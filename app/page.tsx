@@ -39,7 +39,7 @@ function parseOCR(text:string):Part[]{
 export default function Home(){
   const [session,setSession]=useState<any>(null);
   const [authLoading,setAuthLoading]=useState(true);
-  const [loginId,setLoginId]=useState("");
+  const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
   const [authMsg,setAuthMsg]=useState("");
   const [tab,setTab]=useState<"vehicle"|"customerVehicle"|"ocr"|"data"|"print"|"settings">("vehicle");
@@ -82,69 +82,23 @@ export default function Home(){
   useEffect(()=>localStorage.setItem("parts-template",JSON.stringify(template)),[template]);
 
   useEffect(()=>{
-    
+    if(!session) return;
+    (async()=>{
+      const [{data:cs},{data:vs}]=await Promise.all([
+        supabase.from("customers").select("*").order("created_at",{ascending:false}),
+        supabase.from("vehicles").select("*").order("created_at",{ascending:false})
+      ]);
+      if(cs) setCustomers(cs.map((c:any)=>({id:c.id,type:c.customer_type,name:c.name,companyName:c.company_name||"",phone:c.phone||"",email:c.email||"",postalCode:c.postal_code||"",address:c.address||"",notes:c.notes||""})));
+      if(vs) setVehicles(vs.map((v:any)=>({number:v.vehicle_number,model:v.model||"",type:(v.fuel_type||"その他") as Vehicle["type"],weight:v.vehicle_weight==null?"":String(v.vehicle_weight),registration:"",last4:v.registration_number_last4||"",chassis:v.chassis_number||"",firstRegistration:v.first_registration||"",customerId:v.customer_id||"",id:v.id} as any)));
+    })();
+  },[session]);
   useEffect(()=>localStorage.setItem("parts-data",JSON.stringify(parts)),[parts]);
   useEffect(()=>localStorage.setItem("parts-template",JSON.stringify(template)),[template]);
 
   const filtered=useMemo(()=>vehicles.filter(v=>!vehicleSearch||v.number.includes(vehicleSearch)||v.model.includes(vehicleSearch)),[vehicles,vehicleSearch]);
   const customerFiltered=useMemo(()=>customers.filter(c=>!customerSearch||c.name.includes(customerSearch)||c.companyName.includes(customerSearch)||c.phone.includes(customerSearch)),[customers,customerSearch]);
   const registrationFiltered=useMemo(()=>vehicles.filter(v=>!registrationSearch||v.last4===registrationSearch.trim().slice(-4)),[vehicles,registrationSearch]);
-　　　　　if(!session) return <main>
-  <header className="header">
-    <div className="title" style={{fontSize:"42px",fontWeight:800}}>icb</div>
-  </header>
 
-  <section className="card">
-    <h1>ログイン</h1>
-
-    <input
-      type="text"
-      autoCapitalize="none"
-      autoCorrect="off"
-      placeholder="ログインID"
-      value={loginId}
-      onChange={e=>setLoginId(e.target.value)}
-    />
-
-    <input
-      type="password"
-      placeholder="パスワード"
-      value={password}
-      onChange={e=>setPassword(e.target.value)}
-    />
-
-    <div className="actions">
-      <button
-        className="primary"
-        onClick={async()=>{
-          setAuthMsg("");
-
-          const id=loginId.trim().toLowerCase();
-
-          if(!id){
-            setAuthMsg("ログインIDを入力してください。");
-            return;
-          }
-
-          const internalEmail=`${id}@icb.local`;
-
-          const {error}=await supabase.auth.signInWithPassword({
-            email:internalEmail,
-            password
-          });
-
-          if(error){
-            setAuthMsg("ログインIDまたはパスワードが違います。");
-          }
-        }}
-      >
-        ログイン
-      </button>
-    </div>
-
-    {authMsg&&<div className="notice">{authMsg}</div>}
-  </section>
-</main>;
   async function saveVehicle(){
     if(!vehicle.number.trim()){setMsg("車体番号を入力してください。");return}
     if(!session){setMsg("ログインしてください。");return}
