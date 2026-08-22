@@ -441,11 +441,8 @@ export default function Home() {
   }
 
   function newCustomer() {
-    setCustomer({
-      ...emptyCustomer,
-      id: uid(),
-    });
-  }
+  setCustomer({ ...emptyCustomer });
+}
 
   function newVehicle() {
     setVehicle(emptyVehicle);
@@ -677,9 +674,8 @@ export default function Home() {
                   });
 
                 if (error) {
-  setAuthMsg(
-    `Supabaseエラー: ${error.message} / status: ${error.status ?? "不明"}`
-  );
+  setAuthMsg("ログインIDまたはパスワードが違います。");
+  return;
 }
               }}
             >
