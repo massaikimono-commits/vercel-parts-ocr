@@ -677,10 +677,10 @@ export default function Home() {
                   });
 
                 if (error) {
-                  setAuthMsg(
-                    "ログインIDまたはパスワードが違います。"
-                  );
-                }
+  setAuthMsg(
+    `Supabaseエラー: ${error.message} / status: ${error.status ?? "不明"}`
+  );
+}
               }}
             >
               ログイン
