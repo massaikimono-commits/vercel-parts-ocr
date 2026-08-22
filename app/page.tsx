@@ -255,7 +255,7 @@ export default function Home() {
                   v.vehicle_weight == null
                     ? ""
                     : String(v.vehicle_weight),
-                registration: "",
+                registration: v.registration_number || "",
                 last4:
                   v.registration_number_last4 || "",
                 chassis: v.chassis_number || "",
@@ -316,17 +316,25 @@ export default function Home() {
     }
 
     const normalized = {
-      ...vehicle,
-      last4: (
-        vehicle.registration
-          .replace(/\D/g, "")
-          .slice(-4) || vehicle.last4
-      ).slice(-4),
-    };
+  ...vehicle,
+  number: vehicle.number.trim(),
+  model: vehicle.model.trim(),
+  registration: vehicle.registration.trim(),
+  chassis: vehicle.chassis.trim(),
+  firstRegistration: vehicle.firstRegistration.trim(),
+  weight: vehicle.weight.trim(),
+  customerId: vehicle.customerId.trim(),
+  last4: (
+    vehicle.registration
+      .replace(/\D/g, "")
+      .slice(-4) || vehicle.last4
+  ).slice(-4),
+};
 
-    const payload = {
-      vehicle_number: normalized.number,
-      model: normalized.model || null,
+   const payload = {
+  vehicle_number: normalized.number,
+  registration_number: normalized.registration || null,
+  model: normalized.model || null, 
       fuel_type: normalized.type,
       vehicle_weight: normalized.weight
         ? Number(normalized.weight)
