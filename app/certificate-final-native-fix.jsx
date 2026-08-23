@@ -1,5 +1,3 @@
 "use client";
 
-export default function CertificateConsistencyFix() {
-  return null;
-}
+export { default } from "./certificate-authoritative-reader-v2";

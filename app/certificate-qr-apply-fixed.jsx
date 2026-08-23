@@ -76,6 +76,12 @@ function parseQr3(items) {
   };
 }
 
+function isCertificateFileInput(node) {
+  if (!(node instanceof HTMLInputElement) || node.type !== "file") return false;
+  const section = node.closest("section.card");
+  return !!section?.querySelector("h2")?.textContent?.includes("車検証から読み取る");
+}
+
 function showStatus(v, state = "") {
   const host = document.getElementById("certificate-qr-debug");
   if (!host) return;
@@ -92,7 +98,7 @@ function showStatus(v, state = "") {
     host.appendChild(box);
   }
   if (!v) {
-    box.textContent = "QR1〜3の連結データを待っています。";
+    box.textContent = state || "QR1〜3の連結データを待っています。";
     return;
   }
   box.textContent = `QRから本体stateへ反映: 有効期限 ${v.inspectionExpiry || "未取得"} / 初度登録 ${v.firstRegistration || "未取得"} / 型式 ${v.model || "未取得"} / 前前軸重 ${v.frontFrontAxleWeightKg || "-"}kg / 後後軸重 ${v.rearRearAxleWeightKg || "-"}kg / 燃料 ${v.fuel || "未取得"}${state ? ` / ${state}` : ""}`;
@@ -102,33 +108,61 @@ export default function CertificateQrApplyFixed() {
   useEffect(() => {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
     let stopped = false;
-    let sentSignature = "";
+    let sendBudget = 0;
+    let sentCount = 0;
+    let lastFileKey = "";
+
+    const onFileChange = (event) => {
+      const input = event.target;
+      if (!isCertificateFileInput(input)) return;
+      const file = input.files?.[0];
+      if (!file) return;
+      const key = `${file.name}|${file.size}|${file.lastModified}`;
+      const sameFile = Boolean(lastFileKey && key === lastFileKey);
+      if (!sameFile) {
+        window.__vehicleCertificateQr = [];
+        window.__vehicleCertificateQrPriority = null;
+      }
+      lastFileKey = key;
+      sendBudget = 14;
+      sentCount = 0;
+      showStatus(null, sameFile ? "同じ画像を再テスト中。前回QR値を再利用して本体stateを再確定します。" : "新しい画像のQR解析待ちです。"
+      );
+    };
+
+    document.addEventListener("change", onFileChange, true);
+
     const tick = () => {
       if (stopped) return;
       const items = Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : [];
       if (!items.length) return;
       const values = parseQr3(items);
       if (!values) {
-        showStatus(null);
+        showStatus(null, "QR1〜3の連結データを待っています。");
         return;
       }
       window.__vehicleCertificateQrPriority = values;
-      const signature = JSON.stringify(values);
       if (document.querySelector(".progress")) {
         showStatus(values, "OCR完了待ち");
         return;
       }
-      if (signature !== sentSignature) {
-        sentSignature = signature;
+      if (sendBudget > 0) {
         window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: values }));
-        showStatus(values, "本体stateへ送信完了");
+        sendBudget -= 1;
+        sentCount += 1;
+        showStatus(values, `本体stateへ確定送信 ${sentCount}/14`);
       } else {
-        showStatus(values, "反映済み");
+        showStatus(values, "本体state反映安定");
       }
     };
-    const timer = window.setInterval(tick, 250);
+
+    const timer = window.setInterval(tick, 420);
     tick();
-    return () => { stopped = true; window.clearInterval(timer); };
+    return () => {
+      stopped = true;
+      document.removeEventListener("change", onFileChange, true);
+      window.clearInterval(timer);
+    };
   }, []);
   return null;
 }
