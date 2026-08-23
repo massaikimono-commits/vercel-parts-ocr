@@ -27,7 +27,7 @@ const styles: Record<string, React.CSSProperties> = {
   notice: { padding: "13px 15px", background: "#e9f7ef", border: "1px solid #bfe6ce", borderRadius: 12, marginBottom: 14, lineHeight: 1.6 },
   row: { display: "grid", gridTemplateColumns: "minmax(180px, 2fr) 80px 120px 120px", gap: 8, marginBottom: 10 },
   input: { width: "100%", minWidth: 0, border: "2px solid #d6deea", borderRadius: 10, padding: "11px 10px", fontSize: 16 },
-  debug: { width: "100%", minHeight: 200, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" },
+  debug: { width: "100%", minHeight: 230, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" },
 };
 
 function normalizeText(text: string) {
@@ -77,8 +77,7 @@ function correctCommonPartWord(text: string) {
         best = word;
       }
     }
-    const limit = token.length >= 7 ? 3 : 2;
-    return distance <= limit ? best : token;
+    return distance <= (token.length >= 7 ? 3 : 2) ? best : token;
   });
 
   return corrected;
@@ -86,6 +85,9 @@ function correctCommonPartWord(text: string) {
 
 function cleanPartName(raw: string) {
   let text = normalizeText(raw)
+    .replace(/([ぁ-んァ-ヶ一-龠])\s+(?=[ぁ-んァ-ヶ一-龠])/g, "$1")
+    .replace(/([ぁ-んァ-ヶ一-龠])\s+(?=[ぁ-んァ-ヶ一-龠])/g, "$1")
+    .replace(/^[\[\](){}|/\\・:;.,\s]+/, "")
     .replace(/[¥￥]\s*[0-9Il|OQS,.\s]+.*$/i, "")
     .replace(/\s+[YV]\s*\d{3,}.*$/i, "")
     .replace(/\bMC[- ]?E\d+\b/gi, " ")
@@ -111,11 +113,12 @@ function nameScore(text: string) {
   const jp = cleaned.match(/[ぁ-んァ-ヶ一-龠]/g)?.length || 0;
   const alpha = cleaned.match(/[A-Za-z]/g)?.length || 0;
   const digits = cleaned.match(/\d/g)?.length || 0;
-  score += Math.min(14, jp * 2);
-  score += Math.min(8, alpha);
-  if (/ASSY|COMP|KIT|SET|クラッチ|ブレーキ|パッド|フィルタ|オイル|ベルト|ホース|ガスケット/i.test(cleaned)) score += 14;
+
+  score += Math.min(16, jp * 2);
+  score += Math.min(10, alpha);
+  if (/ASSY|COMP|KIT|SET|クラッチ|ブレーキ|パッド|フィルタ|オイル|ベルト|ホース|ガスケット/i.test(cleaned)) score += 18;
   if (/[\/／]/.test(cleaned)) score += 5;
-  if (digits > cleaned.length * 0.45) score -= 10;
+  if (digits > cleaned.length * 0.4) score -= 12;
   return score;
 }
 
@@ -163,7 +166,7 @@ function canvasBlob(canvas: HTMLCanvasElement, quality = 0.98) {
 
 async function sourceCanvas(file: File) {
   const img = await loadImage(file);
-  const maxSide = 2400;
+  const maxSide = 2600;
   const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -181,7 +184,6 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
   const { width: w, height: h } = canvas;
   const pixels = ctx.getImageData(0, 0, w, h).data;
   const step = Math.max(2, Math.floor(Math.max(w, h) / 800));
-
   const isPaper = (r: number, g: number, b: number) => {
     const bright = (r + g + b) / 3;
     const yellow = r > 100 && g > 95 && r + g > b * 1.75;
@@ -203,8 +205,8 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
 
   const top = Math.max(0, ys[0] - step * 2);
   const roughBottom = Math.min(h - 1, ys[ys.length - 1] + step * 2);
-
   const xs: number[] = [];
+
   for (let x = 0; x < w; x += step) {
     let hit = 0;
     let count = 0;
@@ -239,93 +241,86 @@ function relativeBox(paper: CropBox, x: number, y: number, w: number, h: number)
   };
 }
 
-function otsuThreshold(gray: Uint8ClampedArray) {
-  const hist = new Array(256).fill(0);
-  for (const v of gray) hist[v] += 1;
-  const total = gray.length;
-  let sum = 0;
-  for (let i = 0; i < 256; i += 1) sum += i * hist[i];
-
-  let sumB = 0;
-  let wB = 0;
-  let best = 150;
-  let maxVariance = 0;
-
-  for (let i = 0; i < 256; i += 1) {
-    wB += hist[i];
-    if (!wB) continue;
-    const wF = total - wB;
-    if (!wF) break;
-    sumB += i * hist[i];
-    const mB = sumB / wB;
-    const mF = (sum - sumB) / wF;
-    const variance = wB * wF * (mB - mF) ** 2;
-    if (variance > maxVariance) {
-      maxVariance = variance;
-      best = i;
-    }
-  }
-  return Math.max(90, Math.min(205, best));
-}
-
-async function makeCrop(source: HTMLCanvasElement, box: CropBox, targetWidth: number, binary = false) {
+async function makeCrop(
+  source: HTMLCanvasElement,
+  box: CropBox,
+  targetWidth: number,
+  options: { raw?: boolean; rotate?: number; contrast?: number } = {}
+) {
   const scale = Math.min(8, Math.max(1, targetWidth / box.w));
-  const out = document.createElement("canvas");
-  out.width = Math.max(1, Math.round(box.w * scale));
-  out.height = Math.max(1, Math.round(box.h * scale));
-  const ctx = out.getContext("2d", { willReadFrequently: true });
+  const base = document.createElement("canvas");
+  base.width = Math.max(1, Math.round(box.w * scale));
+  base.height = Math.max(1, Math.round(box.h * scale));
+  const ctx = base.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("画像処理を開始できませんでした。");
 
   ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.fillRect(0, 0, base.width, base.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, box.x, box.y, box.w, box.h, 0, 0, out.width, out.height);
+  ctx.drawImage(source, box.x, box.y, box.w, box.h, 0, 0, base.width, base.height);
 
-  const image = ctx.getImageData(0, 0, out.width, out.height);
-  const gray = new Uint8ClampedArray(out.width * out.height);
-
-  for (let p = 0, i = 0; p < image.data.length; p += 4, i += 1) {
-    const r = image.data[p];
-    const g = image.data[p + 1];
-    let v = Math.round(r * 0.22 + g * 0.78);
-    v = Math.max(0, Math.min(255, Math.round((v - 128) * 1.40 + 148)));
-    gray[i] = v;
+  if (!options.raw) {
+    const image = ctx.getImageData(0, 0, base.width, base.height);
+    const contrast = options.contrast ?? 1.18;
+    for (let p = 0; p < image.data.length; p += 4) {
+      const r = image.data[p];
+      const g = image.data[p + 1];
+      const b = image.data[p + 2];
+      let v = Math.round(r * 0.20 + g * 0.72 + b * 0.08);
+      v = Math.max(0, Math.min(255, Math.round((v - 128) * contrast + 148)));
+      if (v > 246) v = 255;
+      image.data[p] = v;
+      image.data[p + 1] = v;
+      image.data[p + 2] = v;
+      image.data[p + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
   }
 
-  const threshold = otsuThreshold(gray);
-  for (let p = 0, i = 0; p < image.data.length; p += 4, i += 1) {
-    let v = gray[i];
-    if (binary) v = v < threshold ? 0 : 255;
-    else if (v > 240) v = 255;
-    image.data[p] = v;
-    image.data[p + 1] = v;
-    image.data[p + 2] = v;
-    image.data[p + 3] = 255;
-  }
+  const angle = options.rotate || 0;
+  if (!angle) return canvasBlob(base);
 
-  ctx.putImageData(image, 0, 0);
-  return canvasBlob(out);
+  const rad = angle * Math.PI / 180;
+  const sin = Math.abs(Math.sin(rad));
+  const cos = Math.abs(Math.cos(rad));
+  const rotated = document.createElement("canvas");
+  rotated.width = Math.ceil(base.width * cos + base.height * sin) + 20;
+  rotated.height = Math.ceil(base.width * sin + base.height * cos) + 20;
+  const rctx = rotated.getContext("2d");
+  if (!rctx) throw new Error("画像回転に失敗しました。");
+  rctx.fillStyle = "#fff";
+  rctx.fillRect(0, 0, rotated.width, rotated.height);
+  rctx.translate(rotated.width / 2, rotated.height / 2);
+  rctx.rotate(rad);
+  rctx.drawImage(base, -base.width / 2, -base.height / 2);
+  return canvasBlob(rotated);
 }
 
-function numberCandidates(text: string, max: number) {
-  const matches = normalizeText(text).match(/\d{1,3}(?:[,\.\s]\d{3})+|\d{1,7}/g) || [];
+function numberCandidates(text: string, max: number, qtyMode = false) {
+  let normalized = normalizeText(text);
+  if (qtyMode) {
+    normalized = normalized
+      .replace(/[|Il!\/\\\]]/g, "1")
+      .replace(/[Oo]/g, "0");
+  }
+
+  const matches = normalized.match(/\d{1,3}(?:[,\.\s]\d{3})+|\d{1,7}/g) || [];
   return matches
     .map((x) => Number(x.replace(/\D/g, "")))
     .filter((x) => Number.isFinite(x) && x > 0 && x <= max)
     .map(String);
 }
 
-function chooseNumber(texts: string[], max: number) {
-  const perPass = texts.map((t) => numberCandidates(t, max));
+function chooseNumber(texts: string[], max: number, qtyMode = false) {
+  const perPass = texts.map((t) => numberCandidates(t, max, qtyMode));
   const all = perPass.flat();
   if (!all.length) return "";
 
   const counts = new Map<string, number>();
   for (const value of all) counts.set(value, (counts.get(value) || 0) + 1);
-  const repeated = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const repeated = [...counts.entries()].sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]));
   if (repeated[0] && repeated[0][1] >= 2) return repeated[0][0];
-
   return perPass.find((x) => x.length)?.[0] || all[0];
 }
 
@@ -335,67 +330,70 @@ async function readNumber(
   source: HTMLCanvasElement,
   box: CropBox,
   max: number,
-  singleChar = false
+  qtyMode = false
 ): Promise<NumberRead> {
-  const [normal, binary] = await Promise.all([
-    makeCrop(source, box, singleChar ? 760 : 1200, false),
-    makeCrop(source, box, singleChar ? 760 : 1200, true),
+  const [straight, deskewed] = await Promise.all([
+    makeCrop(source, box, qtyMode ? 900 : 1350, { raw: true }),
+    makeCrop(source, box, qtyMode ? 900 : 1350, { raw: true, rotate: 6 }),
   ]);
 
   const texts: string[] = [];
+
   await worker.setParameters({
-    tessedit_pageseg_mode: singleChar
-      ? (tesseract.PSM?.SINGLE_CHAR ?? "10")
-      : (tesseract.PSM?.SINGLE_LINE ?? "7"),
-    tessedit_char_whitelist: "0123456789,.",
+    tessedit_pageseg_mode: tesseract.PSM?.SINGLE_LINE ?? "7",
+    tessedit_char_whitelist: qtyMode ? "0123456789|Il!/]\\" : "0123456789,.",
     user_defined_dpi: "300",
   });
+  texts.push((await worker.recognize(deskewed)).data.text || "");
 
-  texts.push((await worker.recognize(normal)).data.text || "");
-  texts.push((await worker.recognize(binary)).data.text || "");
-  return { value: chooseNumber(texts, max), texts };
+  await worker.setParameters({
+    tessedit_pageseg_mode: tesseract.PSM?.SINGLE_WORD ?? tesseract.PSM?.RAW_LINE ?? "13",
+    tessedit_char_whitelist: qtyMode ? "0123456789|Il!/]\\" : "0123456789,.",
+    user_defined_dpi: "300",
+  });
+  texts.push((await worker.recognize(straight)).data.text || "");
+
+  return { value: chooseNumber(texts, max, qtyMode), texts };
 }
 
 async function readName(worker: any, tesseract: any, source: HTMLCanvasElement, box: CropBox) {
-  const [normal, binary] = await Promise.all([
-    makeCrop(source, box, 1900, false),
-    makeCrop(source, box, 1900, true),
+  const [raw, mild] = await Promise.all([
+    makeCrop(source, box, 2100, { raw: true }),
+    makeCrop(source, box, 2100, { contrast: 1.08 }),
   ]);
 
   const texts: string[] = [];
+
   await worker.setParameters({
     preserve_interword_spaces: "1",
     tessedit_pageseg_mode: tesseract.PSM?.SINGLE_LINE ?? "7",
     tessedit_char_whitelist: "",
     user_defined_dpi: "300",
   });
+  texts.push((await worker.recognize(raw)).data.text || "");
+  texts.push((await worker.recognize(mild)).data.text || "");
 
-  texts.push((await worker.recognize(normal)).data.text || "");
-  texts.push((await worker.recognize(binary)).data.text || "");
   return { ...bestName(texts), texts };
 }
 
 function chooseCost(costRead: NumberRead, amountRead: NumberRead, qty: string) {
-  if (qty !== "1") return costRead.value;
-
-  const allTexts = [...costRead.texts, ...amountRead.texts];
-  const merged = chooseNumber(allTexts, 2000000);
+  const all = [...costRead.texts, ...amountRead.texts];
+  const merged = chooseNumber(all, 2000000);
   if (merged) return merged;
-
-  return costRead.value || amountRead.value;
+  if (qty === "1") return costRead.value || amountRead.value;
+  return costRead.value;
 }
 
 function chooseRetail(retailRead: NumberRead, cost: string) {
   const candidates = retailRead.texts.flatMap((t) => numberCandidates(t, 2000000));
   if (!candidates.length) return retailRead.value;
-  if (!cost) return retailRead.value || candidates[0];
 
-  const c = Number(cost);
-  const plausible = candidates.filter((x) => Number(x) >= c);
+  const costNum = Number(cost || 0);
+  const plausible = candidates.filter((x) => Number(x) >= costNum && Number(x) >= 100);
   if (plausible.length) {
     const counts = new Map<string, number>();
     for (const x of plausible) counts.set(x, (counts.get(x) || 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || Number(b[0]) - Number(a[0]))[0][0];
   }
   return retailRead.value || candidates[0];
 }
@@ -449,11 +447,11 @@ export default function HighAccuracyOCRPage() {
         setMessage(`部品表 ${row + 1}行目を読み取り中…`);
         setProgress((old) => Math.max(old, 8 + row * 20));
 
-        const nameBox = relativeBox(paper, 0.050, y + 0.058, 0.180, 0.040);
-        const qtyBox = relativeBox(paper, 0.432, y + 0.020, 0.033, 0.050);
-        const retailBox = relativeBox(paper, 0.475, y + 0.020, 0.085, 0.050);
-        const costBox = relativeBox(paper, 0.590, y + 0.020, 0.085, 0.050);
-        const amountBox = relativeBox(paper, 0.715, y + 0.020, 0.090, 0.050);
+        const nameBox = relativeBox(paper, 0.050, y + 0.050, 0.285, 0.048);
+        const qtyBox = relativeBox(paper, 0.420, y + 0.012, 0.055, 0.058);
+        const retailBox = relativeBox(paper, 0.470, y + 0.012, 0.125, 0.058);
+        const costBox = relativeBox(paper, 0.585, y + 0.012, 0.125, 0.058);
+        const amountBox = relativeBox(paper, 0.710, y + 0.012, 0.125, 0.058);
 
         const nameRead = await readName(worker, tesseract, source, nameBox);
         const qtyRead = await readNumber(worker, tesseract, source, qtyBox, 99, true);
@@ -463,6 +461,7 @@ export default function HighAccuracyOCRPage() {
 
         let qty = qtyRead.value;
         if (!qty && nameRead.name && (retailRead.value || costRead.value || amountRead.value)) qty = "1";
+        if (Number(qty) > 20 && nameRead.name) qty = "1";
 
         const cost = chooseCost(costRead, amountRead, qty);
         const retail = chooseRetail(retailRead, cost);
@@ -477,8 +476,9 @@ export default function HighAccuracyOCRPage() {
           `金額補助: ${amountRead.texts.map((x) => x.trim()).join(" / ")} => ${amountRead.value}`
         );
 
-        const fieldCount = [nameRead.name, qty, retail, cost].filter(Boolean).length;
-        if (fieldCount >= 2) {
+        const strongName = nameScore(nameRead.name) >= 8;
+        const twoPrices = Number(retail || 0) >= 100 && Number(cost || 0) >= 100;
+        if (strongName || twoPrices) {
           found.push({
             id: uid(),
             name: nameRead.name,
@@ -497,7 +497,6 @@ export default function HighAccuracyOCRPage() {
       setParts(found);
       setDebugText(logs.join("\n\n"));
       setProgress(100);
-
       setMessage(
         found.length
           ? `${found.length}件を抽出しました。4項目を確認してください。`
@@ -546,27 +545,14 @@ export default function HighAccuracyOCRPage() {
       <section style={styles.card}>
         <h1 style={styles.title}>部品伝票 高精度OCR</h1>
         <p style={styles.text}>
-          大一用品商会の伝票に合わせ、部品名称・個数・定価・仕入れをそれぞれの印字位置から直接読み取ります。
-          行全体のOCRが失敗しても、各項目の読み取りは続けます。
+          部品名称は元画像に近い状態で読み、数字は伝票の傾きを補正した画像でも読み直します。
+          大一用品商会の伝票では、名称・個数・標準価格・単価の位置を別々に確認します。
         </p>
 
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
 
-        <input
-          ref={cameraRef}
-          hidden
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])}
-        />
-        <input
-          ref={libraryRef}
-          hidden
-          type="file"
-          accept="image/*"
-          onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])}
-        />
+        <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
+        <input ref={libraryRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
 
         <button disabled={busy} style={styles.primary} onClick={() => cameraRef.current?.click()}>
           📷 今撮影して読み取る
@@ -586,7 +572,6 @@ export default function HighAccuracyOCRPage() {
 
       <section style={styles.card}>
         <h2 style={{ marginTop: 0 }}>抽出データ</h2>
-
         {!parts.length && <p style={styles.text}>まだ抽出できた部品はありません。</p>}
 
         {parts.length > 0 && (
@@ -596,7 +581,6 @@ export default function HighAccuracyOCRPage() {
                 <div style={{ ...styles.row, fontWeight: 800, padding: "0 2px" }}>
                   <div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div>
                 </div>
-
                 {parts.map((p, i) => (
                   <div style={styles.row} key={p.id}>
                     <input style={styles.input} value={p.name} onChange={(e) => updatePart(i, "name", e.target.value)} />
@@ -618,7 +602,7 @@ export default function HighAccuracyOCRPage() {
       <section style={styles.card}>
         <details>
           <summary style={{ fontWeight: 700, cursor: "pointer" }}>OCR詳細（調整用）</summary>
-          <p style={styles.text}>各項目の読み取り候補を確認できます。通常は開かなくて大丈夫です。</p>
+          <p style={styles.text}>各項目を2通りで読んだ結果を表示します。</p>
           <textarea readOnly value={debugText} style={styles.debug} />
         </details>
       </section>
