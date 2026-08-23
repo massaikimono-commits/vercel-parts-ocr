@@ -24,7 +24,6 @@ const photoPickerEnhancer = `
     linkedAt: new Date().toISOString()
   });
 
-  // OCR開始前の部品ID一覧と比較し、今回追加された部品だけを作業車両へ自動紐付けする。
   const autoLinkCurrentBatch = () => {
     const vehicle = parse(localStorage.getItem(ACTIVE_KEY), null);
     const before = parse(localStorage.getItem(BEFORE_KEY), null);
@@ -45,11 +44,10 @@ const photoPickerEnhancer = `
     }
   };
 
-  // 今後の保存では、作業車両が選択されていれば新規部品を保存時点で自動紐付けする。
   const originalSetItem = Storage.prototype.setItem;
   Storage.prototype.setItem = function(key, value) {
     if (this === localStorage && key === PARTS_KEY) {
-      const vehicle = parse(originalSetItem === undefined ? null : localStorage.getItem(ACTIVE_KEY), null);
+      const vehicle = parse(localStorage.getItem(ACTIVE_KEY), null);
       const previous = parse(localStorage.getItem(PARTS_KEY), []);
       const incoming = parse(value, null);
       if (vehicle && Array.isArray(previous) && Array.isArray(incoming)) {
@@ -90,6 +88,7 @@ const photoPickerEnhancer = `
 
     let path = "";
     if (text.includes("①車体番号")) path = "/vehicle-workflow";
+    else if (text.includes("⑤顧客・車両管理")) path = "/customer-vehicles";
     else if (text.includes("③データ")) path = "/parts-data";
     else if (text.includes("②伝票OCR") || text.includes("自動判定OCRで読み込む") || text.includes("高精度OCRで読み込む")) path = "/ocr/auto";
     else if (text.includes("④印刷")) path = "/parts-print";
@@ -102,7 +101,6 @@ const photoPickerEnhancer = `
     return true;
   };
 
-  // iPhone SafariではReactのclick処理より先に確実に捕まえるためpointerdownも使う。
   document.addEventListener("pointerdown", routeFromTarget, true);
   document.addEventListener("touchstart", routeFromTarget, { capture: true, passive: false });
   document.addEventListener("click", routeFromTarget, true);
