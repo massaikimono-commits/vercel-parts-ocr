@@ -2,183 +2,444 @@
 
 import { useEffect } from "react";
 
-const norm = (v = "") => String(v).normalize("NFKC").replace(/[‐‑‒–—―ー]/g, "-").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
+const norm = (v = "") =>
+  String(v)
+    .normalize("NFKC")
+    .replace(/[‐‑‒–—―ー]/g, "-")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
 const compact = (v = "") => norm(v).replace(/\s+/g, "");
 
 function section(title) {
-  return Array.from(document.querySelectorAll("section.card")).find((s) => s.querySelector("h2")?.textContent?.includes(title)) || null;
+  return (
+    Array.from(document.querySelectorAll("section.card")).find((s) =>
+      s.querySelector("h2")?.textContent?.includes(title)
+    ) || null
+  );
 }
-function input(title, label) {
-  const s = section(title); if (!s) return null;
+
+function field(title, label) {
+  const s = section(title);
+  if (!s) return null;
   for (const l of Array.from(s.querySelectorAll("label"))) {
-    const t = (l.querySelector("span")?.textContent || l.childNodes[0]?.textContent || "").trim();
-    if (compact(t) === compact(label)) return l.querySelector("input");
+    const text = (
+      l.querySelector("span")?.textContent ||
+      l.childNodes[0]?.textContent ||
+      ""
+    ).trim();
+    if (compact(text) === compact(label)) return l.querySelector("input");
   }
   return null;
 }
+
 function setInput(el, value) {
   if (!el || !value || el.value === value) return;
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-  if (setter) setter.call(el, value); else el.value = value;
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value"
+  )?.set;
+  if (setter) setter.call(el, value);
+  else el.value = value;
   el.dispatchEvent(new Event("input", { bubbles: true }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
 }
-function pageDebug() {
-  return Array.from(document.querySelectorAll("details pre")).map((x) => x.textContent || "").filter(Boolean).join("\n");
+
+function mainDebug() {
+  const details = Array.from(document.querySelectorAll("details")).find((d) =>
+    d.querySelector("summary")?.textContent?.includes("OCR詳細")
+  );
+  return details?.querySelector("pre")?.textContent || "";
 }
-function logValue(debug, label) {
-  const m = debug.match(new RegExp(`【${label.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}】\\s*([^\\n]*)`));
-  return (m?.[1] || "").trim();
-}
-function numish(s = "") {
-  return norm(s).replace(/[OoQqDd]/g, "0").replace(/[Il|!]/g, "1").replace(/[Zz]/g, "2").replace(/[Ss§]/g, "5").replace(/[Bb]/g, "8");
-}
-function digits(s = "") { return numish(s).replace(/\D/g, ""); }
-function modelStem(model = "") {
-  const t = norm(model).toUpperCase().replace(/\s+/g, "");
-  const core = t.includes("-") ? t.split("-").pop() || "" : t;
-  return core.match(/^([A-Z]{2,5}\d{1,4})/)?.[1] || "";
-}
-function regionFromUser() {
-  const name = input("車検証読み取り情報", "使用者の氏名又は名称")?.value || "";
-  const b = norm(name).match(/([一-龠]{2,5})(?:支店|営業所|事業所)/)?.[1];
-  if (b) return b;
-  const a = input("車検証読み取り情報", "使用者の住所")?.value || "";
-  return norm(a).match(/([一-龠]{2,5})市/)?.[1] || "";
-}
-function registrationFromLogs(debug) {
-  const texts = [logValue(debug, "登録番号行 白黒"), logValue(debug, "登録番号行 灰"), logValue(debug, "登録かな 白黒")].join(" ");
-  const t = numish(texts);
-  const m = t.match(/(?:^|\D)(\d{2,3})\s*([ぁ-ん])\s*(\d{4})(?:\D|$)/);
-  if (!m) return "";
-  const region = regionFromUser();
-  return region ? `${region} ${m[1]} ${m[2]} ${m[3]}` : "";
-}
-function chassisFromLogs(debug) {
-  const stem = modelStem(input("車検証読み取り情報", "型式")?.value || input("基本情報", "型式")?.value || "");
-  if (!stem) return "";
-  for (const label of ["車台番号行 白黒", "車台番号行 灰"]) {
-    const raw = logValue(debug, label);
-    const ds = numish(raw).match(/\d{6,9}/g) || [];
-    if (ds.length) return `${stem}-${ds[ds.length - 1]}`;
-  }
-  return "";
-}
-function normalizeAddress(debug) {
-  const all = norm(debug).replace(/一/g, "-");
-  const target = `${logValue(debug, "使用者住所 灰")} ${logValue(debug, "使用者住所 白黒")}`;
-  let s = norm(target)
-    .replace(/静[過遇逼瞭剛闘]県/g, "静岡県")
-    .replace(/浜[稚雑維]市/g, "浜松市")
-    .replace(/浜[稚雑維]/g, "浜松")
-    .replace(/\s+/g, "")
-    .replace(/[|｜「」『』\[\]()（）]/g, "");
-  const no = (s.match(/\d{3,5}-\d{1,4}/) || all.match(/\d\s*\d\s*\d\s*\d\s*[-一]\s*\d/))?.[0]?.replace(/\s+/g, "").replace(/一/g, "-") || "";
-  const hasIrino = /入\s*野\s*町/.test(all) || /入野町/.test(all);
-  const ward = s.match(/[一-龠]{1,3}区/)?.[0] || "西区";
-  const city = regionFromUser();
-  if (city === "浜松" && no) return `静岡県浜松市${ward}${hasIrino ? "入野町" : ""}${no}`;
-  const direct = s.match(/静岡県[^\d]{2,18}\d{3,5}-\d{1,4}/)?.[0];
-  return direct || "";
-}
-function bodyFromDebug(debug) {
-  const t = compact(debug);
-  const choices = ["キャブオーバ","ステーションワゴン","ピックアップ","ボンネット","トラック","ダンプ","セダン","箱型","幌型","バス","バン"];
-  for (const x of choices) if (t.includes(x)) return x;
-  const i = t.indexOf("車体の形状");
-  const a = i >= 0 ? t.slice(i, i + 30) : "";
-  if (/ン[プフ]/.test(a)) return "バン";
-  return "";
-}
+
 function eraFrom(text = "") {
-  const t = norm(text).replace(/信和|令入|作和|今和|三和|合和/g, "令和").replace(/平[或戊成陰]/g, "平成");
+  const t = norm(text)
+    .replace(/信和|令入|令禾|今和|今禾|作和|三和|合和|命和/g, "令和")
+    .replace(/平[或戊陰咸戌]/g, "平成")
+    .replace(/昭[禾知]/g, "昭和");
   if (t.includes("令和")) return "令和";
   if (t.includes("平成")) return "平成";
   if (t.includes("昭和")) return "昭和";
   return "";
 }
-function detectPaper(canvas) {
-  const ctx = canvas.getContext("2d", { willReadFrequently: true }); if (!ctx) return { x:0,y:0,w:canvas.width,h:canvas.height };
-  const w=canvas.width,h=canvas.height,d=ctx.getImageData(0,0,w,h).data,step=Math.max(4,Math.floor(Math.max(w,h)/650));
-  const ok=(x,y)=>{const p=(y*w+x)*4,r=d[p],g=d[p+1],b=d[p+2],br=(r+g+b)/3;return br>120&&Math.max(r,g,b)-Math.min(r,g,b)<90;};
-  const ys=[]; for(let y=0;y<h;y+=step){let hit=0,n=0;for(let x=0;x<w;x+=step){if(ok(x,y))hit++;n++;}if(hit/Math.max(1,n)>.25)ys.push(y);} if(ys.length<10)return{x:0,y:0,w,h};
-  const top=Math.max(0,ys[0]-step*2),bottom=Math.min(h-1,ys[ys.length-1]+step*2),xs=[];
-  for(let x=0;x<w;x+=step){let hit=0,n=0;for(let y=top;y<=bottom;y+=step){if(ok(x,y))hit++;n++;}if(hit/Math.max(1,n)>.25)xs.push(x);} if(xs.length<10)return{x:0,y:top,w,h:bottom-top+1};
-  const left=Math.max(0,xs[0]-step*2),right=Math.min(w-1,xs[xs.length-1]+step*2);return{x:left,y:top,w:right-left+1,h:bottom-top+1};
+
+function numish(text = "") {
+  return norm(text)
+    .replace(/[OoQqDd]/g, "0")
+    .replace(/[Il|!]/g, "1")
+    .replace(/[Zz]/g, "2")
+    .replace(/[Ss§]/g, "5")
+    .replace(/[Bb]/g, "8");
 }
-async function buildSource(img) {
-  if (!img.complete) await new Promise((res,rej)=>{img.addEventListener("load",res,{once:true});img.addEventListener("error",rej,{once:true});});
-  const c=document.createElement("canvas"),max=4600,s=Math.min(1,max/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
-  c.width=Math.max(1,Math.round((img.naturalWidth||img.width)*s));c.height=Math.max(1,Math.round((img.naturalHeight||img.height)*s));const x=c.getContext("2d",{willReadFrequently:true});x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;
+
+function validDateParts(values, monthOnly) {
+  if (monthOnly) {
+    if (values.length !== 2) return null;
+    const [y, m] = values;
+    return y >= 1 && y <= 64 && m >= 1 && m <= 12 ? [y, m] : null;
+  }
+  if (values.length !== 3) return null;
+  const [y, m, d] = values;
+  return y >= 1 && y <= 64 && m >= 1 && m <= 12 && d >= 1 && d <= 31
+    ? [y, m, d]
+    : null;
 }
-function makeCell(source,paper,x0,x1,y0,y1,binary=false,targetWidth=1900){
-  const sx=Math.max(0,Math.round(paper.x+paper.w*x0)),sy=Math.max(0,Math.round(paper.y+paper.h*y0)),sw=Math.max(1,Math.round(paper.w*(x1-x0))),sh=Math.max(1,Math.round(paper.h*(y1-y0))),scale=Math.max(1,Math.min(12,targetWidth/sw));
-  const c=document.createElement("canvas");c.width=Math.max(1,Math.round(sw*scale));c.height=Math.max(1,Math.round(sh*scale));const x=c.getContext("2d",{willReadFrequently:true});x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.imageSmoothingEnabled=true;x.imageSmoothingQuality="high";x.drawImage(source,sx,sy,sw,sh,0,0,c.width,c.height);
-  if(binary){const im=x.getImageData(0,0,c.width,c.height);let sum=0,n=0;for(let p=0;p<im.data.length;p+=4){const g=Math.round(im.data[p]*.22+im.data[p+1]*.70+im.data[p+2]*.08);sum+=g;n++;}const th=Math.max(115,Math.min(205,sum/Math.max(1,n)-18));for(let p=0;p<im.data.length;p+=4){const g=Math.round(im.data[p]*.22+im.data[p+1]*.70+im.data[p+2]*.08),v=g<th?0:255;im.data[p]=im.data[p+1]=im.data[p+2]=v;im.data[p+3]=255;}x.putImageData(im,0,0);}
-  return c;
-}
-async function rec(worker,canvas,psm="7",white=""){await worker.setParameters({tessedit_pageseg_mode:psm,preserve_interword_spaces:"1",...(white?{tessedit_char_whitelist:white}:{})});return norm((await worker.recognize(canvas)).data.text||"");}
-function numberGroups(text){return (numish(text).match(/\d{1,2}/g)||[]).map(Number).filter(Number.isFinite);}
-function bestDate(groups, monthOnly=false){
-  for(const g of groups){
-    if(monthOnly){for(let i=0;i+1<g.length;i++){const y=g[i],m=g[i+1];if(y>=1&&y<=64&&m>=1&&m<=12)return[y,m];}}
-    else{for(let i=0;i+2<g.length;i++){const y=g[i],m=g[i+1],d=g[i+2];if(y>=1&&y<=64&&m>=1&&m<=12&&d>=1&&d<=31)return[y,m,d];}}
+
+function splitCompactDigits(ds, monthOnly) {
+  const need = monthOnly ? 2 : 3;
+  const out = [];
+  const walk = (start, parts) => {
+    if (parts.length === need) {
+      if (start === ds.length) out.push(parts.map(Number));
+      return;
+    }
+    for (const len of [1, 2]) {
+      if (start + len > ds.length) continue;
+      walk(start + len, [...parts, ds.slice(start, start + len)]);
+    }
+  };
+  walk(0, []);
+  for (const candidate of out) {
+    const ok = validDateParts(candidate, monthOnly);
+    if (ok) return ok;
   }
   return null;
 }
-function ensureDebug(lines){
-  let box=document.getElementById("certificate-micro-debug");
-  if(!box){box=document.createElement("details");box.id="certificate-micro-debug";box.style.margin="12px 0";box.innerHTML='<summary style="font-weight:700;cursor:pointer">マイクロOCR（確認用）</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px"></pre>';const img=document.querySelector("img.preview");img?.closest("section.card")?.appendChild(box);}
-  const pre=box?.querySelector("pre");if(pre)pre.textContent=lines.join("\n");
+
+function dateNumbers(texts, monthOnly = false) {
+  for (const raw of texts) {
+    const t = numish(raw);
+    const groups = (t.match(/\d{1,2}/g) || []).map(Number);
+    const need = monthOnly ? 2 : 3;
+    for (let i = 0; i + need <= groups.length; i += 1) {
+      const ok = validDateParts(groups.slice(i, i + need), monthOnly);
+      if (ok) return ok;
+    }
+    const ds = t.replace(/\D/g, "");
+    if (ds.length >= need && ds.length <= need * 2) {
+      const ok = splitCompactDigits(ds, monthOnly);
+      if (ok) return ok;
+    }
+  }
+  return null;
 }
 
-async function microDates(img,debug){
-  const source=await buildSource(img),paper=detectPaper(source),t=await import("tesseract.js"),worker=await t.createWorker("jpn+eng",1),logs=[`マイクロ紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];
-  try{
-    const readDate=async(name,box,monthOnly=false)=>{
-      const a=await rec(worker,makeCell(source,paper,...box,false,2300),"7","0123456789");
-      const b=await rec(worker,makeCell(source,paper,...box,true,2300),"7","0123456789");
-      logs.push(`【${name} 数字灰】 ${a||"(空)"}`,`【${name} 数字白黒】 ${b||"(空)"}`);
-      return bestDate([numberGroups(b),numberGroups(a)],monthOnly);
-    };
-    const reg=await readDate("登録年月日",[0.245,0.405,0.260,0.284],false);
-    const first=await readDate("初度登録",[0.455,0.600,0.260,0.284],true);
-    const exp=await readDate("有効期限",[0.675,0.845,0.260,0.284],false);
-    const bodyA=await rec(worker,makeCell(source,paper,0.175,0.305,0.452,0.482,false,1700),"7");
-    const bodyB=await rec(worker,makeCell(source,paper,0.175,0.305,0.452,0.482,true,1700),"7");
-    logs.push(`【車体形状マイクロ 灰】 ${bodyA||"(空)"}`,`【車体形状マイクロ 白黒】 ${bodyB||"(空)"}`);
-    const regEra=eraFrom(`${logValue(debug,"登録年月日 灰")} ${logValue(debug,"登録年月日 白黒")}`)||"令和";
-    const firstEra=eraFrom(`${logValue(debug,"初度登録 灰")} ${logValue(debug,"初度登録 白黒")}`)||"平成";
-    const expEra=eraFrom(`${logValue(debug,"有効期限 灰")} ${logValue(debug,"有効期限 白黒")}`)||"令和";
-    const out={
-      registrationDate:reg?`${regEra}${reg[0]}年${reg[1]}月${reg[2]}日`:"",
-      firstRegistration:first?`${firstEra}${first[0]}年${first[1]}月`:"",
-      inspectionExpiry:exp?`${expEra}${exp[0]}年${exp[1]}月${exp[2]}日`:"",
-      bodyShape:bodyFromDebug(`${bodyA}\n${bodyB}`)
-    };
-    logs.push(`【マイクロ採用 登録年月日】 ${out.registrationDate||"未読"}`,`【マイクロ採用 初度登録】 ${out.firstRegistration||"未読"}`,`【マイクロ採用 有効期限】 ${out.inspectionExpiry||"未読"}`,`【マイクロ採用 車体形状】 ${out.bodyShape||"未読"}`);
-    ensureDebug(logs);return out;
-  } finally {await worker.terminate();}
+function bodyFrom(text = "") {
+  const t = compact(text)
+    .replace(/パン/g, "バン")
+    .replace(/ハン/g, "バン")
+    .replace(/バソ/g, "バン");
+  const choices = [
+    "キャブオーバ",
+    "ステーションワゴン",
+    "ピックアップ",
+    "ボンネット",
+    "トラック",
+    "ダンプ",
+    "セダン",
+    "箱型",
+    "幌型",
+    "バス",
+    "バン",
+  ];
+  return choices.find((v) => t.includes(v)) || "";
 }
 
-export default function CertificateMicroCellsFix(){
-  useEffect(()=>{
-    let dead=false,running=false,lastKey="";
-    const run=async()=>{
-      if(dead||running)return;const debug=pageDebug(),img=document.querySelector("img.preview");if(!img?.src||!debug.includes("【最終採用"))return;const key=`${img.src}|${debug.length}`;if(key===lastKey)return;lastKey=key;running=true;
-      try{
-        const reg=registrationFromLogs(debug),ch=chassisFromLogs(debug),addr=normalizeAddress(debug),body0=bodyFromDebug(debug);
-        if(reg){setInput(input("車検証読み取り情報","自動車登録番号又は車両番号"),reg);setInput(input("基本情報","登録番号"),reg);setInput(input("基本情報","ナンバー下4桁"),reg.match(/\d{4}$/)?.[0]||"");}
-        if(ch){setInput(input("車検証読み取り情報","車台番号"),ch);setInput(input("基本情報","車台番号"),ch);}
-        if(addr)setInput(input("車検証読み取り情報","使用者の住所"),addr);
-        if(body0)setInput(input("車検証読み取り情報","車体の形状"),body0);
-        const m=await microDates(img,debug);if(dead)return;
-        if(m.registrationDate)setInput(input("車検証読み取り情報","登録年月日／交付年月日"),m.registrationDate);
-        if(m.firstRegistration){setInput(input("車検証読み取り情報","初度登録年月"),m.firstRegistration);setInput(input("基本情報","初度登録（和暦）"),m.firstRegistration);}
-        if(m.inspectionExpiry)setInput(input("車検証読み取り情報","有効期間の満了する日"),m.inspectionExpiry);
-        if(m.bodyShape)setInput(input("車検証読み取り情報","車体の形状"),m.bodyShape);
-      }catch(e){ensureDebug([`マイクロOCRエラー: ${e?.message||e}`]);}finally{running=false;}
+function detectPaper(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
+
+  const w = canvas.width;
+  const h = canvas.height;
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const step = Math.max(4, Math.floor(Math.max(w, h) / 650));
+  const isPaper = (x, y) => {
+    const p = (y * w + x) * 4;
+    const r = data[p];
+    const g = data[p + 1];
+    const b = data[p + 2];
+    const br = (r + g + b) / 3;
+    return br > 120 && Math.max(r, g, b) - Math.min(r, g, b) < 90;
+  };
+
+  const ys = [];
+  for (let y = 0; y < h; y += step) {
+    let hit = 0;
+    let n = 0;
+    for (let x = 0; x < w; x += step) {
+      if (isPaper(x, y)) hit += 1;
+      n += 1;
+    }
+    if (hit / Math.max(1, n) > 0.25) ys.push(y);
+  }
+  if (ys.length < 10) return { x: 0, y: 0, w, h };
+
+  const top = Math.max(0, ys[0] - step * 2);
+  const bottom = Math.min(h - 1, ys[ys.length - 1] + step * 2);
+  const xs = [];
+  for (let x = 0; x < w; x += step) {
+    let hit = 0;
+    let n = 0;
+    for (let y = top; y <= bottom; y += step) {
+      if (isPaper(x, y)) hit += 1;
+      n += 1;
+    }
+    if (hit / Math.max(1, n) > 0.25) xs.push(x);
+  }
+  if (xs.length < 10) return { x: 0, y: top, w, h: bottom - top + 1 };
+
+  const left = Math.max(0, xs[0] - step * 2);
+  const right = Math.min(w - 1, xs[xs.length - 1] + step * 2);
+  return { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
+}
+
+async function sourceCanvas(img) {
+  if (!img.complete) {
+    await new Promise((resolve, reject) => {
+      img.addEventListener("load", resolve, { once: true });
+      img.addEventListener("error", reject, { once: true });
+    });
+  }
+  const naturalW = img.naturalWidth || img.width;
+  const naturalH = img.naturalHeight || img.height;
+  const scale = Math.min(1, 4600 / Math.max(naturalW, naturalH));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(naturalW * scale));
+  canvas.height = Math.max(1, Math.round(naturalH * scale));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function cropCell(source, paper, box, binary = false, targetWidth = 2200) {
+  const [x0, y0, w0, h0] = box;
+  const sx = Math.max(0, Math.round(paper.x + paper.w * x0));
+  const sy = Math.max(0, Math.round(paper.y + paper.h * y0));
+  const sw = Math.max(1, Math.round(paper.w * w0));
+  const sh = Math.max(1, Math.round(paper.h * h0));
+  const scale = Math.max(1, Math.min(14, targetWidth / sw));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sw * scale));
+  canvas.height = Math.max(1, Math.round(sh * scale));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+  if (binary) {
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let sum = 0;
+    let count = 0;
+    for (let p = 0; p < image.data.length; p += 4) {
+      sum += Math.round(
+        image.data[p] * 0.22 + image.data[p + 1] * 0.7 + image.data[p + 2] * 0.08
+      );
+      count += 1;
+    }
+    const threshold = Math.max(115, Math.min(205, sum / Math.max(1, count) - 18));
+    for (let p = 0; p < image.data.length; p += 4) {
+      const g = Math.round(
+        image.data[p] * 0.22 + image.data[p + 1] * 0.7 + image.data[p + 2] * 0.08
+      );
+      const v = g < threshold ? 0 : 255;
+      image.data[p] = v;
+      image.data[p + 1] = v;
+      image.data[p + 2] = v;
+      image.data[p + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+  return canvas;
+}
+
+async function recognize(worker, canvas, psm, whitelist = "") {
+  await worker.setParameters({
+    tessedit_pageseg_mode: String(psm),
+    preserve_interword_spaces: "1",
+    user_defined_dpi: "300",
+    tessedit_char_whitelist: whitelist,
+  });
+  return norm((await worker.recognize(canvas)).data.text || "");
+}
+
+async function readDate(worker, source, paper, box, psm, monthOnly, currentValue) {
+  const gray = cropCell(source, paper, box, false, 2400);
+  const bw = cropCell(source, paper, box, true, 2400);
+  const rawGray = await recognize(worker, gray, psm, "");
+  const rawBw = await recognize(worker, bw, psm, "");
+  const digitsGray = await recognize(worker, gray, psm, "0123456789. ");
+  const digitsBw = await recognize(worker, bw, psm, "0123456789. ");
+  const parts = dateNumbers([digitsBw, digitsGray, rawBw, rawGray], monthOnly);
+  const era = eraFrom(`${rawGray} ${rawBw}`) || eraFrom(currentValue);
+  if (!parts || !era) {
+    return { value: "", raw: `${rawGray} / ${rawBw} / ${digitsGray} / ${digitsBw}` };
+  }
+  const value = monthOnly
+    ? `${era}${parts[0]}年${parts[1]}月`
+    : `${era}${parts[0]}年${parts[1]}月${parts[2]}日`;
+  return { value, raw: `${rawGray} / ${rawBw} / ${digitsGray} / ${digitsBw}` };
+}
+
+function showDebug(lines) {
+  let details = document.getElementById("certificate-date-body-debug");
+  if (!details) {
+    details = document.createElement("details");
+    details.id = "certificate-date-body-debug";
+    details.style.marginTop = "12px";
+    details.innerHTML =
+      '<summary style="font-weight:800;cursor:pointer">日付・形状セルOCR（確認用）</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px"></pre>';
+    document.querySelector("img.preview")?.closest("section.card")?.appendChild(details);
+  }
+  const pre = details.querySelector("pre");
+  if (pre) pre.textContent = lines.join("\n");
+}
+
+export default function CertificateMicroCellsFix() {
+  useEffect(() => {
+    if (!location.pathname.startsWith("/vehicle-workflow")) return;
+
+    let stopped = false;
+    let running = false;
+    let lastKey = "";
+
+    const run = async () => {
+      if (stopped || running) return;
+      const img = document.querySelector("img.preview");
+      const debug = mainDebug();
+      if (!img?.src || !debug.includes("【車検証 全体OCR】")) return;
+
+      const key = `${img.src}|${debug.length}`;
+      if (key === lastKey) return;
+      lastKey = key;
+      running = true;
+
+      let worker = null;
+      try {
+        const source = await sourceCanvas(img);
+        const paper = detectPaper(source);
+        const t = await import("tesseract.js");
+        worker = await t.createWorker("jpn+eng", 1);
+        const psm = t.PSM?.SINGLE_LINE ?? "7";
+
+        // 自動車検査証記録事項の値セルだけを狙う。
+        // ラベルや上下の行を含めないことで、別の数字を日付として組み合わせる誤読を防ぐ。
+        const regBox = [0.275, 0.198, 0.21, 0.034];
+        const firstBox = [0.49, 0.198, 0.17, 0.034];
+        const expiryBox = [0.735, 0.198, 0.205, 0.034];
+        const bodyBox = [0.26, 0.414, 0.12, 0.036];
+
+        const regCurrent = field(
+          "車検証読み取り情報",
+          "登録年月日／交付年月日"
+        )?.value;
+        const firstCurrent = field("車検証読み取り情報", "初度登録年月")?.value;
+        const expiryCurrent = field(
+          "車検証読み取り情報",
+          "有効期間の満了する日"
+        )?.value;
+
+        const reg = await readDate(
+          worker,
+          source,
+          paper,
+          regBox,
+          psm,
+          false,
+          regCurrent
+        );
+        const first = await readDate(
+          worker,
+          source,
+          paper,
+          firstBox,
+          psm,
+          true,
+          firstCurrent
+        );
+        const expiry = await readDate(
+          worker,
+          source,
+          paper,
+          expiryBox,
+          psm,
+          false,
+          expiryCurrent
+        );
+
+        const bodyGray = await recognize(
+          worker,
+          cropCell(source, paper, bodyBox, false, 1900),
+          psm,
+          ""
+        );
+        const bodyBw = await recognize(
+          worker,
+          cropCell(source, paper, bodyBox, true, 1900),
+          psm,
+          ""
+        );
+        const body = bodyFrom(`${bodyGray} ${bodyBw}`);
+
+        if (stopped) return;
+        if (reg.value) {
+          setInput(
+            field("車検証読み取り情報", "登録年月日／交付年月日"),
+            reg.value
+          );
+        }
+        if (first.value) {
+          setInput(field("車検証読み取り情報", "初度登録年月"), first.value);
+          setInput(field("基本情報", "初度登録（和暦）"), first.value);
+        }
+        if (expiry.value) {
+          setInput(
+            field("車検証読み取り情報", "有効期間の満了する日"),
+            expiry.value
+          );
+        }
+        if (body) {
+          setInput(field("車検証読み取り情報", "車体の形状"), body);
+        }
+
+        showDebug([
+          `紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`,
+          `【登録年月日 セルOCR】 ${reg.raw || "(空)"}`,
+          `【登録年月日 採用】 ${reg.value || "未読"}`,
+          `【初度登録 セルOCR】 ${first.raw || "(空)"}`,
+          `【初度登録 採用】 ${first.value || "未読"}`,
+          `【有効期限 セルOCR】 ${expiry.raw || "(空)"}`,
+          `【有効期限 採用】 ${expiry.value || "未読"}`,
+          `【車体形状 セルOCR】 ${bodyGray || "(空)"} / ${bodyBw || "(空)"}`,
+          `【車体形状 採用】 ${body || "未読"}`,
+        ]);
+      } catch (e) {
+        showDebug([`日付・形状セルOCRエラー: ${e?.message || e}`]);
+      } finally {
+        if (worker) await worker.terminate().catch(() => {});
+        running = false;
+      }
     };
-    const obs=new MutationObserver(()=>void run());obs.observe(document.documentElement,{childList:true,subtree:true,characterData:true});const id=setInterval(()=>void run(),1100);void run();return()=>{dead=true;obs.disconnect();clearInterval(id);};
-  },[]);return null;
+
+    const observer = new MutationObserver(() => void run());
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    const timer = window.setInterval(() => void run(), 900);
+    void run();
+
+    return () => {
+      stopped = true;
+      observer.disconnect();
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  return null;
 }
