@@ -2,6 +2,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { saveOCRTransferImage } from "../transfer";
 
 type Mode = "dedicated" | "general" | "";
 
@@ -74,22 +75,10 @@ async function prepareForDetection(file: File) {
 
 function classify(text: string): { mode: Mode; reason: string } {
   const t = normalize(text);
-
-  const supplierSignals = [
-    "大一用品商会",
-    "大一用品",
-    "DAIICHI",
-    "MC-E133",
-    "MCE133",
-    "07009330",
-  ];
-
+  const supplierSignals = ["大一用品商会", "大一用品", "DAIICHI", "MC-E133", "MCE133", "07009330"];
   const dedicatedHits = supplierSignals.filter((x) => t.includes(normalize(x)));
   if (dedicatedHits.length) {
-    return {
-      mode: "dedicated",
-      reason: `大一用品商会の特徴を検出: ${dedicatedHits.join(" / ")}`,
-    };
+    return { mode: "dedicated", reason: `大一用品商会の特徴を検出: ${dedicatedHits.join(" / ")}` };
   }
 
   const genericHeaders = [
@@ -100,16 +89,10 @@ function classify(text: string): { mode: Mode; reason: string } {
   ];
   const headerHits = genericHeaders.filter((x) => t.includes(normalize(x)));
   if (headerHits.length >= 2) {
-    return {
-      mode: "general",
-      reason: `汎用表の見出しを${headerHits.length}個検出: ${headerHits.slice(0, 6).join(" / ")}`,
-    };
+    return { mode: "general", reason: `汎用表の見出しを${headerHits.length}個検出: ${headerHits.slice(0, 6).join(" / ")}` };
   }
 
-  return {
-    mode: "general",
-    reason: "大一用品商会の特徴が見つからなかったため、汎用A4・他社伝票OCRを使用します。",
-  };
+  return { mode: "general", reason: "大一用品商会の特徴が見つからなかったため、汎用A4・他社伝票OCRを使用します。" };
 }
 
 export default function AutoOCRPage() {
@@ -136,13 +119,12 @@ export default function AutoOCRPage() {
 
     let worker: any = null;
     try {
+      await saveOCRTransferImage(file);
       const image = await prepareForDetection(file);
       const tesseract: any = await import("tesseract.js");
       worker = await tesseract.createWorker("jpn+eng", 1, {
         logger: (m: any) => {
-          if (m.status === "recognizing text") {
-            setProgress(Math.max(1, Math.min(99, Math.round((m.progress || 0) * 100))));
-          }
+          if (m.status === "recognizing text") setProgress(Math.max(1, Math.min(99, Math.round((m.progress || 0) * 100))));
         },
       });
       await worker.setParameters({
@@ -158,7 +140,7 @@ export default function AutoOCRPage() {
       setMode(judged.mode);
       setReason(judged.reason);
       setProgress(100);
-      setMessage(judged.mode === "dedicated" ? "大一用品商会 専用OCRと判定しました。" : "汎用A4・他社伝票OCRと判定しました。");
+      setMessage(judged.mode === "dedicated" ? "大一用品商会 専用OCRと判定しました。次へ進むと同じ写真で自動読取します。" : "汎用A4・他社伝票OCRと判定しました。次へ進むと同じ写真で自動読取します。");
     } catch (error) {
       console.error(error);
       setMode("general");
@@ -176,45 +158,26 @@ export default function AutoOCRPage() {
     <main style={styles.page}>
       <section style={styles.card}>
         <h1 style={styles.title}>伝票OCR 自動判定</h1>
-        <p style={styles.text}>
-          まず用紙全体を軽く読み取り、大一用品商会の伝票なら専用OCR、それ以外は汎用A4・他社伝票OCRへ振り分けます。
-          判定結果は確認してから進められます。
-        </p>
-
+        <p style={styles.text}>1回だけ撮影・選択して用紙を判定し、その同じ写真を判定先のOCRへ引き継ぎます。</p>
         <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>
 
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && detect(e.target.files[0])} />
         <input ref={libraryRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && detect(e.target.files[0])} />
+        <button disabled={busy} style={styles.primary} onClick={() => cameraRef.current?.click()}>📷 今撮影して自動判定</button>
+        <button disabled={busy} style={styles.secondary} onClick={() => libraryRef.current?.click()}>🖼 写真ライブラリから自動判定</button>
 
-        <button disabled={busy} style={styles.primary} onClick={() => cameraRef.current?.click()}>
-          📷 今撮影して自動判定
-        </button>
-        <button disabled={busy} style={styles.secondary} onClick={() => libraryRef.current?.click()}>
-          🖼 写真ライブラリから自動判定
-        </button>
-
-        {preview && (
-          <img
-            src={preview}
-            alt="判定画像"
-            style={{ width: "100%", maxHeight: 380, objectFit: "contain", borderRadius: 14, marginTop: 16, background: "#eef2f7" }}
-          />
-        )}
+        {preview && <img src={preview} alt="判定画像" style={{ width: "100%", maxHeight: 380, objectFit: "contain", borderRadius: 14, marginTop: 16, background: "#eef2f7" }} />}
       </section>
 
       {mode && (
         <section style={styles.card}>
           <h2 style={{ marginTop: 0 }}>判定結果</h2>
-          <div style={{ ...styles.notice, fontWeight: 800, fontSize: 18 }}>
-            {mode === "dedicated" ? "大一用品商会 専用OCR" : "汎用A4・他社伝票OCR"}
-          </div>
+          <div style={{ ...styles.notice, fontWeight: 800, fontSize: 18 }}>{mode === "dedicated" ? "大一用品商会 専用OCR" : "汎用A4・他社伝票OCR"}</div>
           <p style={styles.text}>{reason}</p>
-          <button style={styles.primary} onClick={() => location.assign(destination)}>
-            このモードで読み取りへ進む →
-          </button>
+          <button style={styles.primary} onClick={() => location.assign(destination)}>この写真のまま読み取りへ進む →</button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
-            <button style={styles.secondary} onClick={() => location.assign("/ocr")}>専用OCRを開く</button>
-            <button style={styles.secondary} onClick={() => location.assign("/ocr/general")}>汎用OCRを開く</button>
+            <button style={styles.secondary} onClick={() => location.assign("/ocr")}>専用OCRへ変更</button>
+            <button style={styles.secondary} onClick={() => location.assign("/ocr/general")}>汎用OCRへ変更</button>
           </div>
         </section>
       )}
