@@ -23,34 +23,36 @@ function detailInput(label) {
   return null;
 }
 
-function basicControl(label) {
-  const s = section("基本情報");
-  if (!s) return null;
-  for (const node of Array.from(s.querySelectorAll("label"))) {
-    const text = compact(node.childNodes[0]?.textContent || node.textContent || "");
-    if (text.startsWith(compact(label))) return node.querySelector("input,select");
-  }
-  return null;
+function reactProps(el) {
+  if (!el) return null;
+  const key = Object.keys(el).find((k) => k.startsWith("__reactProps$"));
+  return key ? el[key] : null;
 }
 
-function setReactInput(el, value) {
-  if (!(el instanceof HTMLInputElement) || !value || el.value === value) return false;
-  const old = el.value;
+function setNativeValue(el, value) {
+  if (!(el instanceof HTMLInputElement)) return;
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   if (setter) setter.call(el, value);
   else el.value = value;
-  if (el._valueTracker) el._valueTracker.setValue(old);
-  el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
-  el.dispatchEvent(new Event("change", { bubbles: true }));
-  return true;
 }
 
-function setReactSelect(el, value) {
-  if (!(el instanceof HTMLSelectElement) || !value || el.value === value) return false;
+function applyThroughReact(el, value) {
+  if (!(el instanceof HTMLInputElement) || !value) return false;
+  if (el.value === value) return true;
+
+  const props = reactProps(el);
+  if (typeof props?.onChange === "function") {
+    props.onChange({
+      target: { value },
+      currentTarget: { value },
+      preventDefault() {},
+      stopPropagation() {},
+    });
+    return true;
+  }
+
   const old = el.value;
-  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
-  if (setter) setter.call(el, value);
-  else el.value = value;
+  setNativeValue(el, value);
   if (el._valueTracker) el._valueTracker.setValue(old);
   el.dispatchEvent(new Event("input", { bubbles: true }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
@@ -140,6 +142,27 @@ function parseQr3(items) {
   };
 }
 
+function queueFor(v) {
+  return [
+    ["有効期間の満了する日", v.inspectionExpiry],
+    ["初度登録年月", v.firstRegistration],
+    ["型式", v.model],
+    ["前前軸重 kg", v.frontFrontAxleWeightKg],
+    ["前後軸重 kg", v.frontRearAxleWeightKg],
+    ["後前軸重 kg", v.rearFrontAxleWeightKg],
+    ["後後軸重 kg", v.rearRearAxleWeightKg],
+    ["燃料の種類", v.fuel],
+  ].filter(([, value]) => Boolean(value));
+}
+
+function expectedForInput(el, v) {
+  if (!(el instanceof HTMLInputElement) || !v) return "";
+  const label = el.closest("label");
+  const title = compact(label?.querySelector("span")?.textContent || "");
+  const row = queueFor(v).find(([name]) => compact(name) === title);
+  return row?.[1] || "";
+}
+
 function showStatus(v, state = "") {
   const host = document.getElementById("certificate-qr-debug");
   if (!host) return;
@@ -166,61 +189,75 @@ export default function CertificateQrApplyFixed() {
   useEffect(() => {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
 
+    let values = null;
+    let stable = 0;
+    let stopped = false;
+
+    const protect = (event) => {
+      if (!values) return;
+      const el = event.target;
+      const expected = expectedForInput(el, values);
+      if (!expected || el.value === expected) return;
+      event.stopImmediatePropagation();
+      event.stopPropagation();
+      setNativeValue(el, expected);
+    };
+    document.addEventListener("input", protect, true);
+    document.addEventListener("change", protect, true);
+
     const tick = () => {
+      if (stopped) return;
       const items = Array.isArray(window.__vehicleCertificateQr)
         ? window.__vehicleCertificateQr
         : [];
       if (!items.length) return;
 
-      const values = parseQr3(items);
+      values = parseQr3(items);
       if (!values) {
         showStatus(null);
         return;
       }
 
       window.__vehicleCertificateQrPriority = values;
-
-      const fuelBasic = values.fuel === "軽油"
-        ? "ディーゼル"
-        : values.fuel === "ガソリン"
-          ? "ガソリン"
-          : /電気/.test(values.fuel || "")
-            ? "EV"
-            : "";
-
-      const queue = [
-        { label: "有効期限", el: () => detailInput("有効期間の満了する日"), value: values.inspectionExpiry, type: "input" },
-        { label: "初度登録", el: () => detailInput("初度登録年月"), value: values.firstRegistration, type: "input" },
-        { label: "基本情報の初度登録", el: () => basicControl("初度登録（和暦）"), value: values.firstRegistration, type: "input" },
-        { label: "型式", el: () => detailInput("型式"), value: values.model, type: "input" },
-        { label: "基本情報の型式", el: () => basicControl("型式"), value: values.model, type: "input" },
-        { label: "前前軸重", el: () => detailInput("前前軸重 kg"), value: values.frontFrontAxleWeightKg, type: "input" },
-        { label: "前後軸重", el: () => detailInput("前後軸重 kg"), value: values.frontRearAxleWeightKg, type: "input" },
-        { label: "後前軸重", el: () => detailInput("後前軸重 kg"), value: values.rearFrontAxleWeightKg, type: "input" },
-        { label: "後後軸重", el: () => detailInput("後後軸重 kg"), value: values.rearRearAxleWeightKg, type: "input" },
-        { label: "燃料", el: () => detailInput("燃料の種類"), value: values.fuel, type: "input" },
-        { label: "基本情報の燃料", el: () => basicControl("燃料"), value: fuelBasic, type: "select" },
-      ].filter((x) => Boolean(x.value));
-
-      const pending = queue.find((x) => {
-        const el = x.el();
-        return el && el.value !== x.value;
+      const queue = queueFor(values);
+      const pending = queue.filter(([label, value]) => {
+        const el = detailInput(label);
+        return !el || el.value !== value;
       });
 
-      if (!pending) {
-        showStatus(values, "反映完了");
+      if (pending.length) {
+        stable = 0;
+        const [label, value] = pending[0];
+        const el = detailInput(label);
+        if (el) applyThroughReact(el, value);
+        showStatus(values, `反映中 ${label}`);
         return;
       }
 
-      const el = pending.el();
-      if (pending.type === "select") setReactSelect(el, pending.value);
-      else setReactInput(el, pending.value);
-      showStatus(values, `反映中 ${pending.label}`);
+      if (document.querySelector(".progress")) {
+        stable = 0;
+        showStatus(values, "OCR完了待ち");
+        return;
+      }
+
+      stable += 1;
+      if (stable >= 5) {
+        showStatus(values, "反映完了");
+        window.clearInterval(timer);
+      } else {
+        showStatus(values, "反映確認中");
+      }
     };
 
-    const timer = window.setInterval(tick, 70);
+    const timer = window.setInterval(tick, 220);
     tick();
-    return () => window.clearInterval(timer);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener("input", protect, true);
+      document.removeEventListener("change", protect, true);
+    };
   }, []);
 
   return null;
