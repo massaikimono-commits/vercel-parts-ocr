@@ -30,8 +30,7 @@ function escapeRegExp(value: string) {
 }
 
 function looseLabelRegex(label: string) {
-  const chars = [...label.replace(/\s+/g, "")].map((c) => escapeRegExp(c));
-  return new RegExp(chars.join("\\s*"));
+  return new RegExp([...label.replace(/\s+/g, "")].map(escapeRegExp).join("\\s*"));
 }
 
 function isFieldLine(line: string) {
@@ -63,8 +62,7 @@ function rawField(debug: string, label: string) {
   const marker = `【${label} 生OCR】`;
   const i = debug.indexOf(marker);
   if (i < 0) return "";
-  const rest = debug.slice(i + marker.length);
-  return rest.split("\n")[0]?.trim() || "";
+  return debug.slice(i + marker.length).split("\n")[0]?.trim() || "";
 }
 
 function digitsOnly(value: string) {
@@ -80,12 +78,6 @@ function parseInteger(value: string, min: number, max: number) {
   return "";
 }
 
-function parseDashOrInteger(value: string, min: number, max: number) {
-  const t = norm(value);
-  if (/(^|\s)-($|\s)/.test(t) || /^[－ー―-]$/.test(t)) return "-";
-  return parseInteger(t, min, max);
-}
-
 function parseRound10(value: string, min: number, max: number) {
   const n = parseInteger(value, min, max);
   return n && Number(n) % 10 === 0 ? n : "";
@@ -99,8 +91,9 @@ function parseRound50(value: string, min: number, max: number) {
 function parseModel(value: string) {
   const t = norm(value).toUpperCase().replace(/\s+/g, "");
   const all = t.match(/[0-9A-Z]{2,5}-[A-Z0-9]{3,12}/g) || [];
-  const candidates = all.filter((x) => !/^[A-Z]{1,4}[0-9]{2,6}-[0-9O]{4,10}$/.test(x));
-  return candidates.sort((a, b) => b.length - a.length)[0] || "";
+  return all
+    .filter((x) => !/^[A-Z]{1,4}[0-9]{2,6}-[0-9O]{4,10}$/.test(x))
+    .sort((a, b) => b.length - a.length)[0] || "";
 }
 
 function parseChassis(value: string) {
@@ -110,12 +103,6 @@ function parseChassis(value: string) {
   if (!picked) return "";
   const [left, right] = picked.split("-");
   return `${left}-${right.replace(/O/g, "0")}`;
-}
-
-function parseEngine(value: string) {
-  const t = norm(value).toUpperCase().replace(/\s+/g, "").replace(/O/g, "0");
-  const all = t.match(/[A-Z0-9]{3,10}/g) || [];
-  return all.find((x) => /[A-Z]/.test(x) && /\d/.test(x) && !x.startsWith("TKG") && !x.startsWith("QKG") && !x.startsWith("2RG")) || "";
 }
 
 function parseRegistration(value: string) {
@@ -157,14 +144,28 @@ function parseOutput(value: string) {
   return decimal?.[0] || "";
 }
 
+function parseEngine(value: string) {
+  const t = norm(value).toUpperCase().replace(/\s+/g, "").replace(/O/g, "0");
+  const all = t.match(/[A-Z0-9]{3,8}/g) || [];
+  return all.find((x) => /[A-Z]/.test(x) && /\d/.test(x) && !/^(TKG|QKG|PKG|SKG|2RG|3DA|DBA|DAA|ABA)/.test(x)) || "";
+}
+
+function parseEngineFromWhole(value: string) {
+  const t = norm(value).toUpperCase().replace(/O/g, "0");
+  const all = t.match(/\b[0-9][A-Z0-9]{2,6}\b/g) || [];
+  const scored = all.filter((x) => /[A-Z]/.test(x) && /\d/.test(x) && x.length >= 3 && x.length <= 7);
+  return scored.find((x) => /^\d[A-Z]{1,3}\d[A-Z0-9]{0,2}$/.test(x)) || "";
+}
+
 function cleanJapaneseText(value: string, allowStars = false) {
   const t = norm(value).replace(/\s+/g, " ").trim();
-  if (allowStars && /^[*＊]{2,4}$/.test(t)) return "***";
+  if (allowStars && /[*＊]{2,4}/.test(t)) return "***";
   if (!t || t.length > 80) return "";
-  if (/原動機|型式|車台|手細情報|OCR|<|>|\{|\}/.test(t)) return "";
+  if (/原動機|型式|車台|車両詳細情報|基本情報|手細情報|OCR|<|>|\{|\}|※/.test(t)) return "";
   const jp = (t.match(/[一-龠々ぁ-んァ-ヶ]/g) || []).length;
-  const bad = (t.match(/[\[\]{}<>「」『』※☆★]/g) || []).length;
-  if (jp < 2 || bad >= 2) return "";
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  const bad = (t.match(/[\[\]{}<>「」『』☆★]/g) || []).length;
+  if (jp < 2 || bad >= 2 || latin > jp + 4) return "";
   return t;
 }
 
@@ -206,62 +207,98 @@ function currentValue(label: string) {
   return fieldInput(label)?.value?.trim() || "";
 }
 
-function bestSource(globalText: string, debug: string, label: string, aliases: string[] = []) {
-  return nearValue(globalText, aliases.length ? aliases : [label]) || rawField(debug, label);
+function sourceFor(globalText: string, debug: string, label: string, aliases: string[] = []) {
+  const near = nearValue(globalText, aliases.length ? aliases : [label]);
+  const raw = rawField(debug, label);
+  return { near, raw };
+}
+
+function firstMatchingDocumentNumber(globalText: string) {
+  return (norm(globalText).match(/\b\d{10,14}\b/g) || [""])[0] || "";
 }
 
 function buildCorrections(globalText: string, debug: string) {
   const out = new Map<string, string>();
-  const put = (label: string, parsed: string, sanitize?: (value: string) => string) => {
+  const put = (label: string, value: string, strict = false, sanitize?: (value: string) => string) => {
     const now = currentValue(label);
     const cleanNow = sanitize ? sanitize(now) : now;
-    const finalValue = parsed || cleanNow;
+    const finalValue = value || (strict ? "" : cleanNow);
     if (finalValue !== now) out.set(label, finalValue);
   };
 
-  put("記録年月日", parseJapaneseDate(bestSource(globalText, debug, "記録年月日")));
-  put("記録事項番号", (digitsOnly(bestSource(globalText, debug, "記録事項番号", ["記録事項番号", "記録事項"])).match(/\d{10,14}/) || [""])[0]);
-  put("自動車登録番号又は車両番号", parseRegistration(bestSource(globalText, debug, "自動車登録番号又は車両番号")));
-  put("車台番号", parseChassis(bestSource(globalText, debug, "車台番号") || globalText));
-  put("登録年月日／交付年月日", parseJapaneseDate(bestSource(globalText, debug, "登録年月日／交付年月日", ["登録年月日", "交付年月日"])));
-  put("初度登録年月", parseJapaneseMonth(bestSource(globalText, debug, "初度登録年月", ["初度登録年月", "初度登録"])));
-  put("有効期間の満了する日", parseJapaneseDate(bestSource(globalText, debug, "有効期間の満了する日")));
-
-  put("使用者の氏名又は名称", cleanJapaneseText(bestSource(globalText, debug, "使用者の氏名又は名称")), (v) => cleanJapaneseText(v));
-  put("使用者の住所", cleanJapaneseText(bestSource(globalText, debug, "使用者の住所")), (v) => cleanJapaneseText(v));
-  put("使用の本拠の位置", cleanJapaneseText(bestSource(globalText, debug, "使用の本拠の位置"), true), (v) => cleanJapaneseText(v, true));
-
-  const vehicleNameSource = bestSource(globalText, debug, "車名");
-  put("車名", pickKnown(vehicleNameSource || globalText, ["日野","トヨタ","レクサス","日産","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","UDトラックス","メルセデス・ベンツ","BMW","アウディ","フォルクスワーゲン","ボルボ"]), (v) => pickKnown(v, ["日野","トヨタ","レクサス","日産","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","UDトラックス","メルセデス・ベンツ","BMW","アウディ","フォルクスワーゲン","ボルボ"]));
-  put("型式", parseModel(bestSource(globalText, debug, "型式") || globalText), (v) => parseModel(v));
-  put("原動機の型式", parseEngine(bestSource(globalText, debug, "原動機の型式")), (v) => parseEngine(v));
-  put("自動車の種別", pickKnown(bestSource(globalText, debug, "自動車の種別"), ["普通","小型","軽自動車","大型特殊"]), (v) => pickKnown(v, ["普通","小型","軽自動車","大型特殊"]));
-  put("用途", pickKnown(bestSource(globalText, debug, "用途"), ["貨物","乗用","乗合","特種"]), (v) => pickKnown(v, ["貨物","乗用","乗合","特種"]));
-  put("自家用・事業用の別", pickKnown(bestSource(globalText, debug, "自家用・事業用の別", ["自家用・事業用の別", "自家用・事業用"]), ["自家用","事業用"]), (v) => pickKnown(v, ["自家用","事業用"]));
-  put("車体の形状", pickKnown(bestSource(globalText, debug, "車体の形状"), ["キャブオーバ","バン","箱型","ステーションワゴン","セダン","ボンネット","トラック","ダンプ","幌型","ピックアップ","バス"]), (v) => pickKnown(v, ["キャブオーバ","バン","箱型","ステーションワゴン","セダン","ボンネット","トラック","ダンプ","幌型","ピックアップ","バス"]));
-
-  put("乗車定員", parseInteger(bestSource(globalText, debug, "乗車定員"), 1, 99), (v) => parseInteger(v, 1, 99));
-  put("最大積載量 kg", parseRound50(bestSource(globalText, debug, "最大積載量 kg", ["最大積載量"]), 100, 99999) || (/-/.test(bestSource(globalText, debug, "最大積載量 kg", ["最大積載量"])) ? "-" : ""), (v) => v === "-" ? "-" : parseRound50(v, 100, 99999));
-  put("車両重量 kg", parseInteger(bestSource(globalText, debug, "車両重量 kg", ["車両重量"]), 100, 99999), (v) => parseInteger(v, 100, 99999));
-  put("車両総重量 kg", parseInteger(bestSource(globalText, debug, "車両総重量 kg", ["車両総重量"]), 100, 99999), (v) => parseInteger(v, 100, 99999));
-  put("長さ cm", parseInteger(bestSource(globalText, debug, "長さ cm", ["長さ"]), 50, 3000), (v) => parseInteger(v, 50, 3000));
-  put("幅 cm", parseInteger(bestSource(globalText, debug, "幅 cm", ["幅"]), 50, 1000), (v) => parseInteger(v, 50, 1000));
-  put("高さ cm", parseInteger(bestSource(globalText, debug, "高さ cm", ["高さ"]), 50, 1000), (v) => parseInteger(v, 50, 1000));
-
-  const axle = (label: string, aliases: string[]) => {
-    const source = bestSource(globalText, debug, label, aliases);
-    const parsed = /^\s*[-－ー―]\s*$/.test(source) ? "-" : parseRound10(source, 100, 30000);
-    put(label, parsed, (v) => v === "-" ? "-" : parseRound10(v, 100, 30000));
+  const source = (label: string, aliases: string[] = []) => {
+    const s = sourceFor(globalText, debug, label, aliases);
+    return s.near || s.raw;
   };
-  axle("前前軸重 kg", ["前前軸重"]);
-  axle("前後軸重 kg", ["前後軸重"]);
-  axle("後前軸重 kg", ["後前軸重"]);
-  axle("後後軸重 kg", ["後後軸重"]);
 
-  put("総排気量又は定格出力", parseOutput(bestSource(globalText, debug, "総排気量又は定格出力", ["総排気量又は定格出力", "総排気量", "定格出力"])), (v) => parseOutput(v));
-  put("燃料の種類", pickKnown(bestSource(globalText, debug, "燃料の種類", ["燃料の種類", "燃料"]), ["軽油","ガソリン","揮発油","電気","LPG","CNG","水素"]), (v) => pickKnown(v, ["軽油","ガソリン","揮発油","電気","LPG","CNG","水素"]));
-  put("型式指定番号", (bestSource(globalText, debug, "型式指定番号").match(/\b\d{4,6}\b/) || [""])[0], (v) => (/^\d{4,6}$/.test(v) ? v : ""));
-  put("類別区分番号", (bestSource(globalText, debug, "類別区分番号").match(/\b\d{4,6}\b/) || [""])[0], (v) => (/^\d{4,6}$/.test(v) ? v : ""));
+  put("記録年月日", parseJapaneseDate(source("記録年月日")), true);
+  put("記録事項番号", firstMatchingDocumentNumber(source("記録事項番号", ["記録事項番号", "記録事項"])) || firstMatchingDocumentNumber(globalText), true);
+  put("自動車登録番号又は車両番号", parseRegistration(source("自動車登録番号又は車両番号")) || parseRegistration(globalText), true);
+  put("車台番号", parseChassis(source("車台番号")) || parseChassis(globalText), true);
+  put("登録年月日／交付年月日", parseJapaneseDate(source("登録年月日／交付年月日", ["登録年月日", "交付年月日"])), true);
+  put("初度登録年月", parseJapaneseMonth(source("初度登録年月", ["初度登録年月", "初度登録"])), true);
+  put("有効期間の満了する日", parseJapaneseDate(source("有効期間の満了する日")), true);
+
+  put("使用者の氏名又は名称", cleanJapaneseText(source("使用者の氏名又は名称")), true);
+  put("使用者の住所", cleanJapaneseText(source("使用者の住所")), true);
+  const baseSource = source("使用の本拠の位置");
+  put("使用の本拠の位置", /[*＊]{2,4}/.test(baseSource) ? "***" : cleanJapaneseText(baseSource, true), true);
+
+  const makers = ["日野","トヨタ","レクサス","日産","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","UDトラックス","メルセデス・ベンツ","BMW","アウディ","フォルクスワーゲン","ボルボ"];
+  const vehicleName = pickKnown(source("車名"), makers) || pickKnown(globalText, makers);
+  put("車名", vehicleName, true);
+
+  put("型式", parseModel(source("型式")) || parseModel(globalText), false, parseModel);
+
+  const engineSource = sourceFor(globalText, debug, "原動機の型式");
+  let engine = parseEngine(engineSource.near);
+  if (!engine && engineSource.raw && globalText.toUpperCase().replace(/\s+/g, "").includes(parseEngine(engineSource.raw))) engine = parseEngine(engineSource.raw);
+  if (!engine) engine = parseEngineFromWhole(globalText);
+  put("原動機の型式", engine, true);
+
+  put("自動車の種別", pickKnown(source("自動車の種別"), ["普通","小型","軽自動車","大型特殊"]), true);
+  put("用途", pickKnown(source("用途"), ["貨物","乗用","乗合","特種"]) || pickKnown(globalText, ["貨物","乗用","乗合","特種"]), true);
+  put("自家用・事業用の別", pickKnown(source("自家用・事業用の別", ["自家用・事業用の別", "自家用・事業用"]), ["自家用","事業用"]), true);
+  put("車体の形状", pickKnown(source("車体の形状"), ["キャブオーバ","バン","箱型","ステーションワゴン","セダン","ボンネット","トラック","ダンプ","幌型","ピックアップ","バス"]), true);
+
+  put("乗車定員", parseInteger(source("乗車定員"), 1, 99), true);
+  put("最大積載量 kg", parseRound50(source("最大積載量 kg", ["最大積載量"]), 100, 99999), true);
+  put("車両重量 kg", parseRound10(source("車両重量 kg", ["車両重量"]), 100, 99999), true);
+  put("車両総重量 kg", parseInteger(source("車両総重量 kg", ["車両総重量"]), 100, 99999), true);
+  put("長さ cm", parseInteger(source("長さ cm", ["長さ"]), 100, 3000), true);
+  put("幅 cm", parseInteger(source("幅 cm", ["幅"]), 100, 1000), true);
+  put("高さ cm", parseInteger(source("高さ cm", ["高さ"]), 100, 1000), true);
+
+  const axleValue = (label: string, aliases: string[]) => {
+    const s = sourceFor(globalText, debug, label, aliases);
+    const near = /^\s*[-－ー―]\s*$/.test(s.near) ? "-" : parseRound10(s.near, 100, 30000);
+    const raw = /^\s*[-－ー―]\s*$/.test(s.raw) ? "-" : parseRound10(s.raw, 100, 30000);
+    if (near && raw && near !== raw) return "";
+    return near || raw || "";
+  };
+
+  let ff = axleValue("前前軸重 kg", ["前前軸重"]);
+  let fr = axleValue("前後軸重 kg", ["前後軸重"]);
+  let rf = axleValue("後前軸重 kg", ["後前軸重"]);
+  let rr = axleValue("後後軸重 kg", ["後後軸重"]);
+
+  if (rf && rr && rf !== "-" && rf === rr) rf = "";
+  if (ff && fr && ff !== "-" && ff === fr) fr = "";
+
+  put("前前軸重 kg", ff, true);
+  put("前後軸重 kg", fr, true);
+  put("後前軸重 kg", rf, true);
+  put("後後軸重 kg", rr, true);
+
+  put("総排気量又は定格出力", parseOutput(source("総排気量又は定格出力", ["総排気量又は定格出力", "総排気量", "定格出力"])), true);
+
+  const fuels = ["軽油","ガソリン","揮発油","電気","LPG","CNG","水素"];
+  put("燃料の種類", pickKnown(source("燃料の種類", ["燃料の種類", "燃料"]), fuels) || pickKnown(globalText, fuels), true);
+
+  const designationSource = source("型式指定番号");
+  const classSource = source("類別区分番号");
+  put("型式指定番号", (designationSource.match(/\b\d{5}\b/) || [""])[0], true);
+  put("類別区分番号", (classSource.match(/\b\d{4}\b/) || [""])[0], true);
 
   return out;
 }
@@ -290,7 +327,7 @@ export default function VehicleWorkflowV2() {
           const input = fieldInput(label);
           if (!input || input.value === value) continue;
           nativeSet(input, value);
-          await new Promise((resolve) => setTimeout(resolve, 45));
+          await new Promise((resolve) => setTimeout(resolve, 35));
         }
       } finally {
         processing = false;
