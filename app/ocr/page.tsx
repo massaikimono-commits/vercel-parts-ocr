@@ -91,7 +91,7 @@ function bestName(texts: string[]) {
 
 function detectSupplierCode(texts: string[]) {
   const joined = normalizeText(texts.join(" ")).toUpperCase().replace(/\s+/g, "");
-  if (/MC-?E[1IL]?33/.test(joined) || /MC-?EI33/.test(joined)) return "MC-E133";
+  if (/M?C-?E[1IL]?33/.test(joined) || /M?C-?EI33/.test(joined)) return "MC-E133";
   return joined.match(/[A-Z]{1,4}-[A-Z0-9]{2,8}/)?.[0] || "";
 }
 
