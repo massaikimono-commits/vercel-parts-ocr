@@ -8,7 +8,7 @@ import CertificateConsistencyFix from "./certificate-consistency-fix";
 import CertificatePdfBridge from "./certificate-pdf-bridge";
 import CertificateQrReader from "./certificate-qr-reader";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
-import CertificateDateStateFix from "./certificate-date-state-fix";
+import CertificateStateAuthority from "./certificate-state-authority";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -192,7 +192,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificatePdfBridge />
         <CertificateQrReader />
         <CertificateQrApply />
-        <CertificateDateStateFix />
+        <CertificateStateAuthority />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
       </body>
     </html>
