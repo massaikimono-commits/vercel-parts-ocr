@@ -15,7 +15,7 @@ const compact = (v = "") => norm(v).replace(/\s+/g, "");
 const numish = (v = "") =>
   norm(v)
     .replace(/[OoQqDd]/g, "0")
-    .replace(/[Il|]/g, "1")
+    .replace(/[Il|!]/g, "1")
     .replace(/[Zz]/g, "2")
     .replace(/[Ss§]/g, "5")
     .replace(/[Bb]/g, "8");
@@ -91,17 +91,19 @@ function modelValue() {
 function modelStem(model) {
   const t = norm(model).toUpperCase().replace(/\s+/g, "");
   const core = t.includes("-") ? t.split("-").pop() || "" : t;
-  const m = core.match(/^([A-Z]{2,5}\d{1,4})/);
-  return m?.[1] || "";
+  return core.match(/^([A-Z]{2,5}\d{1,4})/)?.[1] || "";
 }
 
 function normalizeChassis(value, model) {
   let t = norm(value)
     .toUpperCase()
     .replace(/[OoQqDd]/g, "0")
-    .replace(/[Il|]/g, "1")
+    .replace(/[Il|!]/g, "1")
+    .replace(/[Zz]/g, "2")
+    .replace(/[Ss]/g, "5")
     .replace(/[＿_]/g, "-")
     .replace(/\s+/g, "")
+    .replace(/[^A-Z0-9-]/g, "")
     .replace(/--+/g, "-")
     .replace(/^S(?=N(?:KR|PR|LR|MR|QR|KS|PS|LS|MS|QS))/g, "")
     .replace(/NKRS(?=\d)/g, "NKR");
@@ -114,7 +116,8 @@ function normalizeChassis(value, model) {
       before === stem ||
       before.endsWith(stem) ||
       stem.endsWith(before) ||
-      before.replace(/S/g, "") === stem.replace(/S/g, "")
+      before.replace(/S/g, "") === stem.replace(/S/g, "") ||
+      Math.abs(before.length - stem.length) <= 2
     ) {
       t = `${stem}-${serial}`;
     }
@@ -124,23 +127,49 @@ function normalizeChassis(value, model) {
   return all.sort((a, b) => b.length - a.length)[0] || "";
 }
 
-function parseRegistration(text) {
-  const t = norm(text)
-    .replace(/[OoQqDd]/g, "0")
-    .replace(/[Il|]/g, "1")
-    .replace(/[一―‐‑‒–—ー]/g, "-");
+function currentUserName() {
+  return input("車検証読み取り情報", "使用者の氏名又は名称")?.value || "";
+}
 
-  const patterns = [
-    /([一-龠ぁ-んァ-ヶ]{1,8})\s*([0-9]{2,3})\s*([ぁ-ん])\s*[-・.]?\s*([0-9 ]{1,7})/,
-    /([一-龠ぁ-んァ-ヶ]{1,8})([0-9]{2,3})([ぁ-ん])([0-9]{1,4})/,
-  ];
+function fallbackRegionFromContext() {
+  const s = norm(currentUserName());
+  const m = s.match(/([一-龠]{2,4})(?:支店|営業所|事業所)/);
+  return m?.[1] || "";
+}
 
-  for (const p of patterns) {
-    const m = t.match(p);
-    if (!m) continue;
-    const serial = m[4].replace(/\D/g, "");
-    if (!serial || serial.length > 4) continue;
-    return `${m[1]} ${m[2]} ${m[3]} ${serial.padStart(4, "0")}`;
+function parseRegistration(texts) {
+  const list = texts.map((x) => norm(x)).filter(Boolean);
+  let cls = "";
+  let kana = "";
+  let serial = "";
+  const regions = [];
+
+  for (const raw of list) {
+    const t = numish(raw).replace(/[一―‐‑‒–—ー]/g, "-");
+    const groups = t.match(/\d{2,4}/g) || [];
+    const c = groups.find((x) => Number(x) >= 10 && Number(x) <= 999) || "";
+    const after = c ? groups.slice(groups.indexOf(c) + 1).filter((x) => x.length <= 4) : [];
+    const s = after[after.length - 1] || "";
+    if (!cls && c) cls = c;
+    if (!serial && s) serial = s;
+
+    if (!kana) {
+      const km = raw.match(/[ぁ-ん]/g) || [];
+      kana = km.find((x) => !/[あいうえお]/.test(x)) || km[0] || "";
+    }
+
+    const beforeClass = c ? t.split(c)[0] : t;
+    const rs = beforeClass.match(/[一-龠]{2,4}/g) || [];
+    for (const r of rs) regions.push(r);
+  }
+
+  const contextRegion = fallbackRegionFromContext();
+  let region = "";
+  if (contextRegion) region = contextRegion;
+  else region = regions.find((x) => x.length >= 2 && x.length <= 4) || "";
+
+  if (region && cls && kana && serial) {
+    return `${region} ${cls} ${kana} ${serial.padStart(4, "0")}`;
   }
   return "";
 }
@@ -148,7 +177,7 @@ function parseRegistration(text) {
 function eraFromText(text) {
   const t = norm(text)
     .replace(/作\s*和|今\s*和|三\s*和|信\s*和|合\s*和|令\s*[禾ロ]/g, "令和")
-    .replace(/平\s*[或戊成]/g, "平成");
+    .replace(/平\s*[或戊成陰]/g, "平成");
   if (/令和/.test(t)) return "令和";
   if (/平成/.test(t)) return "平成";
   if (/昭和/.test(t)) return "昭和";
@@ -160,9 +189,8 @@ function numberTokens(text) {
   const raw = t.match(/\d{1,4}/g) || [];
   const out = [];
   for (const s of raw) {
-    const n = Number(s);
-    out.push(n);
-    if (s.length === 3 && n > 99) {
+    out.push(Number(s));
+    if (s.length === 3) {
       out.push(Number(s.slice(0, 2)));
       out.push(Number(s.slice(1)));
     }
@@ -170,11 +198,9 @@ function numberTokens(text) {
   return out.filter((x) => Number.isFinite(x));
 }
 
-function looseDate(text, options = {}) {
-  const { monthOnly = false, eraHint = "", model = "" } = options;
+function looseDate(text, { monthOnly = false, eraHint = "", model = "" } = {}) {
   let era = eraFromText(text) || eraHint;
   const a = numberTokens(text);
-
   for (let i = 0; i < a.length; i++) {
     const y = a[i];
     if (y < 1 || y > 64) continue;
@@ -182,28 +208,25 @@ function looseDate(text, options = {}) {
       const m = a[j];
       if (m < 1 || m > 12) continue;
       if (monthOnly) {
-        if (!era && y > 10 && /^(TKG|QKG|PKG|SKG|LDA|DBA|DAA|3BA|4BA|5BA|5AA|6AA)-/i.test(norm(model))) {
-          era = "平成";
+        if (!era) {
+          if (
+            y >= 10 &&
+            /^(TKG|QKG|PKG|SKG|LDA|DBA|DAA|CBA|ABA)-/i.test(norm(model))
+          ) {
+            era = "平成";
+          } else if (y <= 15) {
+            era = "令和";
+          }
         }
         if (!era) continue;
         return `${era}${y}年${m}月`;
       }
       for (let k = j + 1; k < Math.min(a.length, j + 4); k++) {
         const d = a[k];
-        if (d < 1 || d > 31) continue;
-        if (!era) continue;
+        if (d < 1 || d > 31 || !era) continue;
         return `${era}${y}年${m}月${d}日`;
       }
     }
-  }
-  return "";
-}
-
-function company(text) {
-  for (const line0 of norm(text).split("\n")) {
-    const line = line0.replace(/\s{2,}/g, " ").trim();
-    const m = line.match(/(株式会社|有限会社|合同会社).{1,60}/);
-    if (m) return m[0].replace(/[|｜]+$/g, "").trim();
   }
   return "";
 }
@@ -212,13 +235,14 @@ function cleanAddressLine(line0) {
   let line = norm(line0)
     .replace(/使用者の住所/g, "")
     .replace(/使[房用]者.*住所/g, "")
-    .replace(/[［【\[(（]\s*[0-9０-９\s._-]{4,}.*$/g, "")
+    .replace(/[［【\[(（].*$/g, "")
     .replace(/([0-9])一([0-9])/g, "$1-$2")
     .replace(/\s*-\s*/g, "-")
     .replace(/\s+/g, "")
     .trim();
 
-  if (/[都道府県市区町村]/.test(line) && /-\d{6,}$/.test(line)) {
+  line = line.replace(/[A-Za-z<>{}|_^~]{2,}/g, "");
+  if (/-\d{1,4}\d{5,}$/.test(line)) {
     const m = line.match(/^(.*?-\d{1,4}?)(\d{5,})$/);
     if (m) line = m[1];
   }
@@ -226,25 +250,40 @@ function cleanAddressLine(line0) {
 }
 
 function address(text) {
-  for (const line0 of norm(text).split("\n")) {
+  const lines = norm(text).split("\n");
+  for (const line0 of lines) {
     const line = cleanAddressLine(line0);
     if (
       line.length >= 8 &&
       line.length <= 70 &&
-      /[都道府県市区町村]/.test(line) &&
-      /\d/.test(line) &&
-      !/記録|事項|型式|車両/.test(line)
+      /[都道府県]/.test(line) &&
+      /[市区町村]/.test(line) &&
+      /\d/.test(line)
     ) {
       return line;
     }
   }
+
+  const joined = cleanAddressLine(lines.join(""));
+  if (
+    joined.length >= 8 &&
+    joined.length <= 70 &&
+    /[都道府県]/.test(joined) &&
+    /[市区町村]/.test(joined) &&
+    /\d/.test(joined)
+  ) {
+    return joined;
+  }
   return "";
 }
 
-function baseLocation(text, debug) {
-  const raw = `${text}\n${rawField(debug, "使用の本拠の位置")}\n${globalText(debug)}`;
-  const around = raw.slice(Math.max(0, raw.indexOf("使用の本拠の位置")), raw.indexOf("使用の本拠の位置") + 240);
-  if (/[*＊※kK]{2,}/.test(text) || /[*＊※kK]{2,}/.test(around)) return "***";
+function baseLocation(debug) {
+  const g = norm(globalText(debug));
+  const i = g.indexOf("使用の本拠の位置");
+  const around = i >= 0 ? g.slice(i, i + 240) : g;
+  if (/(?:[*＊※kK]\s*){2,}/.test(around)) return "***";
+  const raw = rawField(debug, "使用の本拠の位置");
+  if (/(?:[*＊※kK]\s*){2,}/.test(raw)) return "***";
   return "";
 }
 
@@ -264,13 +303,15 @@ function bodyShape(text) {
     "バン",
   ];
   for (const x of choices) if (t.includes(x)) return x;
+  if (/[バパハ]ン/.test(t)) return "バン";
   return "";
 }
 
 function detectPaper(canvas) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
-  const w = canvas.width, h = canvas.height;
+  const w = canvas.width;
+  const h = canvas.height;
   const data = ctx.getImageData(0, 0, w, h).data;
   const step = Math.max(4, Math.floor(Math.max(w, h) / 650));
   const paperish = (x, y) => {
@@ -316,8 +357,11 @@ async function buildSource(img) {
     });
   }
   const c = document.createElement("canvas");
-  const max = 4200;
-  const s = Math.min(1, max / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+  const max = 4600;
+  const s = Math.min(
+    1,
+    max / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height)
+  );
   c.width = Math.max(1, Math.round((img.naturalWidth || img.width) * s));
   c.height = Math.max(1, Math.round((img.naturalHeight || img.height) * s));
   const ctx = c.getContext("2d", { willReadFrequently: true });
@@ -327,71 +371,89 @@ async function buildSource(img) {
   return c;
 }
 
-function cell(source, paper, x0, x1, y0, y1, targetWidth = 2200) {
+function makeCell(source, paper, x0, x1, y0, y1, { targetWidth = 2800, binary = true } = {}) {
   const sx = Math.max(0, Math.round(paper.x + paper.w * x0));
   const sy = Math.max(0, Math.round(paper.y + paper.h * y0));
   const sw = Math.max(1, Math.round(paper.w * (x1 - x0)));
   const sh = Math.max(1, Math.round(paper.h * (y1 - y0)));
-  const scale = Math.max(1, Math.min(8, targetWidth / sw));
+  const scale = Math.max(1, Math.min(10, targetWidth / sw));
+  const pad = 28;
 
   const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(sw * scale));
-  c.height = Math.max(1, Math.round(sh * scale));
+  c.width = Math.max(1, Math.round(sw * scale)) + pad * 2;
+  c.height = Math.max(1, Math.round(sh * scale)) + pad * 2;
   const ctx = c.getContext("2d", { willReadFrequently: true });
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, c.width, c.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  ctx.drawImage(
+    source,
+    sx,
+    sy,
+    sw,
+    sh,
+    pad,
+    pad,
+    c.width - pad * 2,
+    c.height - pad * 2
+  );
 
   const im = ctx.getImageData(0, 0, c.width, c.height);
   const gray = new Uint8Array(c.width * c.height);
+  let min = 255, max = 0;
   for (let p = 0, i = 0; p < im.data.length; p += 4, i++) {
-    const lum = im.data[p] * 0.22 + im.data[p + 1] * 0.7 + im.data[p + 2] * 0.08;
-    const v = Math.max(0, Math.min(255, Math.round((lum - 128) * 1.55 + 128)));
+    const v = Math.round(im.data[p] * 0.22 + im.data[p + 1] * 0.7 + im.data[p + 2] * 0.08);
     gray[i] = v;
-    im.data[p] = im.data[p + 1] = im.data[p + 2] = v;
-    im.data[p + 3] = 255;
+    if (v < min) min = v;
+    if (v > max) max = v;
   }
 
-  const rowDark = new Uint32Array(c.height);
-  const colDark = new Uint32Array(c.width);
-  for (let y = 0; y < c.height; y++) {
-    for (let x = 0; x < c.width; x++) {
-      if (gray[y * c.width + x] < 92) {
-        rowDark[y]++;
-        colDark[x]++;
-      }
-    }
+  const span = Math.max(25, max - min);
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < gray.length; i++) {
+    const v = Math.max(0, Math.min(255, Math.round(((gray[i] - min) * 255) / span)));
+    gray[i] = v;
+    hist[v]++;
   }
-  for (let y = 0; y < c.height; y++) {
-    if (rowDark[y] / c.width > 0.5) {
-      for (let yy = Math.max(0, y - 1); yy <= Math.min(c.height - 1, y + 1); yy++) {
-        for (let x = 0; x < c.width; x++) {
-          const p = (yy * c.width + x) * 4;
-          im.data[p] = im.data[p + 1] = im.data[p + 2] = 255;
-        }
+
+  let threshold = 170;
+  if (binary) {
+    const total = gray.length;
+    let sum = 0;
+    for (let i = 0; i < 256; i++) sum += i * hist[i];
+    let sumB = 0, wB = 0, best = -1;
+    for (let i = 0; i < 256; i++) {
+      wB += hist[i];
+      if (!wB) continue;
+      const wF = total - wB;
+      if (!wF) break;
+      sumB += i * hist[i];
+      const mB = sumB / wB;
+      const mF = (sum - sumB) / wF;
+      const score = wB * wF * (mB - mF) * (mB - mF);
+      if (score > best) {
+        best = score;
+        threshold = i;
       }
     }
+    threshold = Math.max(115, Math.min(210, threshold + 10));
   }
-  for (let x = 0; x < c.width; x++) {
-    if (colDark[x] / c.height > 0.72) {
-      for (let xx = Math.max(0, x - 1); xx <= Math.min(c.width - 1, x + 1); xx++) {
-        for (let y = 0; y < c.height; y++) {
-          const p = (y * c.width + xx) * 4;
-          im.data[p] = im.data[p + 1] = im.data[p + 2] = 255;
-        }
-      }
-    }
+
+  for (let p = 0, i = 0; p < im.data.length; p += 4, i++) {
+    const v = binary ? (gray[i] > threshold ? 255 : 0) : gray[i];
+    im.data[p] = im.data[p + 1] = im.data[p + 2] = v;
+    im.data[p + 3] = 255;
   }
   ctx.putImageData(im, 0, 0);
   return c;
 }
 
-async function recognize(worker, canvas, psm = "7") {
+async function recognize(worker, canvas, psm = "7", whitelist = "") {
   await worker.setParameters({
     tessedit_pageseg_mode: String(psm),
     preserve_interword_spaces: "1",
+    tessedit_char_whitelist: whitelist,
   });
   const r = await worker.recognize(canvas);
   return norm(r?.data?.text || "");
@@ -404,28 +466,84 @@ async function extract(img, debug) {
   const worker = await t.createWorker("jpn+eng", 1);
 
   try {
-    const regText = await recognize(worker, cell(source, paper, 0.28, 0.62, 0.204, 0.234), "7");
-    const chassisText = await recognize(worker, cell(source, paper, 0.21, 0.60, 0.228, 0.257), "11");
-    const registrationDateText = await recognize(worker, cell(source, paper, 0.29, 0.49, 0.249, 0.281), "7");
-    const firstRegistrationText = await recognize(worker, cell(source, paper, 0.50, 0.69, 0.249, 0.281), "7");
-    const expiryText = await recognize(worker, cell(source, paper, 0.70, 0.91, 0.249, 0.281), "7");
-    const userText = await recognize(worker, cell(source, paper, 0.27, 0.78, 0.283, 0.370), "6");
-    const bodyText = await recognize(worker, cell(source, paper, 0.18, 0.38, 0.445, 0.480), "6");
+    const regBox = [0.30, 0.69, 0.214, 0.238];
+    const regBinary = await recognize(
+      worker,
+      makeCell(source, paper, ...regBox, { targetWidth: 3000, binary: true }),
+      "7"
+    );
+    const regGray = await recognize(
+      worker,
+      makeCell(source, paper, ...regBox, { targetWidth: 3000, binary: false }),
+      "7"
+    );
+
+    const chassisText = await recognize(
+      worker,
+      makeCell(source, paper, 0.235, 0.67, 0.236, 0.258, {
+        targetWidth: 3000,
+        binary: true,
+      }),
+      "7",
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
+    );
+
+    const registrationDateText = await recognize(
+      worker,
+      makeCell(source, paper, 0.275, 0.49, 0.258, 0.282, {
+        targetWidth: 2400,
+        binary: true,
+      }),
+      "7"
+    );
+    const firstRegistrationText = await recognize(
+      worker,
+      makeCell(source, paper, 0.485, 0.685, 0.258, 0.282, {
+        targetWidth: 2200,
+        binary: true,
+      }),
+      "7"
+    );
+    const expiryText = await recognize(
+      worker,
+      makeCell(source, paper, 0.675, 0.90, 0.258, 0.282, {
+        targetWidth: 2400,
+        binary: true,
+      }),
+      "7"
+    );
+
+    const addressText = await recognize(
+      worker,
+      makeCell(source, paper, 0.27, 0.86, 0.326, 0.351, {
+        targetWidth: 3200,
+        binary: false,
+      }),
+      "7"
+    );
+
+    const bodyText = await recognize(
+      worker,
+      makeCell(source, paper, 0.18, 0.39, 0.458, 0.486, {
+        targetWidth: 2200,
+        binary: true,
+      }),
+      "7"
+    );
 
     const model = modelValue();
-    const currentRecord = input("車検証読み取り情報", "記録年月日")?.value || "";
-    const eraHint = eraFromText(currentRecord) || "令和";
+    const record = input("車検証読み取り情報", "記録年月日")?.value || "";
+    const eraHint = eraFromText(record) || "令和";
 
     return {
       documentNumber: documentNumberFromDebug(debug),
-      registrationNumber: parseRegistration(regText),
+      registrationNumber: parseRegistration([regBinary, regGray]),
       chassisNumber: normalizeChassis(chassisText, model),
       registrationDate: looseDate(registrationDateText, { eraHint, model }),
       firstRegistration: looseDate(firstRegistrationText, { monthOnly: true, model }),
       inspectionExpiry: looseDate(expiryText, { eraHint, model }),
-      userName: company(userText),
-      userAddress: address(userText),
-      baseLocation: baseLocation(userText, debug),
+      userAddress: address(addressText),
+      baseLocation: baseLocation(debug),
       bodyShape: bodyShape(bodyText),
     };
   } finally {
@@ -443,7 +561,6 @@ function apply(v) {
   setInput(d("登録年月日／交付年月日"), v.registrationDate);
   setInput(d("初度登録年月"), v.firstRegistration);
   setInput(d("有効期間の満了する日"), v.inspectionExpiry);
-  setInput(d("使用者の氏名又は名称"), v.userName);
   setInput(d("使用者の住所"), v.userAddress);
   setInput(d("使用の本拠の位置"), v.baseLocation);
   setInput(d("車体の形状"), v.bodyShape);
@@ -454,19 +571,19 @@ function apply(v) {
     if (last) setInput(b("ナンバー下4桁"), last);
   }
   setInput(b("車台番号"), v.chassisNumber);
-  if (v.firstRegistration) setInput(b("初度登録（和暦）"), v.firstRegistration);
-  else {
-    const el = b("初度登録（和暦）");
-    if (el && el.value) setInput(el, "", true);
-  }
+  setInput(b("初度登録（和暦）"), v.firstRegistration);
 
   const addr = d("使用者の住所");
-  if (addr && /ペペ|バケ|TTTT|手細情報|[<>{}]/.test(addr.value)) setInput(addr, "", true);
+  if (
+    addr &&
+    !v.userAddress &&
+    (/\[[A-Za-z0-9]/.test(addr.value) || /[A-Z]{3,}/.test(addr.value) || /ペペ|バケ|TTTT|手細情報/.test(addr.value))
+  ) {
+    setInput(addr, "", true);
+  }
 
   const base = d("使用の本拠の位置");
-  if (base && /原動機|KG-|ババ|T-\s*e/.test(base.value)) setInput(base, "", true);
-
-  if (addr && base && addr.value && base.value === addr.value && !v.baseLocation) {
+  if (base && !v.baseLocation && /原動機|KG-|ババ|T-\s*e/.test(base.value)) {
     setInput(base, "", true);
   }
 
@@ -517,7 +634,11 @@ export default function CertificateTopCellsFix() {
     };
 
     const obs = new MutationObserver(() => void run());
-    obs.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    obs.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
     const id = setInterval(() => void run(), 900);
     void run();
 
