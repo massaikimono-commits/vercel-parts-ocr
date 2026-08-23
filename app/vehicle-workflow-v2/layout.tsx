@@ -4,6 +4,7 @@ import CertificateMicroCellsFix from "../certificate-micro-cells-fix";
 import CertificateAuthoritativeFix from "../certificate-authoritative-fix";
 import CertificateTemplateRowV2 from "../certificate-template-row-v2";
 import CertificateCriticalV3 from "../certificate-critical-v3";
+import CertificateClassificationNumberGuard from "../certificate-classification-number-guard";
 
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,6 +16,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateAuthoritativeFix />
       <CertificateTemplateRowV2 />
       <CertificateCriticalV3 />
+      <CertificateClassificationNumberGuard />
     </>
   );
 }
