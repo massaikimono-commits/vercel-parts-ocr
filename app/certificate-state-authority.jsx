@@ -11,7 +11,13 @@ const BODY_TYPES = [
 ];
 
 function parseBody(raw = "") {
-  const t = compact(raw).replace(/\s+/g, "");
+  let t = compact(raw).replace(/\s+/g, "");
+  t = t
+    .replace(/パン/g, "バン")
+    .replace(/ハン/g, "バン")
+    .replace(/バソ/g, "バン")
+    .replace(/パソ/g, "バン")
+    .replace(/ヴァン/g, "バン");
   return BODY_TYPES.find((name) => t.includes(name)) || "";
 }
 
@@ -29,12 +35,14 @@ function parseJpDate(raw = "") {
   const eraMatch = t.match(/令和|平成|昭和/);
   if (!eraMatch) return "";
   const era = eraMatch[0];
-  let tail = t.slice(t.indexOf(era) + era.length);
+  const tail = t.slice(t.indexOf(era) + era.length);
 
-  // OCRで「20」の0が縦棒になることがある。日付末尾の 2| は 20 としても候補化する。
-  const variants = [tail];
-  if (/2\s*[|｜]/.test(tail)) variants.push(tail.replace(/2\s*[|｜]/, "20"));
+  // 車検証の細字OCRでは「20日」の0が | / ｜ に見えることがある。
+  // 2| を先に20へ補正し、その後に通常候補を試す。
+  const variants = [];
+  if (/2\s*[|｜]/.test(tail)) variants.push(tail.replace(/2\s*[|｜]/g, "20"));
   variants.push(tail.replace(/[|｜]/g, "1"));
+  variants.push(tail);
 
   for (const v of variants) {
     const nums = (v.match(/\d{1,2}/g) || []).map(Number);
@@ -59,7 +67,7 @@ async function canvasFromFile(file) {
     });
     const iw = img.naturalWidth || img.width;
     const ih = img.naturalHeight || img.height;
-    const scale = Math.min(1, 5200 / Math.max(iw, ih));
+    const scale = Math.min(1, 5600 / Math.max(iw, ih));
     const c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(iw * scale));
     c.height = Math.max(1, Math.round(ih * scale));
@@ -142,33 +150,35 @@ function crop(source, paper, box, binary = false, targetWidth = 2600) {
   return c;
 }
 
+function mode(items) {
+  const counts = new Map();
+  for (const v of items.filter(Boolean)) counts.set(v, (counts.get(v) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+}
+
 async function targetedRead(file) {
   const source = await canvasFromFile(file);
   const paper = detectPaper(source);
   const t = await import("tesseract.js");
   const worker = await t.createWorker("jpn+eng", 1);
-  const dateCandidates = [];
-  const bodyCandidates = [];
-  const dateRaws = [];
-  const bodyRaws = [];
+  const dateCandidates = [], bodyCandidates = [], dateRaws = [], bodyRaws = [];
 
-  // 実車検証の印字位置を中心に、上下左右へ少しずつずらした候補。
+  // 本体OCRと同じ用紙比率を基準に、対象セルだけを狭く再読込。
   const dateBoxes = [
-    [0.145, 0.205, 0.430, 0.282],
-    [0.165, 0.220, 0.420, 0.275],
-    [0.185, 0.228, 0.425, 0.290],
-    [0.120, 0.205, 0.460, 0.295],
+    [0.155, 0.232, 0.425, 0.282],
+    [0.170, 0.238, 0.410, 0.276],
+    [0.135, 0.225, 0.445, 0.288],
   ];
   const bodyBoxes = [
-    [0.060, 0.435, 0.340, 0.525],
-    [0.070, 0.455, 0.320, 0.515],
-    [0.090, 0.445, 0.360, 0.535],
+    [0.105, 0.485, 0.345, 0.540],
+    [0.125, 0.493, 0.325, 0.535],
+    [0.080, 0.478, 0.365, 0.548],
   ];
 
   try {
     for (const b of dateBoxes) {
       for (const binary of [false, true]) {
-        const c = crop(source, paper, b, binary, 2800);
+        const c = crop(source, paper, b, binary, 3000);
         for (const psm of ["7", "6", "11"]) {
           await worker.setParameters({ tessedit_pageseg_mode: psm, preserve_interword_spaces: "1", user_defined_dpi: "300" });
           const raw = compact((await worker.recognize(c)).data.text || "");
@@ -181,7 +191,7 @@ async function targetedRead(file) {
 
     for (const b of bodyBoxes) {
       for (const binary of [false, true]) {
-        const c = crop(source, paper, b, binary, 2400);
+        const c = crop(source, paper, b, binary, 2600);
         for (const psm of ["7", "6", "11"]) {
           await worker.setParameters({ tessedit_pageseg_mode: psm, preserve_interword_spaces: "1", user_defined_dpi: "300" });
           const raw = compact((await worker.recognize(c)).data.text || "");
@@ -195,74 +205,89 @@ async function targetedRead(file) {
     await worker.terminate().catch(() => {});
   }
 
-  const mode = (items) => {
-    const counts = new Map();
-    for (const v of items) counts.set(v, (counts.get(v) || 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
-  };
-
-  return {
-    registrationDate: mode(dateCandidates),
-    bodyShape: mode(bodyCandidates),
-    dateRaws,
-    bodyRaws,
-  };
+  return { registrationDate: mode(dateCandidates), bodyShape: mode(bodyCandidates), dateRaws, bodyRaws };
 }
 
-function getVehicleStateHook() {
-  const node = document.querySelector("main.page");
-  if (!node) return null;
-  const key = Object.keys(node).find((k) => k.startsWith("__reactFiber$"));
-  let fiber = key ? node[key] : null;
-  while (fiber) {
-    let hook = fiber.memoizedState;
-    while (hook) {
-      const state = hook.memoizedState;
-      if (state && typeof state === "object" && state.certificate && typeof state.firstRegistration === "string" && typeof hook.queue?.dispatch === "function") {
-        return hook;
-      }
-      hook = hook.next;
-    }
-    fiber = fiber.return;
+function section(title) {
+  return Array.from(document.querySelectorAll("section.card")).find((s) =>
+    s.querySelector("h2")?.textContent?.includes(title)
+  ) || null;
+}
+
+function detailInput(labelText) {
+  const s = section("車検証読み取り情報");
+  if (!s) return null;
+  for (const label of Array.from(s.querySelectorAll("label"))) {
+    const title = compact(label.querySelector("span")?.textContent || "");
+    if (title === compact(labelText)) return label.querySelector("input");
   }
   return null;
 }
 
-function fuelTypeFromQr(fuel = "") {
-  const t = compact(fuel);
-  if (/軽油|ディーゼル/.test(t)) return "ディーゼル";
-  if (/ガソリン/.test(t)) return "ガソリン";
-  if (/電気/.test(t)) return "EV";
-  return "その他";
+function basicInput(prefix) {
+  const s = section("基本情報");
+  if (!s) return null;
+  for (const label of Array.from(s.querySelectorAll("label"))) {
+    const text = compact(label.textContent || "");
+    if (text.startsWith(compact(prefix))) return label.querySelector("input");
+  }
+  return null;
 }
 
-function applyAuthoritativeState(extra = {}) {
-  const hook = getVehicleStateHook();
-  if (!hook) return false;
-  const current = hook.memoizedState;
-  const qr = window.__vehicleCertificateQrPriority || {};
-  const certificate = {
-    ...current.certificate,
-    ...(qr.firstRegistration ? { firstRegistration: qr.firstRegistration } : {}),
-    ...(qr.inspectionExpiry ? { inspectionExpiry: qr.inspectionExpiry } : {}),
-    ...(qr.model ? { model: qr.model } : {}),
-    ...(qr.frontFrontAxleWeightKg ? { frontFrontAxleWeightKg: qr.frontFrontAxleWeightKg } : {}),
-    ...(qr.frontRearAxleWeightKg ? { frontRearAxleWeightKg: qr.frontRearAxleWeightKg } : {}),
-    ...(qr.rearFrontAxleWeightKg ? { rearFrontAxleWeightKg: qr.rearFrontAxleWeightKg } : {}),
-    ...(qr.rearRearAxleWeightKg ? { rearRearAxleWeightKg: qr.rearRearAxleWeightKg } : {}),
-    ...(qr.fuel ? { fuel: qr.fuel } : {}),
-    ...(extra.registrationDate ? { registrationDate: extra.registrationDate } : {}),
-    ...(extra.bodyShape ? { bodyShape: extra.bodyShape } : {}),
-  };
-  const next = {
-    ...current,
-    certificate,
-    ...(qr.firstRegistration ? { firstRegistration: qr.firstRegistration } : {}),
-    ...(qr.model ? { model: qr.model } : {}),
-    ...(qr.fuel ? { type: fuelTypeFromQr(qr.fuel) } : {}),
-  };
-  hook.queue.dispatch(next);
+function reactProps(el) {
+  if (!el) return null;
+  const key = Object.keys(el).find((k) => k.startsWith("__reactProps$"));
+  return key ? el[key] : null;
+}
+
+function fireReactChange(el, value) {
+  if (!(el instanceof HTMLInputElement) || !value) return false;
+  const props = reactProps(el);
+  if (typeof props?.onChange === "function") {
+    props.onChange({
+      target: { value },
+      currentTarget: { value },
+      preventDefault() {},
+      stopPropagation() {},
+    });
+    return true;
+  }
+
+  // React propsが取れない場合のフォールバック。
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  const previous = el.value;
+  if (setter) setter.call(el, value); else el.value = value;
+  if (el._valueTracker) el._valueTracker.setValue(previous);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
   return true;
+}
+
+async function setAndVerify(getter, value, attempts = 5) {
+  if (!value) return true;
+  for (let i = 0; i < attempts; i += 1) {
+    const el = getter();
+    if (el?.value === value) return true;
+    if (el) fireReactChange(el, value);
+    await sleep(650);
+    if (getter()?.value === value) return true;
+  }
+  return false;
+}
+
+function snapshot(extra) {
+  const qr = window.__vehicleCertificateQrPriority || {};
+  return {
+    registrationDate: detailInput("登録年月日／交付年月日")?.value || "",
+    firstDetail: detailInput("初度登録年月")?.value || "",
+    firstBasic: basicInput("初度登録")?.value || "",
+    expiry: detailInput("有効期間の満了する日")?.value || "",
+    body: detailInput("車体の形状")?.value || "",
+    targetRegistrationDate: extra?.registrationDate || "",
+    targetFirst: qr.firstRegistration || "",
+    targetExpiry: qr.inspectionExpiry || "",
+    targetBody: extra?.bodyShape || "",
+  };
 }
 
 function showStatus(extra, state) {
@@ -276,18 +301,59 @@ function showStatus(extra, state) {
     box.innerHTML = '<summary style="font-weight:800">本体state最終確定（確認用）</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px"></pre>';
     host.appendChild(box);
   }
-  const qr = window.__vehicleCertificateQrPriority || {};
+  const s = snapshot(extra);
   const pre = box.querySelector("pre");
   if (pre) pre.textContent = [
     `状態: ${state}`,
-    `登録年月日: ${extra?.registrationDate || "未取得"}`,
-    `初度登録(QR): ${qr.firstRegistration || "待機中"}`,
-    `有効期限(QR): ${qr.inspectionExpiry || "待機中"}`,
-    `車体の形状: ${extra?.bodyShape || "未取得"}`,
+    `登録年月日: ${s.registrationDate} → ${s.targetRegistrationDate || "未取得"}`,
+    `初度登録(詳細): ${s.firstDetail} → ${s.targetFirst || "待機中"}`,
+    `初度登録(基本): ${s.firstBasic} → ${s.targetFirst || "待機中"}`,
+    `有効期限: ${s.expiry} → ${s.targetExpiry || "待機中"}`,
+    `車体の形状: ${s.body || "空欄"} → ${s.targetBody || "未取得"}`,
     "",
     "登録年月日OCR:", ...(extra?.dateRaws || ["(空)"]),
     "", "車体形状OCR:", ...(extra?.bodyRaws || ["(空)"]),
   ].join("\n");
+}
+
+async function applyAll(extra) {
+  const qr = window.__vehicleCertificateQrPriority || {};
+
+  // 同じupdate()が古いstateを使わないよう、必ず1項目ずつ再描画を待つ。
+  if (extra.registrationDate) {
+    showStatus(extra, "登録年月日を反映中");
+    await setAndVerify(() => detailInput("登録年月日／交付年月日"), extra.registrationDate);
+  }
+
+  if (qr.firstRegistration) {
+    showStatus(extra, "初度登録を反映中");
+    // 基本情報の初度登録はupdate("firstRegistration")なので、ここを起点にすると詳細欄も同時更新される。
+    const basicOk = await setAndVerify(() => basicInput("初度登録"), qr.firstRegistration);
+    if (!basicOk || detailInput("初度登録年月")?.value !== qr.firstRegistration) {
+      await setAndVerify(() => detailInput("初度登録年月"), qr.firstRegistration);
+    }
+  }
+
+  if (qr.inspectionExpiry) {
+    showStatus(extra, "有効期限を確認中");
+    await setAndVerify(() => detailInput("有効期間の満了する日"), qr.inspectionExpiry);
+  }
+
+  if (extra.bodyShape) {
+    showStatus(extra, "車体の形状を反映中");
+    await setAndVerify(() => detailInput("車体の形状"), extra.bodyShape);
+  }
+
+  const s = snapshot(extra);
+  const required = [
+    !extra.registrationDate || s.registrationDate === extra.registrationDate,
+    !qr.firstRegistration || (s.firstDetail === qr.firstRegistration && s.firstBasic === qr.firstRegistration),
+    !qr.inspectionExpiry || s.expiry === qr.inspectionExpiry,
+    !extra.bodyShape || s.body === extra.bodyShape,
+  ];
+  const done = required.every(Boolean);
+  showStatus(extra, done ? "本体フォーム反映完了" : "一部未反映（再試行）");
+  return done;
 }
 
 export default function CertificateStateAuthority() {
@@ -304,8 +370,8 @@ export default function CertificateStateAuthority() {
       const id = ++scanId;
 
       void (async () => {
-        // 本体OCRとQR処理を先に完了させ、最後に確定する。
-        for (let i = 0; i < 160 && !dead && id === scanId; i += 1) {
+        // 本体OCRとQRを先に完了させる。
+        for (let i = 0; i < 180 && !dead && id === scanId; i += 1) {
           if (!document.querySelector(".progress") && window.__vehicleCertificateQrPriority?.firstRegistration) break;
           await sleep(350);
         }
@@ -315,11 +381,12 @@ export default function CertificateStateAuthority() {
         const extra = await targetedRead(file);
         if (dead || id !== scanId) return;
 
-        for (let i = 0; i < 8 && !dead && id === scanId; i += 1) {
-          const ok = applyAuthoritativeState(extra);
-          showStatus(extra, ok ? (i >= 2 ? "本体state反映完了" : "本体stateへ反映中") : "React state待ち");
-          await sleep(500);
+        // 最大3巡だけ。永続ループはしない。
+        for (let pass = 0; pass < 3 && !dead && id === scanId; pass += 1) {
+          if (await applyAll(extra)) return;
+          await sleep(900);
         }
+        showStatus(extra, "確認終了（未反映項目あり）");
       })().catch((error) => showStatus({ dateRaws: [String(error?.message || error)] }, "最終確定エラー"));
     };
 
