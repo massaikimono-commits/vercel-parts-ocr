@@ -5,7 +5,6 @@ import CertificateRowPriorityFix from "./certificate-row-priority-fix";
 import CertificateFuelClassificationFix from "./certificate-fuel-classification-fix";
 import CertificateChassisCorrectionFix from "./certificate-chassis-correction-fix";
 import CertificateConsistencyFix from "./certificate-consistency-fix";
-import CertificateCriticalV3 from "./certificate-critical-v3";
 import CertificateQrReader from "./certificate-qr-reader";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
 
@@ -188,7 +187,6 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificateFuelClassificationFix />
         <CertificateChassisCorrectionFix />
         <CertificateConsistencyFix />
-        <CertificateCriticalV3 />
         <CertificateQrReader />
         <CertificateQrApply />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
