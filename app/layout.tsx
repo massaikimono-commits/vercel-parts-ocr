@@ -7,6 +7,7 @@ import CertificateChassisCorrectionFix from "./certificate-chassis-correction-fi
 import CertificateConsistencyFix from "./certificate-consistency-fix";
 import CertificateCriticalV3 from "./certificate-critical-v3";
 import CertificateQrReader from "./certificate-qr-reader";
+import CertificateQrApply from "./certificate-qr-apply";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -189,6 +190,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificateConsistencyFix />
         <CertificateCriticalV3 />
         <CertificateQrReader />
+        <CertificateQrApply />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
       </body>
     </html>
