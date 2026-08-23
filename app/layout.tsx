@@ -1,5 +1,6 @@
 import "./globals.css";
 import CertificatePriorityFix from "./certificate-priority-fix";
+import CertificateEssentialFieldsFix from "./certificate-essential-fields-fix";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -175,6 +176,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
       <body>
         {children}
         <CertificatePriorityFix />
+        <CertificateEssentialFieldsFix />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
       </body>
     </html>
