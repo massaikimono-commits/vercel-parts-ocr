@@ -7,7 +7,7 @@ import CertificateChassisCorrectionFix from "./certificate-chassis-correction-fi
 import CertificateConsistencyFix from "./certificate-consistency-fix";
 import CertificateCriticalV3 from "./certificate-critical-v3";
 import CertificateQrReader from "./certificate-qr-reader";
-import CertificateQrApply from "./certificate-qr-apply";
+import CertificateQrApply from "./certificate-qr-apply-fixed";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
