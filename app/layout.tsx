@@ -1,6 +1,8 @@
 import "./globals.css";
 import CertificatePriorityFix from "./certificate-priority-fix";
 import CertificateEssentialFieldsFix from "./certificate-essential-fields-fix";
+import CertificateFuelClassificationFix from "./certificate-fuel-classification-fix";
+import CertificateChassisCorrectionFix from "./certificate-chassis-correction-fix";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -177,6 +179,8 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         {children}
         <CertificatePriorityFix />
         <CertificateEssentialFieldsFix />
+        <CertificateFuelClassificationFix />
+        <CertificateChassisCorrectionFix />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
       </body>
     </html>
