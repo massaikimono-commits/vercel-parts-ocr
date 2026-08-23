@@ -30,20 +30,29 @@ const photoPickerEnhancer = `
     });
   };
 
-  const goHighAccuracyOCR = (event) => {
+  const routeMainActions = (event) => {
     if (location.pathname !== "/") return;
     const target = event.target instanceof Element ? event.target.closest("button") : null;
     if (!target) return;
     const text = target.textContent || "";
+
     if (text.includes("②伝票OCR") || text.includes("高精度OCRで読み込む")) {
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
       location.assign("/ocr");
+      return;
+    }
+
+    if (text.includes("④印刷")) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      location.assign("/parts-print");
     }
   };
 
-  document.addEventListener("click", goHighAccuracyOCR, true);
+  document.addEventListener("click", routeMainActions, true);
   enhance();
 
   const observer = new MutationObserver(enhance);
