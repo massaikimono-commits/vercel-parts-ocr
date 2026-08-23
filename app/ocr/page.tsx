@@ -27,7 +27,7 @@ const styles: Record<string, React.CSSProperties> = {
   notice: { padding: "13px 15px", background: "#e9f7ef", border: "1px solid #bfe6ce", borderRadius: 12, marginBottom: 14, lineHeight: 1.6 },
   row: { display: "grid", gridTemplateColumns: "minmax(180px, 2fr) 80px 120px 120px", gap: 8, marginBottom: 10 },
   input: { width: "100%", minWidth: 0, border: "2px solid #d6deea", borderRadius: 10, padding: "11px 10px", fontSize: 16 },
-  debug: { width: "100%", minHeight: 230, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" },
+  debug: { width: "100%", minHeight: 260, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" },
 };
 
 function normalizeText(text: string) {
@@ -64,8 +64,10 @@ function correctCommonPartWord(text: string) {
     "ベアリング", "プラグ", "オイル",
   ];
 
-  let corrected = text
-    .replace(/リクフッチ|リクラッチ|クラツチ|クフッチ|ラクッチ|クフツチ/g, "クラッチ");
+  let corrected = text.replace(
+    /リクフッチ|リクラッチ|クラツチ|クフッチ|ラクッチ|クフツチ|クラッヂ/g,
+    "クラッチ"
+  );
 
   corrected = corrected.replace(/[ァ-ヶー]{3,}/g, (token) => {
     let best = token;
@@ -86,12 +88,11 @@ function correctCommonPartWord(text: string) {
 function cleanPartName(raw: string) {
   let text = normalizeText(raw)
     .replace(/([ぁ-んァ-ヶ一-龠])\s+(?=[ぁ-んァ-ヶ一-龠])/g, "$1")
-    .replace(/([ぁ-んァ-ヶ一-龠])\s+(?=[ぁ-んァ-ヶ一-龠])/g, "$1")
-    .replace(/^[\[\](){}|/\\・:;.,\s]+/, "")
+    .replace(/^[\[\](){}|\\・:;.,\s]+/, "")
+    .replace(/\bMC\s*-?\s*E\s*\d+\b/gi, " ")
+    .replace(/\*?0{2,}\d+/g, " ")
     .replace(/[¥￥]\s*[0-9Il|OQS,.\s]+.*$/i, "")
     .replace(/\s+[YV]\s*\d{3,}.*$/i, "")
-    .replace(/\bMC[- ]?E\d+\b/gi, " ")
-    .replace(/\*?0{2,}\d+/g, " ")
     .replace(/^[-:;|・.\s]+|[-:;|・.\s]+$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
@@ -125,6 +126,7 @@ function nameScore(text: string) {
 function bestName(texts: string[]) {
   let name = "";
   let score = -100;
+
   for (const text of texts) {
     for (const line of normalizeText(text).split(/\n+/).map((x) => x.trim()).filter(Boolean)) {
       const cleaned = cleanPartName(line);
@@ -135,6 +137,7 @@ function bestName(texts: string[]) {
       }
     }
   }
+
   return { name: score >= 1 ? name : "", score };
 }
 
@@ -184,6 +187,7 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
   const { width: w, height: h } = canvas;
   const pixels = ctx.getImageData(0, 0, w, h).data;
   const step = Math.max(2, Math.floor(Math.max(w, h) / 800));
+
   const isPaper = (r: number, g: number, b: number) => {
     const bright = (r + g + b) / 3;
     const yellow = r > 100 && g > 95 && r + g > b * 1.75;
@@ -201,12 +205,13 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
     }
     if (count && hit / count > 0.18) ys.push(y);
   }
+
   if (ys.length < 4) return { x: 0, y: 0, w, h };
 
   const top = Math.max(0, ys[0] - step * 2);
   const roughBottom = Math.min(h - 1, ys[ys.length - 1] + step * 2);
-  const xs: number[] = [];
 
+  const xs: number[] = [];
   for (let x = 0; x < w; x += step) {
     let hit = 0;
     let count = 0;
@@ -223,6 +228,7 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
   const width = right - left + 1;
   let boxHeight = roughBottom - top + 1;
 
+  // この伝票は幅:高さがおよそ1.74:1。台紙を下端として拾った時だけ補正する。
   const expectedHeight = Math.round(width / 1.74);
   if (width / boxHeight < 1.55 && expectedHeight < boxHeight) {
     boxHeight = Math.min(expectedHeight, h - top);
@@ -245,24 +251,25 @@ async function makeCrop(
   source: HTMLCanvasElement,
   box: CropBox,
   targetWidth: number,
-  options: { raw?: boolean; rotate?: number; contrast?: number } = {}
+  options: { raw?: boolean; contrast?: number } = {}
 ) {
   const scale = Math.min(8, Math.max(1, targetWidth / box.w));
-  const base = document.createElement("canvas");
-  base.width = Math.max(1, Math.round(box.w * scale));
-  base.height = Math.max(1, Math.round(box.h * scale));
-  const ctx = base.getContext("2d", { willReadFrequently: true });
+  const out = document.createElement("canvas");
+  out.width = Math.max(1, Math.round(box.w * scale));
+  out.height = Math.max(1, Math.round(box.h * scale));
+  const ctx = out.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("画像処理を開始できませんでした。");
 
   ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, base.width, base.height);
+  ctx.fillRect(0, 0, out.width, out.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, box.x, box.y, box.w, box.h, 0, 0, base.width, base.height);
+  ctx.drawImage(source, box.x, box.y, box.w, box.h, 0, 0, out.width, out.height);
 
   if (!options.raw) {
-    const image = ctx.getImageData(0, 0, base.width, base.height);
-    const contrast = options.contrast ?? 1.18;
+    const image = ctx.getImageData(0, 0, out.width, out.height);
+    const contrast = options.contrast ?? 1.25;
+
     for (let p = 0; p < image.data.length; p += 4) {
       const r = image.data[p];
       const g = image.data[p + 1];
@@ -275,30 +282,16 @@ async function makeCrop(
       image.data[p + 2] = v;
       image.data[p + 3] = 255;
     }
+
     ctx.putImageData(image, 0, 0);
   }
 
-  const angle = options.rotate || 0;
-  if (!angle) return canvasBlob(base);
-
-  const rad = angle * Math.PI / 180;
-  const sin = Math.abs(Math.sin(rad));
-  const cos = Math.abs(Math.cos(rad));
-  const rotated = document.createElement("canvas");
-  rotated.width = Math.ceil(base.width * cos + base.height * sin) + 20;
-  rotated.height = Math.ceil(base.width * sin + base.height * cos) + 20;
-  const rctx = rotated.getContext("2d");
-  if (!rctx) throw new Error("画像回転に失敗しました。");
-  rctx.fillStyle = "#fff";
-  rctx.fillRect(0, 0, rotated.width, rotated.height);
-  rctx.translate(rotated.width / 2, rotated.height / 2);
-  rctx.rotate(rad);
-  rctx.drawImage(base, -base.width / 2, -base.height / 2);
-  return canvasBlob(rotated);
+  return canvasBlob(out);
 }
 
 function numberCandidates(text: string, max: number, qtyMode = false) {
   let normalized = normalizeText(text);
+
   if (qtyMode) {
     normalized = normalized
       .replace(/[|Il!\/\\\]]/g, "1")
@@ -319,8 +312,10 @@ function chooseNumber(texts: string[], max: number, qtyMode = false) {
 
   const counts = new Map<string, number>();
   for (const value of all) counts.set(value, (counts.get(value) || 0) + 1);
+
   const repeated = [...counts.entries()].sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]));
   if (repeated[0] && repeated[0][1] >= 2) return repeated[0][0];
+
   return perPass.find((x) => x.length)?.[0] || all[0];
 }
 
@@ -332,70 +327,64 @@ async function readNumber(
   max: number,
   qtyMode = false
 ): Promise<NumberRead> {
-  const [straight, deskewed] = await Promise.all([
-    makeCrop(source, box, qtyMode ? 900 : 1350, { raw: true }),
-    makeCrop(source, box, qtyMode ? 900 : 1350, { raw: true, rotate: 6 }),
+  const [raw, gray] = await Promise.all([
+    makeCrop(source, box, qtyMode ? 900 : 1450, { raw: true }),
+    makeCrop(source, box, qtyMode ? 900 : 1450, { contrast: 1.18 }),
   ]);
 
   const texts: string[] = [];
+  const whitelist = qtyMode ? "0123456789|Il!/\\" : "0123456789,.";
+
+  await worker.setParameters({
+    tessedit_pageseg_mode: qtyMode
+      ? (tesseract.PSM?.SINGLE_CHAR ?? "10")
+      : (tesseract.PSM?.SINGLE_WORD ?? "8"),
+    tessedit_char_whitelist: whitelist,
+    user_defined_dpi: "300",
+  });
+  texts.push((await worker.recognize(raw)).data.text || "");
 
   await worker.setParameters({
     tessedit_pageseg_mode: tesseract.PSM?.SINGLE_LINE ?? "7",
-    tessedit_char_whitelist: qtyMode ? "0123456789|Il!/]\\" : "0123456789,.",
+    tessedit_char_whitelist: whitelist,
     user_defined_dpi: "300",
   });
-  texts.push((await worker.recognize(deskewed)).data.text || "");
-
-  await worker.setParameters({
-    tessedit_pageseg_mode: tesseract.PSM?.SINGLE_WORD ?? tesseract.PSM?.RAW_LINE ?? "13",
-    tessedit_char_whitelist: qtyMode ? "0123456789|Il!/]\\" : "0123456789,.",
-    user_defined_dpi: "300",
-  });
-  texts.push((await worker.recognize(straight)).data.text || "");
+  texts.push((await worker.recognize(gray)).data.text || "");
 
   return { value: chooseNumber(texts, max, qtyMode), texts };
 }
 
 async function readName(worker: any, tesseract: any, source: HTMLCanvasElement, box: CropBox) {
-  const [raw, mild] = await Promise.all([
-    makeCrop(source, box, 2100, { raw: true }),
-    makeCrop(source, box, 2100, { contrast: 1.08 }),
+  const [raw, gray] = await Promise.all([
+    makeCrop(source, box, 2300, { raw: true }),
+    makeCrop(source, box, 2300, { contrast: 1.10 }),
   ]);
 
   const texts: string[] = [];
 
   await worker.setParameters({
     preserve_interword_spaces: "1",
-    tessedit_pageseg_mode: tesseract.PSM?.SINGLE_LINE ?? "7",
+    tessedit_pageseg_mode: tesseract.PSM?.SPARSE_TEXT ?? "11",
     tessedit_char_whitelist: "",
     user_defined_dpi: "300",
   });
   texts.push((await worker.recognize(raw)).data.text || "");
-  texts.push((await worker.recognize(mild)).data.text || "");
+
+  await worker.setParameters({
+    preserve_interword_spaces: "1",
+    tessedit_pageseg_mode: tesseract.PSM?.SINGLE_BLOCK ?? "6",
+    tessedit_char_whitelist: "",
+    user_defined_dpi: "300",
+  });
+  texts.push((await worker.recognize(gray)).data.text || "");
 
   return { ...bestName(texts), texts };
 }
 
 function chooseCost(costRead: NumberRead, amountRead: NumberRead, qty: string) {
-  const all = [...costRead.texts, ...amountRead.texts];
-  const merged = chooseNumber(all, 2000000);
-  if (merged) return merged;
-  if (qty === "1") return costRead.value || amountRead.value;
-  return costRead.value;
-}
-
-function chooseRetail(retailRead: NumberRead, cost: string) {
-  const candidates = retailRead.texts.flatMap((t) => numberCandidates(t, 2000000));
-  if (!candidates.length) return retailRead.value;
-
-  const costNum = Number(cost || 0);
-  const plausible = candidates.filter((x) => Number(x) >= costNum && Number(x) >= 100);
-  if (plausible.length) {
-    const counts = new Map<string, number>();
-    for (const x of plausible) counts.set(x, (counts.get(x) || 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1] || Number(b[0]) - Number(a[0]))[0][0];
-  }
-  return retailRead.value || candidates[0];
+  if (costRead.value) return costRead.value;
+  if (qty === "1") return amountRead.value;
+  return "";
 }
 
 export default function HighAccuracyOCRPage() {
@@ -436,22 +425,25 @@ export default function HighAccuracyOCRPage() {
       const found: Part[] = [];
       const logs: string[] = [`paper x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];
 
-      const rowStart = 0.462;
+      // 実画像で確認した大一用品商会の部品行。
+      // 以前は0.462付近から読んでいて約30〜50px下にズレ、空欄をOCRしていた。
+      const firstRowY = 0.440;
       const rowStep = 0.100;
       let emptyRows = 0;
 
       for (let row = 0; row < 4; row += 1) {
-        const y = rowStart + row * rowStep;
-        if (y >= 0.90) break;
+        const y = firstRowY + row * rowStep;
+        if (y >= 0.88) break;
 
         setMessage(`部品表 ${row + 1}行目を読み取り中…`);
         setProgress((old) => Math.max(old, 8 + row * 20));
 
-        const nameBox = relativeBox(paper, 0.050, y + 0.050, 0.285, 0.048);
-        const qtyBox = relativeBox(paper, 0.420, y + 0.012, 0.055, 0.058);
-        const retailBox = relativeBox(paper, 0.470, y + 0.012, 0.125, 0.058);
-        const costBox = relativeBox(paper, 0.585, y + 0.012, 0.125, 0.058);
-        const amountBox = relativeBox(paper, 0.710, y + 0.012, 0.125, 0.058);
+        // 罫線そのものではなく、実際に数字・名称が印字されている中心だけを切り出す。
+        const nameBox = relativeBox(paper, 0.050, y + 0.020, 0.250, 0.060);
+        const qtyBox = relativeBox(paper, 0.432, y, 0.040, 0.070);
+        const retailBox = relativeBox(paper, 0.480, y, 0.090, 0.070);
+        const costBox = relativeBox(paper, 0.596, y, 0.080, 0.070);
+        const amountBox = relativeBox(paper, 0.730, y, 0.080, 0.070);
 
         const nameRead = await readName(worker, tesseract, source, nameBox);
         const qtyRead = await readNumber(worker, tesseract, source, qtyBox, 99, true);
@@ -463,11 +455,12 @@ export default function HighAccuracyOCRPage() {
         if (!qty && nameRead.name && (retailRead.value || costRead.value || amountRead.value)) qty = "1";
         if (Number(qty) > 20 && nameRead.name) qty = "1";
 
+        const retail = retailRead.value;
         const cost = chooseCost(costRead, amountRead, qty);
-        const retail = chooseRetail(retailRead, cost);
 
         logs.push(
           `【${row + 1}行目】\n` +
+          `boxY=${y.toFixed(3)}\n` +
           `名称候補: ${nameRead.texts.map((x) => x.trim()).join(" / ")}\n` +
           `名称採用: ${nameRead.name}\n` +
           `個数: ${qtyRead.texts.map((x) => x.trim()).join(" / ")} => ${qty}\n` +
@@ -477,8 +470,9 @@ export default function HighAccuracyOCRPage() {
         );
 
         const strongName = nameScore(nameRead.name) >= 8;
-        const twoPrices = Number(retail || 0) >= 100 && Number(cost || 0) >= 100;
-        if (strongName || twoPrices) {
+        const numericCount = [qty, retail, cost].filter(Boolean).length;
+
+        if (strongName || numericCount >= 2) {
           found.push({
             id: uid(),
             name: nameRead.name,
@@ -545,8 +539,8 @@ export default function HighAccuracyOCRPage() {
       <section style={styles.card}>
         <h1 style={styles.title}>部品伝票 高精度OCR</h1>
         <p style={styles.text}>
-          部品名称は元画像に近い状態で読み、数字は伝票の傾きを補正した画像でも読み直します。
-          大一用品商会の伝票では、名称・個数・標準価格・単価の位置を別々に確認します。
+          大一用品商会の伝票について、実際の印字位置に合わせて部品名称・個数・定価・仕入れを別々に切り出して読み取ります。
+          今回は空欄ではなく、文字がある高さに読み取り位置を戻しています。
         </p>
 
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
