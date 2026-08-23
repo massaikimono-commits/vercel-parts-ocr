@@ -64,10 +64,10 @@ function correctCommonPartWord(text: string) {
     "ベアリング", "プラグ", "オイル",
   ];
 
-  let corrected = text.replace(
-    /リクフッチ|リクラッチ|クラツチ|クフッチ|ラクッチ|クフツチ|クラッヂ/g,
-    "クラッチ"
-  );
+  let corrected = text
+    .replace(/リクフッチ|リクラッチ|クラツチ|クフッチ|ラクッチ|クフツチ|クラッヂ|リクフツチ/g, "クラッチ")
+    .replace(/A[S5][S5][YV]/gi, "ASSY")
+    .replace(/M\s*[\/|]\s*C\s*[\/|]\s*/gi, "M/C/");
 
   corrected = corrected.replace(/[ァ-ヶー]{3,}/g, (token) => {
     let best = token;
@@ -117,9 +117,10 @@ function nameScore(text: string) {
 
   score += Math.min(16, jp * 2);
   score += Math.min(10, alpha);
-  if (/ASSY|COMP|KIT|SET|クラッチ|ブレーキ|パッド|フィルタ|オイル|ベルト|ホース|ガスケット/i.test(cleaned)) score += 18;
+  if (/ASSY|COMP|KIT|SET|クラッチ|ブレーキ|パッド|フィルタ|オイル|ベルト|ホース|ガスケット/i.test(cleaned)) score += 20;
   if (/[\/／]/.test(cleaned)) score += 5;
-  if (digits > cleaned.length * 0.4) score -= 12;
+  if (/^[A-Za-z0-9\s=\-"']+$/.test(cleaned)) score -= 12;
+  if (digits > cleaned.length * 0.35) score -= 14;
   return score;
 }
 
@@ -228,7 +229,6 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
   const width = right - left + 1;
   let boxHeight = roughBottom - top + 1;
 
-  // この伝票は幅:高さがおよそ1.74:1。台紙を下端として拾った時だけ補正する。
   const expectedHeight = Math.round(width / 1.74);
   if (width / boxHeight < 1.55 && expectedHeight < boxHeight) {
     boxHeight = Math.min(expectedHeight, h - top);
@@ -291,7 +291,6 @@ async function makeCrop(
 
 function numberCandidates(text: string, max: number, qtyMode = false) {
   let normalized = normalizeText(text);
-
   if (qtyMode) {
     normalized = normalized
       .replace(/[|Il!\/\\\]]/g, "1")
@@ -312,10 +311,8 @@ function chooseNumber(texts: string[], max: number, qtyMode = false) {
 
   const counts = new Map<string, number>();
   for (const value of all) counts.set(value, (counts.get(value) || 0) + 1);
-
   const repeated = [...counts.entries()].sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]));
   if (repeated[0] && repeated[0][1] >= 2) return repeated[0][0];
-
   return perPass.find((x) => x.length)?.[0] || all[0];
 }
 
@@ -354,10 +351,22 @@ async function readNumber(
   return { value: chooseNumber(texts, max, qtyMode), texts };
 }
 
-async function readName(worker: any, tesseract: any, source: HTMLCanvasElement, box: CropBox) {
-  const [raw, gray] = await Promise.all([
-    makeCrop(source, box, 2300, { raw: true }),
-    makeCrop(source, box, 2300, { contrast: 1.10 }),
+async function readName(
+  worker: any,
+  tesseract: any,
+  source: HTMLCanvasElement,
+  paper: CropBox,
+  y: number
+) {
+  // 10:18頃に最も近い結果が出ていた方式へ戻す。
+  // 1つの細い枠だけでなく、名称欄全体＋下段を別々に読む。
+  const fullBox = relativeBox(paper, 0.025, y + 0.002, 0.370, 0.058);
+  const lowerBox = relativeBox(paper, 0.035, y + 0.029, 0.320, 0.032);
+
+  const [full, lowerRaw, lowerGray] = await Promise.all([
+    makeCrop(source, fullBox, 2200, { contrast: 1.28 }),
+    makeCrop(source, lowerBox, 2400, { raw: true }),
+    makeCrop(source, lowerBox, 2400, { contrast: 1.42 }),
   ]);
 
   const texts: string[] = [];
@@ -368,15 +377,16 @@ async function readName(worker: any, tesseract: any, source: HTMLCanvasElement, 
     tessedit_char_whitelist: "",
     user_defined_dpi: "300",
   });
-  texts.push((await worker.recognize(raw)).data.text || "");
+  texts.push((await worker.recognize(full)).data.text || "");
 
   await worker.setParameters({
     preserve_interword_spaces: "1",
-    tessedit_pageseg_mode: tesseract.PSM?.SINGLE_BLOCK ?? "6",
+    tessedit_pageseg_mode: tesseract.PSM?.SINGLE_LINE ?? "7",
     tessedit_char_whitelist: "",
     user_defined_dpi: "300",
   });
-  texts.push((await worker.recognize(gray)).data.text || "");
+  texts.push((await worker.recognize(lowerRaw)).data.text || "");
+  texts.push((await worker.recognize(lowerGray)).data.text || "");
 
   return { ...bestName(texts), texts };
 }
@@ -424,9 +434,6 @@ export default function HighAccuracyOCRPage() {
 
       const found: Part[] = [];
       const logs: string[] = [`paper x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];
-
-      // 実画像で確認した大一用品商会の部品行。
-      // 以前は0.462付近から読んでいて約30〜50px下にズレ、空欄をOCRしていた。
       const firstRowY = 0.440;
       const rowStep = 0.100;
       let emptyRows = 0;
@@ -438,22 +445,20 @@ export default function HighAccuracyOCRPage() {
         setMessage(`部品表 ${row + 1}行目を読み取り中…`);
         setProgress((old) => Math.max(old, 8 + row * 20));
 
-        // 罫線そのものではなく、実際に数字・名称が印字されている中心だけを切り出す。
-        const nameBox = relativeBox(paper, 0.050, y + 0.020, 0.250, 0.060);
         const qtyBox = relativeBox(paper, 0.432, y, 0.040, 0.070);
         const retailBox = relativeBox(paper, 0.480, y, 0.090, 0.070);
         const costBox = relativeBox(paper, 0.596, y, 0.080, 0.070);
         const amountBox = relativeBox(paper, 0.730, y, 0.080, 0.070);
 
-        const nameRead = await readName(worker, tesseract, source, nameBox);
+        const nameRead = await readName(worker, tesseract, source, paper, y);
         const qtyRead = await readNumber(worker, tesseract, source, qtyBox, 99, true);
         const retailRead = await readNumber(worker, tesseract, source, retailBox, 2000000);
         const costRead = await readNumber(worker, tesseract, source, costBox, 2000000);
         const amountRead = await readNumber(worker, tesseract, source, amountBox, 2000000);
 
         let qty = qtyRead.value;
-        if (!qty && nameRead.name && (retailRead.value || costRead.value || amountRead.value)) qty = "1";
-        if (Number(qty) > 20 && nameRead.name) qty = "1";
+        if (!qty && (retailRead.value || costRead.value || amountRead.value)) qty = "1";
+        if (Number(qty) > 20 && (retailRead.value || costRead.value)) qty = "1";
 
         const retail = retailRead.value;
         const cost = chooseCost(costRead, amountRead, qty);
@@ -461,7 +466,9 @@ export default function HighAccuracyOCRPage() {
         logs.push(
           `【${row + 1}行目】\n` +
           `boxY=${y.toFixed(3)}\n` +
-          `名称候補: ${nameRead.texts.map((x) => x.trim()).join(" / ")}\n` +
+          `名称候補1: ${nameRead.texts[0]?.trim() || ""}\n` +
+          `名称候補2: ${nameRead.texts[1]?.trim() || ""}\n` +
+          `名称候補3: ${nameRead.texts[2]?.trim() || ""}\n` +
           `名称採用: ${nameRead.name}\n` +
           `個数: ${qtyRead.texts.map((x) => x.trim()).join(" / ")} => ${qty}\n` +
           `定価: ${retailRead.texts.map((x) => x.trim()).join(" / ")} => ${retail}\n` +
@@ -470,9 +477,11 @@ export default function HighAccuracyOCRPage() {
         );
 
         const strongName = nameScore(nameRead.name) >= 8;
-        const numericCount = [qty, retail, cost].filter(Boolean).length;
+        const retailOk = Number(retail || 0) >= 100;
+        const costOk = Number(cost || 0) >= 100;
+        const isRealPartRow = (retailOk && costOk) || (strongName && (retailOk || costOk));
 
-        if (strongName || numericCount >= 2) {
+        if (isRealPartRow) {
           found.push({
             id: uid(),
             name: nameRead.name,
@@ -493,8 +502,8 @@ export default function HighAccuracyOCRPage() {
       setProgress(100);
       setMessage(
         found.length
-          ? `${found.length}件を抽出しました。4項目を確認してください。`
-          : "まだ部品行を抽出できませんでした。OCR詳細を使って次の位置調整をします。"
+          ? `${found.length}件を抽出しました。数値は維持したまま、部品名称を3通りで読み比べています。`
+          : "部品行を抽出できませんでした。OCR詳細を使って次の位置調整をします。"
       );
     } catch (error) {
       console.error(error);
@@ -539,8 +548,8 @@ export default function HighAccuracyOCRPage() {
       <section style={styles.card}>
         <h1 style={styles.title}>部品伝票 高精度OCR</h1>
         <p style={styles.text}>
-          大一用品商会の伝票について、実際の印字位置に合わせて部品名称・個数・定価・仕入れを別々に切り出して読み取ります。
-          今回は空欄ではなく、文字がある高さに読み取り位置を戻しています。
+          大一用品商会の伝票は数値列を現在の精度のまま維持し、部品名称だけ「名称欄全体＋下段」を3通りで読み比べます。
+          他社伝票・A4用紙については、この専用OCRとは別に汎用OCRモードを追加します。
         </p>
 
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
@@ -596,7 +605,7 @@ export default function HighAccuracyOCRPage() {
       <section style={styles.card}>
         <details>
           <summary style={{ fontWeight: 700, cursor: "pointer" }}>OCR詳細（調整用）</summary>
-          <p style={styles.text}>各項目を2通りで読んだ結果を表示します。</p>
+          <p style={styles.text}>名称は3候補、数字は2通りの読み取り結果を表示します。</p>
           <textarea readOnly value={debugText} style={styles.debug} />
         </details>
       </section>
