@@ -62,6 +62,63 @@ const photoPickerEnhancer = `
     return originalSetItem.call(this, key, value);
   };
 
+  const go = (path, event) => {
+    if (event) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      event.stopImmediatePropagation?.();
+    }
+    location.assign(path);
+  };
+
+  const routeForText = (text) => {
+    if (text.includes("①車体番号")) return "/vehicle-workflow";
+    if (text.includes("⑤顧客・車両管理")) return "/customer-vehicles";
+    if (text.includes("③データ")) return "/parts-data";
+    if (text.includes("②伝票OCR") || text.includes("自動判定OCRで読み込む") || text.includes("高精度OCRで読み込む")) return "/ocr/auto";
+    if (text.includes("④印刷")) return "/parts-print";
+    return "";
+  };
+
+  const bindDirectRoutes = () => {
+    if (location.pathname !== "/") return;
+    document.querySelectorAll("button").forEach((button) => {
+      const path = routeForText(button.textContent || "");
+      if (!path || button.dataset.icbRouteBound === path) return;
+      button.dataset.icbRouteBound = path;
+      button.addEventListener("click", (event) => go(path, event), true);
+    });
+  };
+
+  const injectCertificateEntry = () => {
+    if (location.pathname !== "/") return;
+    const cards = Array.from(document.querySelectorAll("section.card"));
+    const card = cards.find((node) => {
+      const h1 = node.querySelector("h1");
+      return h1 && (h1.textContent || "").trim() === "車体番号";
+    });
+    if (!card || card.querySelector('[data-icb-certificate-entry="1"]')) return;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.icbCertificateEntry = "1";
+    button.textContent = "📷 車検証を撮影・読み取る";
+    button.style.width = "100%";
+    button.style.margin = "0 0 14px";
+    button.style.padding = "16px";
+    button.style.borderRadius = "14px";
+    button.style.border = "1px solid #2f6fe4";
+    button.style.background = "#2f6fe4";
+    button.style.color = "#fff";
+    button.style.fontSize = "18px";
+    button.style.fontWeight = "800";
+    button.addEventListener("click", (event) => go("/vehicle-workflow", event), true);
+
+    const h1 = card.querySelector("h1");
+    if (h1?.nextSibling) card.insertBefore(button, h1.nextSibling);
+    else card.appendChild(button);
+  };
+
   const enhance = () => {
     if (location.pathname !== "/") return;
 
@@ -78,26 +135,18 @@ const photoPickerEnhancer = `
         button.textContent = "📷 自動判定OCRで読み込む";
       }
     });
+
+    bindDirectRoutes();
+    injectCertificateEntry();
   };
 
   const routeFromTarget = (event) => {
     if (location.pathname !== "/") return false;
     const target = event.target instanceof Element ? event.target.closest("button") : null;
     if (!target) return false;
-    const text = target.textContent || "";
-
-    let path = "";
-    if (text.includes("①車体番号")) path = "/vehicle-workflow";
-    else if (text.includes("⑤顧客・車両管理")) path = "/customer-vehicles";
-    else if (text.includes("③データ")) path = "/parts-data";
-    else if (text.includes("②伝票OCR") || text.includes("自動判定OCRで読み込む") || text.includes("高精度OCRで読み込む")) path = "/ocr/auto";
-    else if (text.includes("④印刷")) path = "/parts-print";
-
+    const path = routeForText(target.textContent || "");
     if (!path) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation?.();
-    location.assign(path);
+    go(path, event);
     return true;
   };
 
