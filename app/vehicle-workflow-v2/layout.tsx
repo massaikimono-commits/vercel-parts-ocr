@@ -1,12 +1,12 @@
 import CertificateFulltextFix from "../certificate-fulltext-fix";
-import CertificateTopBandFix from "../certificate-top-band-fix";
+import CertificateTopCellsFix from "../certificate-top-cells-fix";
 
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
       <CertificateFulltextFix />
-      <CertificateTopBandFix />
+      <CertificateTopCellsFix />
     </>
   );
 }
