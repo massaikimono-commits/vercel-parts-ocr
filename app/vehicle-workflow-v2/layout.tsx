@@ -1,10 +1,10 @@
-import CertificateCalibratedFix from "../certificate-calibrated-fix";
+import CertificateTemplateRowFix from "../certificate-template-row-fix";
 
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      <CertificateCalibratedFix />
+      <CertificateTemplateRowFix />
     </>
   );
 }
