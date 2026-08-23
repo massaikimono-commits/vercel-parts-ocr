@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { jsPDF } from "jspdf";
 
 type Part = {
   id: string;
@@ -66,6 +67,41 @@ function readLayout(): OtherLayout {
   }
 }
 
+function createPrintCanvas(parts: Part[], layout: OtherLayout) {
+  // PDFに日本語を確実に出すため、文字は高解像度Canvasへ描いてからPDF化する。
+  const pxPerMm = 8;
+  const canvas = document.createElement("canvas");
+  canvas.width = 210 * pxPerMm;
+  canvas.height = 297 * pxPerMm;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("印刷データを作成できませんでした。");
+
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#000";
+  ctx.textBaseline = "middle";
+  ctx.font = `${Math.round(2.8 * pxPerMm)}px -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif`;
+
+  const mm = (value: number) => value * pxPerMm;
+
+  parts.forEach((part, index) => {
+    const top = layout.firstY + index * layout.rowPitch;
+    const baseline = mm(top + 2.25);
+
+    ctx.textAlign = "left";
+    ctx.fillText(part.name || "", mm(layout.name.x), baseline, mm(layout.name.w));
+
+    ctx.textAlign = "center";
+    ctx.fillText(part.qty || "", mm(layout.qty.x + layout.qty.w / 2), baseline, mm(layout.qty.w));
+
+    ctx.textAlign = "right";
+    ctx.fillText(moneyText(part.retail), mm(layout.retail.x + layout.retail.w - 0.8), baseline, mm(layout.retail.w));
+    ctx.fillText(moneyText(part.cost), mm(layout.cost.x + layout.cost.w - 0.8), baseline, mm(layout.cost.w));
+  });
+
+  return canvas;
+}
+
 export default function PartsPrintPage() {
   const [parts, setParts] = useState<Part[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -107,12 +143,40 @@ export default function PartsPrintPage() {
     setMessage("用紙写真をガイド表示しました。写真は印刷されません。");
   }
 
-  function doPrint() {
+  function makePdfAndOpen() {
     if (!selectedParts.length) {
       setMessage("印刷する部品を1件以上選んでください。");
       return;
     }
-    window.print();
+
+    // iPhone SafariのWebページ直接印刷ではURL/日付が入り2ページになることがあるため、
+    // A4ちょうど1ページのPDFを作ってPDF側から印刷する。
+    const popup = window.open("about:blank", "_blank");
+    try {
+      const canvas = createPrintCanvas(selectedParts, layout);
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297, undefined, "FAST");
+      const blob = pdf.output("blob");
+      const url = URL.createObjectURL(blob);
+
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        location.assign(url);
+      }
+
+      setMessage("A4・1ページの印刷用PDFを開きました。PDF画面の共有/印刷から印刷してください。");
+      window.setTimeout(() => URL.revokeObjectURL(url), 120000);
+    } catch (error) {
+      console.error(error);
+      popup?.close();
+      setMessage("印刷用PDFの作成に失敗しました。もう一度押してください。");
+    }
   }
 
   const fieldRows: Array<["name" | "qty" | "retail" | "cost", string]> = [
@@ -124,12 +188,12 @@ export default function PartsPrintPage() {
 
   return (
     <main className="page">
-      <div className="top noPrint">
+      <div className="top">
         <button onClick={() => location.assign("/")}>← メインへ</button>
         <strong>icb</strong>
       </div>
 
-      <section className="card noPrint">
+      <section className="card">
         <h1>部品出庫伝票へ印刷</h1>
         <p>
           <b>安全ルール：</b>名称が似ているだけでは既存品名へ自動割り当てしません。
@@ -158,14 +222,15 @@ export default function PartsPrintPage() {
         </div>
 
         <div className="actions">
-          <button className="primary" onClick={doPrint}>🖨 この内容で印刷</button>
+          <button className="primary" onClick={makePdfAndOpen}>📄 A4・1ページPDFを作って印刷</button>
           <button onClick={() => document.getElementById("position-settings")?.scrollIntoView({ behavior: "smooth" })}>
             印刷位置を調整
           </button>
         </div>
+        <p className="hint">iPhoneではPDFを開いたあと、共有ボタン →「プリント」で印刷します。WebページのURLや日付は印刷されません。</p>
       </section>
 
-      <section className="card noPrint" id="position-settings">
+      <section className="card" id="position-settings">
         <h2>右下「その他」欄の位置調整</h2>
         <p>まず初期位置で試し刷りし、上下左右のズレだけmm単位で合わせます。</p>
         <label className="fileButton">
@@ -190,14 +255,14 @@ export default function PartsPrintPage() {
         <button onClick={() => setLayout(initialLayout)}>初期位置に戻す</button>
       </section>
 
-      <section className="previewCard noPrint">
+      <section className="previewCard">
         <h2>位置プレビュー</h2>
-        <p>薄い写真は位置確認用だけです。実際の印刷では文字だけ出ます。</p>
+        <p>薄い写真は位置確認用だけです。PDFには文字だけ入ります。</p>
       </section>
 
       <div className="sheet previewSheet">
         {guide && <img className="guide" src={guide} alt="部品出庫伝票ガイド" />}
-        {!guide && <div className="placeholder noPrint">A4 部品出庫伝票<br />右下「その他」欄に印字</div>}
+        {!guide && <div className="placeholder">A4 部品出庫伝票<br />右下「その他」欄に印字</div>}
         {selectedParts.map((p, i) => {
           const y = layout.firstY + i * layout.rowPitch;
           return (
@@ -222,6 +287,7 @@ export default function PartsPrintPage() {
         h1 { font-size: 32px; margin: 0 0 12px; }
         h2 { margin-top: 6px; }
         p { color: #5d6878; line-height: 1.7; }
+        .hint { font-size: 14px; margin: 10px 0 0; }
         .notice { background: #e9f7ef; border: 1px solid #bfe6ce; border-radius: 12px; padding: 13px 15px; line-height: 1.6; margin: 14px 0; }
         .partList { display: grid; gap: 9px; }
         .part { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; border: 1px solid #dbe3ee; border-radius: 12px; padding: 12px; }
@@ -245,16 +311,6 @@ export default function PartsPrintPage() {
         @media (max-width: 760px) {
           .fieldSettings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .previewSheet { transform: scale(.38); margin-bottom: calc(-297mm * .62); }
-        }
-
-        @page { size: A4 portrait; margin: 0; }
-        @media print {
-          html, body { width: 210mm; height: 297mm; margin: 0 !important; padding: 0 !important; background: white !important; }
-          .noPrint, .previewCard { display: none !important; }
-          .page { width: 210mm; max-width: none; margin: 0; padding: 0; }
-          .sheet { width: 210mm; height: 297mm; margin: 0; box-shadow: none; transform: none !important; }
-          .guide { display: none !important; }
-          .overlay { color: #000 !important; }
         }
       `}</style>
     </main>
