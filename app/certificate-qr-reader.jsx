@@ -27,7 +27,7 @@ async function imageCanvas(img) {
 
   const iw = img.naturalWidth || img.width;
   const ih = img.naturalHeight || img.height;
-  const max = 3600;
+  const max = 4600;
   const scale = Math.min(1, max / Math.max(iw, ih));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(iw * scale));
@@ -39,33 +39,138 @@ async function imageCanvas(img) {
   return canvas;
 }
 
-function regionCanvas(source, box, targetWidth = 1800) {
+function detectPaper(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
+
+  const w = canvas.width;
+  const h = canvas.height;
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const step = Math.max(4, Math.floor(Math.max(w, h) / 650));
+
+  const paperish = (x, y) => {
+    const p = (y * w + x) * 4;
+    const r = data[p];
+    const g = data[p + 1];
+    const b = data[p + 2];
+    const br = (r + g + b) / 3;
+    return br > 112 && Math.max(r, g, b) - Math.min(r, g, b) < 95;
+  };
+
+  const ys = [];
+  for (let y = 0; y < h; y += step) {
+    let hit = 0;
+    let n = 0;
+    for (let x = 0; x < w; x += step) {
+      if (paperish(x, y)) hit += 1;
+      n += 1;
+    }
+    if (hit / Math.max(1, n) > 0.24) ys.push(y);
+  }
+
+  if (ys.length < 10) return { x: 0, y: 0, w, h };
+
+  const top = Math.max(0, ys[0] - step * 2);
+  const bottom = Math.min(h - 1, ys[ys.length - 1] + step * 2);
+  const xs = [];
+
+  for (let x = 0; x < w; x += step) {
+    let hit = 0;
+    let n = 0;
+    for (let y = top; y <= bottom; y += step) {
+      if (paperish(x, y)) hit += 1;
+      n += 1;
+    }
+    if (hit / Math.max(1, n) > 0.24) xs.push(x);
+  }
+
+  if (xs.length < 10) return { x: 0, y: top, w, h: bottom - top + 1 };
+
+  const left = Math.max(0, xs[0] - step * 2);
+  const right = Math.min(w - 1, xs[xs.length - 1] + step * 2);
+  return { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
+}
+
+function enhance(canvas, mode) {
+  if (mode === "color") return canvas;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const gray = new Uint8Array(canvas.width * canvas.height);
+  let sum = 0;
+
+  for (let p = 0, i = 0; p < image.data.length; p += 4, i += 1) {
+    const v = Math.round(
+      image.data[p] * 0.22 + image.data[p + 1] * 0.7 + image.data[p + 2] * 0.08
+    );
+    gray[i] = v;
+    sum += v;
+  }
+
+  const avg = sum / Math.max(1, gray.length);
+  const threshold = Math.max(110, Math.min(215, avg - 12));
+
+  for (let p = 0, i = 0; p < image.data.length; p += 4, i += 1) {
+    let v = gray[i];
+    if (mode === "contrast") {
+      v = Math.max(0, Math.min(255, Math.round((v - 128) * 1.7 + 150)));
+    } else if (mode === "binary") {
+      v = v < threshold ? 0 : 255;
+    }
+    image.data[p] = v;
+    image.data[p + 1] = v;
+    image.data[p + 2] = v;
+    image.data[p + 3] = 255;
+  }
+
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
+
+function regionCanvas(source, paper, box, targetWidth = 1800, mode = "color") {
   const [x0, y0, w0, h0] = box;
-  const sx = Math.max(0, Math.round(source.width * x0));
-  const sy = Math.max(0, Math.round(source.height * y0));
-  const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * w0)));
-  const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * h0)));
-  const scale = Math.min(1.6, Math.max(0.55, targetWidth / sw));
+  const sx = Math.max(0, Math.round(paper.x + paper.w * x0));
+  const sy = Math.max(0, Math.round(paper.y + paper.h * y0));
+  const sw = Math.max(1, Math.min(source.width - sx, Math.round(paper.w * w0)));
+  const sh = Math.max(1, Math.min(source.height - sy, Math.round(paper.h * h0)));
+
+  // QRは文字OCRと違い、元画像で小さい場合は積極的に拡大する。
+  const scale = Math.max(1, Math.min(5, targetWidth / sw));
+  const pad = 36;
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sw * scale));
-  canvas.height = Math.max(1, Math.round(sh * scale));
+  canvas.width = Math.max(1, Math.round(sw * scale) + pad * 2);
+  canvas.height = Math.max(1, Math.round(sh * scale) + pad * 2);
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-  return canvas;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(
+    source,
+    sx,
+    sy,
+    sw,
+    sh,
+    pad,
+    pad,
+    canvas.width - pad * 2,
+    canvas.height - pad * 2
+  );
+
+  return enhance(canvas, mode);
 }
 
 function codeBounds(code, width, height) {
   const loc = code?.location;
   if (!loc) return null;
-  const points = [loc.topLeftCorner, loc.topRightCorner, loc.bottomLeftCorner, loc.bottomRightCorner].filter(Boolean);
+  const points = [
+    loc.topLeftCorner,
+    loc.topRightCorner,
+    loc.bottomLeftCorner,
+    loc.bottomRightCorner,
+  ].filter(Boolean);
   if (!points.length) return null;
   const xs = points.map((p) => p.x);
   const ys = points.map((p) => p.y);
-  const pad = Math.max(12, Math.round(Math.min(width, height) * 0.018));
+  const pad = Math.max(14, Math.round(Math.min(width, height) * 0.02));
   const left = Math.max(0, Math.floor(Math.min(...xs) - pad));
   const top = Math.max(0, Math.floor(Math.min(...ys) - pad));
   const right = Math.min(width, Math.ceil(Math.max(...xs) + pad));
@@ -77,7 +182,7 @@ function scanMany(jsQR, canvas, label) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   const found = [];
 
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(image.data, image.width, image.height, {
       inversionAttempts: "attemptBoth",
@@ -95,7 +200,12 @@ function scanMany(jsQR, canvas, label) {
     const b = codeBounds(code, canvas.width, canvas.height);
     if (!b) break;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(b.left, b.top, Math.max(1, b.right - b.left), Math.max(1, b.bottom - b.top));
+    ctx.fillRect(
+      b.left,
+      b.top,
+      Math.max(1, b.right - b.left),
+      Math.max(1, b.bottom - b.top)
+    );
   }
 
   return found;
@@ -192,22 +302,32 @@ async function scanVehicleQr(img) {
   const mod = await import("jsqr");
   const jsQR = mod.default || mod;
   const source = await imageCanvas(img);
+  const paper = detectPaper(source);
 
-  // 車検証記録事項のQR群は用紙下部に並ぶ。全体下部＋重なりタイルで小さいQRも拾う。
+  // QR群は車検証の最下部。用紙全体ではなく「用紙基準」で下端を狙う。
+  // 5個のQRを一度に読む帯と、1～2個ずつ読む重なりタイルの両方を試す。
   const regions = [
-    ["下部全体", [0.25, 0.64, 0.74, 0.31], 2100],
-    ["下部左", [0.28, 0.66, 0.35, 0.27], 1500],
-    ["下部中央", [0.45, 0.66, 0.34, 0.27], 1500],
-    ["下部右", [0.64, 0.66, 0.35, 0.27], 1500],
-    ["最下部", [0.30, 0.74, 0.68, 0.22], 1900],
+    ["QR帯", [0.35, 0.755, 0.64, 0.18], 3600],
+    ["左3個", [0.43, 0.765, 0.39, 0.15], 2800],
+    ["右2個", [0.76, 0.765, 0.23, 0.15], 2200],
+    ["QR1", [0.45, 0.77, 0.14, 0.14], 1500],
+    ["QR2", [0.54, 0.77, 0.14, 0.14], 1500],
+    ["QR3", [0.63, 0.77, 0.14, 0.14], 1500],
+    ["QR4", [0.78, 0.77, 0.13, 0.14], 1500],
+    ["QR5", [0.87, 0.77, 0.12, 0.14], 1500],
+    // 撮影の上下ズレ用に少し広い帯も持つ。
+    ["下部広域", [0.32, 0.70, 0.67, 0.25], 3600],
   ];
 
   const all = [];
   for (const [label, box, target] of regions) {
-    const c = regionCanvas(source, box, target);
-    all.push(...scanMany(jsQR, c, label));
+    for (const mode of ["color", "contrast", "binary"]) {
+      const c = regionCanvas(source, paper, box, target, mode);
+      all.push(...scanMany(jsQR, c, `${label}/${mode}`));
+    }
   }
-  return uniqueCodes(all);
+
+  return { result: uniqueCodes(all), paper };
 }
 
 export default function CertificateQrReader() {
@@ -228,14 +348,20 @@ export default function CertificateQrReader() {
       renderResult([], "QRコードを検索中…");
 
       try {
-        const result = await scanVehicleQr(img);
+        const { result, paper } = await scanVehicleQr(img);
         if (dead) return;
         if (result.length) {
           window.__vehicleCertificateQr = result;
-          renderResult(result);
+          renderResult(
+            result,
+            `QRコードを ${result.length} 件読み取りました。用紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`
+          );
         } else {
           window.__vehicleCertificateQr = [];
-          renderResult([], "QRコードを読み取れませんでした。写真全体が入り、QRが潰れていない画像で再試行してください。");
+          renderResult(
+            [],
+            `QRコードを読み取れませんでした。用紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`
+          );
         }
       } catch (e) {
         if (!dead) renderResult([], `QR読取エラー: ${e?.message || e}`);
