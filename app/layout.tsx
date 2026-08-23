@@ -5,6 +5,7 @@ import CertificateRowPriorityFix from "./certificate-row-priority-fix";
 import CertificateFuelClassificationFix from "./certificate-fuel-classification-fix";
 import CertificateChassisCorrectionFix from "./certificate-chassis-correction-fix";
 import CertificateConsistencyFix from "./certificate-consistency-fix";
+import CertificatePdfBridge from "./certificate-pdf-bridge";
 import CertificateQrReader from "./certificate-qr-reader";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
 
@@ -110,7 +111,7 @@ const photoPickerEnhancer = `
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.icbCertificateEntry = "1";
-    button.textContent = "📷 車検証を撮影・読み取る";
+    button.textContent = "📄 車検証PDF・写真を読み取る";
     button.style.width = "100%";
     button.style.margin = "0 0 14px";
     button.style.padding = "16px";
@@ -187,6 +188,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificateFuelClassificationFix />
         <CertificateChassisCorrectionFix />
         <CertificateConsistencyFix />
+        <CertificatePdfBridge />
         <CertificateQrReader />
         <CertificateQrApply />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
