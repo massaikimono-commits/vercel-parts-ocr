@@ -291,17 +291,19 @@ function findLabelInWords(words: Word[], labels: string[]) {
 
 function detectHeader(lines: OCRLine[]) {
   let best: { index: number; matches: HeaderMatch[] } | null = null;
-  lines.forEach((line, index) => {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const matches: HeaderMatch[] = [];
-    (Object.keys(LABELS) as ColumnKey[]).forEach((key) => {
+    for (const key of Object.keys(LABELS) as ColumnKey[]) {
       const found = findLabelInWords(line.words, LABELS[key]);
       if (found) matches.push({ key, x: found.x, label: found.label });
-    });
+    }
     const unique = new Map(matches.map((x) => [x.key, x]));
     const list = [...unique.values()];
     if (!best || list.length > best.matches.length) best = { index, matches: list };
-  });
-  return best && best.matches.length >= 2 ? best : null;
+  }
+  if (!best) return null;
+  return best.matches.length >= 2 ? best : null;
 }
 
 function nearestColumn(word: Word, headers: HeaderMatch[]) {
@@ -332,7 +334,6 @@ function parseByColumns(lines: OCRLine[], header: { index: number; matches: Head
     let retail = hasRetail ? moneyValue(cells.retail.join(" ")) : "";
     let cost = hasCost ? moneyValue(cells.cost.join(" ")) : "";
 
-    // 「単価」だけが価格列として見つかった場合は仕入れとして扱う。
     if (!hasRetail && hasCost) cost = moneyValue(cells.cost.join(" "));
     if (hasRetail && !hasCost) retail = moneyValue(cells.retail.join(" "));
 
@@ -348,14 +349,7 @@ function parseByColumns(lines: OCRLine[], header: { index: number; matches: Head
     if (!qty) qty = "1";
 
     if (name || qty || retail || cost) {
-      found.push({
-        id: uid(),
-        name,
-        qty,
-        retail,
-        cost,
-        source: allText,
-      });
+      found.push({ id: uid(), name, qty, retail, cost, source: allText });
     }
   }
   return found;
@@ -447,7 +441,6 @@ export default function GeneralOCRPage() {
         tessedit_pageseg_mode: tesseract.PSM?.AUTO ?? "3",
         user_defined_dpi: "300",
       });
-
       const result = await worker.recognize(enhanced, {}, { text: true, tsv: true });
       const text = result.data.text || "";
       const tsv = result.data.tsv || "";
