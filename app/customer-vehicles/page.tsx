@@ -6,10 +6,12 @@ import { supabase } from "../supabase";
 
 type Customer = {
   id: string;
+  type: "individual" | "company";
   name: string;
   companyName: string;
   phone: string;
   email: string;
+  postalCode: string;
   address: string;
   notes: string;
 };
@@ -52,8 +54,32 @@ type LocalPart = {
   linkedAt?: string;
 };
 
+type CustomerForm = {
+  id: string;
+  type: "individual" | "company";
+  name: string;
+  companyName: string;
+  phone: string;
+  email: string;
+  postalCode: string;
+  address: string;
+  notes: string;
+};
+
 const ACTIVE_KEY = "parts-active-vehicle";
 const PARTS_KEY = "parts-data";
+
+const blankCustomer: CustomerForm = {
+  id: "",
+  type: "individual",
+  name: "",
+  companyName: "",
+  phone: "",
+  email: "",
+  postalCode: "",
+  address: "",
+  notes: "",
+};
 
 function readLocalParts(): LocalPart[] {
   try {
@@ -87,6 +113,10 @@ function vehicleLabel(v: Vehicle) {
   return v.registration || v.number || v.chassis || "車両";
 }
 
+function customerLabel(c: Customer) {
+  return c.companyName || c.name || "顧客名未入力";
+}
+
 export default function CustomerVehiclesPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -96,6 +126,10 @@ export default function CustomerVehiclesPage() {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("顧客・車両・部品履歴をまとめて確認できます。");
+  const [customerEditing, setCustomerEditing] = useState(false);
+  const [customerForm, setCustomerForm] = useState<CustomerForm>(blankCustomer);
+  const [linkCustomerId, setLinkCustomerId] = useState("");
+  const [savingCustomer, setSavingCustomer] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -125,10 +159,12 @@ export default function CustomerVehiclesPage() {
 
       const customerList: Customer[] = (customerRes.data || []).map((c: any) => ({
         id: c.id,
+        type: c.customer_type === "company" ? "company" : "individual",
         name: c.name || "",
         companyName: c.company_name || "",
         phone: c.phone || "",
         email: c.email || "",
+        postalCode: c.postal_code || "",
         address: c.address || "",
         notes: c.notes || "",
       }));
@@ -181,7 +217,10 @@ export default function CustomerVehiclesPage() {
       try {
         const active = JSON.parse(localStorage.getItem(ACTIVE_KEY) || "null");
         const found = vehicleList.find((v) => v.id === active?.id || v.number === active?.number);
-        if (found) setSelectedVehicleId(found.id);
+        if (found) {
+          setSelectedVehicleId(found.id);
+          setLinkCustomerId(found.customerId || "");
+        }
       } catch {}
 
       setMessage(
@@ -231,6 +270,8 @@ export default function CustomerVehiclesPage() {
 
   function selectVehicle(v: Vehicle) {
     setSelectedVehicleId(v.id);
+    setLinkCustomerId(v.customerId || "");
+    setCustomerEditing(false);
     localStorage.setItem(ACTIVE_KEY, JSON.stringify({
       id: v.id,
       number: v.number,
@@ -254,6 +295,106 @@ export default function CustomerVehiclesPage() {
     if (!selectedVehicle) return;
     selectVehicle(selectedVehicle);
     location.assign("/parts-data");
+  }
+
+  function beginEditCustomer(customer?: Customer | null) {
+    if (customer) {
+      setCustomerForm({
+        id: customer.id,
+        type: customer.type,
+        name: customer.name,
+        companyName: customer.companyName,
+        phone: customer.phone,
+        email: customer.email,
+        postalCode: customer.postalCode,
+        address: customer.address,
+        notes: customer.notes,
+      });
+    } else {
+      setCustomerForm(blankCustomer);
+    }
+    setCustomerEditing(true);
+  }
+
+  async function saveCustomer() {
+    if (!selectedVehicle) return;
+    const displayName = customerForm.type === "company"
+      ? (customerForm.companyName.trim() || customerForm.name.trim())
+      : (customerForm.name.trim() || customerForm.companyName.trim());
+    if (!displayName) {
+      setMessage("お客様名または会社名を入力してください。");
+      return;
+    }
+
+    setSavingCustomer(true);
+    try {
+      const payload = {
+        customer_type: customerForm.type,
+        name: customerForm.name.trim() || displayName,
+        company_name: customerForm.companyName.trim() || null,
+        phone: customerForm.phone.trim() || null,
+        email: customerForm.email.trim() || null,
+        postal_code: customerForm.postalCode.trim() || null,
+        address: customerForm.address.trim() || null,
+        notes: customerForm.notes.trim() || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      let saved: any = null;
+      if (customerForm.id) {
+        const { data, error } = await supabase.from("customers").update(payload).eq("id", customerForm.id).select("*").single();
+        if (error) throw error;
+        saved = data;
+      } else {
+        const { data, error } = await supabase.from("customers").insert(payload).select("*").single();
+        if (error) throw error;
+        saved = data;
+      }
+
+      const { error: vehicleError } = await supabase.from("vehicles").update({ customer_id: saved.id, updated_at: new Date().toISOString() }).eq("id", selectedVehicle.id);
+      if (vehicleError) throw vehicleError;
+
+      const normalized: Customer = {
+        id: saved.id,
+        type: saved.customer_type === "company" ? "company" : "individual",
+        name: saved.name || "",
+        companyName: saved.company_name || "",
+        phone: saved.phone || "",
+        email: saved.email || "",
+        postalCode: saved.postal_code || "",
+        address: saved.address || "",
+        notes: saved.notes || "",
+      };
+
+      setCustomers((prev) => {
+        const exists = prev.some((c) => c.id === normalized.id);
+        return exists ? prev.map((c) => c.id === normalized.id ? normalized : c) : [normalized, ...prev];
+      });
+      setVehicles((prev) => prev.map((v) => v.id === selectedVehicle.id ? { ...v, customerId: normalized.id } : v));
+      setLinkCustomerId(normalized.id);
+      setCustomerEditing(false);
+      setMessage(`${customerLabel(normalized)} を保存し、この車両へ紐付けました。`);
+    } catch (error: any) {
+      setMessage(`顧客保存エラー: ${error?.message || error}`);
+    } finally {
+      setSavingCustomer(false);
+    }
+  }
+
+  async function linkExistingCustomer() {
+    if (!selectedVehicle || !linkCustomerId) {
+      setMessage("紐付ける顧客を選択してください。");
+      return;
+    }
+    try {
+      const { error } = await supabase.from("vehicles").update({ customer_id: linkCustomerId, updated_at: new Date().toISOString() }).eq("id", selectedVehicle.id);
+      if (error) throw error;
+      setVehicles((prev) => prev.map((v) => v.id === selectedVehicle.id ? { ...v, customerId: linkCustomerId } : v));
+      const customer = customers.find((c) => c.id === linkCustomerId);
+      setMessage(`${customer ? customerLabel(customer) : "選択した顧客"} をこの車両へ紐付けました。`);
+    } catch (error: any) {
+      setMessage(`顧客紐付けエラー: ${error?.message || error}`);
+    }
   }
 
   const totalHistory = selectedCloudParts.length + selectedLocalParts.length;
@@ -291,7 +432,7 @@ export default function CustomerVehiclesPage() {
             return (
               <button key={v.id} className={`vehicle ${selectedVehicleId === v.id ? "selected" : ""}`} onClick={() => selectVehicle(v)}>
                 <div className="vehicleTitle"><b>{vehicleLabel(v)}</b><span>部品履歴 {Math.max(localCount, cloudCount)}件</span></div>
-                <div>{c ? (c.companyName || c.name || "顧客名未入力") : "顧客未割り当て"}</div>
+                <div>{c ? customerLabel(c) : "顧客未割り当て"}</div>
                 <small>{[v.maker, v.model, v.chassis].filter(Boolean).join(" / ") || "車両情報未入力"}</small>
               </button>
             );
@@ -305,7 +446,7 @@ export default function CustomerVehiclesPage() {
             <div className="sectionHead"><h2>選択車両</h2><span className="badge">作業車両</span></div>
             <h3>{vehicleLabel(selectedVehicle)}</h3>
             <div className="infoGrid">
-              <div><small>お客様</small><b>{selectedCustomer ? (selectedCustomer.companyName || selectedCustomer.name || "未入力") : "未割り当て"}</b></div>
+              <div><small>お客様</small><b>{selectedCustomer ? customerLabel(selectedCustomer) : "未割り当て"}</b></div>
               <div><small>電話番号</small><b>{selectedCustomer?.phone || "-"}</b></div>
               <div><small>型式</small><b>{selectedVehicle.model || "-"}</b></div>
               <div><small>車台番号</small><b>{selectedVehicle.chassis || "-"}</b></div>
@@ -318,6 +459,63 @@ export default function CustomerVehiclesPage() {
               <button onClick={openParts}>③ 部品データ</button>
               <button onClick={() => location.assign("/vehicle-workflow")}>車両情報を編集</button>
             </div>
+          </section>
+
+          <section className="card">
+            <div className="sectionHead"><h2>顧客情報</h2><span>{selectedCustomer ? "登録済み" : "未割り当て"}</span></div>
+
+            {!customerEditing && (
+              <>
+                {selectedCustomer ? (
+                  <div className="customerSummary">
+                    <div><small>区分</small><b>{selectedCustomer.type === "company" ? "法人" : "個人"}</b></div>
+                    <div><small>お客様名</small><b>{selectedCustomer.name || "-"}</b></div>
+                    <div><small>会社名</small><b>{selectedCustomer.companyName || "-"}</b></div>
+                    <div><small>電話番号</small><b>{selectedCustomer.phone || "-"}</b></div>
+                    <div><small>メール</small><b>{selectedCustomer.email || "-"}</b></div>
+                    <div><small>郵便番号</small><b>{selectedCustomer.postalCode || "-"}</b></div>
+                    <div className="wide"><small>住所</small><b>{selectedCustomer.address || "-"}</b></div>
+                    <div className="wide"><small>備考</small><b>{selectedCustomer.notes || "-"}</b></div>
+                  </div>
+                ) : <div className="empty">この車両にはまだ顧客が紐付いていません。</div>}
+
+                <div className="actions">
+                  {selectedCustomer && <button onClick={() => beginEditCustomer(selectedCustomer)}>顧客情報を編集</button>}
+                  <button onClick={() => beginEditCustomer(null)}>＋ 新規顧客を登録</button>
+                </div>
+
+                {!!customers.length && (
+                  <div className="linkBox">
+                    <label>既存顧客をこの車両へ割り当て</label>
+                    <select value={linkCustomerId} onChange={(e) => setLinkCustomerId(e.target.value)}>
+                      <option value="">顧客を選択</option>
+                      {customers.map((c) => <option key={c.id} value={c.id}>{customerLabel(c)}{c.phone ? ` / ${c.phone}` : ""}</option>)}
+                    </select>
+                    <button onClick={linkExistingCustomer}>この顧客を車両へ紐付け</button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {customerEditing && (
+              <div className="customerForm">
+                <div className="segmented">
+                  <button className={customerForm.type === "individual" ? "active" : ""} onClick={() => setCustomerForm((f) => ({ ...f, type: "individual" }))}>個人</button>
+                  <button className={customerForm.type === "company" ? "active" : ""} onClick={() => setCustomerForm((f) => ({ ...f, type: "company" }))}>法人</button>
+                </div>
+                <label>お客様名<input value={customerForm.name} onChange={(e) => setCustomerForm((f) => ({ ...f, name: e.target.value }))} placeholder="お客様名" /></label>
+                <label>会社名<input value={customerForm.companyName} onChange={(e) => setCustomerForm((f) => ({ ...f, companyName: e.target.value }))} placeholder="会社名" /></label>
+                <label>電話番号<input value={customerForm.phone} onChange={(e) => setCustomerForm((f) => ({ ...f, phone: e.target.value }))} inputMode="tel" placeholder="電話番号" /></label>
+                <label>メール<input value={customerForm.email} onChange={(e) => setCustomerForm((f) => ({ ...f, email: e.target.value }))} inputMode="email" placeholder="メール" /></label>
+                <label>郵便番号<input value={customerForm.postalCode} onChange={(e) => setCustomerForm((f) => ({ ...f, postalCode: e.target.value }))} inputMode="numeric" placeholder="郵便番号" /></label>
+                <label>住所<input value={customerForm.address} onChange={(e) => setCustomerForm((f) => ({ ...f, address: e.target.value }))} placeholder="住所" /></label>
+                <label className="wide">備考<textarea value={customerForm.notes} onChange={(e) => setCustomerForm((f) => ({ ...f, notes: e.target.value }))} placeholder="備考" /></label>
+                <div className="actions wide">
+                  <button className="primary" disabled={savingCustomer} onClick={saveCustomer}>{savingCustomer ? "保存中…" : customerForm.id ? "顧客情報を更新" : "新規顧客を保存して紐付け"}</button>
+                  <button onClick={() => setCustomerEditing(false)}>キャンセル</button>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="card">
@@ -344,7 +542,7 @@ export default function CustomerVehiclesPage() {
       )}
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:920px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button{border:1px solid #cdd7e5;border-radius:12px;background:#fff;color:#2674e8;padding:11px 14px;font-size:15px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}h2{margin:0}h3{font-size:26px;margin:12px 0}p{color:#5d6878;line-height:1.7}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:13px 15px;margin:14px 0}.search{width:100%;border:1px solid #cdd7e5;border-radius:12px;padding:14px;font-size:16px}.sectionHead,.vehicleTitle,.historyTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.sectionHead span,.vehicleTitle span,.historyTop span,.badge{font-size:13px;border-radius:999px;padding:5px 9px;background:#eef4ff;color:#2f6fe4}.vehicleList,.historyList{display:grid;gap:10px;margin-top:14px}.vehicle{text-align:left;color:#172033;display:grid;gap:5px}.vehicle small{color:#718096;font-weight:500}.vehicle.selected{border:2px solid #2f6fe4;background:#eef4ff}.infoGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.infoGrid>div{border:1px solid #e0e6ef;border-radius:12px;padding:12px;display:grid;gap:4px}.infoGrid small{color:#78869a}.address{margin-top:10px;padding:12px;background:#f8fafc;border-radius:12px;color:#5d6878}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.primary{background:#2f6fe4;color:white;border-color:#2f6fe4}.history{border:1px solid #dbe3ee;border-radius:14px;padding:14px;display:grid;gap:9px}.history.local{border-style:dashed}.numbers{display:flex;gap:18px;flex-wrap:wrap;color:#5d6878}.history>small{color:#8a96a7}.empty{margin-top:14px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}@media(max-width:650px){.infoGrid{grid-template-columns:1fr}.sectionHead{align-items:flex-start}.actions button{flex:1 1 100%}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:920px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button{border:1px solid #cdd7e5;border-radius:12px;background:#fff;color:#2674e8;padding:11px 14px;font-size:15px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}h2{margin:0}h3{font-size:26px;margin:12px 0}p{color:#5d6878;line-height:1.7}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:13px 15px;margin:14px 0}.search,.customerForm input,.customerForm textarea,.linkBox select{width:100%;border:1px solid #cdd7e5;border-radius:12px;padding:14px;font-size:16px;background:#fff;color:#172033}.customerForm textarea{min-height:90px;resize:vertical}.sectionHead,.vehicleTitle,.historyTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.sectionHead span,.vehicleTitle span,.historyTop span,.badge{font-size:13px;border-radius:999px;padding:5px 9px;background:#eef4ff;color:#2f6fe4}.vehicleList,.historyList{display:grid;gap:10px;margin-top:14px}.vehicle{text-align:left;color:#172033;display:grid;gap:5px}.vehicle small{color:#718096;font-weight:500}.vehicle.selected{border:2px solid #2f6fe4;background:#eef4ff}.infoGrid,.customerSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.infoGrid>div,.customerSummary>div{border:1px solid #e0e6ef;border-radius:12px;padding:12px;display:grid;gap:4px}.infoGrid small,.customerSummary small{color:#78869a}.customerSummary .wide{grid-column:1/-1}.address{margin-top:10px;padding:12px;background:#f8fafc;border-radius:12px;color:#5d6878}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.primary{background:#2f6fe4;color:white;border-color:#2f6fe4}.history{border:1px solid #dbe3ee;border-radius:14px;padding:14px;display:grid;gap:9px}.history.local{border-style:dashed}.numbers{display:flex;gap:18px;flex-wrap:wrap;color:#5d6878}.history>small{color:#8a96a7}.empty{margin-top:14px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}.linkBox{margin-top:16px;padding:14px;border:1px solid #e0e6ef;border-radius:14px;display:grid;gap:10px}.linkBox label,.customerForm label{display:grid;gap:6px;color:#5d6878;font-weight:700}.customerForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.customerForm .wide{grid-column:1/-1}.segmented{grid-column:1/-1;display:flex;gap:8px}.segmented button{flex:1}.segmented button.active{background:#2f6fe4;color:#fff;border-color:#2f6fe4}button:disabled{opacity:.55}.customerSummary{margin-top:14px}@media(max-width:650px){.infoGrid,.customerSummary,.customerForm{grid-template-columns:1fr}.customerSummary .wide,.customerForm .wide{grid-column:auto}.sectionHead{align-items:flex-start}.actions button{flex:1 1 100%}}
       `}</style>
     </main>
   );
