@@ -23,10 +23,13 @@ function showPdfStatus(message, error = false) {
     box.style.fontWeight = "800";
     card.querySelector(".actions")?.insertAdjacentElement("afterend", box);
   }
-  box.style.background = error ? "#fff1f1" : "#eef6ff";
-  box.style.border = error ? "1px solid #efb7b7" : "1px solid #bfd6ff";
-  box.style.color = error ? "#9f2525" : "#244f91";
-  box.textContent = message;
+  const bg = error ? "#fff1f1" : "#eef6ff";
+  const border = error ? "1px solid #efb7b7" : "1px solid #bfd6ff";
+  const color = error ? "#9f2525" : "#244f91";
+  if (box.style.background !== bg) box.style.background = bg;
+  if (box.style.border !== border) box.style.border = border;
+  if (box.style.color !== color) box.style.color = color;
+  if (box.textContent !== message) box.textContent = message;
 }
 
 async function loadPdfJs() {
@@ -140,21 +143,24 @@ async function pdfToImageFile(file) {
 }
 
 function enhanceUi() {
-  if (!location.pathname.startsWith("/vehicle-workflow")) return;
+  if (!location.pathname.startsWith("/vehicle-workflow")) return false;
   const card = vehicleCard();
-  if (!card) return;
+  if (!card) return false;
 
   const inputs = Array.from(card.querySelectorAll('input[type="file"]'));
   inputs.forEach((input) => {
-    if (!input.hasAttribute("capture")) input.setAttribute("accept", PDF_ACCEPT);
+    if (!input.hasAttribute("capture") && input.getAttribute("accept") !== PDF_ACCEPT) {
+      input.setAttribute("accept", PDF_ACCEPT);
+    }
   });
 
   const buttons = Array.from(card.querySelectorAll(".actions button"));
   if (buttons[1]) {
-    buttons[1].textContent = "📄 PDF / 写真から読み取る";
-    buttons[1].classList.add("primary");
+    const wanted = "📄 PDF / 写真から読み取る";
+    if (buttons[1].textContent !== wanted) buttons[1].textContent = wanted;
+    if (!buttons[1].classList.contains("primary")) buttons[1].classList.add("primary");
   }
-  if (buttons[0]) buttons[0].classList.remove("primary");
+  if (buttons[0]?.classList.contains("primary")) buttons[0].classList.remove("primary");
 
   if (!card.querySelector("[data-pdf-main-note]")) {
     const note = document.createElement("p");
@@ -165,6 +171,7 @@ function enhanceUi() {
     note.textContent = "PDFをメイン入力として利用できます。複数ページPDFは車検証ページを自動判定し、QRを優先してOCRで補完します。";
     card.querySelector(".actions")?.insertAdjacentElement("afterend", note);
   }
+  return true;
 }
 
 export default function CertificatePdfBridge() {
@@ -180,7 +187,6 @@ export default function CertificatePdfBridge() {
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
       if (!isPdf || input.dataset.pdfConverting === "1") return;
 
-      // React側の画像専用onChangeより先にPDFを受け取り、PNGへ変換して同じ入力へ戻す。
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
@@ -204,14 +210,20 @@ export default function CertificatePdfBridge() {
     };
 
     document.addEventListener("change", onChange, true);
-    enhanceUi();
-    const observer = new MutationObserver(enhanceUi);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+
+    // MutationObserverは使わない。画面を書き換えて自分自身を再発火させるループを防ぐ。
+    let tries = 0;
+    const setup = () => {
+      tries += 1;
+      if (enhanceUi() || tries >= 20) window.clearInterval(setupTimer);
+    };
+    const setupTimer = window.setInterval(setup, 250);
+    setup();
 
     return () => {
       dead = true;
       document.removeEventListener("change", onChange, true);
-      observer.disconnect();
+      window.clearInterval(setupTimer);
     };
   }, []);
 
