@@ -23,16 +23,6 @@ function detailInput(label) {
   return null;
 }
 
-function basicControl(label) {
-  const s = section("基本情報");
-  if (!s) return null;
-  for (const node of Array.from(s.querySelectorAll("label"))) {
-    const text = compact(node.childNodes[0]?.textContent || "");
-    if (text.startsWith(compact(label))) return node.querySelector("input,select");
-  }
-  return null;
-}
-
 function setReactInput(el, value) {
   if (!(el instanceof HTMLInputElement) || !value || el.value === value) return false;
   const old = el.value;
@@ -40,19 +30,7 @@ function setReactInput(el, value) {
   if (setter) setter.call(el, value);
   else el.value = value;
   if (el._valueTracker) el._valueTracker.setValue(old);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
-  el.dispatchEvent(new Event("change", { bubbles: true }));
-  return true;
-}
-
-function setReactSelect(el, value) {
-  if (!(el instanceof HTMLSelectElement) || !value || el.value === value) return false;
-  const old = el.value;
-  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
-  if (setter) setter.call(el, value);
-  else el.value = value;
-  if (el._valueTracker) el._valueTracker.setValue(old);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
   return true;
 }
@@ -129,7 +107,6 @@ function parseQr3(items) {
   };
 
   return {
-    raw: joined,
     inspectionExpiry: date6(f[3]),
     firstRegistration: month4(f[4]),
     model: compact(f[5]).replace(/\s/g, "").toUpperCase(),
@@ -141,7 +118,7 @@ function parseQr3(items) {
   };
 }
 
-function showStatus(v) {
+function showStatus(v, appliedLabel = "") {
   const host = document.getElementById("certificate-qr-debug");
   if (!host) return;
   let box = document.getElementById("certificate-qr-applied-fixed");
@@ -160,47 +137,50 @@ function showStatus(v) {
     box.textContent = "QR1〜3の連結データを待っています。";
     return;
   }
-  box.textContent = `QRから自動反映: 有効期限 ${v.inspectionExpiry || "未取得"} / 初度登録 ${v.firstRegistration || "未取得"} / 型式 ${v.model || "未取得"} / 前前軸重 ${v.frontFrontAxleWeightKg || "-"}kg / 後後軸重 ${v.rearRearAxleWeightKg || "-"}kg / 燃料 ${v.fuel || "未取得"}`;
-}
-
-function apply(v) {
-  if (!v) return;
-  const put = (label, value) => {
-    if (value) setReactInput(detailInput(label), value);
-  };
-
-  put("有効期間の満了する日", v.inspectionExpiry);
-  put("初度登録年月", v.firstRegistration);
-  put("型式", v.model);
-  put("前前軸重 kg", v.frontFrontAxleWeightKg);
-  put("前後軸重 kg", v.frontRearAxleWeightKg);
-  put("後前軸重 kg", v.rearFrontAxleWeightKg);
-  put("後後軸重 kg", v.rearRearAxleWeightKg);
-  put("燃料の種類", v.fuel);
-
-  setReactInput(basicControl("初度登録（和暦）"), v.firstRegistration);
-  setReactInput(basicControl("型式"), v.model);
-  if (v.fuel === "軽油") setReactSelect(basicControl("燃料"), "ディーゼル");
-  else if (v.fuel === "ガソリン") setReactSelect(basicControl("燃料"), "ガソリン");
-  else if (/電気/.test(v.fuel)) setReactSelect(basicControl("燃料"), "EV");
+  box.textContent = `QRから自動反映: 有効期限 ${v.inspectionExpiry || "未取得"} / 初度登録 ${v.firstRegistration || "未取得"} / 型式 ${v.model || "未取得"} / 前前軸重 ${v.frontFrontAxleWeightKg || "-"}kg / 後後軸重 ${v.rearRearAxleWeightKg || "-"}kg / 燃料 ${v.fuel || "未取得"}${appliedLabel ? ` / 反映中 ${appliedLabel}` : ""}`;
 }
 
 export default function CertificateQrApplyFixed() {
   useEffect(() => {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
 
-    const run = () => {
+    let index = 0;
+    let values = null;
+
+    const tick = () => {
       const items = Array.isArray(window.__vehicleCertificateQr)
         ? window.__vehicleCertificateQr
         : [];
       if (!items.length) return;
-      const values = parseQr3(items);
-      showStatus(values);
-      apply(values);
+
+      values = parseQr3(items);
+      if (!values) {
+        showStatus(null);
+        return;
+      }
+
+      window.__vehicleCertificateQrPriority = values;
+
+      const queue = [
+        ["有効期間の満了する日", values.inspectionExpiry],
+        ["初度登録年月", values.firstRegistration],
+        ["型式", values.model],
+        ["前前軸重 kg", values.frontFrontAxleWeightKg],
+        ["前後軸重 kg", values.frontRearAxleWeightKg],
+        ["後前軸重 kg", values.rearFrontAxleWeightKg],
+        ["後後軸重 kg", values.rearRearAxleWeightKg],
+        ["燃料の種類", values.fuel],
+      ].filter(([, value]) => Boolean(value));
+
+      if (!queue.length) return;
+      const [label, value] = queue[index % queue.length];
+      setReactInput(detailInput(label), value);
+      showStatus(values, label);
+      index += 1;
     };
 
-    const timer = window.setInterval(run, 300);
-    run();
+    const timer = window.setInterval(tick, 180);
+    tick();
     return () => window.clearInterval(timer);
   }, []);
 
