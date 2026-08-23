@@ -25,26 +25,31 @@ const photoPickerEnhancer = `
     });
   };
 
-  const routeMainActions = (event) => {
-    if (location.pathname !== "/") return;
+  const routeFromTarget = (event) => {
+    if (location.pathname !== "/") return false;
     const target = event.target instanceof Element ? event.target.closest("button") : null;
-    if (!target) return;
+    if (!target) return false;
     const text = target.textContent || "";
 
-    const go = (path) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation?.();
-      location.assign(path);
-    };
+    let path = "";
+    if (text.includes("①車体番号")) path = "/vehicle-workflow";
+    else if (text.includes("③データ")) path = "/parts-data";
+    else if (text.includes("②伝票OCR") || text.includes("自動判定OCRで読み込む") || text.includes("高精度OCRで読み込む")) path = "/ocr/auto";
+    else if (text.includes("④印刷")) path = "/parts-print";
 
-    if (text.includes("①車体番号")) return go("/vehicle-workflow");
-    if (text.includes("③データ")) return go("/parts-data");
-    if (text.includes("②伝票OCR") || text.includes("自動判定OCRで読み込む") || text.includes("高精度OCRで読み込む")) return go("/ocr/auto");
-    if (text.includes("④印刷")) return go("/parts-print");
+    if (!path) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    location.assign(path);
+    return true;
   };
 
-  document.addEventListener("click", routeMainActions, true);
+  // iPhone SafariではReactのclick処理より先に確実に捕まえるためpointerdownも使う。
+  document.addEventListener("pointerdown", routeFromTarget, true);
+  document.addEventListener("touchstart", routeFromTarget, { capture: true, passive: false });
+  document.addEventListener("click", routeFromTarget, true);
+
   enhance();
 
   const observer = new MutationObserver(enhance);
