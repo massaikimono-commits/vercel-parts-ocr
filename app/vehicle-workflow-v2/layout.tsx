@@ -1,10 +1,10 @@
-import CertificateTemplateRowFix from "../certificate-template-row-fix";
+import CertificateFulltextFix from "../certificate-fulltext-fix";
 
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      <CertificateTemplateRowFix />
+      <CertificateFulltextFix />
     </>
   );
 }
