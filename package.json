@@ -12,7 +12,8 @@
     "jspdf":"^2.5.2",
     "jsqr":"^1.4.0",
     "@zxing/browser":"^0.1.5",
-    "@zxing/library":"^0.21.3"
+    "@zxing/library":"^0.21.3",
+    "pdfjs-dist":"^4.10.38"
   },
   "devDependencies": {
     "@types/node":"^20.17.24",
