@@ -44,6 +44,7 @@ type LocalPart = {
   qty: string;
   retail: string;
   cost: string;
+  source?: string;
   vehicleId?: string;
   vehicleNumber?: string;
   registration?: string;
@@ -69,6 +70,19 @@ function money(value: any) {
   return Number.isFinite(n) ? n.toLocaleString("ja-JP") : String(value);
 }
 
+function numberOrNull(value: string) {
+  const n = Number(String(value || "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) && value !== "" ? n : null;
+}
+
+function marker(id: string) {
+  return `[local-id:${id}]`;
+}
+
+function markerFromSource(source: string | null | undefined) {
+  return source?.match(/\[local-id:([^\]]+)\]/)?.[1] || "";
+}
+
 function vehicleLabel(v: Vehicle) {
   return v.registration || v.number || v.chassis || "車両";
 }
@@ -84,13 +98,15 @@ export default function CustomerVehiclesPage() {
   const [message, setMessage] = useState("顧客・車両・部品履歴をまとめて確認できます。");
 
   useEffect(() => {
-    setLocalParts(readLocalParts());
     void loadData();
   }, []);
 
   async function loadData() {
     setBusy(true);
     try {
+      const local = readLocalParts();
+      setLocalParts(local);
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setMessage("ログイン後に顧客・車両履歴を読み込みます。");
@@ -130,9 +146,37 @@ export default function CustomerVehiclesPage() {
         weight: v.vehicle_weight == null ? (v.curb_weight_kg == null ? "" : String(v.curb_weight_kg)) : String(v.vehicle_weight),
       }));
 
+      let cloud = (partsRes.data || []) as CloudPart[];
+      const alreadySynced = new Set(cloud.map((p) => markerFromSource(p.source_text)).filter(Boolean));
+      const vehicleIds = new Set(vehicleList.map((v) => v.id));
+      const pending = local.filter((p) =>
+        p.id && p.name && p.vehicleId && vehicleIds.has(p.vehicleId) && !alreadySynced.has(p.id)
+      );
+
+      let syncedCount = 0;
+      if (pending.length) {
+        const rows = pending.map((p) => ({
+          vehicle_id: p.vehicleId,
+          part_name: p.name,
+          quantity: numberOrNull(p.qty) ?? 1,
+          list_price: numberOrNull(p.retail),
+          purchase_price: numberOrNull(p.cost),
+          source_text: `${marker(p.id)} ${p.source || ""}`.trim(),
+        }));
+        const { data: inserted, error } = await supabase
+          .from("parts")
+          .insert(rows)
+          .select("id,vehicle_id,part_name,quantity,list_price,purchase_price,source_text,created_at");
+        if (error) throw error;
+        if (inserted?.length) {
+          syncedCount = inserted.length;
+          cloud = [...(inserted as CloudPart[]), ...cloud];
+        }
+      }
+
       setCustomers(customerList);
       setVehicles(vehicleList);
-      setCloudParts((partsRes.data || []) as CloudPart[]);
+      setCloudParts(cloud);
 
       try {
         const active = JSON.parse(localStorage.getItem(ACTIVE_KEY) || "null");
@@ -140,7 +184,11 @@ export default function CustomerVehiclesPage() {
         if (found) setSelectedVehicleId(found.id);
       } catch {}
 
-      setMessage(`顧客 ${customerList.length}件・車両 ${vehicleList.length}台を読み込みました。`);
+      setMessage(
+        syncedCount
+          ? `顧客 ${customerList.length}件・車両 ${vehicleList.length}台を読み込み、部品 ${syncedCount}件をクラウドへ同期しました。`
+          : `顧客 ${customerList.length}件・車両 ${vehicleList.length}台を読み込みました。`
+      );
     } catch (error: any) {
       setMessage(`読み込みエラー: ${error?.message || error}`);
     } finally {
@@ -174,11 +222,7 @@ export default function CustomerVehiclesPage() {
 
   const selectedLocalParts = useMemo(() => {
     if (!selectedVehicle) return [];
-    const cloudMarkers = new Set(
-      selectedCloudParts
-        .map((p) => p.source_text?.match(/\[local-id:([^\]]+)\]/)?.[1])
-        .filter(Boolean)
-    );
+    const cloudMarkers = new Set(selectedCloudParts.map((p) => markerFromSource(p.source_text)).filter(Boolean));
     return localParts.filter((p) => {
       const match = p.vehicleId === selectedVehicle.id || (!p.vehicleId && p.vehicleNumber === selectedVehicle.number);
       return match && !cloudMarkers.has(p.id);
@@ -223,7 +267,7 @@ export default function CustomerVehiclesPage() {
 
       <section className="card">
         <h1>顧客・車両管理</h1>
-        <p>お客様名・電話番号・ナンバー下4桁・車台番号・型式から検索し、車両を開くと過去の部品OCR履歴まで確認できます。</p>
+        <p>お客様名・電話番号・ナンバー下4桁・車台番号・型式から検索し、車両を開くと過去の部品OCR履歴まで確認できます。端末で保存した車両紐付け済み部品はクラウドにも自動同期します。</p>
         <div className="notice">{busy ? "顧客・車両を読み込み中…" : message}</div>
         <input
           className="search"
