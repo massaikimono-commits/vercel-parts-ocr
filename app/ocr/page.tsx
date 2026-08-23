@@ -13,7 +13,8 @@ type Part = {
 };
 
 type CropBox = { x: number; y: number; w: number; h: number };
-type CropMode = "text" | "name" | "nameBinary" | "numeric";
+
+type NumberRead = { value: string; texts: string[] };
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -27,7 +28,7 @@ const styles: Record<string, React.CSSProperties> = {
   notice: { padding: "13px 15px", background: "#e9f7ef", border: "1px solid #bfe6ce", borderRadius: 12, marginBottom: 14, lineHeight: 1.6 },
   row: { display: "grid", gridTemplateColumns: "minmax(180px, 2fr) 80px 120px 120px", gap: 8, marginBottom: 10 },
   input: { width: "100%", minWidth: 0, border: "2px solid #d6deea", borderRadius: 10, padding: "11px 10px", fontSize: 16 },
-  debug: { width: "100%", minHeight: 180, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" },
+  debug: { width: "100%", minHeight: 200, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" },
 };
 
 function normalizeText(text: string) {
@@ -37,97 +38,108 @@ function normalizeText(text: string) {
     .replace(/[‐‑‒–—―]/g, "-")
     .replace(/[，、]/g, ",")
     .replace(/\r/g, "")
-    .replace(/[ \t]+/g, " ");
-}
-
-function amountValues(text: string) {
-  const noYen = text.replace(/¥\s*\d[\d,. ]*/g, " ");
-  const matches = noYen.match(/\d{1,3}(?:[,\. ]\d{3})+|\d{4,7}/g) || [];
-  return matches
-    .map((raw) => ({ raw, value: Number(raw.replace(/\D/g, "")) }))
-    .filter((x) => Number.isFinite(x.value) && x.value >= 100 && x.value <= 2000000);
-}
-
-function cleanPartName(line: string) {
-  return line
-    .replace(/[¥￥]\s*[lI1|]?\s*\d[\d,. ]*/g, " ")
-    .replace(/\b0{2,}\d+\b/g, " ")
-    .replace(/^\*?\d{4,}\s*/g, "")
-    .replace(/^[A-Z]{1,4}[- ]?[A-Z0-9]{2,}\s*/i, "")
-    .replace(/^[\s:;|・.\-]+|[\s:;|・.\-]+$/g, "")
-    .replace(/\s{2,}/g, " ")
+    .replace(/[ \t]+/g, " ")
     .trim();
 }
 
-function nameScore(line: string) {
-  const cleaned = cleanPartName(line);
-  if (cleaned.length < 2) return -100;
+function levenshtein(a: string, b: string) {
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    for (let j = 0; j <= b.length; j += 1) prev[j] = cur[j];
+  }
+  return prev[b.length];
+}
+
+function correctCommonPartWord(text: string) {
+  const words = [
+    "クラッチ",
+    "ブレーキ",
+    "フィルター",
+    "フィルタ",
+    "ワイパー",
+    "ガスケット",
+    "ベルト",
+    "ホース",
+    "シール",
+    "パッド",
+    "ベアリング",
+    "プラグ",
+    "オイル",
+  ];
+
+  return text.replace(/[ァ-ヶー]{3,}/g, (token) => {
+    let best = token;
+    let distance = 99;
+    for (const word of words) {
+      const d = levenshtein(token, word);
+      if (d < distance) {
+        distance = d;
+        best = word;
+      }
+    }
+    const limit = token.length >= 7 ? 3 : 2;
+    return distance <= limit ? best : token;
+  });
+}
+
+function cleanPartName(raw: string) {
+  let text = normalizeText(raw)
+    .replace(/[¥￥]\s*[0-9Il|OQS,.\s]+.*$/i, "")
+    .replace(/\bMC[- ]?E\d+\b/gi, " ")
+    .replace(/\*?0{2,}\d+/g, " ")
+    .replace(/^[-:;|・.\s]+|[-:;|・.\s]+$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  text = correctCommonPartWord(text);
+
+  const trailing = text.match(/^(.*\b(?:ASSY|COMP|KIT|SET))\s+([A-Z]{1,2})$/i);
+  if (trailing && !/^(RH|LH|FR|RR)$/i.test(trailing[2])) {
+    text = trailing[1];
+  }
+
+  return text.trim();
+}
+
+function nameScore(text: string) {
+  const cleaned = cleanPartName(text);
+  if (cleaned.length < 3) return -100;
   if (/品番|品名|受注|出庫|標準価格|単価|金額|倉庫|棚番|受注残|年月日|売上|コード|合計|伝票|型式|車台/.test(cleaned)) return -100;
 
   let score = 0;
   const jp = cleaned.match(/[ぁ-んァ-ヶ一-龠]/g)?.length || 0;
   const alpha = cleaned.match(/[A-Za-z]/g)?.length || 0;
   const digits = cleaned.match(/\d/g)?.length || 0;
-
-  if (jp) score += Math.min(12, jp * 2);
-  if (alpha) score += Math.min(8, alpha);
-  if (/ASSY|KIT|SET|COMP|クラッチ|ブレーキ|パッド|フィルタ|オイル|ベルト|シール|ホース|ガスケット/i.test(cleaned)) score += 12;
+  score += Math.min(14, jp * 2);
+  score += Math.min(8, alpha);
+  if (/ASSY|COMP|KIT|SET|クラッチ|ブレーキ|パッド|フィルタ|オイル|ベルト|ホース|ガスケット/i.test(cleaned)) score += 14;
   if (/[\/／]/.test(cleaned)) score += 5;
-  if (cleaned.length >= 6) score += 3;
-  if (cleaned.length >= 10) score += 3;
-  if (/[○●◎□■◇◆]/.test(cleaned)) score -= 8;
   if (digits > cleaned.length * 0.45) score -= 10;
-  if (/^[A-Z0-9_.\/-]+$/i.test(cleaned)) score -= 3;
   return score;
 }
 
-function bestNameFromTexts(texts: string[]) {
-  let best = "";
-  let bestScore = -100;
+function bestName(texts: string[]) {
+  let name = "";
+  let score = -100;
   for (const text of texts) {
-    const lines = normalizeText(text).split(/\n+/).map((x) => x.trim()).filter(Boolean);
-    for (const line of lines) {
+    for (const line of normalizeText(text).split(/\n+/).map((x) => x.trim()).filter(Boolean)) {
       const cleaned = cleanPartName(line);
-      const score = nameScore(cleaned);
-      if (score > bestScore) {
-        bestScore = score;
-        best = cleaned;
+      const s = nameScore(cleaned);
+      if (s > score) {
+        score = s;
+        name = cleaned;
       }
     }
   }
-  return { name: bestScore >= 1 ? best : "", score: bestScore };
-}
-
-function parseRowText(text: string): Part | null {
-  const normalized = normalizeText(text);
-  const lines = normalized.split(/\n+/).map((x) => x.trim()).filter(Boolean);
-  if (!lines.length) return null;
-
-  const { name: bestName, score: bestScore } = bestNameFromTexts(lines);
-  const joined = lines.join(" ");
-  const amounts = amountValues(joined);
-  if (!bestName || bestScore < 2 || amounts.length < 2) return null;
-
-  const firstAmountPos = joined.indexOf(amounts[0].raw);
-  const before = firstAmountPos >= 0 ? joined.slice(0, firstAmountPos).replace(/[¥￥]\s*\d[\d,. ]*/g, " ") : joined;
-  const qtyMatches = [...before.matchAll(/(?:^|\s)(\d{1,3})(?=\s|$)/g)];
-  let qty = "1";
-  for (let i = qtyMatches.length - 1; i >= 0; i -= 1) {
-    const n = Number(qtyMatches[i][1]);
-    if (n >= 1 && n <= 99) {
-      qty = String(n);
-      break;
-    }
-  }
-
-  return {
-    id: uid(),
-    name: bestName,
-    qty,
-    retail: String(amounts[0].value),
-    cost: String(amounts[1].value),
-    source: normalized,
-  };
+  return { name: score >= 1 ? name : "", score };
 }
 
 function loadImage(file: File) {
@@ -146,10 +158,27 @@ function loadImage(file: File) {
   });
 }
 
-function canvasBlob(canvas: HTMLCanvasElement, quality = 0.97) {
+function canvasBlob(canvas: HTMLCanvasElement, quality = 0.98) {
   return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("画像変換に失敗しました。")), "image/jpeg", quality);
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error("画像変換に失敗しました。")),
+      "image/jpeg",
+      quality
+    );
   });
+}
+
+async function sourceCanvas(file: File) {
+  const img = await loadImage(file);
+  const maxSide = 2200;
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("画像を処理できませんでした。");
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
 }
 
 function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
@@ -161,8 +190,8 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
   const step = Math.max(2, Math.floor(Math.max(w, h) / 800));
   const isPaper = (r: number, g: number, b: number) => {
     const bright = (r + g + b) / 3;
-    const yellowPaper = r > 105 && g > 105 && r + g > b * 1.75;
-    return bright > 148 || yellowPaper;
+    const yellow = r > 100 && g > 95 && r + g > b * 1.75;
+    return bright > 150 || yellow;
   };
 
   const ys: number[] = [];
@@ -179,25 +208,35 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
   if (ys.length < 4) return { x: 0, y: 0, w, h };
 
   const top = Math.max(0, ys[0] - step * 2);
-  const bottom = Math.min(h - 1, ys[ys.length - 1] + step * 2);
+  const roughBottom = Math.min(h - 1, ys[ys.length - 1] + step * 2);
   const xs: number[] = [];
   for (let x = 0; x < w; x += step) {
     let hit = 0;
     let count = 0;
-    for (let y = top; y <= bottom; y += step) {
+    for (let y = top; y <= roughBottom; y += step) {
       const p = (y * w + x) * 4;
       if (isPaper(pixels[p], pixels[p + 1], pixels[p + 2])) hit += 1;
       count += 1;
     }
     if (count && hit / count > 0.2) xs.push(x);
   }
-  if (xs.length < 4) return { x: 0, y: top, w, h: bottom - top + 1 };
 
-  const left = Math.max(0, xs[0] - step * 2);
-  const right = Math.min(w - 1, xs[xs.length - 1] + step * 2);
-  const box = { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
-  if (box.w < w * 0.55 || box.h < h * 0.3) return { x: 0, y: 0, w, h };
-  return box;
+  const left = xs.length ? Math.max(0, xs[0] - step * 2) : 0;
+  const right = xs.length ? Math.min(w - 1, xs[xs.length - 1] + step * 2) : w - 1;
+  const width = right - left + 1;
+  let boxHeight = roughBottom - top + 1;
+
+  // 大一用品商会の横長伝票は幅:高さがおよそ1.74:1。
+  // 黄色いテープや台紙を「伝票の続き」と誤検出した時だけ下端を補正する。
+  const expectedHeight = Math.round(width / 1.74);
+  if (width / boxHeight < 1.55 && expectedHeight < boxHeight) {
+    boxHeight = Math.min(expectedHeight, h - top);
+  }
+
+  if (width < w * 0.55 || boxHeight < h * 0.25) {
+    return { x: 0, y: 0, w, h };
+  }
+  return { x: left, y: top, w: width, h: boxHeight };
 }
 
 function relativeBox(paper: CropBox, x: number, y: number, w: number, h: number): CropBox {
@@ -211,14 +250,14 @@ function relativeBox(paper: CropBox, x: number, y: number, w: number, h: number)
 
 function otsuThreshold(gray: Uint8ClampedArray) {
   const hist = new Array(256).fill(0);
-  for (let i = 0; i < gray.length; i += 1) hist[gray[i]] += 1;
+  for (const v of gray) hist[v] += 1;
   const total = gray.length;
   let sum = 0;
   for (let i = 0; i < 256; i += 1) sum += i * hist[i];
   let sumB = 0;
   let wB = 0;
-  let max = 0;
-  let threshold = 150;
+  let best = 150;
+  let maxVariance = 0;
   for (let i = 0; i < 256; i += 1) {
     wB += hist[i];
     if (!wB) continue;
@@ -227,18 +266,17 @@ function otsuThreshold(gray: Uint8ClampedArray) {
     sumB += i * hist[i];
     const mB = sumB / wB;
     const mF = (sum - sumB) / wF;
-    const between = wB * wF * (mB - mF) ** 2;
-    if (between > max) {
-      max = between;
-      threshold = i;
+    const variance = wB * wF * (mB - mF) ** 2;
+    if (variance > maxVariance) {
+      maxVariance = variance;
+      best = i;
     }
   }
-  return Math.max(95, Math.min(205, threshold));
+  return Math.max(90, Math.min(205, best));
 }
 
-async function makeCrop(source: HTMLCanvasElement, box: CropBox, targetWidth = 2200, mode: CropMode = "text") {
-  const maxScale = mode === "name" || mode === "nameBinary" ? 6 : 4;
-  const scale = Math.min(maxScale, Math.max(1, targetWidth / box.w));
+async function makeCrop(source: HTMLCanvasElement, box: CropBox, targetWidth: number, binary = false) {
+  const scale = Math.min(7, Math.max(1, targetWidth / box.w));
   const out = document.createElement("canvas");
   out.width = Math.max(1, Math.round(box.w * scale));
   out.height = Math.max(1, Math.round(box.h * scale));
@@ -257,17 +295,15 @@ async function makeCrop(source: HTMLCanvasElement, box: CropBox, targetWidth = 2
     const r = image.data[p];
     const g = image.data[p + 1];
     let v = Math.round(r * 0.22 + g * 0.78);
-    const contrast = mode === "numeric" ? 1.9 : mode === "name" ? 1.35 : mode === "nameBinary" ? 1.55 : 1.62;
-    const lift = mode === "name" ? 146 : 154;
-    v = Math.max(0, Math.min(255, Math.round((v - 128) * contrast + lift)));
+    v = Math.max(0, Math.min(255, Math.round((v - 128) * 1.42 + 148)));
     gray[i] = v;
   }
 
   const threshold = otsuThreshold(gray);
   for (let p = 0, i = 0; p < image.data.length; p += 4, i += 1) {
     let v = gray[i];
-    if (mode === "nameBinary") v = v < threshold ? 0 : 255;
-    else if (v > (mode === "name" ? 238 : 226)) v = 255;
+    if (binary) v = v < threshold ? 0 : 255;
+    else if (v > 240) v = 255;
     image.data[p] = v;
     image.data[p + 1] = v;
     image.data[p + 2] = v;
@@ -277,26 +313,60 @@ async function makeCrop(source: HTMLCanvasElement, box: CropBox, targetWidth = 2
   return canvasBlob(out);
 }
 
-function numericValue(text: string, max = 2000000) {
-  const normalized = normalizeText(text);
-  const matches = normalized.match(/\d{1,3}(?:[,\. ]\d{3})+|\d{1,7}/g) || [];
-  const values = matches
+function numberCandidates(text: string, max: number) {
+  const matches = normalizeText(text).match(/\d{1,3}(?:[,\. ]\d{3})+|\d{1,7}/g) || [];
+  return matches
     .map((x) => Number(x.replace(/\D/g, "")))
-    .filter((x) => Number.isFinite(x) && x > 0 && x <= max);
-  return values.length ? String(values[0]) : "";
+    .filter((x) => Number.isFinite(x) && x > 0 && x <= max)
+    .map(String);
 }
 
-async function sourceCanvas(file: File) {
-  const img = await loadImage(file);
-  const maxSide = 2200;
-  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("画像を処理できませんでした。");
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return canvas;
+function chooseNumber(texts: string[], max: number) {
+  const all = texts.flatMap((t) => numberCandidates(t, max));
+  if (!all.length) return "";
+  const counts = new Map<string, number>();
+  for (const value of all) counts.set(value, (counts.get(value) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]))[0][0];
+}
+
+async function readNumber(worker: any, tesseract: any, source: HTMLCanvasElement, box: CropBox, max: number, singleChar = false): Promise<NumberRead> {
+  const [normal, binary] = await Promise.all([
+    makeCrop(source, box, singleChar ? 700 : 1050, false),
+    makeCrop(source, box, singleChar ? 700 : 1050, true),
+  ]);
+
+  const texts: string[] = [];
+  await worker.setParameters({
+    tessedit_pageseg_mode: singleChar ? (tesseract.PSM?.SINGLE_CHAR ?? "10") : (tesseract.PSM?.SINGLE_LINE ?? "7"),
+    tessedit_char_whitelist: "0123456789,.",
+    user_defined_dpi: "300",
+  });
+  texts.push((await worker.recognize(normal)).data.text || "");
+  texts.push((await worker.recognize(binary)).data.text || "");
+  return { value: chooseNumber(texts, max), texts };
+}
+
+async function readName(worker: any, tesseract: any, source: HTMLCanvasElement, box: CropBox) {
+  const [normal, binary] = await Promise.all([
+    makeCrop(source, box, 1800, false),
+    makeCrop(source, box, 1800, true),
+  ]);
+
+  const texts: string[] = [];
+  await worker.setParameters({
+    preserve_interword_spaces: "1",
+    tessedit_pageseg_mode: tesseract.PSM?.SINGLE_LINE ?? "7",
+    tessedit_char_whitelist: "",
+    user_defined_dpi: "300",
+  });
+  texts.push((await worker.recognize(normal)).data.text || "");
+  texts.push((await worker.recognize(binary)).data.text || "");
+  return { ...bestName(texts), texts };
+}
+
+function likelyHasContent(text: string) {
+  const normalized = normalizeText(text);
+  return /[0-9A-Za-zぁ-んァ-ヶ一-龠]/.test(normalized) && normalized.replace(/[^0-9A-Za-zぁ-んァ-ヶ一-龠]/g, "").length >= 2;
 }
 
 export default function HighAccuracyOCRPage() {
@@ -304,48 +374,17 @@ export default function HighAccuracyOCRPage() {
   const libraryRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState("部品名称は名称欄の下段を拡大して複数回読み取ります。");
+  const [message, setMessage] = useState("4項目を伝票の列ごとに読み取ります。");
   const [parts, setParts] = useState<Part[]>([]);
   const [debugText, setDebugText] = useState("");
   const [preview, setPreview] = useState("");
-
-  async function readName(worker: any, tesseract: any, source: HTMLCanvasElement, paper: CropBox, y: number) {
-    const fullBox = relativeBox(paper, 0.025, y + 0.002, 0.37, 0.058);
-    const lowerBox = relativeBox(paper, 0.035, y + 0.029, 0.36, 0.030);
-    const [fullBlob, lowerBlob, lowerBinaryBlob] = await Promise.all([
-      makeCrop(source, fullBox, 2100, "name"),
-      makeCrop(source, lowerBox, 2200, "name"),
-      makeCrop(source, lowerBox, 2200, "nameBinary"),
-    ]);
-
-    const texts: string[] = [];
-    await worker.setParameters({
-      preserve_interword_spaces: "1",
-      tessedit_pageseg_mode: tesseract.PSM?.SPARSE_TEXT ?? "11",
-      tessedit_char_whitelist: "",
-      user_defined_dpi: "300",
-    });
-    texts.push((await worker.recognize(fullBlob)).data.text || "");
-
-    await worker.setParameters({
-      preserve_interword_spaces: "1",
-      tessedit_pageseg_mode: tesseract.PSM?.SINGLE_LINE ?? "7",
-      tessedit_char_whitelist: "",
-      user_defined_dpi: "300",
-    });
-    texts.push((await worker.recognize(lowerBlob)).data.text || "");
-    texts.push((await worker.recognize(lowerBinaryBlob)).data.text || "");
-
-    const best = bestNameFromTexts(texts);
-    return { ...best, texts };
-  }
 
   async function runOCR(file: File) {
     setBusy(true);
     setProgress(1);
     setParts([]);
     setDebugText("");
-    setMessage("伝票の位置を検出しています…");
+    setMessage("伝票位置を補正しています…");
     if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(file));
 
@@ -363,18 +402,23 @@ export default function HighAccuracyOCRPage() {
       });
 
       const found: Part[] = [];
-      const logs: string[] = [];
-      const rowStart = 0.368;
-      const rowStep = 0.066;
-      const rowHeight = 0.063;
+      const logs: string[] = [`paper x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];
 
-      for (let row = 0; row < 7; row += 1) {
+      // 補正後の大一用品商会伝票に合わせた位置。
+      const rowStart = 0.462;
+      const rowStep = 0.085;
+      const rowHeight = 0.082;
+      let emptyRows = 0;
+
+      for (let row = 0; row < 6; row += 1) {
         const y = rowStart + row * rowStep;
-        setMessage(`部品表 ${row + 1}行目を読み取り中…`);
-        setProgress((old) => Math.max(old, 8 + row * 10));
+        if (y + rowHeight >= 0.93) break;
 
-        const rowBox = relativeBox(paper, 0.025, y, 0.82, rowHeight);
-        const rowBlob = await makeCrop(source, rowBox, 2300, "text");
+        setMessage(`部品表 ${row + 1}行目を確認中…`);
+        setProgress((old) => Math.max(old, 8 + row * 12));
+
+        const rowBox = relativeBox(paper, 0.04, y, 0.69, rowHeight);
+        const rowBlob = await makeCrop(source, rowBox, 2400, false);
         await worker.setParameters({
           preserve_interword_spaces: "1",
           tessedit_pageseg_mode: tesseract.PSM?.SPARSE_TEXT ?? "11",
@@ -382,55 +426,59 @@ export default function HighAccuracyOCRPage() {
           user_defined_dpi: "300",
         });
         const rowText = (await worker.recognize(rowBlob)).data.text || "";
-        let parsed = parseRowText(rowText);
-        logs.push(`【${row + 1}行目】\n${rowText.trim()}`);
+        logs.push(`【${row + 1}行目 全体】\n${rowText.trim()}`);
 
-        if (parsed) {
-          const nameRead = await readName(worker, tesseract, source, paper, y);
-          logs.push(`【${row + 1}行目 名称専用】\n${nameRead.texts.map((t, i) => `候補${i + 1}: ${t.trim()}`).join("\n")}\n採用:${nameRead.name} (score ${nameRead.score})`);
-          if (nameRead.name && nameRead.score > nameScore(parsed.name)) {
-            parsed = { ...parsed, name: nameRead.name, source: `${parsed.source}\nNAME:${nameRead.texts.join(" | ")}` };
-          }
+        if (!likelyHasContent(rowText)) {
+          emptyRows += 1;
+          if (emptyRows >= 2 && row > 0) break;
+          continue;
         }
+        emptyRows = 0;
 
-        if (!parsed && row < 5) {
-          const nameRead = await readName(worker, tesseract, source, paper, y);
-          const qtyBlob = await makeCrop(source, relativeBox(paper, 0.405, y + 0.006, 0.07, rowHeight - 0.012), 700, "numeric");
-          const retailBlob = await makeCrop(source, relativeBox(paper, 0.49, y + 0.006, 0.105, rowHeight - 0.012), 900, "numeric");
-          const costBlob = await makeCrop(source, relativeBox(paper, 0.595, y + 0.006, 0.105, rowHeight - 0.012), 900, "numeric");
+        // 名称は印刷行の下段だけを切り出して、品番と価格を入れない。
+        const nameBox = relativeBox(paper, 0.05, y + 0.050, 0.185, 0.042);
+        // 数値は各列の中央だけを狙う。隣の列を混ぜない。
+        const qtyBox = relativeBox(paper, 0.415, y + 0.004, 0.045, 0.074);
+        const retailBox = relativeBox(paper, 0.455, y + 0.004, 0.100, 0.074);
+        const costBox = relativeBox(paper, 0.560, y + 0.004, 0.100, 0.074);
 
-          await worker.setParameters({
-            tessedit_pageseg_mode: tesseract.PSM?.SINGLE_LINE ?? "7",
-            tessedit_char_whitelist: "0123456789,.-",
-            user_defined_dpi: "300",
+        const nameRead = await readName(worker, tesseract, source, nameBox);
+        const qtyRead = await readNumber(worker, tesseract, source, qtyBox, 99, true);
+        const retailRead = await readNumber(worker, tesseract, source, retailBox, 2000000);
+        const costRead = await readNumber(worker, tesseract, source, costBox, 2000000);
+
+        logs.push(
+          `【${row + 1}行目 セル】\n` +
+          `名称候補: ${nameRead.texts.map((x) => x.trim()).join(" / ")}\n` +
+          `名称採用: ${nameRead.name}\n` +
+          `個数: ${qtyRead.texts.map((x) => x.trim()).join(" / ")} => ${qtyRead.value}\n` +
+          `定価: ${retailRead.texts.map((x) => x.trim()).join(" / ")} => ${retailRead.value}\n` +
+          `仕入れ: ${costRead.texts.map((x) => x.trim()).join(" / ")} => ${costRead.value}`
+        );
+
+        if (nameRead.name && qtyRead.value && retailRead.value && costRead.value) {
+          found.push({
+            id: uid(),
+            name: nameRead.name,
+            qty: qtyRead.value,
+            retail: retailRead.value,
+            cost: costRead.value,
+            source: rowText,
           });
-          const qtyText = (await worker.recognize(qtyBlob)).data.text || "";
-          const retailText = (await worker.recognize(retailBlob)).data.text || "";
-          const costText = (await worker.recognize(costBlob)).data.text || "";
-
-          const retail = numericValue(retailText);
-          const cost = numericValue(costText);
-          const qty = numericValue(qtyText, 99) || "1";
-          logs.push(`【${row + 1}行目セル】\n名称:${nameRead.name}\n個数:${qtyText.trim()}\n定価:${retailText.trim()}\n仕入:${costText.trim()}`);
-
-          if (nameRead.name && retail && cost) {
-            parsed = { id: uid(), name: nameRead.name, qty, retail, cost, source: `${nameRead.texts.join(" | ")} | ${qtyText} | ${retailText} | ${costText}` };
-          }
-        }
-
-        if (parsed) {
-          const duplicate = found.some((p) => p.name.replace(/\s/g, "").toLowerCase() === parsed!.name.replace(/\s/g, "").toLowerCase() && p.retail === parsed!.retail && p.cost === parsed!.cost);
-          if (!duplicate) found.push(parsed);
         }
       }
 
-      setDebugText(logs.join("\n\n"));
       setParts(found);
+      setDebugText(logs.join("\n\n"));
       setProgress(100);
-      setMessage(found.length ? `${found.length}件を抽出しました。特に部品名称を確認してください。` : "まだ4項目を取れませんでした。読み取り範囲を次に調整します。");
+      setMessage(
+        found.length
+          ? `${found.length}件を抽出しました。部品名称・個数・定価・仕入れを確認してください。`
+          : "4項目を揃えて抽出できませんでした。OCR詳細を残したまま、次の調整をします。"
+      );
     } catch (error) {
       console.error(error);
-      setMessage("OCR処理でエラーが出ました。もう一度同じ写真で試してください。");
+      setMessage("OCR処理でエラーが出ました。同じ写真でもう一度試してください。");
     } finally {
       if (worker) await worker.terminate().catch(() => {});
       setBusy(false);
@@ -463,7 +511,7 @@ export default function HighAccuracyOCRPage() {
 
       <section style={styles.card}>
         <h1 style={styles.title}>部品伝票 高精度OCR</h1>
-        <p style={styles.text}>個数・定価・仕入れに加え、部品名称は名称欄の下段だけを大きく切り出して3通りで読み取り、最も部品名らしい結果を採用します。</p>
+        <p style={styles.text}>伝票の高さを補正してから、部品名称・個数・定価・仕入れをそれぞれ別の列として読み取ります。名称は価格部分を除外して読み取ります。</p>
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
 
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
@@ -482,7 +530,9 @@ export default function HighAccuracyOCRPage() {
           <>
             <div style={{ overflowX: "auto" }}>
               <div style={{ minWidth: 560 }}>
-                <div style={{ ...styles.row, fontWeight: 800, padding: "0 2px" }}><div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div></div>
+                <div style={{ ...styles.row, fontWeight: 800, padding: "0 2px" }}>
+                  <div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div>
+                </div>
                 {parts.map((p, i) => (
                   <div style={styles.row} key={p.id}>
                     <input style={styles.input} value={p.name} onChange={(e) => updatePart(i, "name", e.target.value)} />
@@ -501,7 +551,7 @@ export default function HighAccuracyOCRPage() {
       <section style={styles.card}>
         <details>
           <summary style={{ fontWeight: 700, cursor: "pointer" }}>OCR詳細（調整用）</summary>
-          <p style={styles.text}>名称専用OCRの3候補もここに表示します。通常は開かなくて大丈夫です。</p>
+          <p style={styles.text}>各セルの読み取り候補を確認できます。通常は開かなくて大丈夫です。</p>
           <textarea readOnly value={debugText} style={styles.debug} />
         </details>
       </section>
