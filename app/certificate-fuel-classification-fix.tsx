@@ -12,26 +12,30 @@ function sectionByHeading(text: string) {
   ) || null;
 }
 
-function basicFuelSelect() {
+function basicControl(labelText: string) {
   const section = sectionByHeading("基本情報");
   if (!section) return null;
   const labels = Array.from(section.querySelectorAll("label"));
   for (const label of labels) {
     const text = (label.textContent || "").trim();
-    if (!text.startsWith("燃料")) continue;
-    const select = label.querySelector("select");
-    if (select) return select as HTMLSelectElement;
+    if (!text.startsWith(labelText)) continue;
+    return label.querySelector("input,select") as HTMLInputElement | HTMLSelectElement | null;
   }
   return null;
 }
 
-function detailFuelInput() {
+function basicFuelSelect() {
+  const control = basicControl("燃料");
+  return control instanceof HTMLSelectElement ? control : null;
+}
+
+function detailInput(labelText: string) {
   const section = sectionByHeading("車検証読み取り情報");
   if (!section) return null;
   const labels = Array.from(section.querySelectorAll("label"));
   for (const label of labels) {
     const title = (label.querySelector("span")?.textContent || label.textContent || "").trim();
-    if (compact(title) !== compact("燃料の種類")) continue;
+    if (compact(title) !== compact(labelText)) continue;
     const input = label.querySelector("input");
     if (input) return input as HTMLInputElement;
   }
@@ -83,6 +87,19 @@ function ocrDebugText() {
     .join("\n");
 }
 
+function looksLikeDieselModel(value: string) {
+  const model = compact(value).toUpperCase();
+  if (!model) return false;
+
+  // Japanese type-designation prefixes commonly used by diesel vehicles.
+  if (/^(TKG|QKG|SKG|PKG|LKG|BDG|BKG|PDG|QDG|2KG|2PG|2RG|2DG|2TG|3DA)-/.test(model)) return true;
+
+  // Isuzu commercial-vehicle families. The current NKR/NPR/NLR/NMR/FRR etc. models are light-oil vehicles.
+  if (/^(?:[A-Z0-9]{2,5}-)?(?:NKR|NPR|NLR|NMR|NNR|NQR|FRR|FSR|FTR|FVR|GIGA)/.test(model)) return true;
+
+  return false;
+}
+
 export default function CertificateFuelClassificationFix() {
   useEffect(() => {
     let running = false;
@@ -95,21 +112,32 @@ export default function CertificateFuelClassificationFix() {
         if (!select) return;
 
         const previous = ensureLightOilOption(select);
-        const detail = detailFuelInput();
-        const detailValue = detail?.value || "";
+        const detailFuel = detailInput("燃料の種類");
+        const detailModel = detailInput("型式");
+        const basicModel = basicControl("型式");
+        const detailFuelValue = detailFuel?.value || "";
+        const modelValue =
+          (basicModel instanceof HTMLInputElement ? basicModel.value : "") ||
+          detailModel?.value ||
+          "";
         const debug = ocrDebugText();
-        const lightOilDetected = /軽油|ディーゼル/.test(detailValue) || /軽油|ディーゼル/.test(debug) || previous === "ディーゼル";
+
+        const lightOilDetected =
+          /軽油|ディーゼル/.test(detailFuelValue) ||
+          /軽油|ディーゼル/.test(debug) ||
+          previous === "ディーゼル" ||
+          looksLikeDieselModel(modelValue);
 
         if (!lightOilDetected) return;
 
-        if (detail && /ディーゼル/.test(detailValue)) {
-          nativeSetInput(detail, "軽油");
-        } else if (detail && !detailValue && /軽油/.test(debug)) {
-          nativeSetInput(detail, "軽油");
+        // First update the detailed certificate field, then force the basic fuel selector last.
+        // This ordering prevents the detailed-field onChange from changing the basic selector back.
+        if (detailFuel && detailFuelValue !== "軽油") {
+          nativeSetInput(detailFuel, "軽油");
         }
 
-        const current = select.value;
-        if (current === "" || current === "その他" || current === "ディーゼル") {
+        ensureLightOilOption(select);
+        if (select.value !== "軽油") {
           nativeSetSelect(select, "軽油");
         }
       } finally {
@@ -119,7 +147,7 @@ export default function CertificateFuelClassificationFix() {
 
     const observer = new MutationObserver(() => run());
     observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-    const timer = window.setInterval(run, 700);
+    const timer = window.setInterval(run, 400);
     run();
 
     return () => {
