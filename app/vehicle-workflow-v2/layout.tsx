@@ -2,6 +2,7 @@ import CertificateFulltextFix from "../certificate-fulltext-fix";
 import CertificateFinalCalibration from "../certificate-final-calibration";
 import CertificateMicroCellsFix from "../certificate-micro-cells-fix";
 import CertificateAuthoritativeFix from "../certificate-authoritative-fix";
+import CertificateTemplateRowV2 from "../certificate-template-row-v2";
 
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -11,6 +12,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateFinalCalibration />
       <CertificateMicroCellsFix />
       <CertificateAuthoritativeFix />
+      <CertificateTemplateRowV2 />
     </>
   );
 }
