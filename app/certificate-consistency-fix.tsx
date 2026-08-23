@@ -1,3 +1,5 @@
 "use client";
 
-export { default } from "./certificate-last-mile-fix";
+export default function CertificateConsistencyFix() {
+  return null;
+}
