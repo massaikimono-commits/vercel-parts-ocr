@@ -72,7 +72,7 @@ const photoPickerEnhancer = `
   };
 
   const routeForText = (text) => {
-    if (text.includes("①車体番号")) return "/vehicle-workflow";
+    if (text.includes("①車体番号")) return "/vehicle-workflow-v2";
     if (text.includes("⑤顧客・車両管理")) return "/customer-vehicles";
     if (text.includes("③データ")) return "/parts-data";
     if (text.includes("②伝票OCR") || text.includes("自動判定OCRで読み込む") || text.includes("高精度OCRで読み込む")) return "/ocr/auto";
@@ -112,7 +112,7 @@ const photoPickerEnhancer = `
     button.style.color = "#fff";
     button.style.fontSize = "18px";
     button.style.fontWeight = "800";
-    button.addEventListener("click", (event) => go("/vehicle-workflow", event), true);
+    button.addEventListener("click", (event) => go("/vehicle-workflow-v2", event), true);
 
     const h1 = card.querySelector("h1");
     if (h1?.nextSibling) card.insertBefore(button, h1.nextSibling);
