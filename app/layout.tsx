@@ -7,6 +7,63 @@ export const metadata = {
 
 const photoPickerEnhancer = `
 (() => {
+  const PARTS_KEY = "parts-data";
+  const ACTIVE_KEY = "parts-active-vehicle";
+  const BEFORE_KEY = "parts-before-ocr-ids";
+
+  const parse = (value, fallback) => {
+    try { return JSON.parse(value || ""); } catch { return fallback; }
+  };
+
+  const enrichPart = (part, vehicle) => ({
+    ...part,
+    vehicleId: vehicle?.id || "",
+    vehicleNumber: vehicle?.number || "",
+    registration: vehicle?.registration || "",
+    chassis: vehicle?.chassis || "",
+    linkedAt: new Date().toISOString()
+  });
+
+  // OCR開始前の部品ID一覧と比較し、今回追加された部品だけを作業車両へ自動紐付けする。
+  const autoLinkCurrentBatch = () => {
+    const vehicle = parse(localStorage.getItem(ACTIVE_KEY), null);
+    const before = parse(localStorage.getItem(BEFORE_KEY), null);
+    const parts = parse(localStorage.getItem(PARTS_KEY), []);
+    if (!vehicle || !Array.isArray(before) || !Array.isArray(parts)) return;
+
+    const beforeIds = new Set(before);
+    let changed = false;
+    const next = parts.map((part) => {
+      if (!part?.id || beforeIds.has(part.id) || part.vehicleId || part.vehicleNumber) return part;
+      changed = true;
+      return enrichPart(part, vehicle);
+    });
+
+    if (changed) localStorage.setItem(PARTS_KEY, JSON.stringify(next));
+    if (changed || parts.some((p) => p?.id && !beforeIds.has(p.id))) {
+      localStorage.removeItem(BEFORE_KEY);
+    }
+  };
+
+  // 今後の保存では、作業車両が選択されていれば新規部品を保存時点で自動紐付けする。
+  const originalSetItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function(key, value) {
+    if (this === localStorage && key === PARTS_KEY) {
+      const vehicle = parse(originalSetItem === undefined ? null : localStorage.getItem(ACTIVE_KEY), null);
+      const previous = parse(localStorage.getItem(PARTS_KEY), []);
+      const incoming = parse(value, null);
+      if (vehicle && Array.isArray(previous) && Array.isArray(incoming)) {
+        const oldIds = new Set(previous.map((p) => p?.id).filter(Boolean));
+        const linked = incoming.map((part) => {
+          if (!part?.id || oldIds.has(part.id) || part.vehicleId || part.vehicleNumber) return part;
+          return enrichPart(part, vehicle);
+        });
+        value = JSON.stringify(linked);
+      }
+    }
+    return originalSetItem.call(this, key, value);
+  };
+
   const enhance = () => {
     if (location.pathname !== "/") return;
 
@@ -51,6 +108,7 @@ const photoPickerEnhancer = `
   document.addEventListener("click", routeFromTarget, true);
 
   enhance();
+  autoLinkCurrentBatch();
 
   const observer = new MutationObserver(enhance);
   observer.observe(document.documentElement, {
