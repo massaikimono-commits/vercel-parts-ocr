@@ -57,15 +57,26 @@ function axle(value: string) {
 
 function parseQr3(parts: string[]) {
   if (parts.length !== 3 || parts.some((x) => !x)) return null;
-  const joined = parts.map((x) => String(x).normalize("NFKC").replace(/\u3000/g, " ")).join("");
+  const joined = parts
+    .map((x) => String(x).normalize("NFKC").replace(/\u3000/g, " "))
+    .join("");
   const f = joined.split("/").map(compact);
   if (f.length < 19 || f[0] !== "2") return null;
+
   const fuelCode = String(f[18] || "").replace(/\D/g, "");
   const fuelMap: Record<string, string> = {
-    "01": "ガソリン", "02": "軽油", "03": "LPG", "05": "電気", "09": "CNG",
-    "13": "圧縮水素", "14": "ガソリン・電気", "16": "軽油・電気", "99": "その他",
+    "01": "ガソリン",
+    "02": "軽油",
+    "03": "LPG",
+    "05": "電気",
+    "09": "CNG",
+    "13": "圧縮水素",
+    "14": "ガソリン・電気",
+    "16": "軽油・電気",
+    "99": "その他",
   };
-  return {
+
+  const result = {
     inspectionExpiry: date6(f[3]),
     firstRegistration: month4(f[4]),
     model: compact(f[5]).replace(/\s/g, "").toUpperCase(),
@@ -75,6 +86,8 @@ function parseQr3(parts: string[]) {
     rearRearAxleWeightKg: axle(f[9]),
     fuel: fuelMap[fuelCode] || "",
   };
+
+  return result.firstRegistration && result.inspectionExpiry ? result : null;
 }
 
 async function canvasFromFile(file: File) {
@@ -86,9 +99,10 @@ async function canvasFromFile(file: File) {
       node.onerror = () => reject(new Error("高速QR用画像を開けませんでした"));
       node.src = url;
     });
+
     const iw = img.naturalWidth || img.width;
     const ih = img.naturalHeight || img.height;
-    const scale = Math.min(1, 6200 / Math.max(iw, ih));
+    const scale = Math.min(1, 7000 / Math.max(iw, ih));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(iw * scale));
     canvas.height = Math.max(1, Math.round(ih * scale));
@@ -105,7 +119,9 @@ async function canvasFromFile(file: File) {
 function detectPaper(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
-  const w = canvas.width, h = canvas.height;
+
+  const w = canvas.width;
+  const h = canvas.height;
   const data = ctx.getImageData(0, 0, w, h).data;
   const step = Math.max(5, Math.floor(Math.max(w, h) / 720));
   const paperish = (x: number, y: number) => {
@@ -114,22 +130,31 @@ function detectPaper(canvas: HTMLCanvasElement) {
     const br = (r + g + b) / 3;
     return br > 103 && Math.max(r, g, b) - Math.min(r, g, b) < 108;
   };
+
   const ys: number[] = [];
   for (let y = 0; y < h; y += step) {
     let hit = 0, n = 0;
-    for (let x = 0; x < w; x += step) { if (paperish(x, y)) hit += 1; n += 1; }
+    for (let x = 0; x < w; x += step) {
+      if (paperish(x, y)) hit += 1;
+      n += 1;
+    }
     if (hit / Math.max(1, n) > 0.22) ys.push(y);
   }
   if (ys.length < 10) return { x: 0, y: 0, w, h };
+
   const top = Math.max(0, ys[0] - step * 3);
   const bottom = Math.min(h - 1, ys[ys.length - 1] + step * 3);
   const xs: number[] = [];
   for (let x = 0; x < w; x += step) {
     let hit = 0, n = 0;
-    for (let y = top; y <= bottom; y += step) { if (paperish(x, y)) hit += 1; n += 1; }
+    for (let y = top; y <= bottom; y += step) {
+      if (paperish(x, y)) hit += 1;
+      n += 1;
+    }
     if (hit / Math.max(1, n) > 0.22) xs.push(x);
   }
   if (xs.length < 10) return { x: 0, y: top, w, h: bottom - top + 1 };
+
   const left = Math.max(0, xs[0] - step * 3);
   const right = Math.min(w - 1, xs[xs.length - 1] + step * 3);
   return { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
@@ -137,24 +162,31 @@ function detectPaper(canvas: HTMLCanvasElement) {
 
 function preprocess(canvas: HTMLCanvasElement, mode: string) {
   if (mode === "color") return canvas;
+
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const gray = new Uint8Array(canvas.width * canvas.height);
   let sum = 0;
+
   for (let p = 0, i = 0; p < image.data.length; p += 4, i += 1) {
-    const g = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
-    gray[i] = g; sum += g;
+    const g = Math.round(image.data[p] * 0.22 + image.data[p + 1] * 0.70 + image.data[p + 2] * 0.08);
+    gray[i] = g;
+    sum += g;
   }
+
   const avg = sum / Math.max(1, gray.length);
   const threshold = Math.max(92, Math.min(225, avg - 7));
+
   for (let p = 0, i = 0; p < image.data.length; p += 4, i += 1) {
     let v = gray[i];
     if (mode === "contrast") v = Math.max(0, Math.min(255, Math.round((v - 128) * 2.15 + 147)));
     else if (mode === "binary") v = v < threshold ? 0 : 255;
     else if (mode === "binaryDark") v = v < Math.max(75, threshold - 26) ? 0 : 255;
+    else if (mode === "binaryLight") v = v < Math.min(238, threshold + 24) ? 0 : 255;
     image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
     image.data[p + 3] = 255;
   }
+
   ctx.putImageData(image, 0, 0);
   return canvas;
 }
@@ -165,8 +197,9 @@ function cropRegion(source: HTMLCanvasElement, paper: any, box: number[], target
   const sy = Math.max(0, Math.round(paper.y + paper.h * y0));
   const sw = Math.max(1, Math.min(source.width - sx, Math.round(paper.w * w0)));
   const sh = Math.max(1, Math.min(source.height - sy, Math.round(paper.h * h0)));
-  const scale = Math.max(1, Math.min(12, targetWidth / Math.max(1, sw)));
-  const pad = 52;
+  const scale = Math.max(1, Math.min(14, targetWidth / Math.max(1, sw)));
+  const pad = 56;
+
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sw * scale) + pad * 2);
   canvas.height = Math.max(1, Math.round(sh * scale) + pad * 2);
@@ -182,6 +215,7 @@ async function makeDecoders() {
   const js = await import("jsqr");
   const jsQR = (js as any).default || js;
   let zxing: any = null;
+
   try {
     const browser = await import("@zxing/browser");
     const lib = await import("@zxing/library");
@@ -189,112 +223,156 @@ async function makeDecoders() {
     hints.set(lib.DecodeHintType.POSSIBLE_FORMATS, [lib.BarcodeFormat.QR_CODE]);
     hints.set(lib.DecodeHintType.TRY_HARDER, true);
     zxing = new browser.BrowserQRCodeReader(hints);
-  } catch { zxing = null; }
+  } catch {
+    zxing = null;
+  }
+
   return { jsQR, zxing };
 }
 
 async function decodeOne(decoders: any, canvas: HTMLCanvasElement) {
   if (decoders.zxing) {
     try {
-      const r = await decoders.zxing.decodeFromCanvas(canvas);
-      const text = r?.getText?.() || r?.text || "";
+      const result = await decoders.zxing.decodeFromCanvas(canvas);
+      const text = result?.getText?.() || result?.text || "";
       if (text) return String(text);
     } catch {}
   }
+
   try {
     const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = decoders.jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
     return code?.data || "";
-  } catch { return ""; }
+  } catch {
+    return "";
+  }
 }
 
 async function fastQrPriority(file: File) {
   const source = await canvasFromFile(file);
   const paper = detectPaper(source);
   const decoders = await makeDecoders();
+
   const regions = [
-    [[0.49, 0.735, 0.145, 0.18], 2100],
-    [[0.565, 0.735, 0.145, 0.18], 2100],
-    [[0.64, 0.735, 0.145, 0.18], 2100],
+    [[0.485, 0.728, 0.155, 0.195], 2400],
+    [[0.560, 0.728, 0.155, 0.195], 2400],
+    [[0.635, 0.728, 0.155, 0.195], 2400],
   ] as const;
-  const modes = ["contrast", "binaryDark", "color", "binary"];
+  const modes = ["color", "contrast", "binaryDark", "binary", "binaryLight"];
   const parts = ["", "", ""];
+
   for (let i = 0; i < regions.length; i += 1) {
     const [box, target] = regions[i];
     for (const mode of modes) {
       const crop = cropRegion(source, paper, [...box], target, mode);
       const value = await decodeOne(decoders, crop);
-      if (value) { parts[i] = value; break; }
+      if (value) {
+        parts[i] = value;
+        break;
+      }
     }
   }
+
   return parseQr3(parts);
+}
+
+function showGateStatus(input: HTMLInputElement, text: string) {
+  const card = input.closest("section.card");
+  if (!card) return;
+  let box = card.querySelector("[data-fast-qr-gate]") as HTMLDivElement | null;
+  if (!box) {
+    box = document.createElement("div");
+    box.dataset.fastQrGate = "1";
+    box.style.marginTop = "10px";
+    box.style.fontSize = "12px";
+    box.style.fontWeight = "700";
+    box.style.color = "#49627c";
+    card.appendChild(box);
+  }
+  box.textContent = text;
 }
 
 export default function CertificateConsistencyFix() {
   useEffect(() => {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
+
     let stopped = false;
     let scanId = 0;
-    let postOcrPushes = 0;
-    let wasBusy = false;
-    let lastKey = "";
+    const replaying = new WeakSet<HTMLInputElement>();
 
-    const resetForNewFile = (event: Event) => {
+    const onFileChangeCapture = (event: Event) => {
       if (!isCertificateInput(event.target)) return;
       const input = event.target as HTMLInputElement;
+
+      // 再送イベントはそのままReact本体まで通す。
+      if (replaying.has(input)) return;
+
       const file = input.files?.[0];
-      if (!file) return;
+      if (!file || !file.type.startsWith("image/")) return;
+
+      // React本体のonChangeを一度止め、QR優先値を確定してから同じchangeを再送する。
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
       const id = ++scanId;
-      postOcrPushes = 0;
-      wasBusy = true;
-      lastKey = "";
+      (window as any).__vehicleCertificateFastQrReady = false;
       (window as any).__vehicleCertificateQrPriority = null;
+      showGateStatus(input, "QR優先日付を先に確認中…");
 
-      void fastQrPriority(file).then((values) => {
-        if (stopped || id !== scanId || !values?.firstRegistration || !values?.inspectionExpiry) return;
-        (window as any).__vehicleCertificateQrPriority = values;
-        (window as any).__vehicleCertificateFastQrReady = true;
-        window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: values }));
-      }).catch(() => {});
+      void (async () => {
+        let values: any = null;
+        try {
+          values = await fastQrPriority(file);
+        } catch {
+          values = null;
+        }
+
+        if (stopped || id !== scanId) return;
+
+        if (values?.firstRegistration && values?.inspectionExpiry) {
+          (window as any).__vehicleCertificateQrPriority = values;
+          (window as any).__vehicleCertificateFastQrReady = true;
+          showGateStatus(input, `QR優先値確定: 初度 ${values.firstRegistration} / 有効期限 ${values.inspectionExpiry}`);
+        } else {
+          showGateStatus(input, "高速QRは未確定。通常QR/OCRへ続行します。");
+        }
+
+        // document capture側の別コンポーネントがpriorityをクリアしても、
+        // target phaseで正解値を戻してからReactのbubble onChangeへ渡す。
+        const restoreAtTarget = () => {
+          if (values?.firstRegistration && values?.inspectionExpiry) {
+            (window as any).__vehicleCertificateQrPriority = values;
+            (window as any).__vehicleCertificateFastQrReady = true;
+          }
+        };
+        input.addEventListener("change", restoreAtTarget, { capture: true, once: true });
+
+        replaying.add(input);
+        try {
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        } finally {
+          replaying.delete(input);
+        }
+
+        if (values?.firstRegistration && values?.inspectionExpiry) {
+          // OCR中も優先値を保持。メインread()の最後が必ずこの値を拾えるようにする。
+          for (let i = 0; i < 90 && !stopped && id === scanId; i += 1) {
+            (window as any).__vehicleCertificateQrPriority = values;
+            window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: values }));
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            if (!document.querySelector(".progress") && i > 12) break;
+          }
+        }
+      })();
     };
 
-    const pushAuthoritative = () => {
-      const q = (window as any).__vehicleCertificateQrPriority;
-      if (!q || typeof q !== "object") return;
-      const patch = {
-        firstRegistration: q.firstRegistration || "",
-        inspectionExpiry: q.inspectionExpiry || "",
-        model: q.model || "",
-        frontFrontAxleWeightKg: q.frontFrontAxleWeightKg || "",
-        frontRearAxleWeightKg: q.frontRearAxleWeightKg || "",
-        rearFrontAxleWeightKg: q.rearFrontAxleWeightKg || "",
-        rearRearAxleWeightKg: q.rearRearAxleWeightKg || "",
-        fuel: q.fuel || "",
-      };
-      if (!Object.values(patch).some(Boolean)) return;
-      const key = JSON.stringify(patch);
-      const busy = Boolean(document.querySelector(".progress"));
-      const changed = key !== lastKey;
-      if (busy) {
-        wasBusy = true;
-        postOcrPushes = 0;
-      } else if (wasBusy) {
-        postOcrPushes += 1;
-        if (postOcrPushes >= 16) wasBusy = false;
-      }
-      if (!changed && !busy && !wasBusy) return;
-      lastKey = key;
-      window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: patch }));
-    };
+    document.addEventListener("change", onFileChangeCapture, true);
 
-    document.addEventListener("change", resetForNewFile, true);
-    const timer = window.setInterval(pushAuthoritative, 350);
-    pushAuthoritative();
     return () => {
       stopped = true;
-      document.removeEventListener("change", resetForNewFile, true);
-      window.clearInterval(timer);
+      document.removeEventListener("change", onFileChangeCapture, true);
     };
   }, []);
 
