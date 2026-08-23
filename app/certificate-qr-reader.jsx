@@ -17,17 +17,15 @@ function visibleText(value = "") {
     .replace(/\t/g, "\\t");
 }
 
-async function imageCanvas(img) {
+async function imageCanvasFromImage(img, max = 5200) {
   if (!img.complete) {
     await new Promise((resolve, reject) => {
       img.addEventListener("load", resolve, { once: true });
       img.addEventListener("error", reject, { once: true });
     });
   }
-
   const iw = img.naturalWidth || img.width;
   const ih = img.naturalHeight || img.height;
-  const max = 4600;
   const scale = Math.min(1, max / Math.max(iw, ih));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(iw * scale));
@@ -39,175 +37,138 @@ async function imageCanvas(img) {
   return canvas;
 }
 
+async function imageCanvasFromFile(file, max = 5200) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const x = new Image();
+      x.onload = () => resolve(x);
+      x.onerror = () => reject(new Error("QR画像を開けませんでした"));
+      x.src = url;
+    });
+    return await imageCanvasFromImage(img, max);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function detectPaper(canvas) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
-
   const w = canvas.width;
   const h = canvas.height;
   const data = ctx.getImageData(0, 0, w, h).data;
   const step = Math.max(4, Math.floor(Math.max(w, h) / 650));
-
   const paperish = (x, y) => {
     const p = (y * w + x) * 4;
-    const r = data[p];
-    const g = data[p + 1];
-    const b = data[p + 2];
+    const r = data[p], g = data[p + 1], b = data[p + 2];
     const br = (r + g + b) / 3;
     return br > 112 && Math.max(r, g, b) - Math.min(r, g, b) < 95;
   };
-
   const ys = [];
   for (let y = 0; y < h; y += step) {
-    let hit = 0;
-    let n = 0;
-    for (let x = 0; x < w; x += step) {
-      if (paperish(x, y)) hit += 1;
-      n += 1;
-    }
+    let hit = 0, n = 0;
+    for (let x = 0; x < w; x += step) { if (paperish(x, y)) hit += 1; n += 1; }
     if (hit / Math.max(1, n) > 0.24) ys.push(y);
   }
-
   if (ys.length < 10) return { x: 0, y: 0, w, h };
-
   const top = Math.max(0, ys[0] - step * 2);
   const bottom = Math.min(h - 1, ys[ys.length - 1] + step * 2);
   const xs = [];
-
   for (let x = 0; x < w; x += step) {
-    let hit = 0;
-    let n = 0;
-    for (let y = top; y <= bottom; y += step) {
-      if (paperish(x, y)) hit += 1;
-      n += 1;
-    }
+    let hit = 0, n = 0;
+    for (let y = top; y <= bottom; y += step) { if (paperish(x, y)) hit += 1; n += 1; }
     if (hit / Math.max(1, n) > 0.24) xs.push(x);
   }
-
   if (xs.length < 10) return { x: 0, y: top, w, h: bottom - top + 1 };
-
   const left = Math.max(0, xs[0] - step * 2);
   const right = Math.min(w - 1, xs[xs.length - 1] + step * 2);
   return { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
 }
 
-function enhance(canvas, mode) {
+function cloneCanvas(source) {
+  const c = document.createElement("canvas");
+  c.width = source.width;
+  c.height = source.height;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  x.drawImage(source, 0, 0);
+  return c;
+}
+
+function enhance(source, mode) {
+  const canvas = cloneCanvas(source);
   if (mode === "color") return canvas;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const gray = new Uint8Array(canvas.width * canvas.height);
   let sum = 0;
-
   for (let p = 0, i = 0; p < image.data.length; p += 4, i += 1) {
-    const v = Math.round(
-      image.data[p] * 0.22 + image.data[p + 1] * 0.7 + image.data[p + 2] * 0.08
-    );
+    const v = Math.round(image.data[p] * 0.22 + image.data[p + 1] * 0.7 + image.data[p + 2] * 0.08);
     gray[i] = v;
     sum += v;
   }
-
   const avg = sum / Math.max(1, gray.length);
-  const threshold = Math.max(110, Math.min(215, avg - 12));
-
+  const threshold = Math.max(105, Math.min(220, avg - 10));
   for (let p = 0, i = 0; p < image.data.length; p += 4, i += 1) {
     let v = gray[i];
-    if (mode === "contrast") {
-      v = Math.max(0, Math.min(255, Math.round((v - 128) * 1.7 + 150)));
-    } else if (mode === "binary") {
-      v = v < threshold ? 0 : 255;
-    }
-    image.data[p] = v;
-    image.data[p + 1] = v;
-    image.data[p + 2] = v;
+    if (mode === "contrast") v = Math.max(0, Math.min(255, Math.round((v - 128) * 1.85 + 150)));
+    if (mode === "binary") v = v < threshold ? 0 : 255;
+    image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
     image.data[p + 3] = 255;
   }
-
   ctx.putImageData(image, 0, 0);
   return canvas;
 }
 
-function regionCanvas(source, paper, box, targetWidth = 1800, mode = "color") {
+function cropCanvas(source, box, targetWidth = 2200) {
   const [x0, y0, w0, h0] = box;
-  const sx = Math.max(0, Math.round(paper.x + paper.w * x0));
-  const sy = Math.max(0, Math.round(paper.y + paper.h * y0));
-  const sw = Math.max(1, Math.min(source.width - sx, Math.round(paper.w * w0)));
-  const sh = Math.max(1, Math.min(source.height - sy, Math.round(paper.h * h0)));
-
-  // QRは文字OCRと違い、元画像で小さい場合は積極的に拡大する。
-  const scale = Math.max(1, Math.min(5, targetWidth / sw));
-  const pad = 36;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sw * scale) + pad * 2);
-  canvas.height = Math.max(1, Math.round(sh * scale) + pad * 2);
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(
-    source,
-    sx,
-    sy,
-    sw,
-    sh,
-    pad,
-    pad,
-    canvas.width - pad * 2,
-    canvas.height - pad * 2
-  );
-
-  return enhance(canvas, mode);
+  const sx = Math.max(0, Math.round(source.width * x0));
+  const sy = Math.max(0, Math.round(source.height * y0));
+  const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * w0)));
+  const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * h0)));
+  const scale = Math.max(1, Math.min(7, targetWidth / sw));
+  const pad = 42;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(sw * scale) + pad * 2);
+  c.height = Math.max(1, Math.round(sh * scale) + pad * 2);
+  const x = c.getContext("2d", { willReadFrequently: true });
+  x.fillStyle = "#fff";
+  x.fillRect(0, 0, c.width, c.height);
+  x.imageSmoothingEnabled = false;
+  x.drawImage(source, sx, sy, sw, sh, pad, pad, c.width - pad * 2, c.height - pad * 2);
+  return c;
 }
 
 function codeBounds(code, width, height) {
   const loc = code?.location;
   if (!loc) return null;
-  const points = [
-    loc.topLeftCorner,
-    loc.topRightCorner,
-    loc.bottomLeftCorner,
-    loc.bottomRightCorner,
-  ].filter(Boolean);
+  const points = [loc.topLeftCorner, loc.topRightCorner, loc.bottomLeftCorner, loc.bottomRightCorner].filter(Boolean);
   if (!points.length) return null;
-  const xs = points.map((p) => p.x);
-  const ys = points.map((p) => p.y);
-  const pad = Math.max(14, Math.round(Math.min(width, height) * 0.02));
-  const left = Math.max(0, Math.floor(Math.min(...xs) - pad));
-  const top = Math.max(0, Math.floor(Math.min(...ys) - pad));
-  const right = Math.min(width, Math.ceil(Math.max(...xs) + pad));
-  const bottom = Math.min(height, Math.ceil(Math.max(...ys) + pad));
-  return { left, top, right, bottom };
+  const xs = points.map((p) => p.x), ys = points.map((p) => p.y);
+  const pad = Math.max(18, Math.round(Math.min(width, height) * 0.025));
+  return {
+    left: Math.max(0, Math.floor(Math.min(...xs) - pad)),
+    top: Math.max(0, Math.floor(Math.min(...ys) - pad)),
+    right: Math.min(width, Math.ceil(Math.max(...xs) + pad)),
+    bottom: Math.min(height, Math.ceil(Math.max(...ys) + pad)),
+  };
 }
 
-function scanMany(jsQR, canvas, label) {
+function scanMany(jsQR, source, label) {
+  const canvas = cloneCanvas(source);
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   const found = [];
-
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(image.data, image.width, image.height, {
-      inversionAttempts: "attemptBoth",
-    });
+    const code = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
     if (!code) break;
-
     const binary = Array.from(code.binaryData || []);
-    found.push({
-      label,
-      data: code.data || "",
-      binary,
-      hex: hex(binary),
-    });
-
+    found.push({ label, data: code.data || "", binary, hex: hex(binary) });
     const b = codeBounds(code, canvas.width, canvas.height);
     if (!b) break;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(
-      b.left,
-      b.top,
-      Math.max(1, b.right - b.left),
-      Math.max(1, b.bottom - b.top)
-    );
+    ctx.fillRect(b.left, b.top, Math.max(1, b.right - b.left), Math.max(1, b.bottom - b.top));
   }
-
   return found;
 }
 
@@ -221,25 +182,97 @@ function uniqueCodes(list) {
   return [...map.values()];
 }
 
-function renderResult(result, message = "") {
-  let details = document.getElementById("certificate-qr-debug");
-  if (!details) {
-    details = document.createElement("details");
-    details.id = "certificate-qr-debug";
-    details.open = true;
-    details.style.marginTop = "14px";
-    details.style.border = "1px solid #b9d2ff";
-    details.style.borderRadius = "14px";
-    details.style.background = "#f5f9ff";
-    details.style.padding = "14px";
-    const summary = document.createElement("summary");
-    summary.style.fontWeight = "800";
-    summary.style.cursor = "pointer";
-    summary.textContent = "車検証QR（確認用）";
-    details.appendChild(summary);
-    document.querySelector("img.preview")?.closest("section.card")?.appendChild(details);
-  }
+async function scanCanvas(source, closeUp = false) {
+  const mod = await import("jsqr");
+  const jsQR = mod.default || mod;
+  const regions = closeUp
+    ? [
+        ["QR近接 全体", [0, 0, 1, 1], 4800],
+        ["QR近接 左", [0, 0, 0.62, 1], 3200],
+        ["QR近接 中央", [0.18, 0, 0.64, 1], 3200],
+        ["QR近接 右", [0.38, 0, 0.62, 1], 3200],
+      ]
+    : [
+        ["QR帯", [0.34, 0.73, 0.65, 0.22], 4200],
+        ["左3個", [0.41, 0.75, 0.43, 0.18], 3200],
+        ["右2個", [0.72, 0.75, 0.27, 0.18], 2600],
+        ["下部広域", [0.28, 0.67, 0.71, 0.29], 4200],
+      ];
 
+  const all = [];
+  for (const [label, box, target] of regions) {
+    const base = cropCanvas(source, box, target);
+    for (const mode of ["color", "contrast", "binary"]) {
+      all.push(...scanMany(jsQR, enhance(base, mode), `${label}/${mode}`));
+    }
+  }
+  return uniqueCodes(all);
+}
+
+function ensurePanel() {
+  let details = document.getElementById("certificate-qr-debug");
+  if (details) return details;
+  details = document.createElement("details");
+  details.id = "certificate-qr-debug";
+  details.open = true;
+  details.style.marginTop = "14px";
+  details.style.border = "1px solid #b9d2ff";
+  details.style.borderRadius = "14px";
+  details.style.background = "#f5f9ff";
+  details.style.padding = "14px";
+  const summary = document.createElement("summary");
+  summary.style.fontWeight = "800";
+  summary.style.cursor = "pointer";
+  summary.textContent = "車検証QR（確認用）";
+  details.appendChild(summary);
+  document.querySelector("img.preview")?.closest("section.card")?.appendChild(details);
+  return details;
+}
+
+function addCloseUpControls(box, onCamera, onLibrary) {
+  const help = document.createElement("div");
+  help.style.marginTop = "12px";
+  help.style.padding = "10px";
+  help.style.borderRadius = "10px";
+  help.style.background = "#fff7e8";
+  help.style.lineHeight = "1.6";
+  help.textContent = "QRが読めない場合は、車検証下部の5個のQRだけを画面いっぱいに入れて近くから撮影してください。";
+  box.appendChild(help);
+
+  const row = document.createElement("div");
+  row.style.display = "grid";
+  row.style.gridTemplateColumns = "1fr 1fr";
+  row.style.gap = "8px";
+  row.style.marginTop = "10px";
+
+  const camera = document.createElement("button");
+  camera.type = "button";
+  camera.textContent = "📷 QRだけ近くで撮影";
+  camera.style.padding = "13px 10px";
+  camera.style.borderRadius = "10px";
+  camera.style.border = "1px solid #2f6fe4";
+  camera.style.background = "#2f6fe4";
+  camera.style.color = "white";
+  camera.style.fontWeight = "800";
+  camera.onclick = onCamera;
+
+  const library = document.createElement("button");
+  library.type = "button";
+  library.textContent = "🖼 QR写真を選ぶ";
+  library.style.padding = "13px 10px";
+  library.style.borderRadius = "10px";
+  library.style.border = "1px solid #2f6fe4";
+  library.style.background = "white";
+  library.style.color = "#2f6fe4";
+  library.style.fontWeight = "800";
+  library.onclick = onLibrary;
+
+  row.append(camera, library);
+  box.appendChild(row);
+}
+
+function renderResult(result, message, handlers) {
+  const details = ensurePanel();
   details.querySelectorAll("[data-qr-content]").forEach((x) => x.remove());
   const box = document.createElement("div");
   box.dataset.qrContent = "1";
@@ -258,16 +291,8 @@ function renderResult(result, message = "") {
     card.style.borderRadius = "10px";
     card.style.padding = "10px";
     card.style.marginTop = "8px";
-
     const title = document.createElement("b");
     title.textContent = `QR ${index + 1} (${item.label})`;
-    card.appendChild(title);
-
-    const textLabel = document.createElement("div");
-    textLabel.style.marginTop = "8px";
-    textLabel.textContent = "文字列";
-    card.appendChild(textLabel);
-
     const textPre = document.createElement("pre");
     textPre.style.whiteSpace = "pre-wrap";
     textPre.style.wordBreak = "break-all";
@@ -276,12 +301,6 @@ function renderResult(result, message = "") {
     textPre.style.padding = "8px";
     textPre.style.borderRadius = "8px";
     textPre.textContent = visibleText(item.data) || "(文字列なし)";
-    card.appendChild(textPre);
-
-    const hexLabel = document.createElement("div");
-    hexLabel.textContent = "バイナリ HEX";
-    card.appendChild(hexLabel);
-
     const hexPre = document.createElement("pre");
     hexPre.style.whiteSpace = "pre-wrap";
     hexPre.style.wordBreak = "break-all";
@@ -290,44 +309,12 @@ function renderResult(result, message = "") {
     hexPre.style.padding = "8px";
     hexPre.style.borderRadius = "8px";
     hexPre.textContent = item.hex || "(バイナリなし)";
-    card.appendChild(hexPre);
-
+    card.append(title, document.createTextNode("文字列"), textPre, document.createTextNode("バイナリ HEX"), hexPre);
     box.appendChild(card);
   });
 
+  addCloseUpControls(box, handlers.onCamera, handlers.onLibrary);
   details.appendChild(box);
-}
-
-async function scanVehicleQr(img) {
-  const mod = await import("jsqr");
-  const jsQR = mod.default || mod;
-  const source = await imageCanvas(img);
-  const paper = detectPaper(source);
-
-  // QR群は車検証の最下部。用紙全体ではなく「用紙基準」で下端を狙う。
-  // 5個のQRを一度に読む帯と、1～2個ずつ読む重なりタイルの両方を試す。
-  const regions = [
-    ["QR帯", [0.35, 0.755, 0.64, 0.18], 3600],
-    ["左3個", [0.43, 0.765, 0.39, 0.15], 2800],
-    ["右2個", [0.76, 0.765, 0.23, 0.15], 2200],
-    ["QR1", [0.45, 0.77, 0.14, 0.14], 1500],
-    ["QR2", [0.54, 0.77, 0.14, 0.14], 1500],
-    ["QR3", [0.63, 0.77, 0.14, 0.14], 1500],
-    ["QR4", [0.78, 0.77, 0.13, 0.14], 1500],
-    ["QR5", [0.87, 0.77, 0.12, 0.14], 1500],
-    // 撮影の上下ズレ用に少し広い帯も持つ。
-    ["下部広域", [0.32, 0.70, 0.67, 0.25], 3600],
-  ];
-
-  const all = [];
-  for (const [label, box, target] of regions) {
-    for (const mode of ["color", "contrast", "binary"]) {
-      const c = regionCanvas(source, paper, box, target, mode);
-      all.push(...scanMany(jsQR, c, `${label}/${mode}`));
-    }
-  }
-
-  return { result: uniqueCodes(all), paper };
 }
 
 export default function CertificateQrReader() {
@@ -338,33 +325,85 @@ export default function CertificateQrReader() {
     let running = false;
     let lastSrc = "";
 
+    const cameraInput = document.createElement("input");
+    cameraInput.type = "file";
+    cameraInput.accept = "image/*";
+    cameraInput.setAttribute("capture", "environment");
+    cameraInput.style.display = "none";
+    document.body.appendChild(cameraInput);
+
+    const libraryInput = document.createElement("input");
+    libraryInput.type = "file";
+    libraryInput.accept = "image/*";
+    libraryInput.style.display = "none";
+    document.body.appendChild(libraryInput);
+
+    const handlers = {
+      onCamera: () => cameraInput.click(),
+      onLibrary: () => libraryInput.click(),
+    };
+
+    const scanCloseUp = async (file) => {
+      if (!file || running) return;
+      running = true;
+      renderResult([], "近接QR写真を読み取り中…", handlers);
+      try {
+        const source = await imageCanvasFromFile(file, 6200);
+        const result = await scanCanvas(source, true);
+        if (dead) return;
+        window.__vehicleCertificateQr = result;
+        renderResult(
+          result,
+          result.length
+            ? `近接写真からQRコードを ${result.length} 件読み取りました。`
+            : "近接写真でもQRを読み取れませんでした。5個のQRをもっと大きく、ピントを合わせて撮影してください。",
+          handlers
+        );
+      } catch (e) {
+        if (!dead) renderResult([], `近接QR読取エラー: ${e?.message || e}`, handlers);
+      } finally {
+        running = false;
+      }
+    };
+
+    cameraInput.onchange = () => {
+      const file = cameraInput.files?.[0];
+      if (file) void scanCloseUp(file);
+      cameraInput.value = "";
+    };
+    libraryInput.onchange = () => {
+      const file = libraryInput.files?.[0];
+      if (file) void scanCloseUp(file);
+      libraryInput.value = "";
+    };
+
     const run = async () => {
       if (dead || running) return;
       const img = document.querySelector("img.preview");
       if (!img?.src || img.src === lastSrc) return;
-
       running = true;
       lastSrc = img.src;
-      renderResult([], "QRコードを検索中…");
-
+      renderResult([], "車検証全体写真からQRコードを検索中…", handlers);
       try {
-        const { result, paper } = await scanVehicleQr(img);
+        const source = await imageCanvasFromImage(img, 5200);
+        const paper = detectPaper(source);
+        const paperCanvas = document.createElement("canvas");
+        paperCanvas.width = paper.w;
+        paperCanvas.height = paper.h;
+        const px = paperCanvas.getContext("2d", { willReadFrequently: true });
+        px.drawImage(source, paper.x, paper.y, paper.w, paper.h, 0, 0, paper.w, paper.h);
+        const result = await scanCanvas(paperCanvas, false);
         if (dead) return;
-        if (result.length) {
-          window.__vehicleCertificateQr = result;
-          renderResult(
-            result,
-            `QRコードを ${result.length} 件読み取りました。用紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`
-          );
-        } else {
-          window.__vehicleCertificateQr = [];
-          renderResult(
-            [],
-            `QRコードを読み取れませんでした。用紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`
-          );
-        }
+        window.__vehicleCertificateQr = result;
+        renderResult(
+          result,
+          result.length
+            ? `車検証全体写真からQRコードを ${result.length} 件読み取りました。`
+            : `QRコードを読み取れませんでした。用紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`,
+          handlers
+        );
       } catch (e) {
-        if (!dead) renderResult([], `QR読取エラー: ${e?.message || e}`);
+        if (!dead) renderResult([], `QR読取エラー: ${e?.message || e}`, handlers);
       } finally {
         running = false;
       }
@@ -379,6 +418,8 @@ export default function CertificateQrReader() {
       dead = true;
       observer.disconnect();
       window.clearInterval(timer);
+      cameraInput.remove();
+      libraryInput.remove();
     };
   }, []);
 
