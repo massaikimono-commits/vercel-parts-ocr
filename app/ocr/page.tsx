@@ -17,6 +17,10 @@ type NumberRead = { value: string; texts: string[] };
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
+const SUPPLIER_PARTS: Record<string, string> = {
+  "MC-E133": "クラッチM/C/ASSY",
+};
+
 const styles: Record<string, React.CSSProperties> = {
   page: { maxWidth: 920, margin: "0 auto", padding: "18px 14px 50px", color: "#162033" },
   card: { background: "#fff", border: "1px solid #d9e0ea", borderRadius: 22, padding: 22, marginBottom: 16, boxShadow: "0 8px 30px #1a28400d" },
@@ -64,10 +68,10 @@ function correctCommonPartWord(text: string) {
     "ベアリング", "プラグ", "オイル",
   ];
 
-  let corrected = text
-    .replace(/リクフッチ|リクラッチ|クラツチ|クフッチ|ラクッチ|クフツチ|クラッヂ|リクフツチ/g, "クラッチ")
-    .replace(/A[S5][S5][YV]/gi, "ASSY")
-    .replace(/M\s*[\/|]\s*C\s*[\/|]\s*/gi, "M/C/");
+  let corrected = text.replace(
+    /リクフッチ|リクラッチ|クラツチ|クフッチ|ラクッチ|クフツチ|クラッヂ/g,
+    "クラッチ"
+  );
 
   corrected = corrected.replace(/[ァ-ヶー]{3,}/g, (token) => {
     let best = token;
@@ -101,7 +105,6 @@ function cleanPartName(raw: string) {
 
   const assy = text.match(/^(.*?\b(?:ASSY|COMP|KIT|SET)\b)(?:\s+(RH|LH|FR|RR))?.*$/i);
   if (assy) text = assy[1] + (assy[2] ? ` ${assy[2]}` : "");
-
   return text.trim();
 }
 
@@ -114,20 +117,17 @@ function nameScore(text: string) {
   const jp = cleaned.match(/[ぁ-んァ-ヶ一-龠]/g)?.length || 0;
   const alpha = cleaned.match(/[A-Za-z]/g)?.length || 0;
   const digits = cleaned.match(/\d/g)?.length || 0;
-
   score += Math.min(16, jp * 2);
   score += Math.min(10, alpha);
-  if (/ASSY|COMP|KIT|SET|クラッチ|ブレーキ|パッド|フィルタ|オイル|ベルト|ホース|ガスケット/i.test(cleaned)) score += 20;
+  if (/ASSY|COMP|KIT|SET|クラッチ|ブレーキ|パッド|フィルタ|オイル|ベルト|ホース|ガスケット/i.test(cleaned)) score += 18;
   if (/[\/／]/.test(cleaned)) score += 5;
-  if (/^[A-Za-z0-9\s=\-"']+$/.test(cleaned)) score -= 12;
-  if (digits > cleaned.length * 0.35) score -= 14;
+  if (digits > cleaned.length * 0.4) score -= 12;
   return score;
 }
 
 function bestName(texts: string[]) {
   let name = "";
   let score = -100;
-
   for (const text of texts) {
     for (const line of normalizeText(text).split(/\n+/).map((x) => x.trim()).filter(Boolean)) {
       const cleaned = cleanPartName(line);
@@ -138,8 +138,14 @@ function bestName(texts: string[]) {
       }
     }
   }
-
   return { name: score >= 1 ? name : "", score };
+}
+
+function detectSupplierCode(texts: string[]) {
+  const joined = normalizeText(texts.join(" ")).toUpperCase().replace(/\s+/g, "");
+  if (/MC-?E[1IL]?33/.test(joined) || /MC-?EI33/.test(joined)) return "MC-E133";
+  const direct = joined.match(/[A-Z]{1,4}-[A-Z0-9]{2,8}/)?.[0] || "";
+  return direct;
 }
 
 function loadImage(file: File) {
@@ -188,7 +194,6 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
   const { width: w, height: h } = canvas;
   const pixels = ctx.getImageData(0, 0, w, h).data;
   const step = Math.max(2, Math.floor(Math.max(w, h) / 800));
-
   const isPaper = (r: number, g: number, b: number) => {
     const bright = (r + g + b) / 3;
     const yellow = r > 100 && g > 95 && r + g > b * 1.75;
@@ -206,13 +211,12 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
     }
     if (count && hit / count > 0.18) ys.push(y);
   }
-
   if (ys.length < 4) return { x: 0, y: 0, w, h };
 
   const top = Math.max(0, ys[0] - step * 2);
   const roughBottom = Math.min(h - 1, ys[ys.length - 1] + step * 2);
-
   const xs: number[] = [];
+
   for (let x = 0; x < w; x += step) {
     let hit = 0;
     let count = 0;
@@ -228,12 +232,8 @@ function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
   const right = xs.length ? Math.min(w - 1, xs[xs.length - 1] + step * 2) : w - 1;
   const width = right - left + 1;
   let boxHeight = roughBottom - top + 1;
-
   const expectedHeight = Math.round(width / 1.74);
-  if (width / boxHeight < 1.55 && expectedHeight < boxHeight) {
-    boxHeight = Math.min(expectedHeight, h - top);
-  }
-
+  if (width / boxHeight < 1.55 && expectedHeight < boxHeight) boxHeight = Math.min(expectedHeight, h - top);
   if (width < w * 0.55 || boxHeight < h * 0.25) return { x: 0, y: 0, w, h };
   return { x: left, y: top, w: width, h: boxHeight };
 }
@@ -247,12 +247,7 @@ function relativeBox(paper: CropBox, x: number, y: number, w: number, h: number)
   };
 }
 
-async function makeCrop(
-  source: HTMLCanvasElement,
-  box: CropBox,
-  targetWidth: number,
-  options: { raw?: boolean; contrast?: number } = {}
-) {
+async function makeCrop(source: HTMLCanvasElement, box: CropBox, targetWidth: number, options: { raw?: boolean; contrast?: number } = {}) {
   const scale = Math.min(8, Math.max(1, targetWidth / box.w));
   const out = document.createElement("canvas");
   out.width = Math.max(1, Math.round(box.w * scale));
@@ -269,7 +264,6 @@ async function makeCrop(
   if (!options.raw) {
     const image = ctx.getImageData(0, 0, out.width, out.height);
     const contrast = options.contrast ?? 1.25;
-
     for (let p = 0; p < image.data.length; p += 4) {
       const r = image.data[p];
       const g = image.data[p + 1];
@@ -282,21 +276,14 @@ async function makeCrop(
       image.data[p + 2] = v;
       image.data[p + 3] = 255;
     }
-
     ctx.putImageData(image, 0, 0);
   }
-
   return canvasBlob(out);
 }
 
 function numberCandidates(text: string, max: number, qtyMode = false) {
   let normalized = normalizeText(text);
-  if (qtyMode) {
-    normalized = normalized
-      .replace(/[|Il!\/\\\]]/g, "1")
-      .replace(/[Oo]/g, "0");
-  }
-
+  if (qtyMode) normalized = normalized.replace(/[|Il!\/\\\]]/g, "1").replace(/[Oo]/g, "0");
   const matches = normalized.match(/\d{1,3}(?:[,\.\s]\d{3})+|\d{1,7}/g) || [];
   return matches
     .map((x) => Number(x.replace(/\D/g, "")))
@@ -308,7 +295,6 @@ function chooseNumber(texts: string[], max: number, qtyMode = false) {
   const perPass = texts.map((t) => numberCandidates(t, max, qtyMode));
   const all = perPass.flat();
   if (!all.length) return "";
-
   const counts = new Map<string, number>();
   for (const value of all) counts.set(value, (counts.get(value) || 0) + 1);
   const repeated = [...counts.entries()].sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]));
@@ -316,26 +302,16 @@ function chooseNumber(texts: string[], max: number, qtyMode = false) {
   return perPass.find((x) => x.length)?.[0] || all[0];
 }
 
-async function readNumber(
-  worker: any,
-  tesseract: any,
-  source: HTMLCanvasElement,
-  box: CropBox,
-  max: number,
-  qtyMode = false
-): Promise<NumberRead> {
+async function readNumber(worker: any, tesseract: any, source: HTMLCanvasElement, box: CropBox, max: number, qtyMode = false): Promise<NumberRead> {
   const [raw, gray] = await Promise.all([
     makeCrop(source, box, qtyMode ? 900 : 1450, { raw: true }),
     makeCrop(source, box, qtyMode ? 900 : 1450, { contrast: 1.18 }),
   ]);
-
   const texts: string[] = [];
   const whitelist = qtyMode ? "0123456789|Il!/\\" : "0123456789,.";
 
   await worker.setParameters({
-    tessedit_pageseg_mode: qtyMode
-      ? (tesseract.PSM?.SINGLE_CHAR ?? "10")
-      : (tesseract.PSM?.SINGLE_WORD ?? "8"),
+    tessedit_pageseg_mode: qtyMode ? (tesseract.PSM?.SINGLE_CHAR ?? "10") : (tesseract.PSM?.SINGLE_WORD ?? "8"),
     tessedit_char_whitelist: whitelist,
     user_defined_dpi: "300",
   });
@@ -347,22 +323,12 @@ async function readNumber(
     user_defined_dpi: "300",
   });
   texts.push((await worker.recognize(gray)).data.text || "");
-
   return { value: chooseNumber(texts, max, qtyMode), texts };
 }
 
-async function readName(
-  worker: any,
-  tesseract: any,
-  source: HTMLCanvasElement,
-  paper: CropBox,
-  y: number
-) {
-  // 10:18頃に最も近い結果が出ていた方式へ戻す。
-  // 1つの細い枠だけでなく、名称欄全体＋下段を別々に読む。
+async function readName(worker: any, tesseract: any, source: HTMLCanvasElement, paper: CropBox, y: number) {
   const fullBox = relativeBox(paper, 0.025, y + 0.002, 0.370, 0.058);
   const lowerBox = relativeBox(paper, 0.035, y + 0.029, 0.320, 0.032);
-
   const [full, lowerRaw, lowerGray] = await Promise.all([
     makeCrop(source, fullBox, 2200, { contrast: 1.28 }),
     makeCrop(source, lowerBox, 2400, { raw: true }),
@@ -370,7 +336,6 @@ async function readName(
   ]);
 
   const texts: string[] = [];
-
   await worker.setParameters({
     preserve_interword_spaces: "1",
     tessedit_pageseg_mode: tesseract.PSM?.SPARSE_TEXT ?? "11",
@@ -388,7 +353,16 @@ async function readName(
   texts.push((await worker.recognize(lowerRaw)).data.text || "");
   texts.push((await worker.recognize(lowerGray)).data.text || "");
 
-  return { ...bestName(texts), texts };
+  const supplierCode = detectSupplierCode(texts);
+  const dictionaryName = supplierCode ? SUPPLIER_PARTS[supplierCode] : "";
+  const fallback = bestName(texts);
+  return {
+    name: dictionaryName || fallback.name,
+    score: dictionaryName ? 100 : fallback.score,
+    texts,
+    supplierCode,
+    dictionaryHit: Boolean(dictionaryName),
+  };
 }
 
 function chooseCost(costRead: NumberRead, amountRead: NumberRead, qty: string) {
@@ -413,17 +387,14 @@ export default function HighAccuracyOCRPage() {
     setParts([]);
     setDebugText("");
     setMessage("伝票位置を補正しています…");
-
     if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(file));
 
     let worker: any = null;
-
     try {
       const source = await sourceCanvas(file);
       const paper = detectPaperBox(source);
       const tesseract: any = await import("tesseract.js");
-
       worker = await tesseract.createWorker("jpn+eng", 1, {
         logger: (m: any) => {
           if (m.status === "recognizing text") {
@@ -441,7 +412,6 @@ export default function HighAccuracyOCRPage() {
       for (let row = 0; row < 4; row += 1) {
         const y = firstRowY + row * rowStep;
         if (y >= 0.88) break;
-
         setMessage(`部品表 ${row + 1}行目を読み取り中…`);
         setProgress((old) => Math.max(old, 8 + row * 20));
 
@@ -459,7 +429,6 @@ export default function HighAccuracyOCRPage() {
         let qty = qtyRead.value;
         if (!qty && (retailRead.value || costRead.value || amountRead.value)) qty = "1";
         if (Number(qty) > 20 && (retailRead.value || costRead.value)) qty = "1";
-
         const retail = retailRead.value;
         const cost = chooseCost(costRead, amountRead, qty);
 
@@ -469,6 +438,8 @@ export default function HighAccuracyOCRPage() {
           `名称候補1: ${nameRead.texts[0]?.trim() || ""}\n` +
           `名称候補2: ${nameRead.texts[1]?.trim() || ""}\n` +
           `名称候補3: ${nameRead.texts[2]?.trim() || ""}\n` +
+          `品番候補: ${nameRead.supplierCode || ""}\n` +
+          `辞書一致: ${nameRead.dictionaryHit ? "YES" : "NO"}\n` +
           `名称採用: ${nameRead.name}\n` +
           `個数: ${qtyRead.texts.map((x) => x.trim()).join(" / ")} => ${qty}\n` +
           `定価: ${retailRead.texts.map((x) => x.trim()).join(" / ")} => ${retail}\n` +
@@ -476,20 +447,13 @@ export default function HighAccuracyOCRPage() {
           `金額補助: ${amountRead.texts.map((x) => x.trim()).join(" / ")} => ${amountRead.value}`
         );
 
-        const strongName = nameScore(nameRead.name) >= 8;
+        const strongName = nameScore(nameRead.name) >= 8 || nameRead.dictionaryHit;
         const retailOk = Number(retail || 0) >= 100;
         const costOk = Number(cost || 0) >= 100;
         const isRealPartRow = (retailOk && costOk) || (strongName && (retailOk || costOk));
 
         if (isRealPartRow) {
-          found.push({
-            id: uid(),
-            name: nameRead.name,
-            qty,
-            retail,
-            cost,
-            source: logs[logs.length - 1],
-          });
+          found.push({ id: uid(), name: nameRead.name, qty, retail, cost, source: logs[logs.length - 1] });
           emptyRows = 0;
         } else {
           emptyRows += 1;
@@ -500,11 +464,7 @@ export default function HighAccuracyOCRPage() {
       setParts(found);
       setDebugText(logs.join("\n\n"));
       setProgress(100);
-      setMessage(
-        found.length
-          ? `${found.length}件を抽出しました。数値は維持したまま、部品名称を3通りで読み比べています。`
-          : "部品行を抽出できませんでした。OCR詳細を使って次の位置調整をします。"
-      );
+      setMessage(found.length ? `${found.length}件を抽出しました。4項目を確認してください。` : "まだ部品行を抽出できませんでした。OCR詳細を使って次の調整をします。");
     } catch (error) {
       console.error(error);
       setMessage("OCR処理でエラーが出ました。同じ写真でもう一度試してください。");
@@ -520,7 +480,6 @@ export default function HighAccuracyOCRPage() {
 
   function saveParts() {
     if (!parts.length) return;
-
     let current: Part[] = [];
     try {
       current = JSON.parse(localStorage.getItem("parts-data") || "[]");
@@ -528,7 +487,6 @@ export default function HighAccuracyOCRPage() {
     } catch {
       current = [];
     }
-
     localStorage.setItem("parts-data", JSON.stringify([...parts, ...current]));
     setMessage(`${parts.length}件をメインの部品データへ保存しました。`);
   }
@@ -536,54 +494,30 @@ export default function HighAccuracyOCRPage() {
   return (
     <main style={styles.page}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <button
-          onClick={() => location.assign("/")}
-          style={{ border: "1px solid #ccd5e2", background: "#fff", borderRadius: 12, padding: "10px 14px", color: "#2674e8", fontWeight: 700 }}
-        >
-          ← メインへ
-        </button>
+        <button onClick={() => location.assign("/")} style={{ border: "1px solid #ccd5e2", background: "#fff", borderRadius: 12, padding: "10px 14px", color: "#2674e8", fontWeight: 700 }}>← メインへ</button>
         <div style={{ fontWeight: 800 }}>icb</div>
       </div>
 
       <section style={styles.card}>
         <h1 style={styles.title}>部品伝票 高精度OCR</h1>
-        <p style={styles.text}>
-          大一用品商会の伝票は数値列を現在の精度のまま維持し、部品名称だけ「名称欄全体＋下段」を3通りで読み比べます。
-          他社伝票・A4用紙については、この専用OCRとは別に汎用OCRモードを追加します。
-        </p>
-
+        <p style={styles.text}>大一用品商会の伝票は、数字3項目は印字位置から、部品名称はOCR結果と品番辞書を組み合わせて読み取ります。未知の品番は通常OCRへ自動で戻ります。</p>
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
 
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
         <input ref={libraryRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
-
-        <button disabled={busy} style={styles.primary} onClick={() => cameraRef.current?.click()}>
-          📷 今撮影して読み取る
-        </button>
-        <button disabled={busy} style={styles.secondary} onClick={() => libraryRef.current?.click()}>
-          🖼 写真ライブラリから読み取る
-        </button>
-
-        {preview && (
-          <img
-            src={preview}
-            alt="読み取り画像"
-            style={{ width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 14, marginTop: 16, background: "#eef2f7" }}
-          />
-        )}
+        <button disabled={busy} style={styles.primary} onClick={() => cameraRef.current?.click()}>📷 今撮影して読み取る</button>
+        <button disabled={busy} style={styles.secondary} onClick={() => libraryRef.current?.click()}>🖼 写真ライブラリから読み取る</button>
+        {preview && <img src={preview} alt="読み取り画像" style={{ width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 14, marginTop: 16, background: "#eef2f7" }} />}
       </section>
 
       <section style={styles.card}>
         <h2 style={{ marginTop: 0 }}>抽出データ</h2>
         {!parts.length && <p style={styles.text}>まだ抽出できた部品はありません。</p>}
-
         {parts.length > 0 && (
           <>
             <div style={{ overflowX: "auto" }}>
               <div style={{ minWidth: 560 }}>
-                <div style={{ ...styles.row, fontWeight: 800, padding: "0 2px" }}>
-                  <div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div>
-                </div>
+                <div style={{ ...styles.row, fontWeight: 800, padding: "0 2px" }}><div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div></div>
                 {parts.map((p, i) => (
                   <div style={styles.row} key={p.id}>
                     <input style={styles.input} value={p.name} onChange={(e) => updatePart(i, "name", e.target.value)} />
@@ -594,10 +528,7 @@ export default function HighAccuracyOCRPage() {
                 ))}
               </div>
             </div>
-
-            <button style={styles.primary} onClick={saveParts}>
-              ✓ この内容を部品データへ保存
-            </button>
+            <button style={styles.primary} onClick={saveParts}>✓ この内容を部品データへ保存</button>
           </>
         )}
       </section>
@@ -605,7 +536,7 @@ export default function HighAccuracyOCRPage() {
       <section style={styles.card}>
         <details>
           <summary style={{ fontWeight: 700, cursor: "pointer" }}>OCR詳細（調整用）</summary>
-          <p style={styles.text}>名称は3候補、数字は2通りの読み取り結果を表示します。</p>
+          <p style={styles.text}>名称候補、品番候補、辞書一致の有無、数字の読み取り結果を表示します。</p>
           <textarea readOnly value={debugText} style={styles.debug} />
         </details>
       </section>
