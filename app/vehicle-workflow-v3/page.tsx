@@ -36,7 +36,7 @@ const ACTIVE_KEY = "parts-active-vehicle";
 const BEFORE_KEY = "parts-before-ocr-ids";
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const DATE_CANDIDATES_KEY = "__vehicleCertificateRegistrationDateCandidates";
-const QR_KEYS = ["firstRegistration","inspectionExpiry","model","frontFrontAxleWeightKg","frontRearAxleWeightKg","rearFrontAxleWeightKg","rearRearAxleWeightKg","fuel"] as const;
+const QR_KEYS = ["firstRegistration","inspectionExpiry","model","frontFrontAxleWeightKg","frontRearAxleWeightKg","rearFrontAxleWeightKg","rearRearAxleWeightKg","fuel","registrationDate","bodyShape"] as const;
 
 function norm(s:string){ return (s||"").normalize("NFKC").replace(/[‐‑‒–—―ー]/g,"-").replace(/\r/g,"").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim(); }
 function digits(s:string){ return s.replace(/\D/g,""); }
