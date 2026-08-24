@@ -8,6 +8,7 @@ import CertificateClassificationNumberGuard from "../certificate-classification-
 import CertificateFocusedRecovery from "../certificate-focused-recovery";
 import CertificateRegistrationNumberGuard from "../certificate-registration-number-guard";
 
+// Vehicle certificate post-processing guards are mounted here for /vehicle-workflow-v2.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
