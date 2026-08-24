@@ -65,15 +65,12 @@ function unresolved(key) {
 function cleanSingleLine(value = "") {
   return norm(value).split("\n").map(x => x.trim()).filter(Boolean).join(" ");
 }
-
 function cleanCode(value = "") {
   return norm(value).toUpperCase().replace(/\s+/g, "");
 }
-
 function cleanDate(value = "") {
   return norm(value).replace(/\s+/g, "");
 }
-
 function plausibleDate(value = "") {
   return /(令和|平成|昭和).{0,3}\d{1,2}.{0,2}\d{1,2}/.test(value);
 }
@@ -156,8 +153,6 @@ export default function CertificateLayoutRecognitionV2() {
 
         const { worker, tesseract } = await createSharedTesseractWorker();
         try {
-          // Main OCR is allowed to finish first. This pass is used for geometry, not for
-          // blindly writing its full text into state.
           const waitedUntil = Date.now() + 18000;
           while (!stopped && myToken === token && document.querySelector(".progress") && Date.now() < waitedUntil) {
             await new Promise(resolve => setTimeout(resolve, 350));
@@ -169,12 +164,17 @@ export default function CertificateLayoutRecognitionV2() {
             user_defined_dpi: "300",
             tessedit_char_whitelist: "",
           });
-          showDebug("複数画像でラベル位置を検出中", session.qualityWarnings.map(x => `画像品質: ${x}`));
+          showDebug("複数画像でラベル位置を検出中", [
+            `傾き補正: ${session.geometry.deskewApplied ? `${session.geometry.deskewAngle.toFixed(2)}°` : "不要/保留"}`,
+            ...session.qualityWarnings.map(x => `画像品質: ${x}`),
+          ]);
 
+          // Three genuinely different views are enough for page-level label geometry:
+          // raw print, enhanced contrast, and shadow-resistant local thresholding.
           const layoutVariants = [
             ["original", session.prepared.variants.original],
             ["contrast", session.prepared.variants.contrast],
-            ["binaryDark", session.prepared.variants.binaryDark],
+            ["adaptiveBinary", session.prepared.variants.adaptiveBinary],
           ];
           const tokenSets = [];
           const tokenCounts = [];
