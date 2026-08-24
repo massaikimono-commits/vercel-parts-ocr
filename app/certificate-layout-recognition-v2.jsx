@@ -12,6 +12,7 @@ import {
   findConsensusLabelAnchors,
   relativeRegionFromAnchor,
 } from "./lib/document-layout-recognition";
+import { inferValueRegionsFromTokens } from "./lib/document-field-regions";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 
@@ -26,7 +27,7 @@ const LABELS = {
 function norm(value = "") {
   return String(value)
     .normalize("NFKC")
-    .replace(/[‐‑‒–—―ー]/g, "-")
+    .replace(/[‐‑‒–—―ー−]/g, "-")
     .replace(/[\u3000\t\r]+/g, " ")
     .replace(/ {2,}/g, " ")
     .trim();
@@ -62,17 +63,95 @@ function unresolved(key) {
   return true;
 }
 
-function cleanSingleLine(value = "") {
-  return norm(value).split("\n").map(x => x.trim()).filter(Boolean).join(" ");
+function numericGroup(value = "") {
+  return String(value)
+    .toUpperCase()
+    .replace(/[OQD]/g, "0")
+    .replace(/[IL|!]/g, "1")
+    .replace(/Z/g, "2")
+    .replace(/S/g, "5")
+    .replace(/G/g, "6")
+    .replace(/B/g, "8")
+    .replace(/[^0-9]/g, "");
 }
-function cleanCode(value = "") {
-  return norm(value).toUpperCase().replace(/\s+/g, "");
+
+function extractRegistration(value = "") {
+  const text = norm(value)
+    .replace(/自動車登録番号又は車両番号/g, " ")
+    .replace(/自動車登録番号/g, " ")
+    .replace(/車両番号/g, " ");
+  const pattern = /([ぁ-んァ-ヶ一-龠]{1,8})\s*([0-9OQDGIL|SZB]{3})\s*([ぁ-ん])\s*([0-9OQDGIL|SZB]{1,4})/g;
+  for (const match of text.matchAll(pattern)) {
+    const area = match[1];
+    const klass = numericGroup(match[2]);
+    const serial = numericGroup(match[4]);
+    if (!area || klass.length !== 3 || !serial || serial.length > 4) continue;
+    return `${area} ${klass} ${match[3]} ${serial}`;
+  }
+  return "";
 }
-function cleanDate(value = "") {
-  return norm(value).replace(/\s+/g, "");
+
+function cleanCodeText(value = "") {
+  return norm(value)
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/[OQ](?=\d)|(?<=\d)[OQ]/g, "0")
+    .replace(/[I|!](?=\d)|(?<=\d)[I|!]/g, "1");
 }
-function plausibleDate(value = "") {
-  return /(令和|平成|昭和).{0,3}\d{1,2}.{0,2}\d{1,2}/.test(value);
+
+function extractChassis(value = "") {
+  const text = cleanCodeText(value);
+  const domestic = text.match(/(?:^|[^A-Z0-9])([A-Z0-9]{1,8}-[A-Z0-9]{4,12})(?:$|[^A-Z0-9])/);
+  if (domestic?.[1]) return domestic[1];
+  for (const match of text.matchAll(/[A-HJ-NPR-Z0-9]{17}/g)) {
+    if (/[A-Z]/.test(match[0]) && /\d/.test(match[0])) return match[0];
+  }
+  return "";
+}
+
+function currentModelCode() {
+  return cleanCodeText(fieldInput("型式")?.value || window.__vehicleCertificateQrPriority?.model || "");
+}
+
+function extractEngineModel(value = "") {
+  const text = cleanCodeText(value)
+    .replace(/原動機の型式/g, "")
+    .replace(/原動機型式/g, "");
+  const currentModel = currentModelCode();
+  const candidates = [...text.matchAll(/[A-Z0-9]{2,8}-[A-Z0-9]{2,8}/g)].map(match => match[0]);
+  for (const candidate of candidates) {
+    if (!/[A-Z]/.test(candidate) || !/\d/.test(candidate)) continue;
+    if (currentModel && (candidate === currentModel || candidate.endsWith(currentModel) || currentModel.endsWith(candidate))) continue;
+    return candidate;
+  }
+  for (const match of text.matchAll(/(?:^|[^A-Z0-9])([A-Z]{1,4}\d[A-Z0-9]{1,5})(?:$|[^A-Z0-9])/g)) {
+    const candidate = match[1];
+    if (currentModel && currentModel.includes(candidate)) continue;
+    return candidate;
+  }
+  return "";
+}
+
+function normalizeJapaneseDate(value = "") {
+  let text = norm(value)
+    .replace(/信和|令入|令禾|今和|作和|三和|合和|令乱|命和/g, "令和")
+    .replace(/平[或戊陰咸戌]/g, "平成")
+    .replace(/昭[禾口知]/g, "昭和")
+    .replace(/\s+/g, "");
+  text = text
+    .replace(/(\d{1,2})[RＲ](?=\d{1,2}[日HＢB己昌曰])/g, "$1月")
+    .replace(/(\d{1,2})[HＢB己昌曰](?![A-Za-z0-9])/g, "$1日")
+    .replace(/(\d{1,2})H$/g, "$1日");
+  const match = text.match(/(令和|平成|昭和)([0-9OQDGIL|SZB?]{1,2})年?([0-9OQDGIL|SZB]{1,2})月?([0-9OQDGIL|SZB]{1,2})日?/);
+  if (!match) return "";
+  const year = numericGroup(match[2]);
+  const month = numericGroup(match[3]);
+  const day = numericGroup(match[4]);
+  if (!year || !month || !day) return "";
+  const m = Number(month);
+  const d = Number(day);
+  if (m < 1 || m > 12 || d < 1 || d > 31) return "";
+  return `${match[1]}${Number(year)}年${m}月${d}日`;
 }
 
 function debugHost() {
@@ -99,34 +178,49 @@ function showDebug(state, lines = []) {
   if (pre) pre.textContent = [`状態: ${state}`, ...lines].join("\n");
 }
 
-async function recognizeNearAnchor(session, worker, anchor, profile, validate) {
+async function recognizeNearAnchor(session, worker, anchor, tokenSets, profile, extract) {
   const page = session.prepared.normalized;
-  const regions = [
+  const inferred = inferValueRegionsFromTokens(anchor, tokenSets, page.width, page.height);
+  const fallbacks = [
     relativeRegionFromAnchor(anchor, page.width, page.height, {
       direction: "right",
-      gap: 0.004,
-      width: 0.46,
-      height: Math.max(0.034, (anchor.bbox.y1 - anchor.bbox.y0) / page.height * 1.8),
-      padY: 0.006,
+      gap: 0.003,
+      width: 0.28,
+      height: Math.max(0.030, (anchor.bbox.y1 - anchor.bbox.y0) / page.height * 1.55),
+      padY: 0.005,
     }),
     relativeRegionFromAnchor(anchor, page.width, page.height, {
       direction: "below",
       gap: 0.002,
-      width: 0.52,
-      height: 0.065,
+      width: 0.34,
+      height: 0.052,
     }),
   ];
 
+  const regions = [
+    ...inferred.map(item => ({ ...item, label: `geometry-${item.direction} support=${item.support}` })),
+    ...fallbacks.map((region, index) => ({ region, support: 0, label: index === 0 ? "fallback-right" : "fallback-below" })),
+  ];
   const results = [];
-  for (const region of regions) {
-    const result = await recognizeDocumentRegion(session, worker, region, {
+  const seen = new Set();
+  for (const item of regions) {
+    const key = [item.region.x, item.region.y, item.region.width, item.region.height].map(x => x.toFixed(3)).join(":");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const result = await recognizeDocumentRegion(session, worker, item.region, {
       ...profile,
-      validate,
+      minSupport: Math.min(profile.minSupport ?? 2, item.support >= 2 ? 1 : 2),
+      validate: value => Boolean(extract(value)),
     });
-    results.push(result);
-    if (result.value && result.confidence >= 0.72) break;
+    const cleaned = result?.value ? extract(result.value) : "";
+    results.push({ result, cleaned, geometrySupport: item.support, regionLabel: item.label });
+    if (cleaned && (result.support >= 2 || item.support >= 2) && result.confidence >= 0.62) break;
   }
-  return results.sort((a, b) => b.confidence - a.confidence)[0];
+
+  return results.sort((a, b) => {
+    const score = item => (item.cleaned ? 2 : 0) + item.geometrySupport * 0.35 + (item.result?.support || 0) * 0.4 + (item.result?.confidence || 0);
+    return score(b) - score(a);
+  })[0];
 }
 
 export default function CertificateLayoutRecognitionV2() {
@@ -165,6 +259,7 @@ export default function CertificateLayoutRecognitionV2() {
             tessedit_char_whitelist: "",
           });
           showDebug("複数画像でラベル位置を検出中", [
+            `台形補正: ${session.geometry.perspectiveApplied ? `適用 confidence=${session.geometry.perspectiveConfidence.toFixed(2)}` : "不要/保留"}`,
             `傾き補正: ${session.geometry.deskewApplied ? `${session.geometry.deskewAngle.toFixed(2)}°` : "不要/保留"}`,
             ...session.qualityWarnings.map(x => `画像品質: ${x}`),
           ]);
@@ -178,8 +273,6 @@ export default function CertificateLayoutRecognitionV2() {
           const tokenCounts = [];
           for (const [name, canvas] of layoutVariants) {
             if (stopped || myToken !== token) return;
-            // Tesseract.js v6 may return text only unless geometry output is requested.
-            // Ask for both blocks and TSV; extractOcrTokens can consume either shape.
             const layoutResult = await worker.recognize(canvas, {}, { text: true, blocks: true, tsv: true });
             const tokens = extractOcrTokens(layoutResult?.data);
             tokenSets.push({ name, tokens });
@@ -190,7 +283,7 @@ export default function CertificateLayoutRecognitionV2() {
           const labelConsensus = findConsensusLabelAnchors(tokenSets, LABELS, {
             pageWidth: page.width,
             pageHeight: page.height,
-            minSimilarity: 0.52,
+            minSimilarity: 0.50,
             maxTokens: 10,
           });
           const anchors = labelConsensus.anchors;
@@ -203,14 +296,14 @@ export default function CertificateLayoutRecognitionV2() {
 
           const patch = {};
           const tasks = [
-            ["registrationNumber", OCR_FIELD_PRESETS.japaneseText, value => /\d/.test(value) && /[ぁ-ん]/.test(value), cleanSingleLine],
-            ["chassisNumber", OCR_FIELD_PRESETS.code, value => /[A-Z]/.test(value) && /\d/.test(value), cleanCode],
-            ["engineModel", OCR_FIELD_PRESETS.code, value => /[A-Z]/.test(value) && /\d/.test(value), cleanCode],
-            ["recordDate", OCR_FIELD_PRESETS.date, plausibleDate, cleanDate],
-            ["registrationDate", OCR_FIELD_PRESETS.date, plausibleDate, cleanDate],
+            ["registrationNumber", { ...OCR_FIELD_PRESETS.japaneseText, minSimilarity: 0.50 }, extractRegistration],
+            ["chassisNumber", { ...OCR_FIELD_PRESETS.code, minSimilarity: 0.58 }, extractChassis],
+            ["engineModel", { ...OCR_FIELD_PRESETS.code, minSimilarity: 0.56 }, extractEngineModel],
+            ["recordDate", { ...OCR_FIELD_PRESETS.date, minSimilarity: 0.56 }, normalizeJapaneseDate],
+            ["registrationDate", { ...OCR_FIELD_PRESETS.date, minSimilarity: 0.56 }, normalizeJapaneseDate],
           ];
 
-          for (const [key, preset, validate, cleaner] of tasks) {
+          for (const [key, preset, extract] of tasks) {
             if (stopped || myToken !== token) return;
             if (!unresolved(key)) {
               lines.push(`${key}: QR/既存値あり → 省略`);
@@ -221,12 +314,12 @@ export default function CertificateLayoutRecognitionV2() {
               lines.push(`${key}: ラベルが見つからないため保留`);
               continue;
             }
-            const result = await recognizeNearAnchor(session, worker, anchor, preset, validate);
-            if (result?.value) {
-              patch[key] = cleaner(result.value);
-              lines.push(`${key}: ${patch[key]} / ${result.reason}`);
+            const attempt = await recognizeNearAnchor(session, worker, anchor, tokenSets, preset, extract);
+            if (attempt?.cleaned) {
+              patch[key] = attempt.cleaned;
+              lines.push(`${key}: ${patch[key]} / ${attempt.regionLabel} / ${attempt.result.reason}`);
             } else {
-              lines.push(`${key}: 保留 / ${result?.reason || "候補なし"}`);
+              lines.push(`${key}: 保留 / ${attempt?.regionLabel || "範囲不明"} / ${attempt?.result?.reason || "候補なし"}`);
             }
             showDebug("未取得項目を順番に読取中", lines);
           }
