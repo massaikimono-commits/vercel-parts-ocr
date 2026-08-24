@@ -7,6 +7,10 @@ import {
   createDocumentRecognitionSession,
   createSharedTesseractWorker,
 } from "../../lib/document-recognition-v2";
+import {
+  joinRecognizedTextBands,
+  recognizeDocumentTextBands,
+} from "../../lib/document-band-recognition";
 
 type Part = {
   id: string;
@@ -329,7 +333,7 @@ export default function GeneralOCRPage() {
       const created = await createSharedTesseractWorker({
         logger: (m: any) => {
           if (m.status === "recognizing text") {
-            setProgress(Math.max(5, Math.min(94, Math.round((m.progress || 0) * 75) + 10)));
+            setProgress(old => Math.max(old, Math.min(95, Math.round((m.progress || 0) * 72) + 10)));
           }
         },
       });
@@ -342,7 +346,7 @@ export default function GeneralOCRPage() {
         tessedit_char_whitelist: "",
       });
 
-      const variants = ["original", "contrast", "binaryDark"] as const;
+      const variants = ["original", "contrast", "adaptiveBinary"] as const;
       const analyses: VariantAnalysis[] = [];
       for (const name of variants) {
         setMessage(`共通OCR V2: ${name}画像で表構造を確認しています…`);
@@ -366,9 +370,34 @@ export default function GeneralOCRPage() {
       let extracted = best?.parts || [];
       const combinedText = analyses.map((x) => `【${x.name}】\n${x.text}`).join("\n\n");
       if (!extracted.length) extracted = fallbackParse(combinedText);
+
+      let bandFallbackText = "";
+      let bandCount = 0;
+      if (!extracted.length) {
+        setMessage("表構造で確定できないため、文字行を自動検出して再読取しています…");
+        setProgress(old => Math.max(old, 78));
+        const bands = await recognizeDocumentTextBands(session, worker, {
+          maxBands: 22,
+          minBandConfidence: 0.10,
+          profile: "japanese",
+          variants: ["original", "contrast", "adaptiveBinary"],
+          psms: ["7", "13"],
+          minSimilarity: 0.56,
+          minSupport: 2,
+          minConfidence: 0.50,
+          targetWidth: 3300,
+        });
+        bandCount = bands.length;
+        bandFallbackText = joinRecognizedTextBands(bands);
+        if (bandFallbackText) extracted = fallbackParse(bandFallbackText);
+      }
+
       extracted = dedupe(extracted);
       setParts(extracted);
-      setRawText(combinedText);
+      setRawText([
+        combinedText,
+        bandFallbackText ? `【横一行OCRフォールバック】\n${bandFallbackText}` : "",
+      ].filter(Boolean).join("\n\n"));
 
       const variantDebug = analyses.map((analysis) => {
         const headerText = analysis.header
@@ -378,12 +407,13 @@ export default function GeneralOCRPage() {
       }).join("\n");
       const bestHeader = best?.header
         ? `採用見出し行: ${best.header.index + 1}\n採用列: ${best.header.matches.map((x) => `${x.key}=${x.label}`).join(" / ")}`
-        : "採用見出し行: 自動検出できず（全文フォールバック使用）";
+        : "採用見出し行: 自動検出できず（全文/横一行フォールバック使用）";
       const lineDebug = (best?.lines || []).slice(0, 100).map((x, i) => `${i + 1}: ${x.text}`).join("\n");
       setDebug([
         `共通OCR V2 / 採用variant: ${best?.name || "なし"}`,
         `傾き補正: ${session.geometry.deskewApplied ? `${session.geometry.deskewAngle.toFixed(2)}° conf=${session.geometry.deskewConfidence.toFixed(2)}` : "不要/保留"}`,
         ...(session.qualityWarnings || []).map((x: string) => `画像品質: ${x}`),
+        `横一行OCRフォールバック: ${bandFallbackText ? `${bandCount}行を再読取` : "未使用/採用なし"}`,
         "",
         "variant比較",
         variantDebug,
@@ -396,8 +426,8 @@ export default function GeneralOCRPage() {
 
       setProgress(100);
       setMessage(extracted.length
-        ? `${extracted.length}件を候補抽出しました。3種類の画像解析から最も安定した表構造を採用しています。`
-        : "候補を自動抽出できませんでした。OCR全文は残してあるので、誤入力せず保留しています。");
+        ? `${extracted.length}件を候補抽出しました。表構造が弱い場合は横一行OCRまで自動で再確認しています。`
+        : "候補を安全に抽出できませんでした。OCR全文は残してありますが、誤った値は保存していません。");
     } catch (error) {
       console.error(error);
       setMessage("汎用OCR処理でエラーが出ました。誤った値は保存していません。");
@@ -448,7 +478,7 @@ export default function GeneralOCRPage() {
       </div>
       <section style={styles.card}>
         <h1 style={styles.title}>汎用A4・他社伝票OCR</h1>
-        <p style={styles.text}>車検証と同じ共通OCR V2で紙検出・傾き補正を行い、原画像・コントラスト・二値化の3通りから「部品名称・数量・定価・仕入れ」の見出しと表構造を比較して読み取ります。</p>
+        <p style={styles.text}>車検証と同じ共通OCR V2で紙検出・傾き補正を行い、原画像・コントラスト・影対応画像から「部品名称・数量・定価・仕入れ」の見出しと表構造を比較します。表が崩れた時だけ横一行OCRで再確認します。</p>
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
         <input ref={libraryRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
@@ -486,7 +516,7 @@ export default function GeneralOCRPage() {
       <section style={styles.card}>
         <details>
           <summary style={{ fontWeight: 800, cursor: "pointer" }}>OCR詳細（調整用）</summary>
-          <p style={styles.text}>3種類の画像の見出し検出数と抽出行数を比較し、どの結果を採用したか確認できます。</p>
+          <p style={styles.text}>3種類の画像の見出し検出数・抽出行数と、必要時の横一行再読取を確認できます。</p>
           <textarea readOnly value={debug} style={styles.debug} />
         </details>
       </section>
