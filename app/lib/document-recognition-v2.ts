@@ -5,6 +5,7 @@ import {
   type PreparedDocument,
 } from "./document-image-pipeline";
 import { deskewDocument } from "./document-recognition-engine";
+import { correctDocumentPerspective } from "./document-perspective";
 import {
   buildOcrConsensus,
   recognizeCanvasEnsemble,
@@ -45,6 +46,9 @@ export type DocumentRecognitionSession = {
   prepared: PreparedDocument;
   qualityWarnings: string[];
   geometry: {
+    perspectiveApplied: boolean;
+    perspectiveConfidence: number;
+    perspectiveSeverity: number;
     deskewApplied: boolean;
     deskewAngle: number;
     deskewConfidence: number;
@@ -89,10 +93,7 @@ function cropRelative(source: HTMLCanvasElement, region: RelativeRegion, targetW
   return out;
 }
 
-/**
- * Mild unsharp mask used only for weak, already-cropped regions.
- * Keeping this out of full-page preprocessing avoids extra iPhone memory/CPU cost.
- */
+/** Mild unsharp mask used only for weak, already-cropped regions. */
 function sharpenRecoveryCanvas(source: HTMLCanvasElement, amount = 0.62) {
   const out = canvas(source.width, source.height);
   const ctx = out.getContext("2d", { willReadFrequently: true })!;
@@ -212,29 +213,47 @@ export async function createDocumentRecognitionSession(
     minPaperConfidence: options.minPaperConfidence ?? 0.48,
   });
 
-  const deskewed = deskewDocument(initial.normalized);
+  // Perspective and rotation are different problems. Correct conservative horizontal
+  // keystone first, then estimate small rotational skew on the corrected document.
+  const perspective = correctDocumentPerspective(initial.normalized);
+  const perspectiveNormalized = perspective.applied ? perspective.canvas : initial.normalized;
+  const deskewed = deskewDocument(perspectiveNormalized);
+  const finalNormalized = deskewed.applied ? deskewed.canvas : perspectiveNormalized;
+
   let prepared = initial;
   const warnings = [...initial.quality.warnings];
+  if (perspective.applied) {
+    warnings.push(`台形補正: severity=${perspective.severity.toFixed(3)} (confidence=${perspective.confidence.toFixed(2)})`);
+  }
   if (deskewed.applied) {
-    const normalized = deskewed.canvas;
-    const variants = createOcrVariants(normalized);
+    warnings.push(`傾き補正: ${deskewed.angle.toFixed(2)}° (confidence=${deskewed.confidence.toFixed(2)})`);
+  }
+
+  if (finalNormalized !== initial.normalized) {
+    const variants = createOcrVariants(finalNormalized);
     releaseVariants(initial.variants);
     if (initial.normalized !== initial.source) {
       initial.normalized.width = 1;
       initial.normalized.height = 1;
     }
+    if (perspective.applied && perspective.canvas !== finalNormalized && perspective.canvas !== initial.source) {
+      perspective.canvas.width = 1;
+      perspective.canvas.height = 1;
+    }
     prepared = {
       ...initial,
-      normalized,
+      normalized: finalNormalized,
       variants,
     };
-    warnings.push(`傾き補正: ${deskewed.angle.toFixed(2)}° (confidence=${deskewed.confidence.toFixed(2)})`);
   }
 
   return {
     prepared,
     qualityWarnings: warnings,
     geometry: {
+      perspectiveApplied: perspective.applied,
+      perspectiveConfidence: perspective.confidence,
+      perspectiveSeverity: perspective.severity,
       deskewApplied: deskewed.applied,
       deskewAngle: deskewed.angle,
       deskewConfidence: deskewed.confidence,
@@ -252,10 +271,7 @@ export async function createSharedTesseractWorker(options: WorkerFactoryOptions 
 
 /**
  * Shared field OCR for certificates and parts slips.
- *
- * Pass 1 uses the normal multi-variant ensemble. If that result is strong, we stop.
- * Weak/empty fields are automatically re-read at higher resolution with alternate
- * segmentation modes and token-level confidence. If those reads still disagree,
+ * Weak/empty fields are re-read at higher resolution. If those reads still disagree,
  * one small cropped region gets a mild sharpening pass as the final generic recovery.
  */
 export async function recognizeDocumentRegion(
@@ -353,9 +369,6 @@ export async function recognizeDocumentRegion(
           validate: options.validate,
         });
 
-        // Thin strokes can remain visible to a person while getting lost in OCR.
-        // Only after standard high-res recovery still looks weak do we sharpen one
-        // small crop and try at most two segmentation modes.
         let sharpPasses = 0;
         if (options.sharpRecovery !== false && !strongEnough(recovered, options)) {
           const sharpSource = session.prepared.variants.contrast || session.prepared.variants.original;
