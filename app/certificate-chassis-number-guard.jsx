@@ -10,6 +10,12 @@ function norm(value = "") {
     .trim();
 }
 
+function modelFamily(value = "") {
+  const text = norm(value).toUpperCase().replace(/\s+/g, "");
+  const tail = text.includes("-") ? text.split("-").pop() || "" : text;
+  return /^[A-Z0-9]{3,8}$/.test(tail) && /[A-Z]/.test(tail) && /\d/.test(tail) ? tail : "";
+}
+
 function parseChassis(value = "") {
   const text = norm(value).toUpperCase();
   const compact = text.replace(/\s+/g, "");
@@ -18,12 +24,12 @@ function parseChassis(value = "") {
   const vin = compact.match(/(?:^|[^A-Z0-9])([A-HJ-NPR-Z0-9]{11,17})(?:$|[^A-Z0-9])/i)?.[1] ||
     (/^[A-HJ-NPR-Z0-9]{11,17}$/.test(compact) ? compact : "");
   if (vin && /[A-Z]/.test(vin) && /\d/.test(vin)) {
-    return { value: vin, raw: text, suspicious: compact !== vin, kind: "VIN" };
+    return { value: vin, raw: text, suspicious: compact !== vin, kind: "VIN", prefix: "" };
   }
 
   // 国内で一般的な「型式系プレフィックス-連番」。
   const matches = [...compact.matchAll(/([A-Z0-9]{3,8})-([0-9OQI|]{5,9})/g)];
-  if (!matches.length) return { value: "", raw: text, suspicious: Boolean(text), kind: "" };
+  if (!matches.length) return { value: "", raw: text, suspicious: Boolean(text), kind: "", prefix: "" };
 
   const m = matches[matches.length - 1];
   const prefix = m[1] || "";
@@ -32,7 +38,7 @@ function parseChassis(value = "") {
     .replace(/[I|]/g, "1");
 
   if (!/[A-Z]/.test(prefix) || !/\d/.test(prefix) || !/^\d{5,9}$/.test(suffix)) {
-    return { value: "", raw: text, suspicious: true, kind: "" };
+    return { value: "", raw: text, suspicious: true, kind: "", prefix };
   }
 
   return {
@@ -40,15 +46,16 @@ function parseChassis(value = "") {
     raw: text,
     suspicious: `${prefix}-${m[2]}` !== `${prefix}-${suffix}` || compact !== `${prefix}-${m[2]}`,
     kind: "国内形式",
+    prefix,
   };
 }
 
-function findChassisInput() {
+function findInput(labelText) {
   for (const label of document.querySelectorAll("label")) {
     const direct = (label.childNodes?.[0]?.textContent || "").trim();
     const span = label.querySelector(":scope > span")?.textContent?.trim() || "";
     const text = direct || span;
-    if (text !== "車台番号") continue;
+    if (text !== labelText) continue;
     const input = label.querySelector("input");
     if (input instanceof HTMLInputElement) return input;
   }
@@ -100,7 +107,7 @@ export default function CertificateChassisNumberGuard() {
 
     let lastKey = "";
     const sync = () => {
-      const input = findChassisInput();
+      const input = findInput("車台番号");
       if (!input) return;
 
       const qrRaw = window.__vehicleCertificateQrPriority?.chassisNumber || "";
@@ -110,11 +117,13 @@ export default function CertificateChassisNumberGuard() {
       if (!raw) return;
 
       const parsed = parseChassis(raw);
-      const key = `${source}|${raw}|${parsed.value}|${parsed.suspicious ? 1 : 0}`;
+      const family = modelFamily(findInput("型式")?.value || "");
+      const familyMismatch = !qrRaw && parsed.kind === "国内形式" && family && parsed.prefix !== family;
+      const key = `${source}|${raw}|${parsed.value}|${family}|${familyMismatch ? 1 : 0}`;
       if (key === lastKey) return;
       lastKey = key;
 
-      if (parsed.value) {
+      if (parsed.value && !familyMismatch) {
         if (parsed.value !== current) setReactInputValue(input, parsed.value);
         if (parsed.value !== raw || parsed.suspicious || qrRaw) {
           const reason = parsed.kind === "国内形式" && parsed.suspicious
@@ -127,7 +136,14 @@ export default function CertificateChassisNumberGuard() {
 
       if (!qrRaw && current) {
         setReactInputValue(input, "");
-        showDebug(raw, "", source, "車台番号の形式として確定できないため保留（空欄）にしました。");
+        showDebug(
+          raw,
+          "",
+          source,
+          familyMismatch
+            ? `型式の車系 ${family} と一致しないため保留（空欄）にしました。`
+            : "車台番号の形式として確定できないため保留（空欄）にしました。"
+        );
       }
     };
 
