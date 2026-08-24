@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { prepareDocumentImage } from "./lib/document-image-pipeline";
 
+const AUTH_EVENT = "vehicle-certificate-authoritative";
+
 function norm(value = "") {
   return String(value)
     .normalize("NFKC")
@@ -70,6 +72,7 @@ function plausible(value) {
     if (year * 12 + month < first) return false;
   }
   if (expiry && date > expiry) return false;
+  if (qr.inspectionExpiry && norm(value) === norm(qr.inspectionExpiry)) return false;
   return true;
 }
 
@@ -110,13 +113,13 @@ function rawCellOcr() {
   return debug.match(/【登録年月日／交付年月日 生OCR】\s*([^\n]*)/)?.[1]?.trim() || "";
 }
 
-function crop(source, box, contrast) {
+function crop(source, box, binary, targetWidth = 2500) {
   const [x, y, w, h] = box;
   const sx = Math.max(0, Math.round(source.width * x));
   const sy = Math.max(0, Math.round(source.height * y));
   const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * w)));
   const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * h)));
-  const scale = Math.max(1, Math.min(7, 2200 / sw));
+  const scale = Math.max(1, Math.min(10, targetWidth / Math.max(1, sw)));
   const pad = 36;
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(sw * scale) + pad * 2;
@@ -127,11 +130,17 @@ function crop(source, box, contrast) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, sx, sy, sw, sh, pad, pad, canvas.width - pad * 2, canvas.height - pad * 2);
-  if (contrast) {
+  if (binary) {
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let sum = 0, count = 0;
     for (let p = 0; p < image.data.length; p += 4) {
-      const gray = Math.round(image.data[p] * 0.22 + image.data[p + 1] * 0.70 + image.data[p + 2] * 0.08);
-      const v = gray < 178 ? 0 : 255;
+      const gray = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+      sum += gray; count += 1;
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = gray;
+    }
+    const threshold = Math.max(105, Math.min(220, sum / Math.max(1, count) - 18));
+    for (let p = 0; p < image.data.length; p += 4) {
+      const v = image.data[p] < threshold ? 0 : 255;
       image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
       image.data[p + 3] = 255;
     }
@@ -140,40 +149,60 @@ function crop(source, box, contrast) {
   return canvas;
 }
 
+function chooseAgreement(values) {
+  const counts = new Map();
+  for (const value of values.filter(Boolean)) counts.set(value, (counts.get(value) || 0) + 1);
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  return ranked[0]?.[1] >= 2 ? ranked[0][0] : "";
+}
+
 async function targetedRead(file) {
-  const prepared = await prepareDocumentImage(file, { maxSide: 3200, cropPaper: true, minPaperConfidence: 0.46 });
+  const prepared = await prepareDocumentImage(file, { maxSide: 3400, cropPaper: true, minPaperConfidence: 0.42 });
   const source = prepared.normalized;
   const t = await import("tesseract.js");
   const worker = await t.createWorker("jpn+eng", 1);
   const raws = [];
+  const values = [];
+
+  // 前回実際に正しい日付を拾えていた狭いセル位置 + 現行メインOCRのセル位置。
   const plans = [
-    [0.14, 0.19, 0.34, 0.065],
-    [0.14, 0.225, 0.34, 0.065],
+    [0.155, 0.214, 0.250, 0.032],
+    [0.175, 0.218, 0.220, 0.026],
+    [0.235, 0.194, 0.240, 0.045],
+    [0.180, 0.247, 0.210, 0.030],
+    [0.160, 0.238, 0.260, 0.045],
   ];
+
   try {
     for (const box of plans) {
-      for (const contrast of [false, true]) {
-        const canvas = crop(source, box, contrast);
+      for (const binary of [false, true]) {
+        const canvas = crop(source, box, binary);
         try {
-          await worker.setParameters({
-            preserve_interword_spaces: "1",
-            tessedit_pageseg_mode: String(t.PSM?.SINGLE_LINE ?? "7"),
-            user_defined_dpi: "300",
-          });
-          const raw = norm((await worker.recognize(canvas)).data.text || "");
-          if (raw) raws.push(`${contrast ? "白黒" : "通常"}: ${raw}`);
-          const value = parseJpDate(raw);
-          if (value && plausible(value)) return { value, raws };
+          for (const psm of ["7", "6"]) {
+            await worker.setParameters({
+              preserve_interword_spaces: "1",
+              tessedit_pageseg_mode: psm,
+              user_defined_dpi: "300",
+            });
+            const raw = norm((await worker.recognize(canvas)).data.text || "");
+            if (!raw) continue;
+            raws.push(`${binary ? "白黒" : "通常"}/psm${psm}: ${raw}`);
+            const value = parseJpDate(raw);
+            if (value && plausible(value)) values.push(value);
+          }
         } finally {
           canvas.width = 1;
           canvas.height = 1;
         }
       }
     }
-    return { value: "", raws };
   } finally {
     await worker.terminate().catch(() => {});
+    source.width = 1;
+    source.height = 1;
   }
+
+  return { value: chooseAgreement(values), values, raws };
 }
 
 function showDebug(source, before, after, detail = []) {
@@ -227,8 +256,8 @@ export default function CertificateRegistrationDateGuard() {
         return;
       }
       const elapsed = Date.now() - startedAt;
-      if (sawProgress && elapsed < 1800) return;
-      if (!sawProgress && elapsed < 12000) return;
+      if (sawProgress && elapsed < 4000) return;
+      if (!sawProgress && elapsed < 14000) return;
 
       const input = detailInput();
       const current = input?.value || "";
@@ -242,6 +271,7 @@ export default function CertificateRegistrationDateGuard() {
       const raw = rawCellOcr();
       const cellValue = parseJpDate(raw);
       if (cellValue && plausible(cellValue)) {
+        window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: { registrationDate: cellValue } }));
         if (input) applyReact(input, cellValue);
         pending = null;
         showDebug("既存セルOCR再解析", current, cellValue, [raw]);
@@ -257,17 +287,15 @@ export default function CertificateRegistrationDateGuard() {
         if (id !== scanId) return;
         const latest = detailInput();
         const before = latest?.value || current;
-        const beforeValue = parseJpDate(before);
-        if (result.value && (!beforeValue || !plausible(beforeValue))) {
+        if (result.value) {
+          window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: { registrationDate: result.value } }));
           if (latest) applyReact(latest, result.value);
-          showDebug("登録年月日セルのみ再読取", before, result.value, result.raws);
-        } else if (result.value && beforeValue !== result.value) {
-          showDebug("登録年月日セルのみ再読取", before, beforeValue, [...result.raws, `候補 ${result.value} と既存値が競合したため既存値を保持`]);
+          showDebug("狭い登録年月日セル再読取", before, result.value, [`一致候補: ${result.values.join(" / ")}`, ...result.raws]);
         } else {
-          showDebug("登録年月日セルのみ再読取", before, result.value || "", result.raws);
+          showDebug("狭い登録年月日セル再読取", before, "", [`一致候補: ${result.values.join(" / ") || "なし"}`, ...result.raws]);
         }
       } catch (error) {
-        showDebug("登録年月日セルのみ再読取", current, "", [String(error?.message || error)]);
+        showDebug("狭い登録年月日セル再読取", current, "", [String(error?.message || error)]);
       } finally {
         running = false;
       }
