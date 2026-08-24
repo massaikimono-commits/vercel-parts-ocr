@@ -273,6 +273,10 @@ export default function CertificateAuthoritativeReaderV2() {
         if (result.registrationDate) patch.registrationDate = result.registrationDate;
         if (result.bodyShape) patch.bodyShape = result.bodyShape;
         if (Object.keys(patch).length) {
+          window.__vehicleCertificateQrPriority = {
+            ...(window.__vehicleCertificateQrPriority || {}),
+            ...patch,
+          };
           for (let i = 0; i < 4 && !dead && id === scan; i += 1) {
             window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: patch }));
             await sleep(650);
