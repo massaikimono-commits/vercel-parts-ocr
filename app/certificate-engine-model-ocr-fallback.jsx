@@ -216,8 +216,9 @@ export default function CertificateEngineModelOcrFallback() {
         return;
       }
       const elapsed = Date.now() - startedAt;
-      if (sawProgress && elapsed < 18000) return;
-      if (!sawProgress && elapsed < 28000) return;
+      // QR探索 → 登録/車台2行OCR の後にだけ動かし、iPhoneでTesseractを重ねない。
+      if (sawProgress && elapsed < 36000) return;
+      if (!sawProgress && elapsed < 46000) return;
 
       const file = pending;
       const myToken = token;
