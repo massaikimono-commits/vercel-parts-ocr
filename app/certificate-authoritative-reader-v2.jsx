@@ -254,33 +254,61 @@ export default function CertificateAuthoritativeReaderV2() {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
     let dead = false;
     let scan = 0;
+
     const onChange = (event) => {
       const input = event.target;
       if (!isCertificateInput(input)) return;
       const file = input.files?.[0];
       if (!file || !file.type.startsWith("image/")) return;
       const id = ++scan;
+
       void (async () => {
-        for (let i = 0; i < 240 && !dead && id === scan; i += 1) {
-          if (!document.querySelector(".progress")) break;
-          await sleep(250);
+        // 写真選択直後はReactのprogressがまだ描画されていないことがある。
+        // まず「本体OCRが始まった」ことを確認してから専用OCRを走らせる。
+        let sawMainOcr = false;
+        for (let i = 0; i < 50 && !dead && id === scan; i += 1) {
+          if (document.querySelector(".progress")) { sawMainOcr = true; break; }
+          await sleep(100);
         }
         if (dead || id !== scan) return;
-        showStatus(null, "専用OCR中");
+
+        showStatus(null, sawMainOcr ? "本体OCRと並行して専用OCR中" : "専用OCR中");
         const result = await targetedRead(file);
         if (dead || id !== scan) return;
+
+        // 本体OCRがまだ動いているなら、終了するまで待つ。
+        // これで本体の最後のsetVehicle/setAuthoritativeに先回りして潰されない。
+        if (sawMainOcr) {
+          for (let i = 0; i < 360 && !dead && id === scan; i += 1) {
+            if (!document.querySelector(".progress")) break;
+            await sleep(250);
+          }
+        } else {
+          // 本体が非常に速く終わったケースでも、Reactの最終描画より後ろに回す。
+          await sleep(1200);
+        }
+        if (dead || id !== scan) return;
+
         const patch = {};
         if (result.registrationDate) patch.registrationDate = result.registrationDate;
         if (result.bodyShape) patch.bodyShape = result.bodyShape;
+
         if (Object.keys(patch).length) {
-          for (let i = 0; i < 4 && !dead && id === scan; i += 1) {
+          // 本体終了後20秒間だけ継続送信。遅いSupabase/React更新が来ても最後に確定値が勝つ。
+          const until = Date.now() + 20000;
+          let pushes = 0;
+          while (!dead && id === scan && Date.now() < until) {
             window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: patch }));
-            await sleep(650);
+            pushes += 1;
+            showStatus(result, `本体OCR後に確定値を同期中 ${pushes}回`);
+            await sleep(700);
           }
         }
-        showStatus(result, Object.keys(patch).length ? "本体stateへ反映完了" : "候補なし");
+
+        showStatus(result, Object.keys(patch).length ? "本体OCR後の確定値同期完了" : "候補なし");
       })().catch((error) => showStatus({ dateRaws: [String(error?.message || error)] }, "エラー"));
     };
+
     document.addEventListener("change", onChange, true);
     return () => {
       dead = true;
