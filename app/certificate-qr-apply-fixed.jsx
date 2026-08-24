@@ -141,7 +141,10 @@ export default function CertificateQrApplyFixed() {
         showStatus(null, "QR1〜3の連結データを待っています。");
         return;
       }
-      window.__vehicleCertificateQrPriority = values;
+      window.__vehicleCertificateQrPriority = {
+        ...(window.__vehicleCertificateQrPriority || {}),
+        ...values,
+      };
       if (document.querySelector(".progress")) {
         showStatus(values, "OCR完了待ち");
         return;
