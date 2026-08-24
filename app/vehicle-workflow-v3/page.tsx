@@ -190,8 +190,17 @@ export default function Page(){
       c.vehicleName=maker(context(global,["車名"],120))||c.vehicleName;c.model=repairModel(c.model||model(context(global,["型式"],180))||model(global),c.chassisNumber);c.engineModel=engine(context(global,["原動機の型式"],100))||c.engineModel;c.vehicleClass=vehicleClass(context(global,["自動車の種別"],100))||c.vehicleClass;c.purpose=purpose(context(global,["用途"],90))||c.purpose;c.privateBusiness=privateBiz(context(global,["自家用・事業用の別","自家用・事業用"],110))||c.privateBusiness;c.bodyShape=body(context(global,["車体の形状"],100))||c.bodyShape;c.fuel=fuelText(context(global,["燃料の種類","燃料"],100))||c.fuel;
       if(!vehicleClass(c.vehicleClass))c.vehicleClass="";if(!purpose(c.purpose))c.purpose="";if(!privateBiz(c.privateBusiness))c.privateBusiness="";if(!body(c.bodyShape))c.bodyShape="";if(!fuelText(c.fuel))c.fuel="";
 
-      const qr=((window as any).__vehicleCertificateQrPriority||{}) as AuthoritativePatch;
+      // QRは別コンポーネントで並行解析されるため、メインOCRの最終stateを作る直前で
+      // 初度登録・有効期限が確定するまで短時間待つ。外付けDOM補正ではなく、
+      // ここでcへ直接取り込むことで最終setVehicle()自体を正しい値にする。
+      let qr=((window as any).__vehicleCertificateQrPriority||{}) as AuthoritativePatch;
+      for(let i=0;i<120&&(!qr.firstRegistration||!qr.inspectionExpiry);i++){
+        await new Promise(resolve=>setTimeout(resolve,250));
+        qr=((window as any).__vehicleCertificateQrPriority||{}) as AuthoritativePatch;
+      }
       for(const [k,v] of Object.entries(qr))if(typeof v==="string"&&v)c[k]=v;
+      log.push(`【QR最終確定】 初度=${c.firstRegistration||"未取得"} / 有効期限=${c.inspectionExpiry||"未取得"}`);
+
       const plausibleDates=dateCandidates.filter(x=>plausibleRegistrationDate(x,c.firstRegistration,c.inspectionExpiry));
       if(plausibleDates.length)c.registrationDate=mode(plausibleDates);
       else if(c.registrationDate&&!plausibleRegistrationDate(c.registrationDate,c.firstRegistration,c.inspectionExpiry))c.registrationDate="";
