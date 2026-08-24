@@ -49,7 +49,33 @@ function recursiveWords(node: any, out: any[]) {
   }
 }
 
-/** Works with both Tesseract.js data.words and the nested blocks format. */
+function tokensFromTsv(tsv = "") {
+  if (!String(tsv).trim()) return [] as OcrToken[];
+  const out: OcrToken[] = [];
+  const rows = String(tsv).split(/\n/);
+  for (let i = 1; i < rows.length; i++) {
+    const columns = rows[i].split("\t");
+    if (columns.length < 12) continue;
+    // Tesseract TSV level 5 is a word. Some builds omit/alter level, so accepting
+    // any row with a real text box keeps this fallback resilient.
+    const text = columns.slice(11).join("\t").trim();
+    const left = Number(columns[6]);
+    const top = Number(columns[7]);
+    const width = Number(columns[8]);
+    const height = Number(columns[9]);
+    const confidence = Number(columns[10]);
+    if (!text || !Number.isFinite(left) || !Number.isFinite(top) || !Number.isFinite(width) || !Number.isFinite(height)) continue;
+    if (width <= 0 || height <= 0) continue;
+    out.push({
+      text,
+      confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(100, confidence)) : 50,
+      bbox: { x0: left, y0: top, x1: left + width, y1: top + height },
+    });
+  }
+  return out;
+}
+
+/** Works with Tesseract.js words, nested blocks, or TSV output. */
 export function extractOcrTokens(data: any): OcrToken[] {
   const raw: any[] = [];
   if (Array.isArray(data?.words)) raw.push(...data.words);
@@ -64,6 +90,7 @@ export function extractOcrTokens(data: any): OcrToken[] {
     seen.add(key);
     out.push(token);
   }
+  if (!out.length && data?.tsv) out.push(...tokensFromTsv(data.tsv));
   return out.sort((a, b) => {
     const ah = a.bbox.y1 - a.bbox.y0;
     const bh = b.bbox.y1 - b.bbox.y0;
@@ -175,11 +202,6 @@ function averageAnchor(group: LabelAnchor[]) {
   } satisfies LabelAnchor;
 }
 
-/**
- * Finds the same label independently on multiple preprocessing variants, then
- * prefers anchors that agree geometrically. This is intentionally generic: vehicle
- * certificates and parts slips can use the same function for their own labels.
- */
 export function findConsensusLabelAnchors(
   tokenSets: Array<{ name: string; tokens: OcrToken[] }>,
   definitions: Record<string, string[]>,
