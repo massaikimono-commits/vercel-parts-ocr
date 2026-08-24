@@ -3,9 +3,15 @@
 
 import { useRef, useState } from "react";
 import { saveOCRTransferImage } from "../transfer";
+import {
+  createDocumentRecognitionSession,
+  createSharedTesseractWorker,
+  recognizeDocumentRegion,
+  recognizeWholeDocument,
+  OCR_FIELD_PRESETS,
+} from "../../lib/document-recognition-v2";
 
 type Mode = "dedicated" | "general" | "unknown" | "";
-type CropBox = { x: number; y: number; w: number; h: number };
 
 const styles: Record<string, React.CSSProperties> = {
   page: { maxWidth: 920, margin: "0 auto", padding: "18px 14px 60px", color: "#162033" },
@@ -22,152 +28,6 @@ function normalize(text: string) {
   return text.normalize("NFKC").replace(/\s+/g, "").toUpperCase();
 }
 
-function loadImage(file: File) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("画像を開けませんでした。"));
-    };
-    img.src = url;
-  });
-}
-
-function toBlob(canvas: HTMLCanvasElement, quality = 0.92) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => blob ? resolve(blob) : reject(new Error("画像変換に失敗しました。")),
-      "image/jpeg",
-      quality
-    );
-  });
-}
-
-async function sourceCanvas(file: File, maxSide = 2200) {
-  const img = await loadImage(file);
-  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) throw new Error("画像を処理できませんでした。");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return canvas;
-}
-
-function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
-  const { width: w, height: h } = canvas;
-  const pixels = ctx.getImageData(0, 0, w, h).data;
-  const step = Math.max(3, Math.floor(Math.max(w, h) / 700));
-  const isPaper = (r: number, g: number, b: number) => {
-    const bright = (r + g + b) / 3;
-    const yellow = r > 100 && g > 95 && r + g > b * 1.72;
-    return bright > 150 || yellow;
-  };
-
-  const ys: number[] = [];
-  for (let y = 0; y < h; y += step) {
-    let hit = 0;
-    let count = 0;
-    for (let x = 0; x < w; x += step) {
-      const p = (y * w + x) * 4;
-      if (isPaper(pixels[p], pixels[p + 1], pixels[p + 2])) hit += 1;
-      count += 1;
-    }
-    if (count && hit / count > 0.17) ys.push(y);
-  }
-  if (ys.length < 4) return { x: 0, y: 0, w, h };
-
-  const top = Math.max(0, ys[0] - step * 3);
-  const bottom = Math.min(h - 1, ys[ys.length - 1] + step * 3);
-  const xs: number[] = [];
-  for (let x = 0; x < w; x += step) {
-    let hit = 0;
-    let count = 0;
-    for (let y = top; y <= bottom; y += step) {
-      const p = (y * w + x) * 4;
-      if (isPaper(pixels[p], pixels[p + 1], pixels[p + 2])) hit += 1;
-      count += 1;
-    }
-    if (count && hit / count > 0.18) xs.push(x);
-  }
-  if (xs.length < 4) return { x: 0, y: 0, w, h };
-
-  const left = Math.max(0, xs[0] - step * 3);
-  const right = Math.min(w - 1, xs[xs.length - 1] + step * 3);
-  const box = { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
-  if (box.w < w * 0.48 || box.h < h * 0.25) return { x: 0, y: 0, w, h };
-  return box;
-}
-
-function relativeBox(paper: CropBox, x: number, y: number, w: number, h: number): CropBox {
-  return {
-    x: Math.round(paper.x + paper.w * x),
-    y: Math.round(paper.y + paper.h * y),
-    w: Math.max(1, Math.round(paper.w * w)),
-    h: Math.max(1, Math.round(paper.h * h)),
-  };
-}
-
-async function enhancedCrop(source: HTMLCanvasElement, box: CropBox, targetWidth = 1800) {
-  const scale = Math.min(6, Math.max(1, targetWidth / box.w));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(box.w * scale));
-  canvas.height = Math.max(1, Math.round(box.h * scale));
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) throw new Error("画像を処理できませんでした。");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, box.x, box.y, box.w, box.h, 0, 0, canvas.width, canvas.height);
-
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  for (let p = 0; p < image.data.length; p += 4) {
-    const r = image.data[p];
-    const g = image.data[p + 1];
-    const b = image.data[p + 2];
-    let v = Math.round(r * 0.20 + g * 0.72 + b * 0.08);
-    v = Math.max(0, Math.min(255, Math.round((v - 128) * 1.35 + 150)));
-    if (v > 246) v = 255;
-    image.data[p] = v;
-    image.data[p + 1] = v;
-    image.data[p + 2] = v;
-    image.data[p + 3] = 255;
-  }
-  ctx.putImageData(image, 0, 0);
-  return toBlob(canvas);
-}
-
-async function prepareForDetection(file: File) {
-  const canvas = await sourceCanvas(file, 1600);
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) throw new Error("画像を処理できませんでした。");
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  for (let p = 0; p < image.data.length; p += 4) {
-    const r = image.data[p];
-    const g = image.data[p + 1];
-    const b = image.data[p + 2];
-    let v = Math.round(r * 0.22 + g * 0.70 + b * 0.08);
-    v = Math.max(0, Math.min(255, Math.round((v - 128) * 1.22 + 150)));
-    image.data[p] = v;
-    image.data[p + 1] = v;
-    image.data[p + 2] = v;
-    image.data[p + 3] = 255;
-  }
-  ctx.putImageData(image, 0, 0);
-  return toBlob(canvas, 0.9);
-}
-
 function classify(text: string): { mode: Mode; reason: string; auto: boolean } {
   const t = normalize(text);
 
@@ -180,7 +40,6 @@ function classify(text: string): { mode: Mode; reason: string; auto: boolean } {
     return { mode: "dedicated", reason: `大一用品商会の特徴を検出: ${dedicatedHits.join(" / ")}`, auto: true };
   }
 
-  // 大一用品商会の帳票は、この列見出しの組み合わせも特徴として使う。
   const dedicatedFormatHeaders = ["受注数", "出庫数", "標準価格", "倉庫", "棚番", "受注残"];
   const formatHits = dedicatedFormatHeaders.filter((x) => t.includes(normalize(x)));
   if (formatHits.length >= 3) {
@@ -197,7 +56,6 @@ function classify(text: string): { mode: Mode; reason: string; auto: boolean } {
     return { mode: "general", reason: `汎用表の見出しを${headerHits.length}個検出: ${headerHits.slice(0, 6).join(" / ")}`, auto: true };
   }
 
-  // 判定が弱い時は勝手に汎用へ送らない。
   return {
     mode: "unknown",
     reason: "専用伝票・汎用伝票のどちらかを安全に確定できませんでした。誤判定を避けるため自動移動を止めました。",
@@ -205,26 +63,34 @@ function classify(text: string): { mode: Mode; reason: string; auto: boolean } {
   };
 }
 
-async function readDedicatedMarkers(worker: any, tesseract: any, file: File) {
-  const source = await sourceCanvas(file, 2400);
-  const paper = detectPaperBox(source);
-  const crops = [
-    // 上部：納品書タイトル、会社名、伝票ヘッダ周辺
-    relativeBox(paper, 0.00, 0.00, 1.00, 0.34),
-    // 最初の部品行：品番・名称・価格周辺
-    relativeBox(paper, 0.00, 0.32, 0.84, 0.28),
-  ];
+function observationText(result: any) {
+  const texts = (result?.observations || [])
+    .map((x: any) => String(x?.text || "").trim())
+    .filter(Boolean);
+  if (result?.value) texts.unshift(String(result.value));
+  return [...new Set(texts)].join("\n");
+}
 
+async function readDedicatedMarkers(session: any, worker: any) {
+  // These regions are intentionally broad and document-relative. They are not tuned
+  // to one photographed sample; paper crop + deskew happens in the shared engine.
+  const regions = [
+    { x: 0.00, y: 0.00, width: 1.00, height: 0.36 },
+    { x: 0.00, y: 0.28, width: 0.92, height: 0.34 },
+  ];
   const texts: string[] = [];
-  await worker.setParameters({
-    tessedit_pageseg_mode: tesseract.PSM?.SPARSE_TEXT ?? "11",
-    preserve_interword_spaces: "1",
-    tessedit_char_whitelist: "",
-    user_defined_dpi: "300",
-  });
-  for (const crop of crops) {
-    const image = await enhancedCrop(source, crop, 2200);
-    texts.push((await worker.recognize(image)).data.text || "");
+  for (const region of regions) {
+    const result = await recognizeDocumentRegion(session, worker, region, {
+      ...OCR_FIELD_PRESETS.japaneseText,
+      variants: ["original", "contrast", "binaryDark"],
+      psms: ["11", "6"],
+      targetWidth: 2600,
+      minSimilarity: 0.56,
+      minSupport: 2,
+      minConfidence: 0.52,
+    });
+    const text = observationText(result);
+    if (text) texts.push(text);
   }
   return texts.join("\n");
 }
@@ -238,7 +104,7 @@ export default function AutoOCRPage() {
   const [mode, setMode] = useState<Mode>("");
   const [reason, setReason] = useState("");
   const [rawText, setRawText] = useState("");
-  const [message, setMessage] = useState("伝票を1回選ぶだけで、専用OCRか汎用OCRかを自動判定します。");
+  const [message, setMessage] = useState("伝票を1回選ぶだけで、共通OCR V2が用紙を読み取り、専用/汎用を自動判定します。");
 
   async function detect(file: File) {
     setBusy(true);
@@ -246,7 +112,7 @@ export default function AutoOCRPage() {
     setMode("");
     setReason("");
     setRawText("");
-    setMessage("用紙の種類を判定しています…");
+    setMessage("共通OCR V2で用紙を補正・判定しています…");
 
     if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(file));
@@ -254,36 +120,50 @@ export default function AutoOCRPage() {
     let worker: any = null;
     try {
       await saveOCRTransferImage(file);
-      const image = await prepareForDetection(file);
-      const tesseract: any = await import("tesseract.js");
-      worker = await tesseract.createWorker("jpn+eng", 1, {
+      const session = await createDocumentRecognitionSession(file, {
+        maxSide: 3400,
+        cropPaper: true,
+        minPaperConfidence: 0.45,
+      });
+      setProgress(8);
+
+      const created = await createSharedTesseractWorker({
         logger: (m: any) => {
-          if (m.status === "recognizing text") setProgress(Math.max(1, Math.min(94, Math.round((m.progress || 0) * 80) + 5)));
+          if (m.status === "recognizing text") {
+            setProgress(Math.max(8, Math.min(88, Math.round((m.progress || 0) * 70) + 12)));
+          }
         },
       });
-      await worker.setParameters({
-        tessedit_pageseg_mode: tesseract.PSM?.SPARSE_TEXT ?? "11",
-        preserve_interword_spaces: "1",
-        tessedit_char_whitelist: "",
-        user_defined_dpi: "300",
+      worker = created.worker;
+
+      const whole = await recognizeWholeDocument(session, worker, {
+        profile: "japanese",
+        variants: ["original", "contrast", "binaryDark"],
+        psms: ["11", "6"],
+        minSimilarity: 0.52,
+        minSupport: 2,
+        minConfidence: 0.50,
       });
 
-      const result = await worker.recognize(image);
-      let text = result.data.text || "";
+      let text = observationText(whole);
       let judged = classify(text);
+      const diagnostics = [
+        `共通OCR V2: ${whole.reason}`,
+        `傾き補正: ${session.geometry.deskewApplied ? `${session.geometry.deskewAngle.toFixed(2)}°` : "不要/保留"}`,
+        ...(session.qualityWarnings || []).map((x: string) => `画像品質: ${x}`),
+      ];
 
-      // 全体OCRで専用判定できなかった場合だけ、専用帳票の重要部分を拡大して再確認。
       if (judged.mode !== "dedicated") {
-        setMessage("専用伝票の特徴を拡大して再確認しています…");
-        setProgress(82);
-        const markerText = await readDedicatedMarkers(worker, tesseract, file);
-        text = `${text}\n\n【専用判定用拡大OCR】\n${markerText}`;
+        setMessage("共通OCR V2で伝票上部と明細見出しを再確認しています…");
+        setProgress(88);
+        const markerText = await readDedicatedMarkers(session, worker);
+        if (markerText) text = `${text}\n\n【見出し再確認】\n${markerText}`;
         const secondJudgement = classify(text);
         if (secondJudgement.mode === "dedicated") judged = secondJudgement;
         else if (judged.mode === "unknown") judged = secondJudgement;
       }
 
-      setRawText(text);
+      setRawText(`${diagnostics.join("\n")}\n\n【認識文字】\n${text}`);
       setMode(judged.mode);
       setReason(judged.reason);
       setProgress(100);
@@ -295,12 +175,12 @@ export default function AutoOCRPage() {
         setMessage("汎用A4・他社伝票OCRと判定しました。自動で読み取りへ進みます…");
         window.setTimeout(() => location.assign("/ocr/general"), 650);
       } else {
-        setMessage("自動判定を確定できませんでした。下のボタンから専用OCRか汎用OCRを選んでください。");
+        setMessage("文字認識は完了しましたが帳票種別を安全に確定できませんでした。下から読み取り方式を選べます。");
       }
     } catch (error) {
       console.error(error);
       setMode("unknown");
-      setReason("自動判定処理でエラーが出ました。誤ったOCRへ送らないよう自動移動を止めました。");
+      setReason("共通OCR V2の判定処理でエラーが出ました。誤ったOCRへ送らないよう自動移動を止めました。");
       setMessage("自動判定を止めました。下から読み取り方式を選べます。");
     } finally {
       if (worker) await worker.terminate().catch(() => {});
@@ -312,7 +192,7 @@ export default function AutoOCRPage() {
     <main style={styles.page}>
       <section style={styles.card}>
         <h1 style={styles.title}>伝票OCR 自動判定</h1>
-        <p style={styles.text}>1回だけ撮影・選択すれば、用紙判定から専用/汎用OCRへの移動、同じ写真の読み取り開始まで自動で進みます。判定に自信がない時は勝手に汎用へ進みません。</p>
+        <p style={styles.text}>車検証と共通の画像補正・傾き補正・複数画像OCR・近似文字統合を使って読み取ります。判定に自信がない時は勝手に別のOCRへ進みません。</p>
         <div style={mode === "unknown" ? styles.warning : styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>
 
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && detect(e.target.files[0])} />
@@ -340,7 +220,7 @@ export default function AutoOCRPage() {
       <section style={styles.card}>
         <details>
           <summary style={{ fontWeight: 700, cursor: "pointer" }}>判定用OCR詳細</summary>
-          <p style={styles.text}>全体OCRに加えて、専用伝票の重要部分を拡大して再確認した文字も表示します。</p>
+          <p style={styles.text}>共通OCR V2の画像品質・傾き補正・複数OCR結果を表示します。</p>
           <textarea readOnly value={rawText} style={{ width: "100%", minHeight: 260, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" }} />
         </details>
       </section>
