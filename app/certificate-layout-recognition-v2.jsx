@@ -9,7 +9,7 @@ import {
 } from "./lib/document-recognition-v2";
 import {
   extractOcrTokens,
-  findAllLabelAnchors,
+  findConsensusLabelAnchors,
   relativeRegionFromAnchor,
 } from "./lib/document-layout-recognition";
 
@@ -169,15 +169,35 @@ export default function CertificateLayoutRecognitionV2() {
             user_defined_dpi: "300",
             tessedit_char_whitelist: "",
           });
-          showDebug("ラベル位置を検出中", session.qualityWarnings.map(x => `画像品質: ${x}`));
-          const layoutResult = await worker.recognize(session.prepared.variants.contrast);
-          if (stopped || myToken !== token) return;
-          const tokens = extractOcrTokens(layoutResult?.data);
-          const anchors = findAllLabelAnchors(tokens, LABELS, { minSimilarity: 0.54, maxTokens: 10 });
+          showDebug("複数画像でラベル位置を検出中", session.qualityWarnings.map(x => `画像品質: ${x}`));
 
-          const lines = [`OCRトークン数: ${tokens.length}`];
+          const layoutVariants = [
+            ["original", session.prepared.variants.original],
+            ["contrast", session.prepared.variants.contrast],
+            ["binaryDark", session.prepared.variants.binaryDark],
+          ];
+          const tokenSets = [];
+          const tokenCounts = [];
+          for (const [name, canvas] of layoutVariants) {
+            if (stopped || myToken !== token) return;
+            const layoutResult = await worker.recognize(canvas);
+            const tokens = extractOcrTokens(layoutResult?.data);
+            tokenSets.push({ name, tokens });
+            tokenCounts.push(`${name}=${tokens.length}`);
+          }
+
+          const page = session.prepared.normalized;
+          const labelConsensus = findConsensusLabelAnchors(tokenSets, LABELS, {
+            pageWidth: page.width,
+            pageHeight: page.height,
+            minSimilarity: 0.52,
+            maxTokens: 10,
+          });
+          const anchors = labelConsensus.anchors;
+
+          const lines = [`OCRトークン数: ${tokenCounts.join(" / ")}`];
           for (const [key, anchor] of Object.entries(anchors)) {
-            lines.push(`${key}: ${anchor ? `${anchor.matchedText} conf=${anchor.confidence.toFixed(2)}` : "ラベル未検出"}`);
+            lines.push(`${key}: ${anchor ? `${anchor.matchedText} conf=${anchor.confidence.toFixed(2)} support=${labelConsensus.support[key] || 1}` : "ラベル未検出"}`);
           }
           showDebug("ラベル検出完了。未取得項目だけ再読取", lines);
 
