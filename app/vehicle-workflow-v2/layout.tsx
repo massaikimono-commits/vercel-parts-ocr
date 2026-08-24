@@ -5,6 +5,7 @@ import CertificateAuthoritativeFix from "../certificate-authoritative-fix";
 import CertificateTemplateRowV2 from "../certificate-template-row-v2";
 import CertificateCriticalV3 from "../certificate-critical-v3";
 import CertificateClassificationNumberGuard from "../certificate-classification-number-guard";
+import CertificateFocusedRecovery from "../certificate-focused-recovery";
 
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -17,6 +18,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateTemplateRowV2 />
       <CertificateCriticalV3 />
       <CertificateClassificationNumberGuard />
+      <CertificateFocusedRecovery />
     </>
   );
 }
