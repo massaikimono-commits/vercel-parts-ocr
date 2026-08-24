@@ -14,6 +14,11 @@ function norm(s = "") {
 }
 function compact(s = "") { return norm(s).replace(/\s+/g, ""); }
 function digits(s = "") { return String(s).replace(/\D/g, ""); }
+function numberOrNull(v) {
+  if (v == null || v === "" || v === "-") return null;
+  const n = Number(String(v).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
 function eraYear(era, year) {
   const y = year === "元" ? 1 : Number(year);
   return era === "令和" ? 2018 + y : era === "平成" ? 1988 + y : era === "昭和" ? 1925 + y : 0;
@@ -55,56 +60,80 @@ function plausibleDate(value, first, expiry) {
   return true;
 }
 
-function cleanRegistration(text = "") {
-  const lines = norm(text).split("\n").map(x => x.trim()).filter(Boolean);
-  const candidates = [];
-  const re = /([一-龠ぁ-んァ-ヶ]{1,9})\s*(\d\s*\d\s*\d)\s*([ぁ-ん])\s*(\d\s*\d\s*\d\s*\d)/g;
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const line = lines[lineIndex];
-    for (const m of line.matchAll(re)) {
-      let place = m[1]
-        .replace(/^(?:東京都|北海道|大阪府|京都府|.{2,4}県)/, "")
-        .replace(/(?:市|区|町|村).*$/, "");
-      const cls = digits(m[2]), num = digits(m[4]);
-      if (!place || place.length > 4 || cls.length !== 3 || num.length !== 4) continue;
-      if (/株式会社|住所|使用者|所有者/.test(line)) continue;
-      let score = 4;
-      if (lineIndex < Math.max(8, Math.ceil(lines.length * 0.28))) score += 3;
-      if (/登録番号|車両番号/.test(line)) score += 8;
-      candidates.push({ value: `${place} ${cls} ${m[3]} ${num}`, score, line });
-    }
-  }
-  return candidates.sort((a, b) => b.score - a.score)[0] || null;
+function modelFamily(model = "") {
+  const t = compact(model).toUpperCase();
+  if (!t) return "";
+  const p = t.split("-").pop() || t;
+  return p.replace(/[^A-Z0-9]/g, "");
 }
 
-function cleanChassis(text = "") {
-  const t = norm(text).toUpperCase().replace(/\s+/g, "").replace(/[‐‑‒–—―ー]/g, "-");
-  const found = t.match(/[A-Z]{1,5}[0-9][A-Z0-9]{1,7}-[A-Z0-9]{4,12}/g) || [];
-  const fixed = found.map(v => {
-    const [a, b] = v.split("-");
-    return `${a.replace(/O(?=\d)|(?<=\d)O/g, "0")}-${b.replace(/O/g, "0")}`;
-  });
-  return fixed.sort((a, b) => b.length - a.length)[0] || "";
+function cleanRegistration(text = "") {
+  const lines = norm(text).split("\n").map(x => x.trim()).filter(Boolean);
+  const out = [];
+  const re = /([一-龠ぁ-んァ-ヶ]{1,8})\s*(\d\s*\d\s*\d)\s*([ぁ-ん])\s*(\d\s*\d\s*\d\s*\d)/g;
+  for (let i = 0; i < lines.length; i++) {
+    for (const m of lines[i].matchAll(re)) {
+      const cls = digits(m[2]), num = digits(m[4]);
+      if (cls.length !== 3 || num.length !== 4) continue;
+      const place = m[1];
+      const around = `${lines[i - 1] || ""} ${lines[i]} ${lines[i + 1] || ""}`;
+      let score = 2;
+      if (/自動車登録番号|車両番号/.test(around)) score += 12;
+      if (/住所|使用者|所有者|株式会社/.test(around)) score -= 8;
+      if (place.length <= 4) score += 2;
+      out.push({ value: `${place} ${cls} ${m[3]} ${num}`, score, line: lines[i] });
+    }
+  }
+  return out.sort((a, b) => b.score - a.score)[0] || null;
+}
+
+function chassisCandidate(text = "", model = "") {
+  const lines = norm(text).split("\n").map(x => x.trim()).filter(Boolean);
+  const fam = modelFamily(model);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const u = lines[i].toUpperCase().replace(/[‐‑‒–—―ー]/g, "-");
+    const found = u.match(/[A-Z0-9]{3,8}\s*-\s*[A-Z0-9]{4,12}/g) || [];
+    for (const raw of found) {
+      const v = raw.replace(/\s+/g, "");
+      const [leftRaw, rightRaw] = v.split("-");
+      if (!leftRaw || !rightRaw) continue;
+      const left = leftRaw.replace(/O(?=\d)|(?<=\d)O/g, "0");
+      const right = rightRaw.replace(/O/g, "0");
+      const rightDigits = (right.match(/\d/g) || []).length;
+      if (left.length > 8 || right.length < 4 || right.length > 10 || rightDigits < 4) continue;
+      if (/^(?:DAA|DBA|ABA|CBA|EBD|HBD|LDA|TDA|TKG|TPG|QKG|QPG|2RG|2PG|3BA|4BA|5BA|5AA|6AA|7BA|8BA)$/.test(left)) continue;
+      const around = `${lines[i - 1] || ""} ${lines[i]} ${lines[i + 1] || ""}`;
+      let score = 2;
+      if (/車台番号/.test(around)) score += 12;
+      if (rightDigits === right.length) score += 3;
+      if (fam && (fam.startsWith(left) || left.startsWith(fam) || (fam.length > 4 && fam.slice(0, -1) === left))) score += 5;
+      if (/原動機|エンジン/.test(around) && !/車台番号/.test(around)) score -= 8;
+      out.push({ value: `${left}-${right}`, score, line: lines[i] });
+    }
+  }
+  return out.sort((a, b) => b.score - a.score)[0] || null;
 }
 
 function engineCandidate(text = "", model = "") {
   const lines = norm(text).split("\n").map(x => x.trim()).filter(Boolean);
   const regulatory = /^(?:DAA|DBA|ABA|CBA|EBD|HBD|LDA|TDA|TKG|TPG|QKG|QPG|2RG|2PG|3BA|4BA|5BA|5AA|6AA|7BA|8BA)-/;
-  const all = [];
+  const out = [];
   for (let i = 0; i < lines.length; i++) {
     const u = lines[i].toUpperCase().replace(/\s+/g, "").replace(/O(?=\d)|(?<=\d)O/g, "0");
     const values = u.match(/[A-Z0-9]{2,8}-[A-Z0-9]{2,8}/g) || [];
     for (const v of values) {
       if (v === compact(model).toUpperCase() || regulatory.test(v)) continue;
       if (!/[A-Z]/.test(v) || !/\d/.test(v)) continue;
-      let score = 2;
       const around = `${lines[i - 1] || ""} ${lines[i]} ${lines[i + 1] || ""}`;
-      if (/原動機|エンジン/.test(around)) score += 10;
+      let score = 1;
+      if (/原動機|エンジン/.test(around)) score += 12;
+      if (/車台番号/.test(around) && !/原動機|エンジン/.test(around)) score -= 8;
       if (v.length >= 7 && v.length <= 13) score += 2;
-      all.push({ value: v, score, line: lines[i] });
+      out.push({ value: v, score, line: lines[i] });
     }
   }
-  return all.sort((a, b) => b.score - a.score)[0] || null;
+  return out.sort((a, b) => b.score - a.score)[0] || null;
 }
 
 function registrationDateCandidate(text = "", first = "", expiry = "") {
@@ -116,45 +145,80 @@ function registrationDateCandidate(text = "", first = "", expiry = "") {
     for (const value of datesInLine(lines[i])) {
       if (expiryCompact && compact(value) === expiryCompact) continue;
       if (!plausibleDate(value, first, expiry)) continue;
-      let score = 1;
       const around = `${lines[i - 1] || ""} ${lines[i]} ${lines[i + 1] || ""}`;
-      if (/登録年月日|交付年月日/.test(around)) score += 12;
-      if (/初度登録/.test(around)) score += 5;
-      if (/有効期間/.test(around)) score += 3;
+      if (/走行距離|備考|点検|整備|燃費|騒音|改定|検査実施|オドメータ/.test(around)) {
+        out.push({ value, score: -20, line: lines[i] });
+        continue;
+      }
+      let score = 1;
+      if (/登録年月日|交付年月日/.test(around)) score += 14;
+      if (/初度登録/.test(around)) score += 4;
+      if (/有効期間/.test(around)) score += 2;
       if (firstMonth) {
         const d = dateOrdinal(value);
         if (d) {
           const y = Math.floor(d / 10000), mo = Math.floor((d % 10000) / 100);
-          if (y * 12 + mo === firstMonth) score += 6;
+          if (y * 12 + mo === firstMonth) score += 4;
         }
       }
-      if (/備考|点検|整備|燃費|騒音|改定|検査/.test(around)) score -= 5;
       out.push({ value, score, line: lines[i] });
     }
   }
   return out.sort((a, b) => b.score - a.score)[0] || null;
 }
 
-function numericRowCandidate(text = "") {
+function combinations5(values) {
+  const out = [];
+  const n = Math.min(values.length, 14);
+  for (let a = 0; a < n - 4; a++)
+    for (let b = a + 1; b < n - 3; b++)
+      for (let c = b + 1; c < n - 2; c++)
+        for (let d = c + 1; d < n - 1; d++)
+          for (let e = d + 1; e < n; e++) out.push([values[a], values[b], values[c], values[d], values[e]]);
+  return out;
+}
+
+function axleSumFromQr(qr = {}) {
+  const ff = numberOrNull(qr.frontFrontAxleWeightKg);
+  const fr = numberOrNull(qr.frontRearAxleWeightKg);
+  const rf = numberOrNull(qr.rearFrontAxleWeightKg);
+  const rr = numberOrNull(qr.rearRearAxleWeightKg);
+  const vals = [ff, fr, rf, rr].filter(v => v != null && v > 0);
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0);
+}
+
+function numericRowCandidate(text = "", qr = {}) {
   const lines = norm(text).split("\n").map(x => x.trim()).filter(Boolean);
+  const axleSum = axleSumFromQr(qr);
+  const kei = /軽自動車/.test(String(qr.vehicleClass || ""));
   let best = null;
+
   for (let i = 0; i < lines.length; i++) {
-    for (let take = 1; take <= 5; take++) {
+    for (let take = 1; take <= 7; take++) {
       const chunk = lines.slice(i, i + take).join(" ")
         .replace(/[Oo]/g, "0")
         .replace(/[Il|]/g, "1")
         .replace(/,/g, "");
+      const hasLabels = /車両重量|車両総重量|長さ|幅|高さ/.test(chunk);
       const nums = (chunk.match(/\d{2,5}/g) || []).map(Number);
-      for (let j = 0; j + 4 < nums.length; j++) {
-        const [weight, gross, length, width, height] = nums.slice(j, j + 5);
-        if (weight < 100 || weight > 30000) continue;
+      if (nums.length < 5) continue;
+      for (const combo of combinations5(nums)) {
+        const [weight, gross, length, width, height] = combo;
+        if (weight < 300 || weight > 30000) continue;
         if (gross < weight || gross > 50000) continue;
         if (length < 100 || length > 3000) continue;
         if (width < 100 || width > 300) continue;
         if (height < 100 || height > 450) continue;
-        let score = 5;
-        if (/車両重量|車両総重量/.test(chunk)) score += 6;
-        if (/長さ|幅|高さ/.test(chunk)) score += 6;
+        if (kei && (weight > 2200 || gross > 3000 || length > 340 || width > 148 || height > 220)) continue;
+        if (axleSum != null && Math.abs(weight - axleSum) > Math.max(60, axleSum * 0.06)) continue;
+
+        let score = 3;
+        if (hasLabels) score += 7;
+        if (/車両重量/.test(chunk) && /車両総重量/.test(chunk)) score += 4;
+        if (/長さ/.test(chunk) && /幅/.test(chunk) && /高さ/.test(chunk)) score += 5;
+        if (axleSum != null && Math.abs(weight - axleSum) <= 20) score += 10;
+        if (kei && length <= 340 && width <= 148) score += 4;
         const value = {
           vehicleWeightKg: String(weight),
           grossVehicleWeightKg: String(gross),
@@ -232,6 +296,7 @@ export default function CertificateAdaptiveOcr() {
         setDebug({ status: "全体OCR文字列が空でした", patch: {}, rows: [] });
         return;
       }
+
       const qr = window.__vehicleCertificateQrPriority || {};
       const model = qr.model || "";
       const first = qr.firstRegistration || "";
@@ -240,30 +305,36 @@ export default function CertificateAdaptiveOcr() {
       const rows = [`全体OCR文字数: ${global.length}`];
 
       const registration = cleanRegistration(global);
-      if (registration?.value && registration.score >= 6) patch.registrationNumber = registration.value;
+      if (registration?.value && registration.score >= 12 && !qr.registrationNumber) patch.registrationNumber = registration.value;
       rows.push(`登録番号: ${registration?.value || "未取得"} score=${registration?.score ?? 0}${registration?.line ? ` / ${registration.line}` : ""}`);
 
-      const ch = cleanChassis(global);
-      if (ch) patch.chassisNumber = ch;
-      rows.push(`車台番号: ${ch || "未取得"}`);
+      const ch = chassisCandidate(global, model);
+      if (ch?.value && ch.score >= 8 && !qr.chassisNumber) patch.chassisNumber = ch.value;
+      rows.push(`車台番号: ${ch?.value || "未取得"} score=${ch?.score ?? 0}${ch?.line ? ` / ${ch.line}` : ""}`);
 
       const regDate = registrationDateCandidate(global, first, expiry);
-      if (regDate?.value && regDate.score >= 6) patch.registrationDate = regDate.value;
+      if (regDate?.value && regDate.score >= 12 && !qr.registrationDate) patch.registrationDate = regDate.value;
       rows.push(`登録年月日: ${regDate?.value || "未取得"} score=${regDate?.score ?? 0}${regDate?.line ? ` / ${regDate.line}` : ""}`);
 
       const eng = engineCandidate(global, model);
-      if (eng?.value && eng.score >= 6) patch.engineModel = eng.value;
+      if (eng?.value && eng.score >= 14 && !qr.engineModel) patch.engineModel = eng.value;
       rows.push(`原動機型式: ${eng?.value || "未取得"} score=${eng?.score ?? 0}${eng?.line ? ` / ${eng.line}` : ""}`);
 
-      const numeric = numericRowCandidate(global);
-      if (numeric?.value && numeric.score >= 7) Object.assign(patch, numeric.value);
+      const numeric = numericRowCandidate(global, qr);
+      if (numeric?.value && numeric.score >= 16) Object.assign(patch, numeric.value);
       rows.push(`重量寸法行: ${numeric ? Object.values(numeric.value).join(" / ") : "未取得"} score=${numeric?.score ?? 0}${numeric?.line ? ` / ${numeric.line}` : ""}`);
+
+      const axleSum = axleSumFromQr(qr);
+      if (axleSum != null && axleSum >= 300 && axleSum <= 30000 && !patch.vehicleWeightKg) {
+        patch.vehicleWeightKg = String(axleSum);
+        rows.push(`軸重整合: QR軸重合計 ${axleSum}kg → 車両重量候補`);
+      }
 
       if (Object.keys(patch).length) {
         window.__vehicleAdaptiveOcrPatch = patch;
         window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: patch }));
       }
-      setDebug({ status: "全体OCR構造解析 完了", patch, rows });
+      setDebug({ status: "安全フィルタ付き全体OCR解析 完了", patch, rows });
     };
 
     document.addEventListener("change", onChange, true);
