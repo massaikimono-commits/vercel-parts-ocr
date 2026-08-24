@@ -19,25 +19,54 @@ function validEngine(value = "") {
   return text;
 }
 
-function findEngineInput() {
+function fieldInput(labelText) {
   for (const label of document.querySelectorAll("label")) {
     const span = label.querySelector(":scope > span")?.textContent?.trim() || "";
     const direct = (label.childNodes?.[0]?.textContent || "").trim();
-    if ((span || direct) !== "原動機の型式") continue;
+    if ((span || direct) !== labelText) continue;
     const input = label.querySelector("input");
     if (input instanceof HTMLInputElement) return input;
   }
   return null;
 }
 
+function modelCore() {
+  const detail = fieldInput("型式")?.value || "";
+  const text = clean(detail);
+  if (!text) return "";
+  const parts = text.split("-").filter(Boolean);
+  return parts.at(-1) || text;
+}
+
+function looksModelContaminated(engine = "") {
+  const current = clean(engine);
+  const model = modelCore();
+  if (!current || !model || model.length < 4) return false;
+  if (current === model) return true;
+  if (current.startsWith(model)) {
+    const tail = current.slice(model.length).replace(/-/g, "");
+    if (tail.length >= 1 && tail.length <= 8) return true;
+  }
+  return false;
+}
+
 function setReactInputValue(input, value) {
+  if (!(input instanceof HTMLInputElement) || input.value === value) return;
+  const key = Object.keys(input).find((name) => name.startsWith("__reactProps$"));
+  const props = key ? input[key] : null;
+  if (typeof props?.onChange === "function") {
+    props.onChange({ target: { value }, currentTarget: { value }, preventDefault() {}, stopPropagation() {} });
+    return;
+  }
   const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  const previous = input.value;
   descriptor?.set?.call(input, value);
+  if (input._valueTracker) input._valueTracker.setValue(previous);
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function showDebug(before, after) {
+function showDebug(source, before, after) {
   const card = [...document.querySelectorAll("section.card")].find((node) =>
     node.querySelector("h2")?.textContent?.includes("車検証から読み取る")
   );
@@ -66,7 +95,7 @@ function showDebug(before, after) {
     box.style.whiteSpace = "pre-wrap";
     details.appendChild(box);
   }
-  box.textContent = `QR優先\n補正前: ${before || "(空)"}\nQR: ${after}`;
+  box.textContent = `取得元: ${source}\n補正前: ${before || "(空)"}\n補正後: ${after || "(保留)"}`;
 }
 
 export default function CertificateEngineModelQrGuard() {
@@ -75,17 +104,23 @@ export default function CertificateEngineModelQrGuard() {
 
     let lastKey = "";
     const sync = () => {
-      const qr = validEngine(window.__vehicleCertificateQrPriority?.engineModel || "");
-      if (!qr) return;
-      const input = findEngineInput();
+      const input = fieldInput("原動機の型式");
       if (!input) return;
       const current = clean(input.value || "");
-      const key = `${current}|${qr}`;
+      const qr = validEngine(window.__vehicleCertificateQrPriority?.engineModel || "");
+      const key = `${current}|${qr}|${modelCore()}`;
       if (key === lastKey) return;
       lastKey = key;
-      if (current !== qr) {
-        setReactInputValue(input, qr);
-        showDebug(current, qr);
+
+      if (qr) {
+        if (current !== qr) setReactInputValue(input, qr);
+        showDebug("QR(K2)", current, qr);
+        return;
+      }
+
+      if (looksModelContaminated(current)) {
+        setReactInputValue(input, "");
+        showDebug("OCR保留（型式混入）", current, "");
       }
     };
 
