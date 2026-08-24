@@ -158,7 +158,7 @@ export default function Page(){
     return()=>window.clearInterval(timer);
   },[]);
 
-  const effectiveCertificate=useMemo<Cert>(()=>({...vehicle.certificate,...qrPriority}),[vehicle.certificate,qrPriority]);
+  const effectiveCertificate=useMemo<Cert>(()=>({...vehicle.certificate,...qrPriority} as Cert),[vehicle.certificate,qrPriority]);
   const effectiveVehicle=useMemo<Vehicle>(()=>({
     ...vehicle,
     certificate:effectiveCertificate,
