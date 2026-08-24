@@ -123,8 +123,9 @@ export default function CertificateQrApplyFixed() {
 
     let stopped = false;
     let lastFileKey = "";
-    let syncBudget = 0;
-    let syncedSignature = "";
+    let sawMainOcr = false;
+    let postOcrUntil = 0;
+    let lastSignature = "";
 
     const onFileChange = (event) => {
       const input = event.target;
@@ -139,8 +140,9 @@ export default function CertificateQrApplyFixed() {
         window.__vehicleCertificateQrPriority = null;
       }
       lastFileKey = key;
-      syncBudget = 0;
-      syncedSignature = "";
+      sawMainOcr = false;
+      postOcrUntil = 0;
+      lastSignature = "";
       showStatus(null, sameFile ? "同じ画像を再解析中。" : "QR解析待ちです。");
     };
 
@@ -148,6 +150,9 @@ export default function CertificateQrApplyFixed() {
 
     const tick = () => {
       if (stopped) return;
+
+      const busy = Boolean(document.querySelector(".progress"));
+      if (busy) sawMainOcr = true;
 
       const items = Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : [];
       if (!items.length) return;
@@ -161,28 +166,30 @@ export default function CertificateQrApplyFixed() {
       window.__vehicleCertificateQrPriority = values;
       const signature = JSON.stringify(values);
 
-      if (document.querySelector(".progress")) {
-        // OCR完了後にも必ず再同期できるよう、処理中は送信枠を補充する。
-        syncBudget = 3;
-        syncedSignature = "";
-        showStatus(values, "v3本体OCRへ渡して処理中");
+      if (busy) {
+        // 本体OCRが動いている間は正解値を保持するだけ。終了後に確実に勝たせる。
+        postOcrUntil = Date.now() + 20000;
+        lastSignature = signature;
+        showStatus(values, "v3本体OCR中・終了後に確定同期");
         return;
       }
 
-      if (!syncBudget && syncedSignature !== signature) syncBudget = 3;
+      // QRが本体OCR終了後に見つかった場合も、その時点から20秒同期する。
+      if (signature !== lastSignature || !postOcrUntil) {
+        lastSignature = signature;
+        postOcrUntil = Date.now() + 20000;
+      }
 
-      if (syncBudget > 0) {
+      if (Date.now() < postOcrUntil) {
         window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: values }));
-        syncBudget -= 1;
-        const done = 3 - syncBudget;
-        if (syncBudget === 0) syncedSignature = signature;
-        showStatus(values, `v3本体state最終同期 ${done}/3`);
+        const remain = Math.max(0, Math.ceil((postOcrUntil - Date.now()) / 1000));
+        showStatus(values, `本体OCR後の確定同期中 残り約${remain}秒`);
       } else {
-        showStatus(values, "v3本体state同期済み");
+        showStatus(values, sawMainOcr ? "本体OCR後の確定同期完了" : "QR確定値同期完了");
       }
     };
 
-    const timer = window.setInterval(tick, 300);
+    const timer = window.setInterval(tick, 500);
     tick();
 
     return () => {
