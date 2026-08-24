@@ -13,8 +13,17 @@ function norm(value = "") {
 function parseChassis(value = "") {
   const text = norm(value).toUpperCase();
   const compact = text.replace(/\s+/g, "");
+
+  // 17桁VINなど。I/O/QはVINでは使わないため、そのまま厳格判定する。
+  const vin = compact.match(/(?:^|[^A-Z0-9])([A-HJ-NPR-Z0-9]{11,17})(?:$|[^A-Z0-9])/i)?.[1] ||
+    (/^[A-HJ-NPR-Z0-9]{11,17}$/.test(compact) ? compact : "");
+  if (vin && /[A-Z]/.test(vin) && /\d/.test(vin)) {
+    return { value: vin, raw: text, suspicious: compact !== vin, kind: "VIN" };
+  }
+
+  // 国内で一般的な「型式系プレフィックス-連番」。
   const matches = [...compact.matchAll(/([A-Z0-9]{3,8})-([0-9OQI|]{5,9})/g)];
-  if (!matches.length) return { value: "", raw: text, suspicious: Boolean(text) };
+  if (!matches.length) return { value: "", raw: text, suspicious: Boolean(text), kind: "" };
 
   const m = matches[matches.length - 1];
   const prefix = m[1] || "";
@@ -23,13 +32,14 @@ function parseChassis(value = "") {
     .replace(/[I|]/g, "1");
 
   if (!/[A-Z]/.test(prefix) || !/\d/.test(prefix) || !/^\d{5,9}$/.test(suffix)) {
-    return { value: "", raw: text, suspicious: true };
+    return { value: "", raw: text, suspicious: true, kind: "" };
   }
 
   return {
     value: `${prefix}-${suffix}`,
     raw: text,
     suspicious: `${prefix}-${m[2]}` !== `${prefix}-${suffix}` || compact !== `${prefix}-${m[2]}`,
+    kind: "国内形式",
   };
 }
 
@@ -107,7 +117,10 @@ export default function CertificateChassisNumberGuard() {
       if (parsed.value) {
         if (parsed.value !== current) setReactInputValue(input, parsed.value);
         if (parsed.value !== raw || parsed.suspicious || qrRaw) {
-          showDebug(raw, parsed.value, source, parsed.suspicious ? "数字部のO/Q→0、I/|→1のみ安全補正しました。" : "");
+          const reason = parsed.kind === "国内形式" && parsed.suspicious
+            ? "数字部のO/Q→0、I/|→1のみ安全補正しました。"
+            : parsed.kind === "VIN" ? "VIN形式として確認しました。" : "";
+          showDebug(raw, parsed.value, source, reason);
         }
         return;
       }
