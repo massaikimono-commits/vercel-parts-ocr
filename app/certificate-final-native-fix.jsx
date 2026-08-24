@@ -1,13 +1,7 @@
 "use client";
 
-import CertificateAuthoritativeReaderV2 from "./certificate-authoritative-reader-v2";
-import CertificateReactPropsDebug from "./certificate-react-props-debug";
-
+// Legacy final reread disabled.
+// /vehicle-workflow-v2 now uses QR first and focused field fallbacks only.
 export default function CertificateFinalNativeFix() {
-  return (
-    <>
-      <CertificateAuthoritativeReaderV2 />
-      <CertificateReactPropsDebug />
-    </>
-  );
+  return null;
 }
