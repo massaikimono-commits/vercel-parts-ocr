@@ -25,14 +25,31 @@ export default function CertificateConsistencyFix() {
       if (!q || typeof q !== "object") return;
 
       const patch = {
+        registrationNumber: q.registrationNumber || "",
+        chassisNumber: q.chassisNumber || "",
+        engineModel: q.engineModel || "",
+        registrationDate: q.registrationDate || "",
         firstRegistration: q.firstRegistration || "",
         inspectionExpiry: q.inspectionExpiry || "",
         model: q.model || "",
+        userName: q.userName || "",
+        userAddress: q.userAddress || "",
+        vehicleName: q.vehicleName || "",
+        vehicleClass: q.vehicleClass || "",
+        purpose: q.purpose || "",
+        privateBusiness: q.privateBusiness || "",
+        bodyShape: q.bodyShape || "",
+        seatingCapacity: q.seatingCapacity || "",
+        maxPayloadKg: q.maxPayloadKg || "",
+        vehicleWeightKg: q.vehicleWeightKg || "",
+        grossVehicleWeightKg: q.grossVehicleWeightKg || "",
         frontFrontAxleWeightKg: q.frontFrontAxleWeightKg || "",
         frontRearAxleWeightKg: q.frontRearAxleWeightKg || "",
         rearFrontAxleWeightKg: q.rearFrontAxleWeightKg || "",
         rearRearAxleWeightKg: q.rearRearAxleWeightKg || "",
         fuel: q.fuel || "",
+        modelDesignationNumber: q.modelDesignationNumber || "",
+        classificationNumber: q.classificationNumber || "",
       };
 
       if (!Object.values(patch).some(Boolean)) return;
@@ -46,7 +63,7 @@ export default function CertificateConsistencyFix() {
         postOcrPushes = 0;
       } else if (wasBusy) {
         postOcrPushes += 1;
-        if (postOcrPushes >= 8) wasBusy = false;
+        if (postOcrPushes >= 12) wasBusy = false;
       }
 
       if (!changed && !busy && !wasBusy) return;
