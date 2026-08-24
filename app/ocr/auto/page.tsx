@@ -10,6 +10,10 @@ import {
   recognizeWholeDocument,
   OCR_FIELD_PRESETS,
 } from "../../lib/document-recognition-v2";
+import {
+  joinRecognizedTextBands,
+  recognizeDocumentTextBands,
+} from "../../lib/document-band-recognition";
 
 type Mode = "dedicated" | "general" | "unknown" | "";
 
@@ -86,6 +90,7 @@ async function readDedicatedMarkers(session: any, worker: any) {
       minSimilarity: 0.56,
       minSupport: 2,
       minConfidence: 0.52,
+      recoveryMaxPasses: 5,
     });
     const text = observationText(result);
     if (text) texts.push(text);
@@ -128,7 +133,7 @@ export default function AutoOCRPage() {
       const created = await createSharedTesseractWorker({
         logger: (m: any) => {
           if (m.status === "recognizing text") {
-            setProgress(Math.max(8, Math.min(88, Math.round((m.progress || 0) * 70) + 12)));
+            setProgress(old => Math.max(old, Math.min(92, Math.round((m.progress || 0) * 66) + 12)));
           }
         },
       });
@@ -151,9 +156,35 @@ export default function AutoOCRPage() {
         ...(session.qualityWarnings || []).map((x: string) => `画像品質: ${x}`),
       ];
 
+      // Full-page OCR is fastest. Only when it cannot safely classify the slip do we
+      // detect horizontal text rows and re-read those rows at higher resolution.
+      if (judged.mode === "unknown") {
+        setMessage("全文で判定できないため、文字行を自動検出して再確認しています…");
+        setProgress(old => Math.max(old, 74));
+        const bands = await recognizeDocumentTextBands(session, worker, {
+          maxBands: 14,
+          minBandConfidence: 0.11,
+          profile: "japanese",
+          variants: ["original", "contrast", "adaptiveBinary"],
+          psms: ["7", "13"],
+          minSimilarity: 0.58,
+          minSupport: 2,
+          minConfidence: 0.50,
+          targetWidth: 3200,
+        });
+        const bandText = joinRecognizedTextBands(bands);
+        if (bandText) {
+          text = `${text}\n\n【横一行OCR】\n${bandText}`;
+          diagnostics.push(`横一行OCR: ${bands.length}行を採用`);
+          judged = classify(text);
+        } else {
+          diagnostics.push("横一行OCR: 安全に採用できる行なし");
+        }
+      }
+
       if (judged.mode !== "dedicated") {
         setMessage("共通OCR V2で伝票上部と明細見出しを再確認しています…");
-        setProgress(88);
+        setProgress(old => Math.max(old, 90));
         const markerText = await readDedicatedMarkers(session, worker);
         if (markerText) text = `${text}\n\n【見出し再確認】\n${markerText}`;
         const secondJudgement = classify(text);
@@ -190,7 +221,7 @@ export default function AutoOCRPage() {
     <main style={styles.page}>
       <section style={styles.card}>
         <h1 style={styles.title}>伝票OCR 自動判定</h1>
-        <p style={styles.text}>車検証と共通の画像補正・傾き補正・影対応OCR・近似文字統合を使って読み取ります。判定に自信がない時は勝手に別のOCRへ進みません。</p>
+        <p style={styles.text}>車検証と共通の画像補正・傾き補正・影対応OCR・近似文字統合を使って読み取ります。全文で弱い時だけ文字行を自動検出して再読取します。</p>
         <div style={mode === "unknown" ? styles.warning : styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>
 
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && detect(e.target.files[0])} />
@@ -218,7 +249,7 @@ export default function AutoOCRPage() {
       <section style={styles.card}>
         <details>
           <summary style={{ fontWeight: 700, cursor: "pointer" }}>判定用OCR詳細</summary>
-          <p style={styles.text}>共通OCR V2の画像品質・傾き補正・影対応を含む複数OCR結果を表示します。</p>
+          <p style={styles.text}>共通OCR V2の画像品質・傾き補正・影対応・横一行再読取を含む結果を表示します。</p>
           <textarea readOnly value={rawText} style={{ width: "100%", minHeight: 260, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" }} />
         </details>
       </section>
