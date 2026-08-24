@@ -44,8 +44,7 @@ async function sourceCanvas(file) {
     });
     const iw = img.naturalWidth || img.width;
     const ih = img.naturalHeight || img.height;
-    // iPhoneのメモリを圧迫しない範囲。QRには十分な解像度を残す。
-    const scale = Math.min(1, 3600 / Math.max(iw, ih));
+    const scale = Math.min(1, 3800 / Math.max(iw, ih));
     const c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(iw * scale));
     c.height = Math.max(1, Math.round(ih * scale));
@@ -59,18 +58,15 @@ async function sourceCanvas(file) {
   }
 }
 
-function cropBottomBand(source, y0, mode) {
-  // 6個QRは用紙最下段の横一列。広域総当たりではなく、この帯だけを読む。
-  const x0 = 0.32;
-  const w0 = 0.67;
-  const h0 = 0.20;
-  const sx = Math.round(source.width * x0);
-  const sy = Math.round(source.height * y0);
+function cropSlot(source, x0, y0, mode) {
+  const w0 = 0.125;
+  const h0 = 0.145;
+  const sx = Math.max(0, Math.round(source.width * x0));
+  const sy = Math.max(0, Math.round(source.height * y0));
   const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * w0)));
   const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * h0)));
-  const targetWidth = 2500;
-  const scale = Math.max(1, Math.min(3, targetWidth / sw));
-  const pad = 36;
+  const scale = Math.max(1, Math.min(4.2, 1250 / sw));
+  const pad = 52;
   const c = document.createElement("canvas");
   c.width = Math.round(sw * scale) + pad * 2;
   c.height = Math.round(sh * scale) + pad * 2;
@@ -84,8 +80,10 @@ function cropBottomBand(source, y0, mode) {
     const image = ctx.getImageData(0, 0, c.width, c.height);
     for (let p = 0; p < image.data.length; p += 4) {
       const g = Math.round(image.data[p] * 0.22 + image.data[p + 1] * 0.70 + image.data[p + 2] * 0.08);
-      const v = Math.max(0, Math.min(255, Math.round((g - 128) * 2.0 + 150)));
-      image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
+      const v = Math.max(0, Math.min(255, Math.round((g - 128) * 2.25 + 150)));
+      image.data[p] = v;
+      image.data[p + 1] = v;
+      image.data[p + 2] = v;
       image.data[p + 3] = 255;
     }
     ctx.putImageData(image, 0, 0);
@@ -93,95 +91,81 @@ function cropBottomBand(source, y0, mode) {
   return c;
 }
 
-function bounds(code, width, height) {
-  const loc = code?.location;
-  if (!loc) return null;
-  const pts = [loc.topLeftCorner, loc.topRightCorner, loc.bottomLeftCorner, loc.bottomRightCorner].filter(Boolean);
-  if (!pts.length) return null;
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  const pad = 18;
-  return {
-    left: Math.max(0, Math.floor(Math.min(...xs) - pad)),
-    top: Math.max(0, Math.floor(Math.min(...ys) - pad)),
-    right: Math.min(width, Math.ceil(Math.max(...xs) + pad)),
-    bottom: Math.min(height, Math.ceil(Math.max(...ys) + pad)),
-  };
+async function makeReader() {
+  const browser = await import("@zxing/browser");
+  const lib = await import("@zxing/library");
+  const hints = new Map();
+  hints.set(lib.DecodeHintType.POSSIBLE_FORMATS, [lib.BarcodeFormat.QR_CODE]);
+  hints.set(lib.DecodeHintType.TRY_HARDER, true);
+  return new browser.BrowserQRCodeReader(hints);
 }
 
-function decodeMany(jsQR, canvas, tag) {
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  const found = [];
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
-    if (!code) break;
-    const binary = Array.from(code.binaryData || []);
-    const pts = [code.location?.topLeftCorner, code.location?.topRightCorner, code.location?.bottomLeftCorner, code.location?.bottomRightCorner].filter(Boolean);
-    const centerX = pts.length ? pts.reduce((s, p) => s + p.x, 0) / pts.length : 0;
-    found.push({
-      tag,
-      centerX,
-      data: code.data || "",
+async function decodeSlot(reader, canvas, slot, tag) {
+  try {
+    const result = await reader.decodeFromCanvas(canvas);
+    const data = result?.getText?.() || result?.text || "";
+    const raw = result?.getRawBytes?.() || result?.rawBytes || [];
+    if (!data && !raw?.length) return null;
+    const binary = Array.from(raw || []);
+    return {
+      slot,
+      label: `軽量下段6個/QR${slot + 1}/${tag}/ZXing`,
+      data,
       binary,
       hex: hex(binary),
-    });
-    const b = bounds(code, canvas.width, canvas.height);
-    if (!b) break;
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(b.left, b.top, Math.max(1, b.right - b.left), Math.max(1, b.bottom - b.top));
+    };
+  } catch {
+    return null;
   }
-  return found;
 }
 
 function unique(items) {
   const map = new Map();
   for (const item of items) {
+    if (!item) continue;
     const key = item.hex || item.data;
-    if (!key) continue;
-    const old = map.get(key);
-    if (!old || item.centerX < old.centerX) map.set(key, item);
+    if (!key || map.has(key)) continue;
+    map.set(key, item);
   }
-  return [...map.values()];
+  return [...map.values()].sort((a, b) => a.slot - b.slot);
 }
 
-async function scanLowerRow(file) {
-  const js = await import("jsqr");
-  const jsQR = js.default || js;
+async function scanSixSlots(file) {
   const source = await sourceCanvas(file);
-  const all = [];
+  const reader = await makeReader();
+  const found = [];
+  // この様式は最下段に6個横並び。実画像に合わせて少し重なる幅で切る。
+  const xs = [0.43, 0.52, 0.61, 0.70, 0.79, 0.875];
+  const passes = [
+    [0.80, "color"],
+    [0.80, "contrast"],
+    [0.835, "color"],
+    [0.835, "contrast"],
+  ];
+
   try {
-    // 撮影の上下ズレだけ3段階で吸収。1段につき色/コントラストの2回だけ。
-    for (const y of [0.76, 0.81, 0.85]) {
-      for (const mode of ["color", "contrast"]) {
-        const band = cropBottomBand(source, y, mode);
+    for (const [y, mode] of passes) {
+      for (let slot = 0; slot < xs.length; slot += 1) {
+        if (found.some((x) => x.slot === slot)) continue;
+        const crop = cropSlot(source, xs[slot], y, mode);
         try {
-          all.push(...decodeMany(jsQR, band, `下段6個/y${y}/${mode}`));
+          const hit = await decodeSlot(reader, crop, slot, `y${y}/${mode}`);
+          if (hit) found.push(hit);
         } finally {
-          band.width = 1;
-          band.height = 1;
+          crop.width = 1;
+          crop.height = 1;
         }
-        if (unique(all).length >= 6) break;
+        // iPhone Safariを固めない。
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
       }
-      if (unique(all).length >= 6) break;
-      // Safariへ描画機会を返して、UIを固めない。
-      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      if (unique(found).length >= 6) break;
     }
   } finally {
     source.width = 1;
     source.height = 1;
   }
 
-  const result = unique(all)
-    .sort((a, b) => a.centerX - b.centerX)
-    .slice(0, 6)
-    .map((item, index) => ({
-      label: `軽量下段6個/QR${index + 1}/${item.tag}/jsQR`,
-      data: item.data,
-      binary: item.binary,
-      hex: item.hex,
-    }));
-  return result;
+  return unique(found);
 }
 
 export default function CertificateQrLowerSixFallback() {
@@ -221,7 +205,6 @@ export default function CertificateQrLowerSixFallback() {
       }
 
       const elapsed = Date.now() - startedAt;
-      // OCRが確実に終わるまで追加QR処理は始めない。
       if (!sawProgress && elapsed < 18000) return;
       if (sawProgress && elapsed < 7000) return;
 
@@ -229,10 +212,11 @@ export default function CertificateQrLowerSixFallback() {
       const myToken = token;
       pending = null;
       running = true;
-      showStatus("OCR完了後に、最下段6個QRだけを軽量解析中…");
+      showStatus("OCR完了後に、下段6個をZXingで個別解析中…");
       try {
-        const result = await scanLowerRow(file);
+        const result = await scanSixSlots(file);
         if (stopped || myToken !== token) return;
+
         const current = Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : [];
         const combined = [...current];
         const keys = new Set(current.map((x) => x?.hex || x?.data).filter(Boolean));
@@ -246,9 +230,9 @@ export default function CertificateQrLowerSixFallback() {
         if (combined.length) {
           window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fallback-ready", { detail: combined }));
         }
-        showStatus(`下段6QR軽量解析: ${result.length}件 / QR合計 ${combined.length}件。OCRを止めずに処理しました。`);
+        showStatus(`下段6QR ZXing解析: ${result.length}件 / QR合計 ${combined.length}件。OCR後に軽量処理しました。`);
       } catch (e) {
-        if (!stopped) showStatus(`下段6QR軽量解析エラー: ${e?.message || e}`);
+        if (!stopped) showStatus(`下段6QR ZXing解析エラー: ${e?.message || e}`);
       } finally {
         running = false;
       }
