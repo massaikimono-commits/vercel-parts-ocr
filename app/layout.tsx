@@ -7,6 +7,7 @@ import CertificateChassisCorrectionFix from "./certificate-chassis-correction-fi
 import CertificateConsistencyFix from "./certificate-consistency-fix";
 import CertificatePdfBridge from "./certificate-pdf-bridge";
 import CertificateQrReader from "./certificate-qr-reader";
+import CertificateQrLowerSixFallback from "./certificate-qr-lower-six-fallback";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
 import CertificateFinalNativeFix from "./certificate-final-native-fix";
 
@@ -191,6 +192,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificateConsistencyFix />
         <CertificatePdfBridge />
         <CertificateQrReader />
+        <CertificateQrLowerSixFallback />
         <CertificateQrApply />
         <CertificateFinalNativeFix />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
