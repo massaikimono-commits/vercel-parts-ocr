@@ -32,17 +32,60 @@ function modelCore() {
   return text.includes("-") ? text.split("-").pop() || "" : text;
 }
 
-function cleanCandidate(value = "") {
-  const text = norm(value)
+function normalizeEnginePattern(value = "") {
+  let text = norm(value)
     .replace(/[Oo](?=\d)|(?<=\d)[Oo]/g, "0")
     .replace(/[Il|](?=\d)|(?<=\d)[Il|]/g, "1")
     .replace(/\s+/g, "")
     .replace(/-+/g, "-");
+  const parts = text.split("-");
+  if (parts.length !== 2) return text;
+  let [left, right] = parts;
+  left = left.replace(/[OQ](?=\d)|(?<=\d)[OQ]/g, "0").replace(/[I|](?=\d)|(?<=\d)[I|]/g, "1");
+  // エンジン/モーター型式で数字位置に混入しやすい O/Q/S を限定補正。
+  if (/^[A-Z]{2}[0OQ][S5][A-Z]$/.test(right)) {
+    right = `${right.slice(0, 2)}0${right[3] === "S" ? "5" : right[3]}${right[4]}`;
+  } else if (/^[A-Z]{2}\dS[A-Z]$/.test(right)) {
+    right = `${right.slice(0, 3)}5${right.slice(4)}`;
+  }
+  right = right.replace(/[OQ](?=\d)|(?<=\d)[OQ]/g, "0").replace(/[I|](?=\d)|(?<=\d)[I|]/g, "1");
+  return `${left}-${right}`;
+}
+
+function editDistance(a = "", b = "") {
+  const x = String(a);
+  const y = String(b);
+  const row = Array.from({ length: y.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= x.length; i += 1) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= y.length; j += 1) {
+      const old = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (x[i - 1] === y[j - 1] ? 0 : 1));
+      prev = old;
+    }
+  }
+  return row[y.length];
+}
+
+function modelContaminated(text = "") {
+  const current = norm(text).replace(/\s+/g, "");
+  const model = modelCore();
+  if (!current || !model) return false;
+  if (current === model || current.startsWith(model)) return true;
+  for (const n of [model.length, model.length + 1]) {
+    if (current.length <= n) continue;
+    const tail = current.slice(n).replace(/-/g, "");
+    if (tail.length >= 1 && tail.length <= 8 && editDistance(current.slice(0, n), model) <= 1) return true;
+  }
+  return false;
+}
+
+function cleanCandidate(value = "") {
+  const text = normalizeEnginePattern(value);
   if (!text || text.length < 3 || text.length > 18) return "";
   if (!/^[A-Z0-9-]+$/.test(text) || !/[A-Z]/.test(text) || !/\d/.test(text)) return "";
-
-  const model = modelCore();
-  if (model && (text === model || text.startsWith(model) || text.includes(`${model}-`))) return "";
+  if (modelContaminated(text)) return "";
   if (/^(?:DAA|DBA|ABA|CBA|EBD|HBD|LDA|TDA|TKG|TPG|QKG|QPG|2RG|2PG|3BA|4BA|5BA|5AA|6AA|7BA|8BA)-/.test(text)) return "";
   return text;
 }
@@ -54,12 +97,21 @@ function candidates(raw = "") {
     const value = cleanCandidate(m[0]);
     if (value) out.push(value);
   }
-  // ハイフン無しはOCR誤結合が多いため、短い単独値のみ候補として残す。
   for (const m of text.matchAll(/(?:^|[^A-Z0-9])([A-Z0-9]{3,6})(?:$|[^A-Z0-9])/g)) {
     const value = cleanCandidate(m[1]);
     if (value && !value.includes("-")) out.push(value);
   }
   return [...new Set(out)];
+}
+
+function existingDebugCandidates() {
+  const values = [];
+  for (const pre of document.querySelectorAll("details pre")) {
+    const text = pre.textContent || "";
+    if (!/原動機|エンジン/.test(text)) continue;
+    for (const value of candidates(text)) values.push(value);
+  }
+  return [...new Set(values)];
 }
 
 function choose(values) {
@@ -93,12 +145,10 @@ function crop(source, box, binary = false, targetWidth = 2500) {
 
   if (binary) {
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    let sum = 0;
-    let count = 0;
+    let sum = 0, count = 0;
     for (let p = 0; p < image.data.length; p += 4) {
-      const gray = Math.round(image.data[p] * 0.22 + image.data[p + 1] * 0.70 + image.data[p + 2] * 0.08);
-      sum += gray;
-      count += 1;
+      const gray = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+      sum += gray; count += 1;
       image.data[p] = image.data[p + 1] = image.data[p + 2] = gray;
     }
     const threshold = Math.max(110, Math.min(220, sum / Math.max(1, count) - 15));
@@ -118,7 +168,8 @@ async function readEngine(file) {
   const t = await import("tesseract.js");
   const worker = await t.createWorker("eng", 1);
   const raws = [];
-  const values = [];
+  const debugValues = existingDebugCandidates();
+  const values = [...debugValues];
 
   try {
     for (const box of [
@@ -147,9 +198,11 @@ async function readEngine(file) {
     }
   } finally {
     await worker.terminate().catch(() => {});
+    source.width = 1;
+    source.height = 1;
   }
 
-  return { value: choose(values), raws, values, model: modelCore() };
+  return { value: choose(values), raws, values, debugValues, model: modelCore() };
 }
 
 function showDebug(result, state) {
@@ -171,8 +224,9 @@ function showDebug(result, state) {
     `状態: ${state}`,
     `型式車系: ${result?.model || "未取得"}`,
     `採用: ${result?.value || "保留"}`,
-    `候補: ${(result?.values || []).join(" / ") || "なし"}`,
-    ...(result?.raws || []).map((x) => `OCR: ${x}`),
+    `既存OCR候補: ${(result?.debugValues || []).join(" / ") || "なし"}`,
+    `全候補: ${(result?.values || []).join(" / ") || "なし"}`,
+    ...(result?.raws || []).map((x) => `セルOCR: ${x}`),
   ].join("\n");
 }
 
@@ -216,7 +270,6 @@ export default function CertificateEngineModelOcrFallback() {
         return;
       }
       const elapsed = Date.now() - startedAt;
-      // QR探索 → 登録/車台2行OCR の後にだけ動かし、iPhoneでTesseractを重ねない。
       if (sawProgress && elapsed < 36000) return;
       if (!sawProgress && elapsed < 46000) return;
 
@@ -224,7 +277,7 @@ export default function CertificateEngineModelOcrFallback() {
       const myToken = token;
       pending = null;
       running = true;
-      showDebug({ model: modelCore() }, "K2未取得のため原動機セルだけOCR中");
+      showDebug({ model: modelCore(), debugValues: existingDebugCandidates() }, "K2未取得のため原動機セルだけOCR中");
       try {
         const result = await readEngine(file);
         if (myToken !== token) return;
@@ -235,7 +288,7 @@ export default function CertificateEngineModelOcrFallback() {
             window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: { engineModel: result.value } }));
             await new Promise((resolve) => window.setTimeout(resolve, 550));
           }
-          showDebug(result, "複数OCR一致 → 本体stateへ反映");
+          showDebug(result, "既存OCR＋セルOCR一致 → 本体stateへ反映");
         } else {
           showDebug(result, "一致不足。安全のため空欄維持");
         }
