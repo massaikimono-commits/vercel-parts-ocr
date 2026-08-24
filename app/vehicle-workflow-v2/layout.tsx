@@ -7,6 +7,7 @@ import CertificateCriticalV3 from "../certificate-critical-v3";
 import CertificateClassificationNumberGuard from "../certificate-classification-number-guard";
 import CertificateFocusedRecovery from "../certificate-focused-recovery";
 import CertificateRegistrationNumberGuard from "../certificate-registration-number-guard";
+import CertificateChassisNumberGuard from "../certificate-chassis-number-guard";
 
 // Vehicle certificate post-processing guards are mounted here for /vehicle-workflow-v2.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
@@ -22,6 +23,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateClassificationNumberGuard />
       <CertificateFocusedRecovery />
       <CertificateRegistrationNumberGuard />
+      <CertificateChassisNumberGuard />
     </>
   );
 }
