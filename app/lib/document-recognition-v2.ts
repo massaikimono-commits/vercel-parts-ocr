@@ -1,4 +1,10 @@
-import { prepareDocumentImage, type DocumentVariantName, type PreparedDocument } from "./document-image-pipeline";
+import {
+  prepareDocumentImage,
+  createOcrVariants,
+  type DocumentVariantName,
+  type PreparedDocument,
+} from "./document-image-pipeline";
+import { deskewDocument } from "./document-recognition-engine";
 import { recognizeCanvasEnsemble, type OcrConsensusResult, type OcrProfile } from "./ocr-ensemble";
 
 export type RelativeRegion = {
@@ -23,6 +29,11 @@ export type RegionRecognitionOptions = {
 export type DocumentRecognitionSession = {
   prepared: PreparedDocument;
   qualityWarnings: string[];
+  geometry: {
+    deskewApplied: boolean;
+    deskewAngle: number;
+    deskewConfidence: number;
+  };
 };
 
 type WorkerFactoryOptions = {
@@ -65,6 +76,13 @@ function cleanupCanvases(canvases: HTMLCanvasElement[]) {
   }
 }
 
+function releaseVariants(variants: PreparedDocument["variants"]) {
+  for (const item of Object.values(variants)) {
+    item.width = 1;
+    item.height = 1;
+  }
+}
+
 async function serial<T>(job: () => Promise<T>): Promise<T> {
   const previous = globalState.__icbOcrQueue || Promise.resolve();
   let release!: () => void;
@@ -82,14 +100,42 @@ export async function createDocumentRecognitionSession(
   file: File,
   options: { maxSide?: number; cropPaper?: boolean; minPaperConfidence?: number } = {},
 ): Promise<DocumentRecognitionSession> {
-  const prepared = await prepareDocumentImage(file, {
+  const initial = await prepareDocumentImage(file, {
     maxSide: options.maxSide ?? 3600,
     cropPaper: options.cropPaper ?? true,
     minPaperConfidence: options.minPaperConfidence ?? 0.48,
   });
+
+  // Geometry correction is shared by every document type. It never depends on a
+  // vehicle, supplier, address, or a hard-coded sample image. Low-confidence skew
+  // estimates are ignored rather than risking a destructive correction.
+  const deskewed = deskewDocument(initial.normalized);
+  let prepared = initial;
+  const warnings = [...initial.quality.warnings];
+  if (deskewed.applied) {
+    const normalized = deskewed.canvas;
+    const variants = createOcrVariants(normalized);
+    releaseVariants(initial.variants);
+    if (initial.normalized !== initial.source) {
+      initial.normalized.width = 1;
+      initial.normalized.height = 1;
+    }
+    prepared = {
+      ...initial,
+      normalized,
+      variants,
+    };
+    warnings.push(`傾き補正: ${deskewed.angle.toFixed(2)}° (confidence=${deskewed.confidence.toFixed(2)})`);
+  }
+
   return {
     prepared,
-    qualityWarnings: [...prepared.quality.warnings],
+    qualityWarnings: warnings,
+    geometry: {
+      deskewApplied: deskewed.applied,
+      deskewAngle: deskewed.angle,
+      deskewConfidence: deskewed.confidence,
+    },
   };
 }
 
