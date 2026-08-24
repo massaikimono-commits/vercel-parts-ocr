@@ -2,6 +2,7 @@ export type DocumentVariantName =
   | "original"
   | "grayscale"
   | "contrast"
+  | "adaptiveBinary"
   | "binaryDark"
   | "binaryLight";
 
@@ -148,6 +149,8 @@ export function measureImageQuality(source: HTMLCanvasElement): ImageQuality {
   if (clippedLightRatio > 0.35) warnings.push("白飛びが多いです");
   if (edgeScore < 18) warnings.push("ピントが甘い可能性があります");
 
+  small.width = 1;
+  small.height = 1;
   return { brightness, contrast, clippedDarkRatio, clippedLightRatio, edgeScore, warnings };
 }
 
@@ -172,7 +175,6 @@ export function detectLikelyPaperBounds(source: HTMLCanvasElement): PaperBounds 
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
       const luma = r * 0.299 + g * 0.587 + b * 0.114;
-      // Paper is usually bright and comparatively neutral. Keep this lenient.
       if (luma > 132 && max - min < 78) {
         row[y]++;
         col[x]++;
@@ -194,13 +196,21 @@ export function detectLikelyPaperBounds(source: HTMLCanvasElement): PaperBounds 
   const bw = right - left + 1;
   const bh = bottom - top + 1;
   const areaRatio = (bw * bh) / (width * height);
-  if (bw < width * 0.42 || bh < height * 0.42 || areaRatio < 0.22) return null;
+  if (bw < width * 0.42 || bh < height * 0.42 || areaRatio < 0.22) {
+    small.width = 1;
+    small.height = 1;
+    return null;
+  }
 
   let paperPixels = 0;
   for (let y = top; y <= bottom; y++) paperPixels += row[y];
   const density = paperPixels / Math.max(1, bw * bh);
   const confidence = Math.max(0, Math.min(1, density * 1.25 + Math.min(0.25, areaRatio * 0.2)));
-  if (confidence < 0.48) return null;
+  if (confidence < 0.48) {
+    small.width = 1;
+    small.height = 1;
+    return null;
+  }
 
   const sx = source.width / width;
   const sy = source.height / height;
@@ -210,6 +220,8 @@ export function detectLikelyPaperBounds(source: HTMLCanvasElement): PaperBounds 
   const y = Math.max(0, (top - padY) * sy);
   const x2 = Math.min(source.width, (right + 1 + padX) * sx);
   const y2 = Math.min(source.height, (bottom + 1 + padY) * sy);
+  small.width = 1;
+  small.height = 1;
 
   return { x, y, width: x2 - x, height: y2 - y, confidence };
 }
@@ -257,9 +269,79 @@ function otsuThreshold(gray: Uint8Array) {
   return best;
 }
 
+/**
+ * Block-adaptive thresholding without a full-resolution integral image. A small grid
+ * of local luminance means is cheap enough for iPhone Safari and handles shadows or
+ * uneven desk lighting much better than one global Otsu threshold.
+ */
+function adaptiveBinary(source: HTMLCanvasElement) {
+  const out = cloneCanvas(source);
+  const ctx = out.getContext("2d", { willReadFrequently: true })!;
+  const image = ctx.getImageData(0, 0, out.width, out.height);
+  const { data } = image;
+  const width = out.width;
+  const height = out.height;
+  const gray = new Uint8Array(width * height);
+  const block = Math.max(28, Math.min(96, Math.round(Math.min(width, height) / 34)));
+  const cols = Math.ceil(width / block);
+  const rows = Math.ceil(height / block);
+  const sums = new Float64Array(cols * rows);
+  const counts = new Uint32Array(cols * rows);
+
+  for (let y = 0; y < height; y++) {
+    const by = Math.floor(y / block);
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      const i = p * 4;
+      const g = Math.round(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+      gray[p] = g;
+      const cell = by * cols + Math.floor(x / block);
+      sums[cell] += g;
+      counts[cell]++;
+    }
+  }
+
+  const means = new Float32Array(cols * rows);
+  for (let by = 0; by < rows; by++) {
+    for (let bx = 0; bx < cols; bx++) {
+      let sum = 0;
+      let n = 0;
+      for (let oy = -1; oy <= 1; oy++) {
+        const yy = by + oy;
+        if (yy < 0 || yy >= rows) continue;
+        for (let ox = -1; ox <= 1; ox++) {
+          const xx = bx + ox;
+          if (xx < 0 || xx >= cols) continue;
+          const cell = yy * cols + xx;
+          sum += sums[cell];
+          n += counts[cell];
+        }
+      }
+      means[by * cols + bx] = n ? sum / n : 180;
+    }
+  }
+
+  for (let y = 0; y < height; y++) {
+    const by = Math.floor(y / block);
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      const i = p * 4;
+      const localMean = means[by * cols + Math.floor(x / block)];
+      const threshold = Math.max(72, Math.min(232, localMean - 13));
+      const v = gray[p] < threshold ? 0 : 255;
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+      data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  return out;
+}
+
 function transformPixels(
   source: HTMLCanvasElement,
-  mode: Exclude<DocumentVariantName, "original">,
+  mode: Exclude<DocumentVariantName, "original" | "adaptiveBinary">,
 ) {
   const out = cloneCanvas(source);
   const ctx = out.getContext("2d", { willReadFrequently: true })!;
@@ -292,6 +374,7 @@ export function createOcrVariants(source: HTMLCanvasElement): Record<DocumentVar
     original: cloneCanvas(source),
     grayscale: transformPixels(source, "grayscale"),
     contrast: transformPixels(source, "contrast"),
+    adaptiveBinary: adaptiveBinary(source),
     binaryDark: transformPixels(source, "binaryDark"),
     binaryLight: transformPixels(source, "binaryLight"),
   };
