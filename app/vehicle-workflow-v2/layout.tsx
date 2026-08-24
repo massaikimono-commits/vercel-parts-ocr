@@ -6,6 +6,7 @@ import CertificateTemplateRowV2 from "../certificate-template-row-v2";
 import CertificateCriticalV3 from "../certificate-critical-v3";
 import CertificateClassificationNumberGuard from "../certificate-classification-number-guard";
 import CertificateFocusedRecovery from "../certificate-focused-recovery";
+import CertificateRegistrationNumberGuard from "../certificate-registration-number-guard";
 
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -19,6 +20,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateCriticalV3 />
       <CertificateClassificationNumberGuard />
       <CertificateFocusedRecovery />
+      <CertificateRegistrationNumberGuard />
     </>
   );
 }
