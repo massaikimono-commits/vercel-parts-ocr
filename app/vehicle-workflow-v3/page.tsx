@@ -36,6 +36,7 @@ const ACTIVE_KEY = "parts-active-vehicle";
 const BEFORE_KEY = "parts-before-ocr-ids";
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const DATE_CANDIDATES_KEY = "__vehicleCertificateRegistrationDateCandidates";
+const QR_KEYS = ["firstRegistration","inspectionExpiry","model","frontFrontAxleWeightKg","frontRearAxleWeightKg","rearFrontAxleWeightKg","rearRearAxleWeightKg","fuel"] as const;
 
 function norm(s:string){ return (s||"").normalize("NFKC").replace(/[‐‑‒–—―ー]/g,"-").replace(/\r/g,"").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim(); }
 function digits(s:string){ return s.replace(/\D/g,""); }
@@ -100,6 +101,13 @@ function mergeVehicle(prev:Vehicle,patch:AuthoritativePatch){
   };
 }
 
+function cleanQrPriority(raw:any):AuthoritativePatch{
+  const next:AuthoritativePatch={};
+  if(!raw||typeof raw!=="object")return next;
+  for(const k of QR_KEYS){const v=raw[k];if(typeof v==="string"&&v.trim())next[k]=v.trim();}
+  return next;
+}
+
 async function loadCanvas(file:File){ const url=URL.createObjectURL(file); try{ const img=await new Promise<HTMLImageElement>((res,rej)=>{const x=new Image();x.onload=()=>res(x);x.onerror=()=>rej(new Error("画像を開けませんでした"));x.src=url;}); const scale=Math.min(1,3600/Math.max(img.naturalWidth,img.naturalHeight)); const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*scale);c.height=Math.round(img.naturalHeight*scale); const ctx=c.getContext("2d",{willReadFrequently:true})!;ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);return c;} finally{URL.revokeObjectURL(url);} }
 function detectPaper(c:HTMLCanvasElement):Box{ const ctx=c.getContext("2d",{willReadFrequently:true}); if(!ctx)return{x:0,y:0,w:c.width,h:c.height}; const {width:w,height:h}=c,d=ctx.getImageData(0,0,w,h).data,step=Math.max(3,Math.floor(Math.max(w,h)/700)); const ok=(x:number,y:number)=>{const p=(y*w+x)*4,r=d[p],g=d[p+1],b=d[p+2],br=(r+g+b)/3;return br>128&&Math.max(r,g,b)-Math.min(r,g,b)<75;}; const ys:number[]=[]; for(let y=0;y<h;y+=step){let hit=0,n=0;for(let x=0;x<w;x+=step){if(ok(x,y))hit++;n++;}if(hit/Math.max(1,n)>.28)ys.push(y);} if(ys.length<10)return{x:0,y:0,w,h}; const top=Math.max(0,ys[0]-step*2),bottom=Math.min(h-1,ys[ys.length-1]+step*2); const xs:number[]=[]; for(let x=0;x<w;x+=step){let hit=0,n=0;for(let y=top;y<=bottom;y+=step){if(ok(x,y))hit++;n++;}if(hit/Math.max(1,n)>.28)xs.push(x);} if(xs.length<10)return{x:0,y:top,w,h:bottom-top+1}; const left=Math.max(0,xs[0]-step*2),right=Math.min(w-1,xs[xs.length-1]+step*2); return{x:left,y:top,w:right-left+1,h:bottom-top+1}; }
 function rel(p:Box,x:number,y:number,w:number,h:number):Box{return{x:Math.round(p.x+p.w*x),y:Math.round(p.y+p.h*y),w:Math.round(p.w*w),h:Math.round(p.h*h)};}
@@ -110,6 +118,7 @@ async function cell(worker:any,src:HTMLCanvasElement,paper:Box,psm:any,b:[number
 export default function Page(){
   const cam=useRef<HTMLInputElement>(null),lib=useRef<HTMLInputElement>(null);
   const [vehicles,setVehicles]=useState<Vehicle[]>([]),[vehicle,setVehicle]=useState<Vehicle>({...EMPTY,certificate:emptyCert()}),[search,setSearch]=useState("");
+  const [qrPriority,setQrPriority]=useState<AuthoritativePatch>({});
   const [message,setMessage]=useState("車検証を読み取るか、作業車両を選んでください。"),[busy,setBusy]=useState(true),[docBusy,setDocBusy]=useState(false),[progress,setProgress]=useState(0),[preview,setPreview]=useState(""),[debug,setDebug]=useState("");
 
   useEffect(()=>{(async()=>{try{const {data:{session}}=await supabase.auth.getSession();if(!session){setMessage("ログイン後に車両一覧を読み込みます。");return;}const {data,error}=await supabase.from("vehicles").select("*").order("created_at",{ascending:false});if(error)throw error;const list=(data||[]).map((v:any):Vehicle=>({id:v.id,number:v.vehicle_number||"",registration:v.registration_number||"",last4:v.registration_number_last4||"",chassis:v.chassis_number||"",model:v.model||"",type:(v.fuel_type||"その他") as FuelType,weight:v.vehicle_weight==null?"":String(v.vehicle_weight),firstRegistration:jpMonth(v.first_registration||"")||v.first_registration||"",customerId:v.customer_id||"",certificate:{...emptyCert(),...(v.certificate_fields||{})}}));setVehicles(list);const saved=localStorage.getItem(ACTIVE_KEY);if(saved){const a=JSON.parse(saved),f=list.find(x=>x.id===a.id||x.number===a.number);if(f){setVehicle(prev=>{const untouched=!prev.number&&!prev.registration&&!prev.chassis&&!prev.model&&!prev.firstRegistration&&!Object.values(prev.certificate||{}).some(Boolean);return untouched?f:prev;});}}}catch(e:any){setMessage(`車両一覧エラー: ${e?.message||e}`);}finally{setBusy(false);}})();},[]);
@@ -126,14 +135,41 @@ export default function Page(){
         const plausible=candidates.filter(x=>plausibleRegistrationDate(x,first,expiry));
         if(plausible.length)patch.registrationDate=mode(plausible);
       }
+      const qrPatch=cleanQrPriority(patch);
+      if(Object.keys(qrPatch).length)setQrPriority(prev=>({...prev,...qrPatch}));
       setVehicle(prev=>mergeVehicle(prev,patch));
     };
     window.addEventListener(AUTH_EVENT,apply as EventListener);
     return()=>window.removeEventListener(AUTH_EVENT,apply as EventListener);
   },[]);
 
+  useEffect(()=>{
+    let last="";
+    const sync=()=>{
+      const next=cleanQrPriority((window as any).__vehicleCertificateQrPriority);
+      const key=JSON.stringify(next);
+      if(key===last)return;
+      last=key;
+      setQrPriority(next);
+      if(Object.keys(next).length)setVehicle(prev=>mergeVehicle(prev,next));
+    };
+    sync();
+    const timer=window.setInterval(sync,250);
+    return()=>window.clearInterval(timer);
+  },[]);
+
+  const effectiveCertificate=useMemo<Cert>(()=>({...vehicle.certificate,...qrPriority}),[vehicle.certificate,qrPriority]);
+  const effectiveVehicle=useMemo<Vehicle>(()=>({
+    ...vehicle,
+    certificate:effectiveCertificate,
+    model:qrPriority.model||vehicle.model,
+    firstRegistration:qrPriority.firstRegistration||vehicle.firstRegistration,
+    type:qrPriority.fuel?fuelType(qrPriority.fuel):vehicle.type,
+  }),[vehicle,effectiveCertificate,qrPriority]);
+
   const filtered=useMemo(()=>{const q=search.trim().toLowerCase();if(!q)return vehicles.slice(0,50);const d=digits(q);return vehicles.filter(v=>[v.number,v.registration,v.last4,v.chassis,v.model].join(" ").toLowerCase().includes(q)||(d.length>=2&&v.last4.includes(d.slice(-4)))).slice(0,60);},[vehicles,search]);
-  function select(v:Vehicle){setVehicle(v);localStorage.setItem(ACTIVE_KEY,JSON.stringify(v));setMessage(`${display(v)} を作業車両に選択しました。`);}
+  function clearQrAuthority(){setQrPriority({});(window as any).__vehicleCertificateQrPriority=null;}
+  function select(v:Vehicle){clearQrAuthority();setVehicle(v);localStorage.setItem(ACTIVE_KEY,JSON.stringify(v));setMessage(`${display(v)} を作業車両に選択しました。`);}
   function update(k:string,val:string){
     setVehicle(prev=>{
       if(k==="registrationDate"&&val&&prev.certificate.firstRegistration&&prev.certificate.inspectionExpiry&&!plausibleRegistrationDate(val,prev.certificate.firstRegistration,prev.certificate.inspectionExpiry))return prev;
@@ -151,6 +187,7 @@ export default function Page(){
 
   async function read(file:File){
     if(!file.type.startsWith("image/")){setMessage("写真・画像を選んでください。");return;}
+    setQrPriority({});
     setDocBusy(true);setProgress(1);setDebug("");setMessage("車検証の各欄を読み取り中です…");if(preview)URL.revokeObjectURL(preview);setPreview(URL.createObjectURL(file));let worker:any=null;
     try{
       const src=await loadCanvas(file),paper=detectPaper(src),t:any=await import("tesseract.js");worker=await t.createWorker("jpn+eng",1);const P=t.PSM,single=P?.SINGLE_LINE??"7",block=P?.SINGLE_BLOCK??"6",c=emptyCert(),log:string[]=[`紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];let n=0;
@@ -190,15 +227,15 @@ export default function Page(){
       c.vehicleName=maker(context(global,["車名"],120))||c.vehicleName;c.model=repairModel(c.model||model(context(global,["型式"],180))||model(global),c.chassisNumber);c.engineModel=engine(context(global,["原動機の型式"],100))||c.engineModel;c.vehicleClass=vehicleClass(context(global,["自動車の種別"],100))||c.vehicleClass;c.purpose=purpose(context(global,["用途"],90))||c.purpose;c.privateBusiness=privateBiz(context(global,["自家用・事業用の別","自家用・事業用"],110))||c.privateBusiness;c.bodyShape=body(context(global,["車体の形状"],100))||c.bodyShape;c.fuel=fuelText(context(global,["燃料の種類","燃料"],100))||c.fuel;
       if(!vehicleClass(c.vehicleClass))c.vehicleClass="";if(!purpose(c.purpose))c.purpose="";if(!privateBiz(c.privateBusiness))c.privateBusiness="";if(!body(c.bodyShape))c.bodyShape="";if(!fuelText(c.fuel))c.fuel="";
 
-      // QRは別コンポーネントで並行解析されるため、メインOCRの最終stateを作る直前で
-      // 初度登録・有効期限が確定するまで短時間待つ。外付けDOM補正ではなく、
-      // ここでcへ直接取り込むことで最終setVehicle()自体を正しい値にする。
-      let qr=((window as any).__vehicleCertificateQrPriority||{}) as AuthoritativePatch;
+      let qr=cleanQrPriority((window as any).__vehicleCertificateQrPriority);
       for(let i=0;i<120&&(!qr.firstRegistration||!qr.inspectionExpiry);i++){
         await new Promise(resolve=>setTimeout(resolve,250));
-        qr=((window as any).__vehicleCertificateQrPriority||{}) as AuthoritativePatch;
+        qr=cleanQrPriority((window as any).__vehicleCertificateQrPriority);
       }
-      for(const [k,v] of Object.entries(qr))if(typeof v==="string"&&v)c[k]=v;
+      if(Object.keys(qr).length){
+        setQrPriority(qr);
+        for(const [k,v] of Object.entries(qr))if(typeof v==="string"&&v)c[k]=v;
+      }
       log.push(`【QR最終確定】 初度=${c.firstRegistration||"未取得"} / 有効期限=${c.inspectionExpiry||"未取得"}`);
 
       const plausibleDates=dateCandidates.filter(x=>plausibleRegistrationDate(x,c.firstRegistration,c.inspectionExpiry));
@@ -209,14 +246,14 @@ export default function Page(){
     }catch(e:any){console.error(e);setMessage(`車検証OCRエラー: ${e?.message||"読み取りに失敗しました"}`);}finally{if(worker)await worker.terminate().catch(()=>{});setDocBusy(false);}
   }
 
-  async function save(){if(!vehicle.number.trim()&&!vehicle.chassis.trim()){setMessage("車台番号または登録番号を確認してください。");return;}const c=vehicle.certificate,p:any={vehicle_number:vehicle.number.trim()||vehicle.chassis.trim()||vehicle.registration.trim(),registration_number:vehicle.registration.trim()||null,registration_number_last4:(vehicle.last4||vehicle.registration.match(/(\d{4})(?!.*\d)/)?.[1]||"").slice(-4)||null,chassis_number:vehicle.chassis.trim()||null,model:vehicle.model.trim()||null,fuel_type:vehicle.type,vehicle_weight:vehicle.weight?Number(vehicle.weight):null,curb_weight_kg:toInt(c.vehicleWeightKg),gross_vehicle_weight_kg:toInt(c.grossVehicleWeightKg),seating_capacity:toInt(c.seatingCapacity),engine_model:c.engineModel||null,usage_category:c.purpose||null,body_type:c.bodyShape||null,inspection_certificate_number:c.documentNumber||null,user_name_snapshot:c.userName||null,first_registration:jpMonth(vehicle.firstRegistration)||vehicle.firstRegistration||null,inspection_expiry_date:dateIso(c.inspectionExpiry),certificate_fields:c,front_front_axle_weight_kg:toInt(c.frontFrontAxleWeightKg),front_rear_axle_weight_kg:toInt(c.frontRearAxleWeightKg),rear_front_axle_weight_kg:toInt(c.rearFrontAxleWeightKg),rear_rear_axle_weight_kg:toInt(c.rearRearAxleWeightKg),customer_id:vehicle.customerId||null,updated_at:new Date().toISOString()};const q=vehicle.id?await supabase.from("vehicles").update(p).eq("id",vehicle.id).select().single():await supabase.from("vehicles").insert(p).select().single();if(q.error){setMessage(`車両保存エラー: ${q.error.message}`);return;}const v={...vehicle,id:q.data.id,number:p.vehicle_number,last4:p.registration_number_last4||"",firstRegistration:p.first_registration||""};setVehicle(v);setVehicles(old=>[v,...old.filter(x=>x.id!==v.id)]);localStorage.setItem(ACTIVE_KEY,JSON.stringify(v));setMessage("車検証情報を保存し、作業車両に設定しました。");}
-  function startOCR(){if(!vehicle.number&&!vehicle.chassis&&!vehicle.registration){setMessage("先に車両を選択または保存してください。");return;}localStorage.setItem(ACTIVE_KEY,JSON.stringify(vehicle));try{const a=JSON.parse(localStorage.getItem("parts-data")||"[]");localStorage.setItem(BEFORE_KEY,JSON.stringify(Array.isArray(a)?a.map((x:any)=>x.id).filter(Boolean):[]));}catch{localStorage.setItem(BEFORE_KEY,"[]");}location.assign("/ocr/auto");}
+  async function save(){const current=effectiveVehicle;if(!current.number.trim()&&!current.chassis.trim()){setMessage("車台番号または登録番号を確認してください。");return;}const c=current.certificate,p:any={vehicle_number:current.number.trim()||current.chassis.trim()||current.registration.trim(),registration_number:current.registration.trim()||null,registration_number_last4:(current.last4||current.registration.match(/(\d{4})(?!.*\d)/)?.[1]||"").slice(-4)||null,chassis_number:current.chassis.trim()||null,model:current.model.trim()||null,fuel_type:current.type,vehicle_weight:current.weight?Number(current.weight):null,curb_weight_kg:toInt(c.vehicleWeightKg),gross_vehicle_weight_kg:toInt(c.grossVehicleWeightKg),seating_capacity:toInt(c.seatingCapacity),engine_model:c.engineModel||null,usage_category:c.purpose||null,body_type:c.bodyShape||null,inspection_certificate_number:c.documentNumber||null,user_name_snapshot:c.userName||null,first_registration:jpMonth(current.firstRegistration)||current.firstRegistration||null,inspection_expiry_date:dateIso(c.inspectionExpiry),certificate_fields:c,front_front_axle_weight_kg:toInt(c.frontFrontAxleWeightKg),front_rear_axle_weight_kg:toInt(c.frontRearAxleWeightKg),rear_front_axle_weight_kg:toInt(c.rearFrontAxleWeightKg),rear_rear_axle_weight_kg:toInt(c.rearRearAxleWeightKg),customer_id:current.customerId||null,updated_at:new Date().toISOString()};const q=current.id?await supabase.from("vehicles").update(p).eq("id",current.id).select().single():await supabase.from("vehicles").insert(p).select().single();if(q.error){setMessage(`車両保存エラー: ${q.error.message}`);return;}const v={...current,id:q.data.id,number:p.vehicle_number,last4:p.registration_number_last4||"",firstRegistration:p.first_registration||""};setVehicle(v);setVehicles(old=>[v,...old.filter(x=>x.id!==v.id)]);localStorage.setItem(ACTIVE_KEY,JSON.stringify(v));setMessage("車検証情報を保存し、作業車両に設定しました。");}
+  function startOCR(){const current=effectiveVehicle;if(!current.number&&!current.chassis&&!current.registration){setMessage("先に車両を選択または保存してください。");return;}localStorage.setItem(ACTIVE_KEY,JSON.stringify(current));try{const a=JSON.parse(localStorage.getItem("parts-data")||"[]");localStorage.setItem(BEFORE_KEY,JSON.stringify(Array.isArray(a)?a.map((x:any)=>x.id).filter(Boolean):[]));}catch{localStorage.setItem(BEFORE_KEY,"[]");}location.assign("/ocr/auto");}
 
   return <main className="page"><div className="top"><button onClick={()=>location.assign("/")}>← メインへ</button><strong>icb</strong></div>
     <section className="card"><h1>作業車両を選択</h1><p>車体番号・ナンバー下4桁・車台番号・型式で検索できます。</p><div className="notice">{busy?"車両一覧を読み込み中…":message}</div><input className="search" placeholder="車体番号 / 下4桁 / 車台番号 / 型式" value={search} onChange={e=>setSearch(e.target.value)}/><div className="list">{filtered.map(v=><button key={v.id||v.number} className={`row ${vehicle.id===v.id&&v.id?"active":""}`} onClick={()=>select(v)}><b>{v.registration||v.number}</b><span>{v.model||"型式未入力"}　下4桁 {v.last4||"----"}</span><small>{v.chassis||v.number}</small></button>)}</div></section>
     <section className="card"><h2>車検証から読み取る</h2><p>備考欄より上の32項目を、値欄の位置と全体OCRの両方で照合します。怪しい文字列は勝手に保存せず空欄にします。</p><input ref={cam} className="hidden" type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files?.[0];if(f)void read(f);e.currentTarget.value="";}}/><input ref={lib} className="hidden" type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f)void read(f);e.currentTarget.value="";}}/><div className="actions"><button className="primary" disabled={docBusy} onClick={()=>cam.current?.click()}>📷 今撮影して読み取る</button><button disabled={docBusy} onClick={()=>lib.current?.click()}>🖼 写真から読み取る</button></div>{docBusy&&<><div className="progress"><div style={{width:`${progress}%`}}/></div><p>読み取り中 {progress}%</p></>}{preview&&<img className="preview" src={preview} alt="車検証"/>}{debug&&<details><summary>OCR詳細（確認用）</summary><pre>{debug}</pre></details>}</section>
-    <section className="card"><h2>基本情報</h2><div className="grid"><label>登録番号<input value={vehicle.registration} onChange={e=>update("registrationNumber",e.target.value)}/></label><label>ナンバー下4桁<input value={vehicle.last4} onChange={e=>setVehicle(prev=>({...prev,last4:digits(e.target.value).slice(-4)}))}/></label><label>車台番号<input value={vehicle.chassis} onChange={e=>update("chassisNumber",e.target.value)}/></label><label>型式<input value={vehicle.model} onChange={e=>update("model",e.target.value)}/></label><label>燃料<select value={vehicle.type} onChange={e=>setVehicle(prev=>({...prev,type:e.target.value as FuelType}))}><option>EV</option><option>ガソリン</option><option>HV</option><option>ディーゼル</option><option>その他</option></select></label><label>車両重量 kg<input value={vehicle.weight} onChange={e=>update("vehicleWeightKg",e.target.value)}/></label><label>初度登録（和暦）<input value={vehicle.firstRegistration} placeholder="令和2年4月" onChange={e=>update("firstRegistration",e.target.value)}/></label></div></section>
-    <section className="card"><h2>車検証読み取り情報（備考欄より上）</h2><p>読み取り後にここで全部確認・修正できます。</p><div className="grid">{FIELDS.map(([k,l])=><label key={k}><span>{l}</span><input value={vehicle.certificate[k]||""} onChange={e=>update(k,e.target.value)}/></label>)}</div><div className="axles"><b>軸重</b><span>前前 {vehicle.certificate.frontFrontAxleWeightKg||"未読"} kg</span><span>前後 {vehicle.certificate.frontRearAxleWeightKg||"未読"} kg</span><span>後前 {vehicle.certificate.rearFrontAxleWeightKg||"未読"} kg</span><span>後後 {vehicle.certificate.rearRearAxleWeightKg||"未読"} kg</span></div><div className="actions"><button onClick={()=>setVehicle({...EMPTY,certificate:emptyCert()})}>＋新規車両</button><button onClick={save}>車両を保存</button></div><button className="primary wide" onClick={startOCR}>この車両で伝票OCRへ →</button></section>
+    <section className="card"><h2>基本情報</h2><div className="grid"><label>登録番号<input value={effectiveVehicle.registration} onChange={e=>update("registrationNumber",e.target.value)}/></label><label>ナンバー下4桁<input value={effectiveVehicle.last4} onChange={e=>setVehicle(prev=>({...prev,last4:digits(e.target.value).slice(-4)}))}/></label><label>車台番号<input value={effectiveVehicle.chassis} onChange={e=>update("chassisNumber",e.target.value)}/></label><label>型式<input value={effectiveVehicle.model} onChange={e=>update("model",e.target.value)}/></label><label>燃料<select value={effectiveVehicle.type} onChange={e=>setVehicle(prev=>({...prev,type:e.target.value as FuelType}))}><option>EV</option><option>ガソリン</option><option>HV</option><option>ディーゼル</option><option>その他</option></select></label><label>車両重量 kg<input value={effectiveVehicle.weight} onChange={e=>update("vehicleWeightKg",e.target.value)}/></label><label>初度登録（和暦）<input value={effectiveVehicle.firstRegistration} placeholder="令和2年4月" onChange={e=>update("firstRegistration",e.target.value)}/></label></div></section>
+    <section className="card"><h2>車検証読み取り情報（備考欄より上）</h2><p>読み取り後にここで全部確認・修正できます。</p><div className="grid">{FIELDS.map(([k,l])=><label key={k}><span>{l}</span><input value={effectiveCertificate[k]||""} onChange={e=>update(k,e.target.value)}/></label>)}</div><div className="axles"><b>軸重</b><span>前前 {effectiveCertificate.frontFrontAxleWeightKg||"未読"} kg</span><span>前後 {effectiveCertificate.frontRearAxleWeightKg||"未読"} kg</span><span>後前 {effectiveCertificate.rearFrontAxleWeightKg||"未読"} kg</span><span>後後 {effectiveCertificate.rearRearAxleWeightKg||"未読"} kg</span></div><div className="actions"><button onClick={()=>{clearQrAuthority();setVehicle({...EMPTY,certificate:emptyCert()});}}>＋新規車両</button><button onClick={save}>車両を保存</button></div><button className="primary wide" onClick={startOCR}>この車両で伝票OCRへ →</button></section>
     <style jsx global>{`*{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:900px;margin:auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button{border:1px solid #cdd7e5;border-radius:12px;background:#fff;color:#2674e8;padding:12px 15px;font-size:16px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}h2{font-size:24px;margin:0 0 8px}p{color:#5d6878;line-height:1.7}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:14px;margin:14px 0}.search,input,select{width:100%;border:1px solid #cdd7e5;border-radius:11px;padding:12px;font-size:16px;background:#fff}.list{display:grid;gap:8px;margin-top:12px;max-height:360px;overflow:auto}.row{text-align:left;display:grid;gap:3px;color:#172033}.row span,.row small{color:#5d6878;font-weight:500}.row.active{border:2px solid #2f6fe4;background:#eef4ff}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.grid label{display:grid;gap:6px;color:#5d6878;font-weight:700}.grid label span{font-size:14px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.actions>*{flex:1 1 220px}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.wide{width:100%;margin-top:12px;font-size:18px;padding:16px}.hidden{display:none}.preview{width:100%;max-height:560px;object-fit:contain;border-radius:14px;margin-top:14px;background:#f4f6fa}.progress{height:8px;background:#e4eaf3;border-radius:999px;overflow:hidden;margin-top:14px}.progress>div{height:100%;background:#2f6fe4}details{margin-top:14px;border:1px solid #d9e0ea;border-radius:12px;padding:12px}summary{font-weight:800}pre{white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto;background:#f8fafc;border-radius:10px;padding:10px;font-size:12px}.axles{margin-top:16px;background:#eef4ff;border:1px solid #c8d8fb;border-radius:14px;padding:14px;display:flex;gap:12px;flex-wrap:wrap}.axles b{width:100%}.axles span{font-weight:700;color:#315fba}@media(max-width:650px){.grid{grid-template-columns:1fr}.card{padding:18px}.page{padding-left:10px;padding-right:10px}}`}</style>
   </main>;
 }
