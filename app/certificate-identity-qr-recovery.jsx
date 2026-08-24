@@ -24,6 +24,10 @@ function isK2(item) {
   return /^2\d$/.test(version(item));
 }
 
+function hasDigit(items, digit) {
+  return unique(items).some((item) => new RegExp(`^${digit}\\d$`).test(version(item)));
+}
+
 function unique(items) {
   const map = new Map();
   for (const item of items || []) {
@@ -142,47 +146,35 @@ async function decodeZXing(reader, canvas, label) {
   }
 }
 
-async function scanIdentity(file) {
-  const prepared = await prepareDocumentImage(file, { maxSide: 5200, cropPaper: true, minPaperConfidence: 0.38 });
-  const source = prepared.normalized;
-  const { jsQR, zxing } = await decoders();
-  const found = [];
-  const logs = [];
-
-  const broadPlans = [
-    ["下段広域A", [0.26, 0.66, 0.74, 0.33]],
-    ["下段広域B", [0.34, 0.71, 0.66, 0.26]],
+async function scanFocusedIdentitySlots(source, jsQR, zxing, found, known, logs) {
+  // 既存6枠解析で使っていた実績座標を中心に、K0/K2だけを両デコーダで読む。
+  const plans = [
+    { digit: "0", name: "K0", xs: [0.390, 0.405, 0.420, 0.435, 0.450, 0.465] },
+    { digit: "2", name: "K2", xs: [0.470, 0.485, 0.500, 0.515, 0.530, 0.545] },
   ];
+  const ys = [0.775, 0.790, 0.805, 0.820, 0.835];
+  const modes = ["contrast", "color", "binary"];
+  const all = () => unique([...(known || []), ...found]);
 
-  try {
-    for (const [name, box] of broadPlans) {
-      for (const mode of ["color", "contrast", "binary"]) {
-        const canvas = crop(source, box, mode, 5000);
-        try {
-          const hits = decodeJsQR(jsQR, canvas, `${name}/${mode}`);
-          found.push(...hits);
-          const identities = unique(found).filter(isIdentity);
-          logs.push(`${name}/${mode}: ${hits.map(version).filter(Boolean).join(",") || "なし"}`);
-          // K0だけなら登録番号・車台番号は取れるが、原動機型式を持つK2を続けて探す。
-          if (identities.some(isK2)) return { found: identities, logs };
-        } finally {
-          canvas.width = 1;
-          canvas.height = 1;
-        }
-      }
-    }
-
-    const xs = [0.30, 0.36, 0.42, 0.48, 0.54, 0.60, 0.66, 0.72, 0.78];
-    const ys = [0.70, 0.76];
+  for (const plan of plans) {
+    if (hasDigit(all(), plan.digit)) continue;
+    let done = false;
     for (const y of ys) {
-      for (const x of xs) {
-        for (const mode of ["color", "contrast"]) {
-          const canvas = crop(source, [x, y, 0.22, 0.22], mode, 2000);
+      if (done) break;
+      for (const x of plan.xs) {
+        if (done) break;
+        for (const mode of modes) {
+          const canvas = crop(source, [x, y, 0.135, 0.155], mode, 1900);
           try {
-            const hits = await decodeZXing(zxing, canvas, `窓/x${x}/y${y}/${mode}`);
-            found.push(...hits);
-            const ids = unique(found).filter(isIdentity);
-            if (ids.some(isK2)) return { found: ids, logs: [...logs, `窓検出: ${ids.map(version).join(",")}`] };
+            const jsHits = decodeJsQR(jsQR, canvas, `${plan.name}/x${x}/y${y}/${mode}`);
+            const zxHits = await decodeZXing(zxing, canvas, `${plan.name}/x${x}/y${y}/${mode}`);
+            found.push(...jsHits, ...zxHits);
+            const versions = [...jsHits, ...zxHits].map(version).filter(Boolean);
+            if (versions.length) logs.push(`${plan.name} x${x} y${y} ${mode}: ${versions.join(",")}`);
+            if (hasDigit(all(), plan.digit)) {
+              done = true;
+              break;
+            }
           } finally {
             canvas.width = 1;
             canvas.height = 1;
@@ -191,6 +183,46 @@ async function scanIdentity(file) {
         await new Promise((resolve) => window.setTimeout(resolve, 0));
       }
     }
+    logs.push(`${plan.name}: ${hasDigit(all(), plan.digit) ? "取得" : "未取得"}`);
+  }
+}
+
+async function scanIdentity(file, known = []) {
+  const prepared = await prepareDocumentImage(file, { maxSide: 5200, cropPaper: true, minPaperConfidence: 0.38 });
+  const source = prepared.normalized;
+  const { jsQR, zxing } = await decoders();
+  const found = [];
+  const logs = [];
+
+  try {
+    // まずK0/K2の想定2枠だけ。32/51/61/71など既読4枠は触らない。
+    await scanFocusedIdentitySlots(source, jsQR, zxing, found, known, logs);
+    let identities = unique([...known, ...found]).filter(isIdentity);
+    if (identities.some(isK2)) return { found: unique(found).filter(isIdentity), logs };
+
+    // ピンポイントでK2まで取れなかった場合だけ、左寄りの下段帯を広めに再確認。
+    const broadPlans = [
+      ["身元帯A", [0.34, 0.72, 0.30, 0.20]],
+      ["身元帯B", [0.38, 0.76, 0.28, 0.17]],
+    ];
+    for (const [name, box] of broadPlans) {
+      for (const mode of ["contrast", "color", "binary"]) {
+        const canvas = crop(source, box, mode, 3000);
+        try {
+          const jsHits = decodeJsQR(jsQR, canvas, `${name}/${mode}`);
+          const zxHits = await decodeZXing(zxing, canvas, `${name}/${mode}`);
+          found.push(...jsHits, ...zxHits);
+          const versions = [...jsHits, ...zxHits].map(version).filter(Boolean);
+          logs.push(`${name}/${mode}: ${versions.join(",") || "なし"}`);
+          identities = unique([...known, ...found]).filter(isIdentity);
+          if (identities.some(isK2)) return { found: unique(found).filter(isIdentity), logs };
+        } finally {
+          canvas.width = 1;
+          canvas.height = 1;
+        }
+      }
+    }
+
     return { found: unique(found).filter(isIdentity), logs };
   } finally {
     source.width = 1;
@@ -249,8 +281,6 @@ export default function CertificateIdentityQrRecovery() {
       const existing = unique(Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : []);
       const existingIdentity = existing.filter(isIdentity);
       const qr = window.__vehicleCertificateQrPriority || {};
-      // K2が取れていれば登録番号・車台番号・原動機型式まで揃うので終了。
-      // K0だけの場合はK2探索を続ける。
       if (existingIdentity.some(isK2)) {
         pending = null;
         showStatus(`K2取得済み: ${existingIdentity.map(version).join(",")}`);
@@ -261,22 +291,22 @@ export default function CertificateIdentityQrRecovery() {
         return;
       }
       const elapsed = Date.now() - startedAt;
-      // 既存の下段6QR補助を先に走らせ、同時にjsQR/ZXingを重ねない。
-      if (sawProgress && elapsed < 15000) return;
-      if (!sawProgress && elapsed < 26000) return;
+      // 通常QR解析を少し待ってから、K0/K2の2枠だけを回収する。
+      if (sawProgress && elapsed < 10500) return;
+      if (!sawProgress && elapsed < 20000) return;
 
       const file = pending;
       const myToken = token;
       pending = null;
       running = true;
       showStatus(existingIdentity.length || qr.registrationNumber || qr.chassisNumber
-        ? "K0/身元情報は取得済み。原動機型式を持つK2だけ追加探索中…"
-        : "K0/K2だけを下段QR帯から再探索中…");
+        ? "K0/身元情報は取得済み。K2をピンポイント探索中…"
+        : "K0/K2の2枠だけをピンポイント探索中…");
       try {
-        const result = await scanIdentity(file);
+        const result = await scanIdentity(file, existing);
         if (myToken !== token) return;
         if (!result.found.length) {
-          showStatus("K0/K2はまだ未取得。OCRで推測せず空欄を維持します。", result.logs);
+          showStatus("K0/K2は未取得。次の2行OCRへ移ります。", result.logs);
           return;
         }
         const current = unique(Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : []);
@@ -290,7 +320,7 @@ export default function CertificateIdentityQrRecovery() {
       } finally {
         running = false;
       }
-    }, 900);
+    }, 700);
 
     document.addEventListener("change", onChange, true);
     return () => {
