@@ -158,8 +158,9 @@ function setFuel(val){if(!val)return;const s=section("基本情報"),sel=Array.f
 function apply(v){
   const d=l=>input("車検証読み取り情報",l),b=l=>input("基本情報",l);
   const list=[
-    ["記録年月日",v.recordDate],["記録事項番号",v.documentNumber],["使用者の氏名又は名称",v.userName],["使用の本拠の位置",v.baseLocation],["車名",v.vehicleName],["型式",v.model],["原動機の型式",v.engineModel],["自動車の種別",v.vehicleClass],["用途",v.purpose],["自家用・事業用の別",v.privateBusiness],["車体の形状",v.bodyShape],["乗車定員",v.seatingCapacity],["最大積載量 kg",v.maxPayloadKg],["車両重量 kg",v.vehicleWeightKg],["車両総重量 kg",v.grossVehicleWeightKg],["長さ cm",v.lengthCm],["幅 cm",v.widthCm],["高さ cm",v.heightCm],["前前軸重 kg",v.frontFrontAxleWeightKg],["前後軸重 kg",v.frontRearAxleWeightKg,true],["後前軸重 kg",v.rearFrontAxleWeightKg,true],["後後軸重 kg",v.rearRearAxleWeightKg],["総排気量又は定格出力",v.displacementOrRatedOutput],["燃料の種類",v.fuel]
+    ["記録年月日",v.recordDate],["記録事項番号",v.documentNumber],["使用者の氏名又は名称",v.userName],["使用の本拠の位置",v.baseLocation],["車名",v.vehicleName],["型式",v.model],["自動車の種別",v.vehicleClass],["用途",v.purpose],["自家用・事業用の別",v.privateBusiness],["車体の形状",v.bodyShape],["乗車定員",v.seatingCapacity],["最大積載量 kg",v.maxPayloadKg],["車両重量 kg",v.vehicleWeightKg],["車両総重量 kg",v.grossVehicleWeightKg],["長さ cm",v.lengthCm],["幅 cm",v.widthCm],["高さ cm",v.heightCm],["前前軸重 kg",v.frontFrontAxleWeightKg],["前後軸重 kg",v.frontRearAxleWeightKg,true],["後前軸重 kg",v.rearFrontAxleWeightKg,true],["後後軸重 kg",v.rearRearAxleWeightKg],["総排気量又は定格出力",v.displacementOrRatedOutput],["燃料の種類",v.fuel]
   ];
+  // 原動機型式は全体OCRでは確定しない。K2 QR / 重点再読取の結果だけを採用する。
   for(const [l,x,e] of list)setInput(d(l),x,!!e);
   setInput(b("型式"),v.model);setInput(b("車両重量 kg"),v.vehicleWeightKg);setFuel(v.fuel);
 }
