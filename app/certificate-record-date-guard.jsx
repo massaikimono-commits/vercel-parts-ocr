@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { prepareDocumentImage } from "./lib/document-image-pipeline";
 
+const AUTH_EVENT = "vehicle-certificate-authoritative";
+
 function norm(value = "") {
   return String(value)
     .normalize("NFKC")
@@ -72,6 +74,33 @@ function plausible(value) {
   if (expiry && date > expiry) return false;
   const now = new Date();
   return date <= (now.getFullYear() + 1) * 10000 + 1231;
+}
+
+function defaultEra() {
+  const qr = window.__vehicleCertificateQrPriority || {};
+  return String(qr.inspectionExpiry || qr.firstRegistration || "").match(/令和|平成|昭和/)?.[0] || "";
+}
+
+function numericDateCandidates(value = "") {
+  const text = repair(value);
+  const nums = (text.match(/\d{1,2}/g) || []).map(Number);
+  const era = text.match(/令和|平成|昭和/)?.[0] || defaultEra();
+  if (!era) return [];
+  const out = [];
+  for (let i = 0; i + 2 < nums.length; i += 1) {
+    const [y, m, d] = nums.slice(i, i + 3);
+    if (y < 1 || y > 64 || m < 1 || m > 12 || d < 1 || d > 31) continue;
+    const candidate = `${era}${y}年${m}月${d}日`;
+    if (plausible(candidate)) out.push(candidate);
+  }
+  return out;
+}
+
+function chooseAgreement(values) {
+  const counts = new Map();
+  for (const value of values.filter(Boolean)) counts.set(value, (counts.get(value) || 0) + 1);
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  return ranked[0]?.[1] >= 2 ? ranked[0][0] : "";
 }
 
 function detailInput(labelText) {
@@ -147,10 +176,11 @@ async function targetedRead(file) {
   const t = await import("tesseract.js");
   const worker = await t.createWorker("jpn+eng", 1);
   const raws = [];
+  const values = [];
   const plans = [
-    { name: "広域", box: [0.52, 0.035, 0.46, 0.125], psm: String(t.PSM?.SINGLE_BLOCK ?? "6") },
-    { name: "中域", box: [0.58, 0.060, 0.40, 0.080], psm: String(t.PSM?.SINGLE_BLOCK ?? "6") },
-    { name: "値欄", box: [0.62, 0.082, 0.34, 0.052], psm: String(t.PSM?.SINGLE_LINE ?? "7") },
+    { name: "値欄A", box: [0.62, 0.082, 0.34, 0.052], psm: "7" },
+    { name: "値欄B", box: [0.65, 0.090, 0.25, 0.030], psm: "7" },
+    { name: "中域", box: [0.58, 0.060, 0.40, 0.080], psm: "6" },
   ];
   try {
     for (const plan of plans) {
@@ -159,16 +189,18 @@ async function targetedRead(file) {
         try {
           await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: plan.psm, user_defined_dpi: "300" });
           const raw = norm((await worker.recognize(canvas)).data.text || "");
-          if (raw) raws.push(`${plan.name}/${mode}: ${raw}`);
-          const value = parseDate(raw);
-          if (value && plausible(value)) return { value, raws };
+          if (!raw) continue;
+          raws.push(`${plan.name}/${mode}: ${raw}`);
+          const direct = parseDate(raw);
+          if (direct && plausible(direct)) values.push(direct);
+          else values.push(...numericDateCandidates(raw));
         } finally {
           canvas.width = 1;
           canvas.height = 1;
         }
       }
     }
-    return { value: "", raws };
+    return { value: chooseAgreement(values), raws, values };
   } finally {
     await worker.terminate().catch(() => {});
     source.width = 1;
@@ -227,8 +259,8 @@ export default function CertificateRecordDateGuard() {
         return;
       }
       const elapsed = Date.now() - startedAt;
-      if (sawProgress && elapsed < 2500) return;
-      if (!sawProgress && elapsed < 12000) return;
+      if (sawProgress && elapsed < 6000) return;
+      if (!sawProgress && elapsed < 14000) return;
 
       const input = detailInput("記録年月日");
       const current = input?.value || "";
@@ -241,6 +273,7 @@ export default function CertificateRecordDateGuard() {
 
       const qrValue = parseDate(window.__vehicleCertificateQrPriority?.recordDate || "");
       if (qrValue && plausible(qrValue)) {
+        window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: { recordDate: qrValue } }));
         if (input) setReactValue(input, qrValue);
         pending = null;
         showDebug("QR", current, qrValue);
@@ -250,6 +283,7 @@ export default function CertificateRecordDateGuard() {
       const raw = existingRaw();
       const parsed = parseDate(raw);
       if (parsed && plausible(parsed)) {
+        window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: { recordDate: parsed } }));
         if (input) setReactValue(input, parsed);
         pending = null;
         showDebug("既存OCR再解析", current, parsed, [raw]);
@@ -265,10 +299,13 @@ export default function CertificateRecordDateGuard() {
         if (myToken !== token) return;
         const latest = detailInput("記録年月日");
         const before = latest?.value || current;
-        if (result.value && latest) setReactValue(latest, result.value);
-        showDebug("右上欄のみ再読取", before, result.value || "", result.raws);
+        if (result.value) {
+          window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: { recordDate: result.value } }));
+          if (latest) setReactValue(latest, result.value);
+        }
+        showDebug("右上セルのみ再読取", before, result.value || "", [`一致候補: ${result.values.join(" / ") || "なし"}`, ...result.raws]);
       } catch (error) {
-        showDebug("右上欄のみ再読取", current, "", [String(error?.message || error)]);
+        showDebug("右上セルのみ再読取", current, "", [String(error?.message || error)]);
       } finally {
         running = false;
       }
