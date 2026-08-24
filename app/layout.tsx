@@ -10,6 +10,7 @@ import CertificateQrReader from "./certificate-qr-reader";
 import CertificateQrLowerSixFallback from "./certificate-qr-lower-six-fallback";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
 import CertificateFinalNativeFix from "./certificate-final-native-fix";
+import CertificateAdaptiveOcr from "./certificate-adaptive-ocr";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -195,6 +196,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificateQrLowerSixFallback />
         <CertificateQrApply />
         <CertificateFinalNativeFix />
+        <CertificateAdaptiveOcr />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
       </body>
     </html>
