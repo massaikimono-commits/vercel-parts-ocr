@@ -113,8 +113,7 @@ function chooseAgreement(values) {
   for (const value of values.filter(Boolean)) counts.set(value, (counts.get(value) || 0) + 1);
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
   if (!ranked.length) return "";
-  if (ranked[0][1] >= 2) return ranked[0][0];
-  return ranked.length === 1 ? ranked[0][0] : "";
+  return ranked[0][1] >= 2 ? ranked[0][0] : "";
 }
 
 function crop(source, box, binary = false, targetWidth = 2600) {
@@ -294,8 +293,9 @@ export default function CertificateIdentityOcrFallback() {
       }
 
       const elapsed = Date.now() - startedAt;
-      if (sawProgress && elapsed < 14000) return;
-      if (!sawProgress && elapsed < 24000) return;
+      // K0/K2専用QR探索を先に完了させ、SafariでQR解析とTesseractを重ねない。
+      if (sawProgress && elapsed < 22000) return;
+      if (!sawProgress && elapsed < 32000) return;
 
       const qr = window.__vehicleCertificateQrPriority || {};
       const currentRegistration = detailInput("自動車登録番号又は車両番号")?.value || "";
@@ -327,7 +327,7 @@ export default function CertificateIdentityOcrFallback() {
             await new Promise((resolve) => window.setTimeout(resolve, 550));
           }
         }
-        showDebug(result, Object.keys(patch).length ? "本体stateへ確定送信" : "一致候補なし。安全のため空欄維持");
+        showDebug(result, Object.keys(patch).length ? "2回以上一致 → 本体stateへ確定送信" : "一致候補なし。安全のため空欄維持");
       } catch (error) {
         showDebug({ family: currentModelFamily(), registrationRaw: [String(error?.message || error)] }, "2行OCRエラー");
       } finally {
