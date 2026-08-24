@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 
+const AUTH_EVENT = "vehicle-certificate-authoritative";
 const compact = (v = "") => String(v).normalize("NFKC").replace(/\u3000/g, " ").replace(/\s+/g, " ").trim();
 
 function eraDate(year, month, day = 0) {
@@ -53,16 +54,26 @@ function parseQr3(items) {
   const q2 = qrByPosition(items, 2);
   const q3 = qrByPosition(items, 3);
   if (!q1 || !q2 || !q3) return null;
+
   const joined = [q1, q2, q3]
     .map((x) => String(x?.data || "").normalize("NFKC").replace(/\u3000/g, " "))
     .join("");
   const f = joined.split("/").map(compact);
   if (f.length < 19 || f[0] !== "2") return null;
+
   const fuelCode = String(f[18] || "").replace(/\D/g, "");
   const fuelMap = {
-    "01": "ガソリン", "02": "軽油", "03": "LPG", "05": "電気", "09": "CNG",
-    "13": "圧縮水素", "14": "ガソリン・電気", "16": "軽油・電気", "99": "その他",
+    "01": "ガソリン",
+    "02": "軽油",
+    "03": "LPG",
+    "05": "電気",
+    "09": "CNG",
+    "13": "圧縮水素",
+    "14": "ガソリン・電気",
+    "16": "軽油・電気",
+    "99": "その他",
   };
+
   return {
     inspectionExpiry: date6(f[3]),
     firstRegistration: month4(f[4]),
@@ -84,6 +95,7 @@ function isCertificateFileInput(node) {
 function showStatus(v, state = "") {
   const host = document.getElementById("certificate-qr-debug");
   if (!host) return;
+
   let box = document.getElementById("certificate-qr-applied-fixed");
   if (!box) {
     box = document.createElement("div");
@@ -96,24 +108,30 @@ function showStatus(v, state = "") {
     box.style.fontWeight = "800";
     host.appendChild(box);
   }
+
   if (!v) {
     box.textContent = state || "QR1〜3の連結データを待っています。";
     return;
   }
+
   box.textContent = `QR優先値確定: 有効期限 ${v.inspectionExpiry || "未取得"} / 初度登録 ${v.firstRegistration || "未取得"} / 型式 ${v.model || "未取得"} / 前前軸重 ${v.frontFrontAxleWeightKg || "-"}kg / 後後軸重 ${v.rearRearAxleWeightKg || "-"}kg / 燃料 ${v.fuel || "未取得"}${state ? ` / ${state}` : ""}`;
 }
 
 export default function CertificateQrApplyFixed() {
   useEffect(() => {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
+
     let stopped = false;
     let lastFileKey = "";
+    let syncBudget = 0;
+    let syncedSignature = "";
 
     const onFileChange = (event) => {
       const input = event.target;
       if (!isCertificateFileInput(input)) return;
       const file = input.files?.[0];
       if (!file) return;
+
       const key = `${file.name}|${file.size}|${file.lastModified}`;
       const sameFile = Boolean(lastFileKey && key === lastFileKey);
       if (!sameFile) {
@@ -121,6 +139,8 @@ export default function CertificateQrApplyFixed() {
         window.__vehicleCertificateQrPriority = null;
       }
       lastFileKey = key;
+      syncBudget = 0;
+      syncedSignature = "";
       showStatus(null, sameFile ? "同じ画像を再解析中。" : "QR解析待ちです。");
     };
 
@@ -128,24 +148,49 @@ export default function CertificateQrApplyFixed() {
 
     const tick = () => {
       if (stopped) return;
+
       const items = Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : [];
       if (!items.length) return;
+
       const values = parseQr3(items);
       if (!values) {
         showStatus(null, "QR1〜3の連結データを待っています。");
         return;
       }
+
       window.__vehicleCertificateQrPriority = values;
-      showStatus(values, document.querySelector(".progress") ? "v3本体OCRへ渡して処理中" : "v3本体が最終採用");
+      const signature = JSON.stringify(values);
+
+      if (document.querySelector(".progress")) {
+        // OCR完了後にも必ず再同期できるよう、処理中は送信枠を補充する。
+        syncBudget = 3;
+        syncedSignature = "";
+        showStatus(values, "v3本体OCRへ渡して処理中");
+        return;
+      }
+
+      if (!syncBudget && syncedSignature !== signature) syncBudget = 3;
+
+      if (syncBudget > 0) {
+        window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: values }));
+        syncBudget -= 1;
+        const done = 3 - syncBudget;
+        if (syncBudget === 0) syncedSignature = signature;
+        showStatus(values, `v3本体state最終同期 ${done}/3`);
+      } else {
+        showStatus(values, "v3本体state同期済み");
+      }
     };
 
-    const timer = window.setInterval(tick, 250);
+    const timer = window.setInterval(tick, 300);
     tick();
+
     return () => {
       stopped = true;
       document.removeEventListener("change", onFileChange, true);
       window.clearInterval(timer);
     };
   }, []);
+
   return null;
 }
