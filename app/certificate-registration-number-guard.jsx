@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+const AUTH_EVENT = "vehicle-certificate-authoritative";
+
 const PLATE_AREAS = [
   "札幌","函館","旭川","室蘭","釧路","帯広","北見",
   "青森","弘前","八戸","岩手","盛岡","平泉","宮城","仙台","秋田","山形","庄内","福島","会津","郡山",
@@ -51,7 +53,7 @@ function parseRegistration(value = "") {
   const text = norm(value);
   const re = /([ぁ-んァ-ヶ一-龠]{1,20})\s*([0-9]\s*[0-9]?\s*[0-9]?)\s*([ぁ-ん])\s*[・･.\- ]*([0-9](?:\s*[0-9]){0,3})/g;
   const matches = [...text.matchAll(re)];
-  if (!matches.length) return { value: "", suspicious: false, raw: text };
+  if (!matches.length) return { value: "", suspicious: false, raw: text, classification: "", serial: "" };
 
   const m = matches[matches.length - 1];
   const prefix = String(m[1] || "").replace(/\s+/g, "");
@@ -59,12 +61,12 @@ function parseRegistration(value = "") {
   const kana = m[3] || "";
   const serial = digits(m[4]);
   if (!classification || classification.length > 3 || !kana || !serial || serial.length > 4) {
-    return { value: "", suspicious: true, raw: text, prefix, area: "" };
+    return { value: "", suspicious: true, raw: text, prefix, area: "", classification, serial };
   }
 
   const known = bestArea(prefix);
   if (!known) {
-    return { value: "", suspicious: true, raw: text, prefix, area: "" };
+    return { value: "", suspicious: true, raw: text, prefix, area: "", classification, serial };
   }
 
   return {
@@ -73,13 +75,33 @@ function parseRegistration(value = "") {
     raw: text,
     prefix,
     area: known,
+    classification,
+    serial,
   };
 }
 
-function findRegistrationInput() {
-  for (const label of document.querySelectorAll("label")) {
-    const text = (label.childNodes?.[0]?.textContent || label.textContent || "").trim();
-    if (!text.startsWith("登録番号")) continue;
+function detailInput() {
+  const card = [...document.querySelectorAll("section.card")].find((node) =>
+    node.querySelector("h2")?.textContent?.includes("車検証読み取り情報")
+  );
+  if (!card) return null;
+  for (const label of card.querySelectorAll("label")) {
+    const title = norm(label.querySelector(":scope > span")?.textContent || "");
+    if (title !== "自動車登録番号又は車両番号") continue;
+    const input = label.querySelector("input");
+    if (input instanceof HTMLInputElement) return input;
+  }
+  return null;
+}
+
+function basicInput() {
+  const card = [...document.querySelectorAll("section.card")].find((node) =>
+    node.querySelector("h2")?.textContent?.includes("基本情報")
+  );
+  if (!card) return null;
+  for (const label of card.querySelectorAll("label")) {
+    const title = norm(label.childNodes?.[0]?.textContent || "");
+    if (title !== "登録番号") continue;
     const input = label.querySelector("input");
     if (input instanceof HTMLInputElement) return input;
   }
@@ -87,10 +109,33 @@ function findRegistrationInput() {
 }
 
 function setReactInputValue(input, value) {
+  if (!(input instanceof HTMLInputElement) || input.value === value) return;
+  const key = Object.keys(input).find((name) => name.startsWith("__reactProps$"));
+  const props = key ? input[key] : null;
+  if (typeof props?.onChange === "function") {
+    props.onChange({ target: { value }, currentTarget: { value }, preventDefault() {}, stopPropagation() {} });
+    return;
+  }
   const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  const previous = input.value;
   descriptor?.set?.call(input, value);
+  if (input._valueTracker) input._valueTracker.setValue(previous);
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function existingOcrCandidate() {
+  const texts = [...document.querySelectorAll("details pre")]
+    .map((node) => node.textContent || "")
+    .filter(Boolean);
+  for (const text of texts) {
+    const parsed = parseRegistration(text);
+    // 全文から拾う場合は誤採用防止のため、現在の3桁分類番号+4桁番号に限定する。
+    if (parsed.value && parsed.classification?.length === 3 && parsed.serial?.length === 4) {
+      return { raw: parsed.raw, parsed };
+    }
+  }
+  return null;
 }
 
 function showDebug(before, after, source, reason = "") {
@@ -131,30 +176,37 @@ export default function CertificateRegistrationNumberGuard() {
 
     let lastKey = "";
     const sync = () => {
-      const input = findRegistrationInput();
-      if (!input) return;
+      const detail = detailInput();
+      const basic = basicInput();
+      if (!detail && !basic) return;
 
       const qrRaw = window.__vehicleCertificateQrPriority?.registrationNumber || "";
-      const current = input.value || "";
-      const source = qrRaw ? "QR" : "OCR";
-      const raw = qrRaw || current;
+      const detailRaw = detail?.value || "";
+      const basicRaw = basic?.value || "";
+      const existing = !qrRaw && !detailRaw && !basicRaw ? existingOcrCandidate() : null;
+      const raw = qrRaw || detailRaw || basicRaw || existing?.raw || "";
+      const source = qrRaw ? "QR" : detailRaw || basicRaw ? "OCR欄" : existing ? "既存OCR全文" : "OCR";
       if (!raw) return;
 
-      const parsed = parseRegistration(raw);
+      const parsed = existing?.parsed || parseRegistration(raw);
       const key = `${source}|${raw}|${parsed.value}|${parsed.suspicious ? 1 : 0}`;
       if (key === lastKey) return;
       lastKey = key;
 
       if (parsed.value) {
-        if (parsed.value !== current) setReactInputValue(input, parsed.value);
-        if (parsed.value !== raw || parsed.suspicious || qrRaw) {
-          showDebug(raw, parsed.value, source, parsed.suspicious ? "住所などの余分な地名を除外しました。" : "");
+        // AUTH_EVENTでcertificateと基本情報を同じstateから更新し、片方だけ残るのを防ぐ。
+        window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: { registrationNumber: parsed.value } }));
+        if (detail && detail.value !== parsed.value) setReactInputValue(detail, parsed.value);
+        if (basic && basic.value !== parsed.value) setReactInputValue(basic, parsed.value);
+        if (parsed.value !== raw || parsed.suspicious || qrRaw || existing) {
+          showDebug(raw.length > 180 ? `${raw.slice(0, 180)}…` : raw, parsed.value, source, parsed.suspicious ? "住所などの余分な地名を除外しました。" : "");
         }
         return;
       }
 
-      if (parsed.suspicious) {
-        if (!qrRaw && current) setReactInputValue(input, "");
+      if (parsed.suspicious && !qrRaw) {
+        if (detail?.value) setReactInputValue(detail, "");
+        if (basic?.value) setReactInputValue(basic, "");
         showDebug(raw, "", source, "実在するナンバープレート地域名として確定できないため保留（空欄）にしました。");
       }
     };
