@@ -37,6 +37,8 @@ export type RegionRecognitionOptions = {
   recoveryMaxPasses?: number;
   recoveryVariants?: DocumentVariantName[];
   recoveryPsms?: Array<string | number>;
+  sharpRecovery?: boolean;
+  sharpRecoveryPasses?: number;
 };
 
 export type DocumentRecognitionSession = {
@@ -84,6 +86,42 @@ function cropRelative(source: HTMLCanvasElement, region: RelativeRegion, targetW
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, sx, sy, sw, sh, pad, pad, out.width - pad * 2, out.height - pad * 2);
+  return out;
+}
+
+/**
+ * Mild unsharp mask used only for weak, already-cropped regions.
+ * Keeping this out of full-page preprocessing avoids extra iPhone memory/CPU cost.
+ */
+function sharpenRecoveryCanvas(source: HTMLCanvasElement, amount = 0.62) {
+  const out = canvas(source.width, source.height);
+  const ctx = out.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(source, 0, 0);
+  const image = ctx.getImageData(0, 0, out.width, out.height);
+  const data = image.data;
+  const width = out.width;
+  const height = out.height;
+  const gray = new Uint8Array(width * height);
+
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    gray[p] = Math.round(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+  }
+
+  const clamp = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const p = y * width + x;
+      const center = gray[p];
+      const average = (gray[p - 1] + gray[p + 1] + gray[p - width] + gray[p + width]) / 4;
+      const value = clamp(center + amount * (center - average));
+      const i = p * 4;
+      data[i] = value;
+      data[i + 1] = value;
+      data[i + 2] = value;
+      data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
   return out;
 }
 
@@ -217,9 +255,8 @@ export async function createSharedTesseractWorker(options: WorkerFactoryOptions 
  *
  * Pass 1 uses the normal multi-variant ensemble. If that result is strong, we stop.
  * Weak/empty fields are automatically re-read at higher resolution with alternate
- * segmentation modes, and token-level confidence from TSV is used when weighting
- * those recovery observations. No vehicle/address/supplier-specific correction is
- * performed in this layer.
+ * segmentation modes and token-level confidence. If those reads still disagree,
+ * one small cropped region gets a mild sharpening pass as the final generic recovery.
  */
 export async function recognizeDocumentRegion(
   session: DocumentRecognitionSession,
@@ -307,27 +344,72 @@ export async function recognizeDocumentRegion(
           }
           if (passes >= maxPasses) break;
         }
+
+        let recovered = buildOcrConsensus(observations, {
+          profile,
+          minSimilarity: Math.max(0.48, (options.minSimilarity ?? 0.72) - 0.06),
+          minSupport: options.minSupport,
+          minConfidence: options.minConfidence,
+          validate: options.validate,
+        });
+
+        // Thin strokes can remain visible to a person while getting lost in OCR.
+        // Only after standard high-res recovery still looks weak do we sharpen one
+        // small crop and try at most two segmentation modes.
+        let sharpPasses = 0;
+        if (options.sharpRecovery !== false && !strongEnough(recovered, options)) {
+          const sharpSource = session.prepared.variants.contrast || session.prepared.variants.original;
+          const baseCrop = cropRelative(sharpSource, recoveryRegion, targetWidth, 36);
+          const sharpCrop = sharpenRecoveryCanvas(baseCrop);
+          recoveryCrops.push(baseCrop, sharpCrop);
+          const requested = Math.max(1, Math.min(2, options.sharpRecoveryPasses ?? 2));
+          const sharpPsms = psms.slice(0, requested);
+
+          for (const psm of sharpPsms) {
+            sharpPasses += 1;
+            await worker.setParameters({
+              tessedit_pageseg_mode: String(psm),
+              preserve_interword_spaces: "1",
+              user_defined_dpi: "360",
+              tessedit_char_whitelist: options.whitelist || "",
+            });
+            const raw = await worker.recognize(sharpCrop, {}, { text: true, tsv: true });
+            const text = String(raw?.data?.text || "").trim();
+            if (!text) continue;
+            const quality = tokenQualityFromTsv(String(raw?.data?.tsv || ""));
+            observations.push({
+              text,
+              confidence: effectiveConfidence(Number(raw?.data?.confidence ?? 55), quality),
+              variant: "contrast:hires:sharp",
+              psm,
+              source: `tesseract-recovery-sharp tokenAvg=${quality.average.toFixed(1)} weak=${quality.weakRatio.toFixed(2)}`,
+            });
+          }
+
+          recovered = buildOcrConsensus(observations, {
+            profile,
+            minSimilarity: Math.max(0.48, (options.minSimilarity ?? 0.72) - 0.06),
+            minSupport: options.minSupport,
+            minConfidence: options.minConfidence,
+            validate: options.validate,
+          });
+        }
+
+        const better = Boolean(recovered.value) && (
+          !first.value
+          || recovered.confidence > first.confidence + 0.025
+          || recovered.support > first.support
+        );
+        const recoveryLabel = sharpPasses
+          ? `高解像度${passes}pass＋シャープ${sharpPasses}pass`
+          : `高解像度${passes}pass`;
+
+        return better
+          ? { ...recovered, reason: `${recovered.reason} / 弱いセルを${recoveryLabel}で再読取` }
+          : { ...first, reason: `${first.reason} / ${recoveryLabel}でも改善なし` };
       } finally {
         cleanupCanvases(recoveryCrops);
       }
-
-      const recovered = buildOcrConsensus(observations, {
-        profile,
-        minSimilarity: Math.max(0.48, (options.minSimilarity ?? 0.72) - 0.06),
-        minSupport: options.minSupport,
-        minConfidence: options.minConfidence,
-        validate: options.validate,
-      });
-
-      const better = Boolean(recovered.value) && (
-        !first.value
-        || recovered.confidence > first.confidence + 0.025
-        || recovered.support > first.support
-      );
-
-      return better
-        ? { ...recovered, reason: `${recovered.reason} / 弱いセルを高解像度再読取(${passes}pass)` }
-        : { ...first, reason: `${first.reason} / 高解像度再読取${passes}passでも改善なし` };
     } finally {
       cleanupCanvases(crops.map(x => x.canvas));
     }

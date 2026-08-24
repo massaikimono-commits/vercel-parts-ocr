@@ -14,6 +14,7 @@ export type RecognizedTextBand = {
   confidence: number;
   support: number;
   reason: string;
+  contributors: string;
 };
 
 export type TextBandRecognitionOptions = {
@@ -53,6 +54,30 @@ function defaultOptions(profile: RegionRecognitionOptions["profile"]): RegionRec
   return { ...OCR_FIELD_PRESETS.japaneseText, profile: profile ?? "japanese" };
 }
 
+function contributorSummary(observations: any[] = []) {
+  const groups = new Map<string, { count: number; confidence: number; sources: Set<string> }>();
+  for (const observation of observations) {
+    const variant = String(observation?.variant || "unknown");
+    const psm = String(observation?.psm ?? "?");
+    const key = `${variant} / PSM=${psm}`;
+    const current = groups.get(key) || { count: 0, confidence: 0, sources: new Set<string>() };
+    current.count += 1;
+    current.confidence += Number(observation?.confidence ?? 0);
+    if (observation?.source) current.sources.add(String(observation.source));
+    groups.set(key, current);
+  }
+  return [...groups.entries()]
+    .map(([key, value]) => ({
+      key,
+      count: value.count,
+      average: value.count ? value.confidence / value.count : 0,
+      sources: [...value.sources],
+    }))
+    .sort((a, b) => b.count - a.count || b.average - a.average)
+    .map(item => `${item.key} / n=${item.count} / avgConf=${item.average.toFixed(1)}${item.sources.some(x => x.includes("sharp")) ? " / SHARP" : ""}`)
+    .join("\n");
+}
+
 /**
  * Detects horizontal text bands from image structure, then OCRs each band with the
  * same shared V2 field engine. This is layout-agnostic: no certificate/supplier
@@ -87,6 +112,8 @@ export async function recognizeDocumentTextBands(
       strongConfidence: 0.80,
       strongSupport: 2,
       recoveryMaxPasses: 5,
+      sharpRecovery: true,
+      sharpRecoveryPasses: 2,
       validate: options.validate,
     });
 
@@ -103,6 +130,7 @@ export async function recognizeDocumentTextBands(
       confidence: result.confidence,
       support: result.support,
       reason: result.reason,
+      contributors: contributorSummary(result.observations || []),
     });
   }
   return results;

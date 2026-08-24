@@ -17,6 +17,7 @@ type ResultView = {
   confidence: string;
   support: number;
   raw: string;
+  contributors: string;
   bandText: string;
   previews: VariantPreview[];
 };
@@ -46,6 +47,22 @@ function previewDataUrl(source: HTMLCanvasElement, maxWidth = 760) {
   canvas.width = 1;
   canvas.height = 1;
   return url;
+}
+
+function contributorSummary(observations: any[] = []) {
+  const groups = new Map<string, { count: number; confidence: number }>();
+  for (const observation of observations) {
+    const key = `${String(observation?.variant || "unknown")} / PSM=${String(observation?.psm ?? "?")}`;
+    const current = groups.get(key) || { count: 0, confidence: 0 };
+    current.count += 1;
+    current.confidence += Number(observation?.confidence ?? 0);
+    groups.set(key, current);
+  }
+  return [...groups.entries()]
+    .map(([key, value]) => ({ key, count: value.count, average: value.count ? value.confidence / value.count : 0 }))
+    .sort((a, b) => b.count - a.count || b.average - a.average)
+    .map(item => `${item.key} / n=${item.count} / avgConf=${item.average.toFixed(1)}`)
+    .join("\n") || "採用候補なし";
 }
 
 export default function OcrEngineTestPage() {
@@ -103,6 +120,7 @@ export default function OcrEngineTestPage() {
         `variant=${obs.variant || ""} / psm=${obs.psm || ""} / OCR confidence=${Number(obs.confidence || 0).toFixed(1)}`,
         String(obs.text || "").trim(),
       ].join("\n")).join("\n\n");
+      const contributors = contributorSummary(recognition.observations || []);
 
       setMessage("文字のある横一行を自動検出して再読取しています…");
       setProgress(old => Math.max(old, 72));
@@ -123,6 +141,8 @@ export default function OcrEngineTestPage() {
             `y=${item.region.y.toFixed(3)} / confidence=${item.confidence.toFixed(2)} / support=${item.support}`,
             item.text,
             item.reason,
+            "寄与した読取:",
+            item.contributors || "なし",
           ].join("\n")).join("\n\n")
         : "テキスト帯を安全に確定できませんでした。";
 
@@ -135,11 +155,12 @@ export default function OcrEngineTestPage() {
         confidence: recognition.confidence.toFixed(2),
         support: recognition.support,
         raw,
+        contributors,
         bandText,
         previews,
       });
       setProgress(100);
-      setMessage("解析完了。全文OCR・横一行OCR・補正画像を比較できます。");
+      setMessage("解析完了。補正画像・全文OCR・横一行OCR・寄与した読取方式を比較できます。");
     } catch (error) {
       console.error(error);
       setMessage(`共通OCR V2テストでエラー: ${String((error as any)?.message || error)}`);
@@ -183,8 +204,16 @@ export default function OcrEngineTestPage() {
 
         <section style={styles.card}>
           <details open>
+            <summary style={{ fontWeight: 800, cursor: "pointer" }}>どの読取方式が効いたか</summary>
+            <p style={styles.text}>variantとPSMごとの候補数・平均confidenceです。横一行OCRでは高解像度やSHARPが使われた場合も表示します。</p>
+            <textarea readOnly value={result.contributors} style={{ ...styles.debug, minHeight: 180 }} />
+          </details>
+        </section>
+
+        <section style={styles.card}>
+          <details open>
             <summary style={{ fontWeight: 800, cursor: "pointer" }}>横一行ずつのOCR比較</summary>
-            <p style={styles.text}>固定座標を使わず、画像から文字行を検出して弱い行だけ高解像度で再読取した結果です。部品名称など長い文字列の改善確認に使います。</p>
+            <p style={styles.text}>固定座標を使わず、画像から文字行を検出して弱い行だけ高解像度で再読取します。標準再読取でも弱い場合だけ小さい切り出しへシャープ化を追加します。</p>
             <textarea readOnly value={result.bandText} style={styles.debug} />
           </details>
         </section>
