@@ -90,7 +90,7 @@ export default function OcrEngineTestPage() {
         minPaperConfidence: 0.45,
       });
       const previews = [
-        { name: "original（紙検出・傾き補正後）", url: previewDataUrl(session.prepared.variants.original) },
+        { name: "original（紙検出・台形/傾き補正後）", url: previewDataUrl(session.prepared.variants.original) },
         { name: "contrast（コントラスト強調）", url: previewDataUrl(session.prepared.variants.contrast) },
         { name: "adaptiveBinary（影対応・局所二値化）", url: previewDataUrl(session.prepared.variants.adaptiveBinary) },
         { name: "binaryDark（通常二値化）", url: previewDataUrl(session.prepared.variants.binaryDark) },
@@ -122,10 +122,10 @@ export default function OcrEngineTestPage() {
       ].join("\n")).join("\n\n");
       const contributors = contributorSummary(recognition.observations || []);
 
-      setMessage("文字のある横一行を自動検出して再読取しています…");
+      setMessage("文字行の座標を復元し、重要な弱い行だけ再読取しています…");
       setProgress(old => Math.max(old, 72));
       const bands = await recognizeDocumentTextBands(session, worker, {
-        maxBands: 12,
+        maxBands: 18,
         minBandConfidence: 0.11,
         profile: "japanese",
         variants: ["original", "contrast", "adaptiveBinary"],
@@ -134,23 +134,31 @@ export default function OcrEngineTestPage() {
         minSupport: 2,
         minConfidence: 0.50,
         targetWidth: 3200,
+        layoutFallback: true,
+        layoutMinConfidence: 18,
+        maxLayoutRereads: 8,
       });
       const bandText = bands.length
         ? bands.map((item, index) => [
             `--- text band ${index + 1} ---`,
-            `y=${item.region.y.toFixed(3)} / confidence=${item.confidence.toFixed(2)} / support=${item.support}`,
+            `source=${item.source} / y=${item.region.y.toFixed(3)} / confidence=${item.confidence.toFixed(2)} / support=${item.support}`,
             item.text,
             item.reason,
             "寄与した読取:",
             item.contributors || "なし",
           ].join("\n")).join("\n\n")
-        : "テキスト帯を安全に確定できませんでした。";
+        : "文字行を安全に確定できませんでした。";
+
+      const perspective = session.geometry.perspectiveApplied
+        ? `台形補正あり: severity=${session.geometry.perspectiveSeverity.toFixed(3)} / confidence=${session.geometry.perspectiveConfidence.toFixed(2)}`
+        : `台形補正なし: severity=${session.geometry.perspectiveSeverity.toFixed(3)} / confidence=${session.geometry.perspectiveConfidence.toFixed(2)}`;
+      const rotation = session.geometry.deskewApplied
+        ? `傾き補正あり: ${session.geometry.deskewAngle.toFixed(2)}° / confidence=${session.geometry.deskewConfidence.toFixed(2)}`
+        : `傾き補正なし: angle=${session.geometry.deskewAngle.toFixed(2)}° / confidence=${session.geometry.deskewConfidence.toFixed(2)}`;
 
       setResult({
         quality: session.qualityWarnings.length ? session.qualityWarnings : ["大きな画像品質警告なし"],
-        geometry: session.geometry.deskewApplied
-          ? `傾き補正あり: ${session.geometry.deskewAngle.toFixed(2)}° / confidence=${session.geometry.deskewConfidence.toFixed(2)}`
-          : `傾き補正なし: angle=${session.geometry.deskewAngle.toFixed(2)}° / confidence=${session.geometry.deskewConfidence.toFixed(2)}`,
+        geometry: `${perspective}\n${rotation}`,
         consensus: recognition.value || "保留（全文を1つに確定せず、生OCRを比較）",
         confidence: recognition.confidence.toFixed(2),
         support: recognition.support,
@@ -160,7 +168,7 @@ export default function OcrEngineTestPage() {
         previews,
       });
       setProgress(100);
-      setMessage("解析完了。補正画像・全文OCR・横一行OCR・寄与した読取方式を比較できます。");
+      setMessage("解析完了。罫線帳票ではTSVの単語座標から文字行を復元し、弱い行だけ高解像度で再読取します。");
     } catch (error) {
       console.error(error);
       setMessage(`共通OCR V2テストでエラー: ${String((error as any)?.message || error)}`);
@@ -186,7 +194,7 @@ export default function OcrEngineTestPage() {
       {result && <>
         <section style={styles.card}>
           <h2 style={{ marginTop: 0 }}>前処理・統合結果</h2>
-          <p><strong>{result.geometry}</strong></p>
+          <p><strong style={{ whiteSpace: "pre-line" }}>{result.geometry}</strong></p>
           <p>近似一致 support: <strong>{result.support}</strong> / confidence: <strong>{result.confidence}</strong></p>
           <div style={styles.notice}>{result.quality.join(" / ")}</div>
         </section>
@@ -213,7 +221,7 @@ export default function OcrEngineTestPage() {
         <section style={styles.card}>
           <details open>
             <summary style={{ fontWeight: 800, cursor: "pointer" }}>横一行ずつのOCR比較</summary>
-            <p style={styles.text}>固定座標を使わず、画像から文字行を検出して弱い行だけ高解像度で再読取します。標準再読取でも弱い場合だけ小さい切り出しへシャープ化を追加します。</p>
+            <p style={styles.text}>罫線が多い帳票では、画像の黒さだけで行を探さず、全文OCRのTSV単語座標から実際の文字行を復元します。その中から不確かな行・数字や英字を含む情報量の多い行だけ高解像度で再読取します。</p>
             <textarea readOnly value={result.bandText} style={styles.debug} />
           </details>
         </section>
@@ -227,7 +235,7 @@ export default function OcrEngineTestPage() {
         <section style={styles.card}>
           <details open>
             <summary style={{ fontWeight: 800, cursor: "pointer" }}>各variant 生OCR比較</summary>
-            <p style={styles.text}>どの画像補正・PSMで文字が壊れたかを比較します。adaptiveBinaryは影や照明むらに強い局所二値化です。</p>
+            <p style={styles.text}>どの画像補正・PSMで文字が壊れたかを比較します。今回の車検証では、欄によって正解になるvariantが違うことも確認できます。</p>
             <textarea readOnly value={result.raw} style={styles.debug} />
           </details>
         </section>
