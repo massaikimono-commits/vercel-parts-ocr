@@ -7,6 +7,7 @@ import {
   createSharedTesseractWorker,
   recognizeWholeDocument,
 } from "../../lib/document-recognition-v2";
+import { recognizeDocumentTextBands } from "../../lib/document-band-recognition";
 
 type VariantPreview = { name: string; url: string };
 type ResultView = {
@@ -16,6 +17,7 @@ type ResultView = {
   confidence: string;
   support: number;
   raw: string;
+  bandText: string;
   previews: VariantPreview[];
 };
 
@@ -80,11 +82,13 @@ export default function OcrEngineTestPage() {
       const created = await createSharedTesseractWorker({
         logger: (m: any) => {
           if (m.status === "recognizing text") {
-            setProgress(Math.max(10, Math.min(94, Math.round((m.progress || 0) * 78) + 12)));
+            setProgress(old => Math.max(old, Math.min(94, Math.round((m.progress || 0) * 70) + 12)));
           }
         },
       });
       worker = created.worker;
+
+      setMessage("まず全文OCRを比較しています…");
       const recognition = await recognizeWholeDocument(session, worker, {
         profile: "japanese",
         variants: ["original", "contrast", "adaptiveBinary", "binaryDark"],
@@ -100,6 +104,28 @@ export default function OcrEngineTestPage() {
         String(obs.text || "").trim(),
       ].join("\n")).join("\n\n");
 
+      setMessage("文字のある横一行を自動検出して再読取しています…");
+      setProgress(old => Math.max(old, 72));
+      const bands = await recognizeDocumentTextBands(session, worker, {
+        maxBands: 12,
+        minBandConfidence: 0.11,
+        profile: "japanese",
+        variants: ["original", "contrast", "adaptiveBinary"],
+        psms: ["7", "13"],
+        minSimilarity: 0.58,
+        minSupport: 2,
+        minConfidence: 0.50,
+        targetWidth: 3200,
+      });
+      const bandText = bands.length
+        ? bands.map((item, index) => [
+            `--- text band ${index + 1} ---`,
+            `y=${item.region.y.toFixed(3)} / confidence=${item.confidence.toFixed(2)} / support=${item.support}`,
+            item.text,
+            item.reason,
+          ].join("\n")).join("\n\n")
+        : "テキスト帯を安全に確定できませんでした。";
+
       setResult({
         quality: session.qualityWarnings.length ? session.qualityWarnings : ["大きな画像品質警告なし"],
         geometry: session.geometry.deskewApplied
@@ -109,10 +135,11 @@ export default function OcrEngineTestPage() {
         confidence: recognition.confidence.toFixed(2),
         support: recognition.support,
         raw,
+        bandText,
         previews,
       });
       setProgress(100);
-      setMessage("解析完了。補正画像と生OCRを直接見比べられます。");
+      setMessage("解析完了。全文OCR・横一行OCR・補正画像を比較できます。");
     } catch (error) {
       console.error(error);
       setMessage(`共通OCR V2テストでエラー: ${String((error as any)?.message || error)}`);
@@ -152,6 +179,14 @@ export default function OcrEngineTestPage() {
               <img src={item.url} alt={item.name} style={{ width: "100%", maxHeight: 360, objectFit: "contain", background: "#eef2f7", borderRadius: 10, border: "1px solid #d9e0ea" }} />
             </div>)}
           </div>
+        </section>
+
+        <section style={styles.card}>
+          <details open>
+            <summary style={{ fontWeight: 800, cursor: "pointer" }}>横一行ずつのOCR比較</summary>
+            <p style={styles.text}>固定座標を使わず、画像から文字行を検出して弱い行だけ高解像度で再読取した結果です。部品名称など長い文字列の改善確認に使います。</p>
+            <textarea readOnly value={result.bandText} style={styles.debug} />
+          </details>
         </section>
 
         <section style={styles.card}>
