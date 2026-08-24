@@ -56,14 +56,14 @@ export default function OcrEngineTestPage() {
       const created = await createSharedTesseractWorker({
         logger: (m: any) => {
           if (m.status === "recognizing text") {
-            setProgress(Math.max(10, Math.min(94, Math.round((m.progress || 0) * 78) + 12)));
+            setProgress(Math.max(10, Math.min(94, Math.round((m.progress || 0) * 78) + 12));
           }
         },
       });
       worker = created.worker;
       const recognition = await recognizeWholeDocument(session, worker, {
         profile: "japanese",
-        variants: ["original", "contrast", "binaryDark", "binaryLight"],
+        variants: ["original", "contrast", "adaptiveBinary", "binaryDark"],
         psms: ["11", "6"],
         minSimilarity: 0.50,
         minSupport: 2,
@@ -87,7 +87,7 @@ export default function OcrEngineTestPage() {
         raw,
       });
       setProgress(100);
-      setMessage("解析完了。生OCRと統合結果を比較できます。");
+      setMessage("解析完了。原画像・コントラスト・影対応・通常二値化の生OCRを比較できます。");
     } catch (error) {
       console.error(error);
       setMessage(`共通OCR V2テストでエラー: ${String((error as any)?.message || error)}`);
@@ -124,7 +124,7 @@ export default function OcrEngineTestPage() {
         <section style={styles.card}>
           <details open>
             <summary style={{ fontWeight: 800, cursor: "pointer" }}>各variant 生OCR比較</summary>
-            <p style={styles.text}>どの画像補正・PSMで文字が壊れたかを比較します。</p>
+            <p style={styles.text}>どの画像補正・PSMで文字が壊れたかを比較します。adaptiveBinaryは影や照明むらに強い局所二値化です。</p>
             <textarea readOnly value={result.raw} style={styles.debug} />
           </details>
         </section>
