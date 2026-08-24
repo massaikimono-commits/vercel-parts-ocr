@@ -56,7 +56,7 @@ export default function OcrEngineTestPage() {
       const created = await createSharedTesseractWorker({
         logger: (m: any) => {
           if (m.status === "recognizing text") {
-            setProgress(Math.max(10, Math.min(94, Math.round((m.progress || 0) * 78) + 12));
+            setProgress(Math.max(10, Math.min(94, Math.round((m.progress || 0) * 78) + 12)));
           }
         },
       });
