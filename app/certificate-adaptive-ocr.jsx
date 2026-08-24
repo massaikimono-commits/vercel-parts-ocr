@@ -1,102 +1,187 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fileToCanvas, detectLikelyPaperBounds, cropCanvas } from "./lib/document-image-pipeline";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 
 function norm(s = "") {
-  return String(s).normalize("NFKC").replace(/[‐‑‒–—―ー]/g, "-").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
+  return String(s)
+    .normalize("NFKC")
+    .replace(/[‐‑‒–—―ー]/g, "-")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
 }
-function digits(s = "") { return s.replace(/\D/g, ""); }
-function jpDate(s = "") {
-  const t = norm(s);
-  const m = t.match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/);
-  if (!m) return "";
-  const mm = Number(m[3]), dd = Number(m[4]);
-  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return "";
-  return `${m[1]}${m[2] === "元" ? "元" : Number(m[2])}年${mm}月${dd}日`;
+function compact(s = "") { return norm(s).replace(/\s+/g, ""); }
+function digits(s = "") { return String(s).replace(/\D/g, ""); }
+function eraYear(era, year) {
+  const y = year === "元" ? 1 : Number(year);
+  return era === "令和" ? 2018 + y : era === "平成" ? 1988 + y : era === "昭和" ? 1925 + y : 0;
 }
-function docNo(s = "") {
-  return digits(norm(s)).match(/\d{10,14}/)?.[0] || "";
+function dateOrdinal(s = "") {
+  const m = compact(s).match(/(令和|平成|昭和)(元|\d{1,2})年?(\d{1,2})月?(\d{1,2})日?/);
+  if (!m) return null;
+  const y = eraYear(m[1], m[2]), mo = Number(m[3]), d = Number(m[4]);
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return y * 10000 + mo * 100 + d;
 }
-function reg(s = "") {
-  const t = norm(s).replace(/\n/g, " ");
-  const matches = [...t.matchAll(/([ぁ-んァ-ヶ一-龠]{1,7})\s*([0-9]\s*[0-9]\s*[0-9])\s*([ぁ-ん])\s*([0-9]\s*[0-9]\s*[0-9]\s*[0-9])/g)];
-  if (!matches.length) return "";
-  const bad = /(株式会社|住所|使用者|大阪府.{0,3}市|静岡県.{0,3}市|東京都.{0,3}区)/;
-  const cleaned = matches.map(m => ({
-    place: m[1].replace(/^(?:東京都|北海道|大阪府|京都府|.{2,4}県)/, ""),
-    cls: digits(m[2]), kana: m[3], num: digits(m[4]), raw: m[1]
-  })).filter(x => !bad.test(x.raw) && x.cls.length === 3 && x.num.length === 4);
-  const best = cleaned[0] || null;
-  if (!best) return "";
-  const place = best.place || best.raw;
-  return `${place} ${best.cls} ${best.kana} ${best.num}`;
+function monthOrdinal(s = "") {
+  const m = compact(s).match(/(令和|平成|昭和)(元|\d{1,2})年?(\d{1,2})月?/);
+  if (!m) return null;
+  const y = eraYear(m[1], m[2]), mo = Number(m[3]);
+  return y && mo >= 1 && mo <= 12 ? y * 12 + mo : null;
 }
-function chassis(s = "") {
-  const t = norm(s).toUpperCase().replace(/\s+/g, "");
-  const a = t.match(/[A-Z]{1,5}[0-9]{1,6}-[A-Z0-9]{4,12}/g) || [];
-  return a.sort((x, y) => y.length - x.length)[0] || "";
+function canonicalDate(era, year, month, day) {
+  return `${era}${year === "元" ? "元" : Number(year)}年${Number(month)}月${Number(day)}日`;
 }
-function engine(s = "") {
-  const t = norm(s).toUpperCase().replace(/\s+/g, "");
-  const a = t.match(/[A-Z0-9]{2,8}(?:-[A-Z0-9]{2,8})?/g) || [];
-  return a.filter(x => /[A-Z]/.test(x) && /\d/.test(x) && x.length >= 3).sort((x, y) => y.length - x.length)[0] || "";
+function datesInLine(line = "") {
+  const t = norm(line);
+  const re = /(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/g;
+  const out = [];
+  for (const m of t.matchAll(re)) {
+    const mo = Number(m[3]), d = Number(m[4]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) out.push(canonicalDate(m[1], m[2], mo, d));
+  }
+  return out;
 }
-function integer(s = "", min = 0, max = 99999) {
-  const a = norm(s).replace(/[Oo]/g, "0").replace(/[Il|]/g, "1").replace(/,/g, "").match(/\d{1,6}/g) || [];
-  for (const x of a) { const n = Number(x); if (n >= min && n <= max) return String(n); }
+function plausibleDate(value, first, expiry) {
+  const r = dateOrdinal(value), f = monthOrdinal(first), e = dateOrdinal(expiry);
+  if (!r) return false;
+  if (f) {
+    const y = Math.floor(r / 10000), m = Math.floor((r % 10000) / 100);
+    if (y * 12 + m < f) return false;
+  }
+  if (e && r > e) return false;
+  return true;
+}
+
+function cleanRegistration(text = "") {
+  const lines = norm(text).split("\n").map(x => x.trim()).filter(Boolean);
+  const candidates = [];
+  const re = /([一-龠ぁ-んァ-ヶ]{1,7})\s*(\d\s*\d\s*\d)\s*([ぁ-ん])\s*(\d\s*\d\s*\d\s*\d)/g;
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    for (const m of line.matchAll(re)) {
+      const place = m[1];
+      if (/[都道府県市区町村番地住所使用者所有者株式会社]/.test(place)) continue;
+      const cls = digits(m[2]), num = digits(m[4]);
+      if (cls.length !== 3 || num.length !== 4 || place.length > 4) continue;
+      let score = 5 - Math.max(0, place.length - 2);
+      if (lineIndex < Math.max(6, Math.ceil(lines.length * 0.25))) score += 3;
+      if (/登録番号|車両番号/.test(line)) score += 5;
+      candidates.push({ value: `${place} ${cls} ${m[3]} ${num}`, score, line });
+    }
+  }
+  return candidates.sort((a, b) => b.score - a.score)[0] || null;
+}
+
+function cleanChassis(text = "") {
+  const t = norm(text).toUpperCase().replace(/\s+/g, "").replace(/[‐‑‒–—―ー]/g, "-");
+  const found = t.match(/[A-Z]{1,5}[0-9][A-Z0-9]{1,7}-[A-Z0-9]{4,12}/g) || [];
+  const fixed = found.map(v => {
+    const [a, b] = v.split("-");
+    return `${a.replace(/O(?=\d)|(?<=\d)O/g, "0")}-${b.replace(/O/g, "0")}`;
+  });
+  return fixed.sort((a, b) => b.length - a.length)[0] || "";
+}
+
+function engineCandidate(text = "", model = "") {
+  const lines = norm(text).split("\n").map(x => x.trim()).filter(Boolean);
+  const regulatory = /^(?:DAA|DBA|ABA|CBA|EBD|HBD|LDA|TDA|TKG|TPG|QKG|QPG|2RG|2PG|3BA|4BA|5BA|5AA|6AA|7BA|8BA)-/;
+  const all = [];
+  for (let i = 0; i < lines.length; i++) {
+    const u = lines[i].toUpperCase().replace(/\s+/g, "").replace(/O(?=\d)|(?<=\d)O/g, "0");
+    const values = u.match(/[A-Z0-9]{2,8}-[A-Z0-9]{2,8}/g) || [];
+    for (const v of values) {
+      if (v === compact(model).toUpperCase() || regulatory.test(v)) continue;
+      if (!/[A-Z]/.test(v) || !/\d/.test(v)) continue;
+      let score = 2;
+      if (/原動機|エンジン/.test(lines[i])) score += 8;
+      if (i > 0 && /原動機|エンジン/.test(lines[i - 1])) score += 5;
+      if (v.length >= 7 && v.length <= 13) score += 2;
+      all.push({ value: v, score, line: lines[i] });
+    }
+  }
+  return all.sort((a, b) => b.score - a.score)[0] || null;
+}
+
+function registrationDateCandidate(text = "", first = "", expiry = "") {
+  const lines = norm(text).split("\n").map(x => x.trim()).filter(Boolean);
+  const firstCompact = compact(first).replace(/日$/, "");
+  const expiryCompact = compact(expiry);
+  const firstMonth = monthOrdinal(first);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    for (const value of datesInLine(lines[i])) {
+      if (expiryCompact && compact(value) === expiryCompact) continue;
+      if (!plausibleDate(value, first, expiry)) continue;
+      let score = 1;
+      const around = `${lines[i - 1] || ""} ${lines[i]} ${lines[i + 1] || ""}`;
+      if (/登録年月日|交付年月日/.test(around)) score += 10;
+      if (/初度登録/.test(around)) score += 6;
+      if (/有効期間/.test(around)) score += 4;
+      if (firstCompact && compact(around).includes(firstCompact)) score += 6;
+      if (expiryCompact && compact(around).includes(expiryCompact)) score += 4;
+      if (firstMonth) {
+        const d = dateOrdinal(value);
+        if (d) {
+          const y = Math.floor(d / 10000), mo = Math.floor((d % 10000) / 100);
+          if (y * 12 + mo === firstMonth) score += 5;
+        }
+      }
+      if (/備考|点検|整備|燃費|騒音|改定/.test(around)) score -= 5;
+      out.push({ value, score, line: lines[i] });
+    }
+  }
+  return out.sort((a, b) => b.score - a.score)[0] || null;
+}
+
+function numericRowCandidate(text = "") {
+  const lines = norm(text).split("\n").map(x => x.trim()).filter(Boolean);
+  let best = null;
+  for (let i = 0; i < lines.length; i++) {
+    for (let take = 1; take <= 3; take++) {
+      const chunk = lines.slice(i, i + take).join(" ")
+        .replace(/[Oo]/g, "0")
+        .replace(/[Il|]/g, "1")
+        .replace(/,/g, "");
+      const nums = (chunk.match(/\d{2,5}/g) || []).map(Number);
+      for (let j = 0; j + 4 < nums.length; j++) {
+        const [weight, gross, length, width, height] = nums.slice(j, j + 5);
+        if (weight < 100 || weight > 30000) continue;
+        if (gross < weight || gross > 50000) continue;
+        if (length < 100 || length > 3000) continue;
+        if (width < 100 || width > 300) continue;
+        if (height < 100 || height > 450) continue;
+        let score = 5;
+        if (/車両重量|車両総重量/.test(chunk)) score += 6;
+        if (/長さ|幅|高さ/.test(chunk)) score += 6;
+        if (gross >= weight) score += 2;
+        const value = { vehicleWeightKg: String(weight), grossVehicleWeightKg: String(gross), lengthCm: String(length), widthCm: String(width), heightCm: String(height) };
+        if (!best || score > best.score) best = { value, score, line: chunk };
+      }
+    }
+  }
+  return best;
+}
+
+function findMainOcrDebug() {
+  for (const details of document.querySelectorAll("details")) {
+    const summary = details.querySelector(":scope > summary");
+    if (!summary?.textContent?.includes("OCR詳細（確認用）")) continue;
+    const pre = details.querySelector("pre");
+    const text = pre?.textContent || "";
+    if (text.includes("【車検証 全体OCR】")) return text;
+  }
   return "";
 }
-function maker(s = "") {
-  const t = norm(s).replace(/\s+/g, "");
-  return ["トヨタ","レクサス","日産","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","日野","UDトラックス","BMW","アウディ","ボルボ"].find(v => t.includes(v)) || "";
-}
-function mode(values) {
-  const m = new Map();
-  for (const v of values.filter(Boolean)) m.set(v, (m.get(v) || 0) + 1);
-  const sorted = [...m.entries()].sort((a, b) => b[1] - a[1]);
-  if (!sorted.length) return { value: "", agree: 0 };
-  return { value: sorted[0][0], agree: sorted[0][1] };
-}
-function makeCrop(src, box, style) {
-  const [x, y, w, h] = box;
-  const sx = Math.max(0, Math.round(src.width * x));
-  const sy = Math.max(0, Math.round(src.height * y));
-  const sw = Math.max(1, Math.round(src.width * w));
-  const sh = Math.max(1, Math.round(src.height * h));
-  const scale = Math.max(1, Math.min(6, 1700 / sw));
-  const c = document.createElement("canvas");
-  c.width = Math.round(sw * scale); c.height = Math.round(sh * scale);
-  const ctx = c.getContext("2d", { willReadFrequently: true });
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
-  if (style === "original") return c;
-  const im = ctx.getImageData(0, 0, c.width, c.height);
-  const data = im.data; let sum = 0; const gray = new Uint8Array(c.width * c.height);
-  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    const g = Math.round(data[i] * .22 + data[i + 1] * .70 + data[i + 2] * .08); gray[p] = g; sum += g;
-  }
-  const mean = sum / gray.length;
-  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    const g = gray[p];
-    const v = style === "binary" ? (g < Math.max(105, Math.min(205, mean - 18)) ? 0 : 255) : Math.max(0, Math.min(255, Math.round((g - 128) * 1.65 + 150)));
-    data[i] = data[i + 1] = data[i + 2] = v;
-  }
-  ctx.putImageData(im, 0, 0); return c;
-}
-async function rec(worker, src, box, parser, whitelist = "") {
-  const out = [];
-  for (const style of ["original", "contrast", "binary"]) {
-    const c = makeCrop(src, box, style);
-    await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: "7", user_defined_dpi: "300", tessedit_char_whitelist: whitelist });
-    const raw = norm((await worker.recognize(c)).data.text || "");
-    out.push({ style, raw, value: parser(raw) });
-  }
-  const picked = mode(out.map(x => x.value));
-  return { ...picked, raw: out };
+function extractGlobal(text = "") {
+  const marker = "【車検証 全体OCR】";
+  const i = text.indexOf(marker);
+  if (i < 0) return "";
+  const rest = text.slice(i + marker.length);
+  const j = rest.indexOf("【QR最終確定】");
+  return (j >= 0 ? rest.slice(0, j) : rest).trim();
 }
 
 export default function CertificateAdaptiveOcr() {
@@ -106,84 +191,87 @@ export default function CertificateAdaptiveOcr() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     let timer = 0;
-    const onChange = (e) => {
+
+    const onChange = (event) => {
       if (!location.pathname.includes("vehicle-workflow")) return;
-      const input = e.target;
+      const input = event.target;
       if (!(input instanceof HTMLInputElement) || input.type !== "file") return;
       const file = input.files?.[0];
       if (!file || !file.type.startsWith("image/")) return;
       const id = ++runId.current;
-      setDebug({ status: "既存OCR終了待ち", patch: {}, bounds: "-", rows: [] });
-      clearTimeout(timer);
+      setDebug({ status: "本体の全体OCR待ち", patch: {}, rows: [] });
       const started = Date.now();
+      clearTimeout(timer);
       const wait = () => {
         if (id !== runId.current) return;
-        const txt = document.body?.innerText || "";
-        const ready = txt.includes("OCR詳細（確認用）") || txt.includes("QRから本体stateへ反映") || Date.now() - started > 45000;
-        if (ready) timer = window.setTimeout(() => run(file, id), 1200);
-        else timer = window.setTimeout(wait, 1000);
+        const source = findMainOcrDebug();
+        if (source) {
+          timer = window.setTimeout(() => run(source, id), 250);
+          return;
+        }
+        if (Date.now() - started > 60000) {
+          setDebug({ status: "本体の全体OCR結果を取得できませんでした", patch: {}, rows: [] });
+          return;
+        }
+        timer = window.setTimeout(wait, 500);
       };
-      timer = window.setTimeout(wait, 1500);
+      timer = window.setTimeout(wait, 500);
     };
 
-    const run = async (file, id) => {
+    const run = (debugText, id) => {
       if (id !== runId.current) return;
-      let worker = null;
-      try {
-        setDebug({ status: "用紙正規化中", patch: {}, bounds: "-", rows: [] });
-        const source = await fileToCanvas(file, 2800);
-        const b = detectLikelyPaperBounds(source);
-        const normalized = b && b.confidence >= .44 ? cropCanvas(source, b) : source;
-        const boundsText = b ? `x=${Math.round(b.x)} y=${Math.round(b.y)} w=${Math.round(b.width)} h=${Math.round(b.height)} conf=${b.confidence.toFixed(2)}` : "検出なし（原画像）";
-        const t = await import("tesseract.js");
-        worker = await t.createWorker("jpn+eng", 1);
-        const defs = [
-          ["recordDate", [0.65,0.090,0.25,0.032], jpDate, ""],
-          ["documentNumber", [0.70,0.137,0.20,0.030], docNo, "0123456789"],
-          ["registrationNumber", [0.20,0.180,0.40,0.036], reg, ""],
-          ["chassisNumber", [0.10,0.210,0.42,0.036], chassis, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"],
-          ["registrationDate", [0.15,0.238,0.28,0.040], jpDate, ""],
-          ["vehicleName", [0.08,0.410,0.24,0.034], maker, ""],
-          ["engineModel", [0.45,0.438,0.23,0.038], engine, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"],
-          ["vehicleWeightKg", [0.10,0.515,0.16,0.034], s => integer(s, 100, 99999), "0123456789kgKG"],
-          ["grossVehicleWeightKg", [0.31,0.515,0.18,0.034], s => integer(s, 100, 99999), "0123456789kgKG"],
-          ["lengthCm", [0.48,0.515,0.11,0.034], s => integer(s, 50, 3000), "0123456789cmCM"],
-          ["widthCm", [0.60,0.515,0.11,0.034], s => integer(s, 50, 1000), "0123456789cmCM"],
-          ["heightCm", [0.73,0.515,0.11,0.034], s => integer(s, 50, 1000), "0123456789cmCM"],
-        ];
-        const patch = {}; const rows = [];
-        for (let i = 0; i < defs.length; i++) {
-          if (id !== runId.current) return;
-          const [key, box, parser, wl] = defs[i];
-          setDebug({ status: `共通補正OCR ${i+1}/${defs.length}`, patch: { ...patch }, bounds: boundsText, rows: [...rows] });
-          const r = await rec(worker, normalized, box, parser, wl);
-          rows.push(`${key}: ${r.raw.map(x => `${x.style}=${x.value || "-"}`).join(" / ")}`);
-          if (r.value && r.agree >= 2) patch[key] = r.value;
-        }
-        if (Object.keys(patch).length) {
-          window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: patch }));
-          window.__vehicleAdaptiveOcrPatch = patch;
-        }
-        setDebug({ status: "共通画像補正OCR 完了", patch, bounds: boundsText, rows });
-      } catch (e) {
-        setDebug({ status: `共通画像補正OCRエラー: ${e?.message || e}`, patch: {}, bounds: "-", rows: [] });
-      } finally {
-        try { await worker?.terminate?.(); } catch {}
+      const global = extractGlobal(debugText);
+      const qr = window.__vehicleCertificateQrPriority || {};
+      const model = qr.model || "";
+      const first = qr.firstRegistration || "";
+      const expiry = qr.inspectionExpiry || "";
+      const patch = {};
+      const rows = [];
+
+      const registration = cleanRegistration(global);
+      if (registration?.value) patch.registrationNumber = registration.value;
+      rows.push(`登録番号: ${registration?.value || "未取得"}${registration?.line ? ` / ${registration.line}` : ""}`);
+
+      const ch = cleanChassis(global);
+      if (ch) patch.chassisNumber = ch;
+      rows.push(`車台番号: ${ch || "未取得"}`);
+
+      const regDate = registrationDateCandidate(global, first, expiry);
+      if (regDate?.value && regDate.score >= 5) patch.registrationDate = regDate.value;
+      rows.push(`登録年月日: ${regDate?.value || "未取得"} score=${regDate?.score ?? 0}${regDate?.line ? ` / ${regDate.line}` : ""}`);
+
+      const eng = engineCandidate(global, model);
+      if (eng?.value && eng.score >= 4) patch.engineModel = eng.value;
+      rows.push(`原動機型式: ${eng?.value || "未取得"} score=${eng?.score ?? 0}${eng?.line ? ` / ${eng.line}` : ""}`);
+
+      const numeric = numericRowCandidate(global);
+      if (numeric?.value && numeric.score >= 7) Object.assign(patch, numeric.value);
+      rows.push(`重量寸法行: ${numeric ? Object.values(numeric.value).join(" / ") : "未取得"} score=${numeric?.score ?? 0}${numeric?.line ? ` / ${numeric.line}` : ""}`);
+
+      if (Object.keys(patch).length) {
+        window.__vehicleAdaptiveOcrPatch = patch;
+        window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: patch }));
       }
+      setDebug({ status: "全体OCR構造解析 完了", patch, rows });
     };
 
     document.addEventListener("change", onChange, true);
-    return () => { document.removeEventListener("change", onChange, true); clearTimeout(timer); runId.current++; };
+    return () => {
+      document.removeEventListener("change", onChange, true);
+      clearTimeout(timer);
+      runId.current += 1;
+    };
   }, []);
 
   if (!debug || typeof window === "undefined" || !location.pathname.includes("vehicle-workflow")) return null;
-  return <details style={{margin:"12px auto",maxWidth:760,padding:12,border:"1px solid #cbd5e1",borderRadius:14,background:"#f8fafc"}}>
-    <summary style={{fontWeight:800,cursor:"pointer"}}>共通画像補正OCR（確認用）</summary>
-    <div style={{marginTop:10,fontSize:14,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
-      <div>状態: {debug.status}</div>
-      <div>用紙: {debug.bounds}</div>
-      <div>採用: {Object.entries(debug.patch || {}).map(([k,v]) => `${k}=${v}`).join(" / ") || "まだなし"}</div>
-      {debug.rows?.length ? <details style={{marginTop:8}}><summary>候補詳細</summary><div>{debug.rows.join("\n")}</div></details> : null}
-    </div>
-  </details>;
+  return (
+    <details open style={{ margin: "12px auto", maxWidth: 760, padding: 12, border: "1px solid #cbd5e1", borderRadius: 14, background: "#f8fafc" }}>
+      <summary style={{ fontWeight: 800, cursor: "pointer" }}>共通画像補正OCR（確認用）</summary>
+      <div style={{ marginTop: 10, fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+        <div>状態: {debug.status}</div>
+        <div>採用: {Object.entries(debug.patch || {}).map(([k, v]) => `${k}=${v}`).join(" / ") || "まだなし"}</div>
+        {debug.rows?.length ? <details open style={{ marginTop: 8 }}><summary>構造解析詳細</summary><div>{debug.rows.join("\n")}</div></details> : null}
+      </div>
+    </details>
+  );
 }
