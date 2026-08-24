@@ -8,6 +8,7 @@ import {
   recognizeWholeDocument,
 } from "../../lib/document-recognition-v2";
 
+type VariantPreview = { name: string; url: string };
 type ResultView = {
   quality: string[];
   geometry: string;
@@ -15,6 +16,7 @@ type ResultView = {
   confidence: string;
   support: number;
   raw: string;
+  previews: VariantPreview[];
 };
 
 const styles: Record<string, React.CSSProperties> = {
@@ -27,6 +29,22 @@ const styles: Record<string, React.CSSProperties> = {
   notice: { padding: "13px 15px", background: "#e9f7ef", border: "1px solid #bfe6ce", borderRadius: 12, lineHeight: 1.6 },
   debug: { width: "100%", minHeight: 360, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" },
 };
+
+function previewDataUrl(source: HTMLCanvasElement, maxWidth = 760) {
+  const scale = Math.min(1, maxWidth / Math.max(1, source.width));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(source.width * scale));
+  canvas.height = Math.max(1, Math.round(source.height * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  const url = canvas.toDataURL("image/jpeg", 0.82);
+  canvas.width = 1;
+  canvas.height = 1;
+  return url;
+}
 
 export default function OcrEngineTestPage() {
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -52,6 +70,12 @@ export default function OcrEngineTestPage() {
         cropPaper: true,
         minPaperConfidence: 0.45,
       });
+      const previews = [
+        { name: "original（紙検出・傾き補正後）", url: previewDataUrl(session.prepared.variants.original) },
+        { name: "contrast（コントラスト強調）", url: previewDataUrl(session.prepared.variants.contrast) },
+        { name: "adaptiveBinary（影対応・局所二値化）", url: previewDataUrl(session.prepared.variants.adaptiveBinary) },
+        { name: "binaryDark（通常二値化）", url: previewDataUrl(session.prepared.variants.binaryDark) },
+      ].filter(x => x.url);
       setProgress(10);
       const created = await createSharedTesseractWorker({
         logger: (m: any) => {
@@ -85,9 +109,10 @@ export default function OcrEngineTestPage() {
         confidence: recognition.confidence.toFixed(2),
         support: recognition.support,
         raw,
+        previews,
       });
       setProgress(100);
-      setMessage("解析完了。原画像・コントラスト・影対応・通常二値化の生OCRを比較できます。");
+      setMessage("解析完了。補正画像と生OCRを直接見比べられます。");
     } catch (error) {
       console.error(error);
       setMessage(`共通OCR V2テストでエラー: ${String((error as any)?.message || error)}`);
@@ -116,6 +141,20 @@ export default function OcrEngineTestPage() {
           <p><strong>{result.geometry}</strong></p>
           <p>近似一致 support: <strong>{result.support}</strong> / confidence: <strong>{result.confidence}</strong></p>
           <div style={styles.notice}>{result.quality.join(" / ")}</div>
+        </section>
+
+        <section style={styles.card}>
+          <h2 style={{ marginTop: 0 }}>OCRへ渡した画像を比較</h2>
+          <p style={styles.text}>ここで文字が消えていれば画像処理側、文字が見えているのに生OCRが違えば認識側の問題と切り分けできます。</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 14 }}>
+            {result.previews.map(item => <div key={item.name}>
+              <div style={{ fontWeight: 800, marginBottom: 6 }}>{item.name}</div>
+              <img src={item.url} alt={item.name} style={{ width: "100%", maxHeight: 360, objectFit: "contain", background: "#eef2f7", borderRadius: 10, border: "1px solid #d9e0ea" }} />
+            </div>)}
+          </div>
+        </section>
+
+        <section style={styles.card}>
           <details>
             <summary style={{ fontWeight: 800, cursor: "pointer" }}>統合OCR文字</summary>
             <textarea readOnly value={result.consensus} style={styles.debug} />
