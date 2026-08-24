@@ -261,8 +261,9 @@ export default function CertificateIdentityQrRecovery() {
         return;
       }
       const elapsed = Date.now() - startedAt;
-      if (sawProgress && elapsed < 10500) return;
-      if (!sawProgress && elapsed < 22000) return;
+      // 既存の下段6QR補助を先に走らせ、同時にjsQR/ZXingを重ねない。
+      if (sawProgress && elapsed < 15000) return;
+      if (!sawProgress && elapsed < 26000) return;
 
       const file = pending;
       const myToken = token;
