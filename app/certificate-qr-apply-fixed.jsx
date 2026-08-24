@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 
-const AUTH_EVENT = "vehicle-certificate-authoritative";
 const compact = (v = "") => String(v).normalize("NFKC").replace(/\u3000/g, " ").replace(/\s+/g, " ").trim();
 
 function eraDate(year, month, day = 0) {
@@ -101,15 +100,13 @@ function showStatus(v, state = "") {
     box.textContent = state || "QR1〜3の連結データを待っています。";
     return;
   }
-  box.textContent = `QRから本体stateへ反映: 有効期限 ${v.inspectionExpiry || "未取得"} / 初度登録 ${v.firstRegistration || "未取得"} / 型式 ${v.model || "未取得"} / 前前軸重 ${v.frontFrontAxleWeightKg || "-"}kg / 後後軸重 ${v.rearRearAxleWeightKg || "-"}kg / 燃料 ${v.fuel || "未取得"}${state ? ` / ${state}` : ""}`;
+  box.textContent = `QR優先値確定: 有効期限 ${v.inspectionExpiry || "未取得"} / 初度登録 ${v.firstRegistration || "未取得"} / 型式 ${v.model || "未取得"} / 前前軸重 ${v.frontFrontAxleWeightKg || "-"}kg / 後後軸重 ${v.rearRearAxleWeightKg || "-"}kg / 燃料 ${v.fuel || "未取得"}${state ? ` / ${state}` : ""}`;
 }
 
 export default function CertificateQrApplyFixed() {
   useEffect(() => {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
     let stopped = false;
-    let sendBudget = 0;
-    let sentCount = 0;
     let lastFileKey = "";
 
     const onFileChange = (event) => {
@@ -124,10 +121,7 @@ export default function CertificateQrApplyFixed() {
         window.__vehicleCertificateQrPriority = null;
       }
       lastFileKey = key;
-      sendBudget = 14;
-      sentCount = 0;
-      showStatus(null, sameFile ? "同じ画像を再テスト中。前回QR値を再利用して本体stateを再確定します。" : "新しい画像のQR解析待ちです。"
-      );
+      showStatus(null, sameFile ? "同じ画像を再解析中。" : "QR解析待ちです。");
     };
 
     document.addEventListener("change", onFileChange, true);
@@ -142,21 +136,10 @@ export default function CertificateQrApplyFixed() {
         return;
       }
       window.__vehicleCertificateQrPriority = values;
-      if (document.querySelector(".progress")) {
-        showStatus(values, "OCR完了待ち");
-        return;
-      }
-      if (sendBudget > 0) {
-        window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: values }));
-        sendBudget -= 1;
-        sentCount += 1;
-        showStatus(values, `本体stateへ確定送信 ${sentCount}/14`);
-      } else {
-        showStatus(values, "本体state反映安定");
-      }
+      showStatus(values, document.querySelector(".progress") ? "v3本体OCRへ渡して処理中" : "v3本体が最終採用");
     };
 
-    const timer = window.setInterval(tick, 420);
+    const timer = window.setInterval(tick, 250);
     tick();
     return () => {
       stopped = true;
