@@ -58,31 +58,22 @@ function parseRegistration(value = "") {
   const classification = digits(m[2]);
   const kana = m[3] || "";
   const serial = digits(m[4]);
-  if (!classification || !kana || !serial) return { value: "", suspicious: false, raw: text };
+  if (!classification || classification.length > 3 || !kana || !serial || serial.length > 4) {
+    return { value: "", suspicious: true, raw: text, prefix, area: "" };
+  }
 
   const known = bestArea(prefix);
-  if (known) {
-    return {
-      value: `${known} ${classification} ${kana} ${serial}`,
-      suspicious: prefix !== known,
-      raw: text,
-      prefix,
-      area: known,
-    };
+  if (!known) {
+    return { value: "", suspicious: true, raw: text, prefix, area: "" };
   }
 
-  const hasAddressSuffix = /[都道府県市区町村]/.test(prefix);
-  if (!hasAddressSuffix && prefix.length <= 4) {
-    return {
-      value: `${prefix} ${classification} ${kana} ${serial}`,
-      suspicious: false,
-      raw: text,
-      prefix,
-      area: prefix,
-    };
-  }
-
-  return { value: "", suspicious: true, raw: text, prefix, area: "" };
+  return {
+    value: `${known} ${classification} ${kana} ${serial}`,
+    suspicious: prefix !== known,
+    raw: text,
+    prefix,
+    area: known,
+  };
 }
 
 function findRegistrationInput() {
@@ -157,14 +148,14 @@ export default function CertificateRegistrationNumberGuard() {
       if (parsed.value) {
         if (parsed.value !== current) setReactInputValue(input, parsed.value);
         if (parsed.value !== raw || parsed.suspicious || qrRaw) {
-          showDebug(raw, parsed.value, source, parsed.suspicious ? "住所文字列の混入を除外しました。" : "");
+          showDebug(raw, parsed.value, source, parsed.suspicious ? "住所などの余分な地名を除外しました。" : "");
         }
         return;
       }
 
       if (parsed.suspicious) {
         if (!qrRaw && current) setReactInputValue(input, "");
-        showDebug(raw, "", source, "登録番号として確定できないため保留（空欄）にしました。");
+        showDebug(raw, "", source, "実在するナンバープレート地域名として確定できないため保留（空欄）にしました。");
       }
     };
 
