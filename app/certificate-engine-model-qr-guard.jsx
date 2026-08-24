@@ -38,6 +38,26 @@ function modelCore() {
   return parts.at(-1) || text;
 }
 
+function editDistance(a = "", b = "") {
+  const x = clean(a);
+  const y = clean(b);
+  const row = Array.from({ length: y.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= x.length; i += 1) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= y.length; j += 1) {
+      const old = row[j];
+      row[j] = Math.min(
+        row[j] + 1,
+        row[j - 1] + 1,
+        prev + (x[i - 1] === y[j - 1] ? 0 : 1)
+      );
+      prev = old;
+    }
+  }
+  return row[y.length];
+}
+
 function looksModelContaminated(engine = "") {
   const current = clean(engine);
   const model = modelCore();
@@ -46,6 +66,15 @@ function looksModelContaminated(engine = "") {
   if (current.startsWith(model)) {
     const tail = current.slice(model.length).replace(/-/g, "");
     if (tail.length >= 1 && tail.length <= 8) return true;
+  }
+
+  // OCRで型式の1文字を余計に拾ったケースも除外する。
+  // 例: 型式 MK53S に対し原動機欄が MKS53SR0 のように連結された場合。
+  for (const prefixLength of [model.length, model.length + 1]) {
+    if (current.length <= prefixLength) continue;
+    const prefix = current.slice(0, prefixLength);
+    const tail = current.slice(prefixLength).replace(/-/g, "");
+    if (tail.length >= 1 && tail.length <= 8 && editDistance(prefix, model) <= 1) return true;
   }
   return false;
 }
