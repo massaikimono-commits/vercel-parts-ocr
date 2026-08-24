@@ -11,6 +11,7 @@ export type LayoutTextLine = {
   wordCount: number;
   variant: DocumentVariantName;
   psm: string | number;
+  variantSupport?: number;
 };
 
 export type LayoutLineRecognitionOptions = {
@@ -118,19 +119,84 @@ function parseTsvLines(
       wordCount: sorted.length,
       variant,
       psm,
+      variantSupport: 1,
     });
   }
 
   return lines.sort((a, b) => a.top - b.top || a.left - b.left);
 }
 
+function compactLength(text = "") {
+  return [...String(text).replace(/\s/g, "")].length;
+}
+
+function informationScore(line: LayoutTextLine) {
+  const text = cleanText(line.text);
+  const length = compactLength(text);
+  const punctuation = [...text].filter(ch => /[-_=|｜ー―~〜.・:：,，\/\\]/.test(ch)).length;
+  const punctuationRatio = length ? punctuation / length : 1;
+  let score = line.confidence * 0.58 + Math.min(32, length) * 0.9;
+  if (/\d/.test(text)) score += 10;
+  if (/[A-Za-z]/.test(text)) score += 9;
+  if (/[ぁ-んァ-ヶ一-龠]/.test(text)) score += 8;
+  if (length <= 2) score -= 26;
+  if (punctuationRatio > 0.55) score -= 30;
+  return score;
+}
+
+function horizontalOverlap(a: LayoutTextLine, b: LayoutTextLine) {
+  const overlap = Math.max(0, Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left));
+  return overlap / Math.max(1, Math.min(a.width, b.width));
+}
+
+function samePhysicalRow(a: LayoutTextLine, b: LayoutTextLine) {
+  const ay = a.top + a.height / 2;
+  const by = b.top + b.height / 2;
+  const yTolerance = Math.max(5, Math.max(a.height, b.height) * 0.82);
+  if (Math.abs(ay - by) > yTolerance) return false;
+  if (horizontalOverlap(a, b) >= 0.34) return true;
+  const ax = a.left + a.width / 2;
+  const bx = b.left + b.width / 2;
+  return Math.abs(ax - bx) <= Math.max(a.width, b.width) * 0.24;
+}
+
+function fuseVariantLines(lines: LayoutTextLine[]) {
+  const groups: LayoutTextLine[][] = [];
+  for (const line of lines.sort((a, b) => a.top - b.top || a.left - b.left)) {
+    let best: LayoutTextLine[] | null = null;
+    let bestDistance = Infinity;
+    for (const group of groups) {
+      const reference = [...group].sort((a, b) => informationScore(b) - informationScore(a))[0];
+      if (!samePhysicalRow(reference, line)) continue;
+      const dy = Math.abs((reference.top + reference.height / 2) - (line.top + line.height / 2));
+      if (dy < bestDistance) {
+        bestDistance = dy;
+        best = group;
+      }
+    }
+    if (best) best.push(line);
+    else groups.push([line]);
+  }
+
+  return groups.map(group => {
+    const strongest = [...group].sort((a, b) => informationScore(b) - informationScore(a))[0];
+    const variants = new Set(group.map(item => item.variant)).size;
+    const weightedConfidence = group.reduce((sum, item) => sum + item.confidence * Math.max(1, compactLength(item.text)), 0);
+    const chars = group.reduce((sum, item) => sum + Math.max(1, compactLength(item.text)), 0);
+    return {
+      ...strongest,
+      confidence: Math.max(strongest.confidence, chars ? weightedConfidence / chars : strongest.confidence),
+      variantSupport: variants,
+    };
+  }).sort((a, b) => a.top - b.top || a.left - b.left);
+}
+
 /**
- * Tesseract already knows where its words and lines are. On ruled forms, using that
- * geometry is much more reliable than trying to find text rows from dark-pixel density,
- * because horizontal table rules otherwise look like very strong "text bands".
- *
- * We normally try contrast first because it preserves thin Japanese strokes while
- * reducing background variation. Original is only used if contrast yields too few rows.
+ * Rebuilds text rows from Tesseract TSV geometry. Ruled forms are hostile to
+ * dark-pixel row detection, so we ask multiple preprocessing variants where words
+ * are, then fuse rows that occupy the same physical place. No single variant gets
+ * to end the search early: a plate number may be best in adaptive threshold while
+ * an engine/model code is best in contrast.
  */
 export async function recognizeDocumentLayoutLines(
   session: DocumentRecognitionSession,
@@ -140,12 +206,12 @@ export async function recognizeDocumentLayoutLines(
   return serial(async () => {
     const variants = options.variants?.length
       ? options.variants
-      : (["contrast", "original"] as DocumentVariantName[]);
+      : (["contrast", "original", "adaptiveBinary"] as DocumentVariantName[]);
     const psm = options.psm ?? "11";
     const minConfidence = Math.max(0, Math.min(95, options.minConfidence ?? 18));
     const minTextLength = Math.max(1, options.minTextLength ?? 2);
     const maxLines = Math.max(4, Math.min(240, options.maxLines ?? 120));
-    let best: LayoutTextLine[] = [];
+    const all: LayoutTextLine[] = [];
 
     for (const variant of variants) {
       const source = session.prepared.variants[variant];
@@ -157,17 +223,18 @@ export async function recognizeDocumentLayoutLines(
         tessedit_char_whitelist: "",
       });
       const raw = await worker.recognize(source, {}, { text: true, tsv: true });
-      const lines = parseTsvLines(
+      all.push(...parseTsvLines(
         String(raw?.data?.tsv || ""),
         variant,
         psm,
         minConfidence,
         minTextLength,
-      );
-      if (lines.length > best.length) best = lines;
-      if (lines.length >= 8) return lines.slice(0, maxLines);
+      ));
     }
 
-    return best.slice(0, maxLines);
+    return fuseVariantLines(all)
+      .sort((a, b) => informationScore(b) - informationScore(a))
+      .slice(0, maxLines)
+      .sort((a, b) => a.top - b.top || a.left - b.left);
   });
 }
