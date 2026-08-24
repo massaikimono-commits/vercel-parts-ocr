@@ -4,18 +4,18 @@ import CertificateRegistrationNumberGuard from "../certificate-registration-numb
 import CertificateChassisNumberGuard from "../certificate-chassis-number-guard";
 import CertificateEngineModelQrGuard from "../certificate-engine-model-qr-guard";
 import CertificateIdentityQrRecovery from "../certificate-identity-qr-recovery";
-import CertificateLayoutRecognitionV4 from "../certificate-layout-recognition-v4";
+import CertificateLayoutRecognitionV5 from "../certificate-layout-recognition-v5";
 import CertificateTestSummary from "../certificate-test-summary";
 
 // Vehicle certificate recognition pipeline for /vehicle-workflow-v2:
 // 1. QR is authoritative whenever available.
-// 2. Shared OCR v4 validates label meaning, infers ruled-cell boundaries from neighboring
-//    labels, then re-reads only the value cell across multiple image variants.
-// 3. Field guards validate values but never infer identity data from addresses or sample-specific values.
+// 2. Shared OCR v5 filters label candidates by document semantics before spatial consensus,
+//    tightens ruled-table columns, and re-reads only the preferred value cell.
+// 3. Plate-region correction uses only OCR text from the registration-number cell and a
+//    registration-region vocabulary; customer addresses are never used to infer a plate.
+// 4. Field guards validate values but never inject sample-specific values.
 //
-// Older field-specific OCR passes and layout v2/v3 are intentionally not mounted here.
-// Keeping one OCR fallback avoids duplicate workers on iPhone Safari and keeps the same
-// recognition foundation reusable by parts slips.
+// Older field-specific OCR passes and layout v2/v3/v4 are intentionally not mounted here.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -23,7 +23,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateFulltextFix />
       <CertificateClassificationNumberGuard />
       <CertificateIdentityQrRecovery />
-      <CertificateLayoutRecognitionV4 />
+      <CertificateLayoutRecognitionV5 />
       <CertificateRegistrationNumberGuard />
       <CertificateChassisNumberGuard />
       <CertificateEngineModelQrGuard />
