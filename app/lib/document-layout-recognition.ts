@@ -151,6 +151,102 @@ export function findAllLabelAnchors(
   return out;
 }
 
+function anchorCenter(anchor: LabelAnchor) {
+  return {
+    x: (anchor.bbox.x0 + anchor.bbox.x1) / 2,
+    y: (anchor.bbox.y0 + anchor.bbox.y1) / 2,
+  };
+}
+
+function averageAnchor(group: LabelAnchor[]) {
+  const strongest = [...group].sort((a, b) => b.confidence - a.confidence)[0];
+  const total = group.reduce((sum, x) => sum + Math.max(0.1, x.confidence), 0);
+  const weighted = (pick: (anchor: LabelAnchor) => number) =>
+    group.reduce((sum, x) => sum + pick(x) * Math.max(0.1, x.confidence), 0) / total;
+  return {
+    ...strongest,
+    confidence: Math.min(1, group.reduce((sum, x) => sum + x.confidence, 0) / group.length + Math.min(0.18, (group.length - 1) * 0.07)),
+    bbox: {
+      x0: weighted(x => x.bbox.x0),
+      y0: weighted(x => x.bbox.y0),
+      x1: weighted(x => x.bbox.x1),
+      y1: weighted(x => x.bbox.y1),
+    },
+  } satisfies LabelAnchor;
+}
+
+/**
+ * Finds the same label independently on multiple preprocessing variants, then
+ * prefers anchors that agree geometrically. This is intentionally generic: vehicle
+ * certificates and parts slips can use the same function for their own labels.
+ */
+export function findConsensusLabelAnchors(
+  tokenSets: Array<{ name: string; tokens: OcrToken[] }>,
+  definitions: Record<string, string[]>,
+  options: {
+    pageWidth: number;
+    pageHeight: number;
+    minSimilarity?: number;
+    maxTokens?: number;
+    xToleranceRatio?: number;
+    yToleranceRatio?: number;
+  },
+) {
+  const perVariant = tokenSets.map(set => ({
+    name: set.name,
+    anchors: findAllLabelAnchors(set.tokens, definitions, {
+      minSimilarity: options.minSimilarity,
+      maxTokens: options.maxTokens,
+    }),
+  }));
+  const out: Record<string, LabelAnchor | null> = {};
+  const support: Record<string, number> = {};
+  const xTolerance = options.pageWidth * (options.xToleranceRatio ?? 0.045);
+  const yTolerance = options.pageHeight * (options.yToleranceRatio ?? 0.025);
+
+  for (const key of Object.keys(definitions)) {
+    const candidates = perVariant
+      .map(set => set.anchors[key])
+      .filter((anchor): anchor is LabelAnchor => !!anchor);
+    if (!candidates.length) {
+      out[key] = null;
+      support[key] = 0;
+      continue;
+    }
+
+    const groups: LabelAnchor[][] = [];
+    for (const anchor of candidates) {
+      const center = anchorCenter(anchor);
+      let bestGroup: LabelAnchor[] | null = null;
+      let bestDistance = Infinity;
+      for (const group of groups) {
+        const reference = averageAnchor(group);
+        const other = anchorCenter(reference);
+        const dx = Math.abs(center.x - other.x);
+        const dy = Math.abs(center.y - other.y);
+        if (dx > xTolerance || dy > yTolerance) continue;
+        const distance = dx / Math.max(1, xTolerance) + dy / Math.max(1, yTolerance);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestGroup = group;
+        }
+      }
+      if (bestGroup) bestGroup.push(anchor);
+      else groups.push([anchor]);
+    }
+
+    groups.sort((a, b) => {
+      const score = (group: LabelAnchor[]) => group.length * 1.4 + group.reduce((sum, x) => sum + x.confidence, 0);
+      return score(b) - score(a);
+    });
+    const winner = groups[0];
+    out[key] = averageAnchor(winner);
+    support[key] = winner.length;
+  }
+
+  return { anchors: out, support, variants: perVariant };
+}
+
 export function relativeRegionFromAnchor(
   anchor: LabelAnchor,
   pageWidth: number,
