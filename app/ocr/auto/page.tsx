@@ -72,8 +72,6 @@ function observationText(result: any) {
 }
 
 async function readDedicatedMarkers(session: any, worker: any) {
-  // These regions are intentionally broad and document-relative. They are not tuned
-  // to one photographed sample; paper crop + deskew happens in the shared engine.
   const regions = [
     { x: 0.00, y: 0.00, width: 1.00, height: 0.36 },
     { x: 0.00, y: 0.28, width: 0.92, height: 0.34 },
@@ -82,7 +80,7 @@ async function readDedicatedMarkers(session: any, worker: any) {
   for (const region of regions) {
     const result = await recognizeDocumentRegion(session, worker, region, {
       ...OCR_FIELD_PRESETS.japaneseText,
-      variants: ["original", "contrast", "binaryDark"],
+      variants: ["original", "contrast", "adaptiveBinary"],
       psms: ["11", "6"],
       targetWidth: 2600,
       minSimilarity: 0.56,
@@ -138,7 +136,7 @@ export default function AutoOCRPage() {
 
       const whole = await recognizeWholeDocument(session, worker, {
         profile: "japanese",
-        variants: ["original", "contrast", "binaryDark"],
+        variants: ["original", "contrast", "adaptiveBinary"],
         psms: ["11", "6"],
         minSimilarity: 0.52,
         minSupport: 2,
@@ -192,7 +190,7 @@ export default function AutoOCRPage() {
     <main style={styles.page}>
       <section style={styles.card}>
         <h1 style={styles.title}>伝票OCR 自動判定</h1>
-        <p style={styles.text}>車検証と共通の画像補正・傾き補正・複数画像OCR・近似文字統合を使って読み取ります。判定に自信がない時は勝手に別のOCRへ進みません。</p>
+        <p style={styles.text}>車検証と共通の画像補正・傾き補正・影対応OCR・近似文字統合を使って読み取ります。判定に自信がない時は勝手に別のOCRへ進みません。</p>
         <div style={mode === "unknown" ? styles.warning : styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>
 
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && detect(e.target.files[0])} />
@@ -220,7 +218,7 @@ export default function AutoOCRPage() {
       <section style={styles.card}>
         <details>
           <summary style={{ fontWeight: 700, cursor: "pointer" }}>判定用OCR詳細</summary>
-          <p style={styles.text}>共通OCR V2の画像品質・傾き補正・複数OCR結果を表示します。</p>
+          <p style={styles.text}>共通OCR V2の画像品質・傾き補正・影対応を含む複数OCR結果を表示します。</p>
           <textarea readOnly value={rawText} style={{ width: "100%", minHeight: 260, border: "1px solid #d6deea", borderRadius: 12, padding: 12, fontSize: 13, background: "#f8fafc" }} />
         </details>
       </section>
