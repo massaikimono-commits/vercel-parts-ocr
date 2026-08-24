@@ -58,14 +58,12 @@ async function sourceCanvas(file) {
   }
 }
 
-function cropSlot(source, x0, y0, mode) {
-  const w0 = 0.125;
-  const h0 = 0.145;
+function cropRegion(source, x0, y0, w0, h0, mode, target = 1250) {
   const sx = Math.max(0, Math.round(source.width * x0));
   const sy = Math.max(0, Math.round(source.height * y0));
   const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * w0)));
   const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * h0)));
-  const scale = Math.max(1, Math.min(4.2, 1250 / sw));
+  const scale = Math.max(1, Math.min(4.8, target / sw));
   const pad = 52;
   const c = document.createElement("canvas");
   c.width = Math.round(sw * scale) + pad * 2;
@@ -89,6 +87,14 @@ function cropSlot(source, x0, y0, mode) {
     ctx.putImageData(image, 0, 0);
   }
   return c;
+}
+
+function cropSlot(source, x0, y0, mode) {
+  return cropRegion(source, x0, y0, 0.125, 0.145, mode, 1250);
+}
+
+function cropFocused(source, x0, y0, mode) {
+  return cropRegion(source, x0, y0, 0.095, 0.125, mode, 1550);
 }
 
 async function makeReader() {
@@ -130,11 +136,58 @@ function unique(items) {
   return [...map.values()].sort((a, b) => a.slot - b.slot);
 }
 
+function keiVersion(item) {
+  const f = String(item?.data || "")
+    .normalize("NFKC")
+    .replace(/\u3000/g, " ")
+    .split("/")
+    .map((x) => x.trim());
+  return f[0] === "K" ? (f[1] || "") : "";
+}
+
+function hasKeiCode(items, firstDigit) {
+  return unique(items).some((item) => new RegExp(`^${firstDigit}\\d$`).test(keiVersion(item)));
+}
+
+async function recoverImportantKeiCodes(source, reader, found) {
+  // 旧・軽自動車紙車検証で重要なコード2(車台/原動機)、コード6(種別/用途/形状等)、
+  // さらにコード1(車両番号/車台)だけを狭い切り出しで再試行する。
+  // 全面再走査はせず、Safariの負荷を抑える。
+  const plans = [
+    { digit: "2", slot: 1, xs: [0.485, 0.515, 0.545] },
+    { digit: "7", slot: 5, xs: [0.765, 0.795, 0.825] },
+    { digit: "0", slot: 0, xs: [0.405, 0.435, 0.465] },
+  ];
+  const attempts = [
+    [0.79, "contrast"],
+    [0.835, "contrast"],
+    [0.805, "color"],
+  ];
+
+  for (const plan of plans) {
+    if (hasKeiCode(found, plan.digit)) continue;
+    outer: for (const [y, mode] of attempts) {
+      for (const x of plan.xs) {
+        const focused = cropFocused(source, x, y, mode);
+        try {
+          const hit = await decodeSlot(reader, focused, plan.slot, `重点K${plan.digit}/x${x}/y${y}/${mode}`);
+          if (hit) found.push(hit);
+          if (hasKeiCode(found, plan.digit)) break outer;
+        } finally {
+          focused.width = 1;
+          focused.height = 1;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+  }
+}
+
 async function scanSixSlots(file) {
   const source = await sourceCanvas(file);
   const reader = await makeReader();
   const found = [];
-  // この様式は最下段に6個横並び。実画像に合わせて少し重なる幅で切る。
+  // この様式は最下段に6個横並び。まず従来の軽量スキャンを行う。
   const xs = [0.43, 0.52, 0.61, 0.70, 0.79, 0.875];
   const passes = [
     [0.80, "color"],
@@ -155,10 +208,14 @@ async function scanSixSlots(file) {
           crop.width = 1;
           crop.height = 1;
         }
-        // iPhone Safariを固めない。
         await new Promise((resolve) => window.setTimeout(resolve, 0));
       }
       if (unique(found).length >= 6) break;
+    }
+
+    // QR3/4/5だけ読めた時に、車台番号等を持つQR2と車両属性を持つQR6を重点回収。
+    if (unique(found).some((item) => keiVersion(item))) {
+      await recoverImportantKeiCodes(source, reader, found);
     }
   } finally {
     source.width = 1;
@@ -230,7 +287,9 @@ export default function CertificateQrLowerSixFallback() {
         if (combined.length) {
           window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fallback-ready", { detail: combined }));
         }
-        showStatus(`下段6QR ZXing解析: ${result.length}件 / QR合計 ${combined.length}件。OCR後に軽量処理しました。`);
+        const versions = [...new Set(combined.map(keiVersion).filter(Boolean))].sort();
+        const slots = result.map((x) => `${x.slot + 1}:${keiVersion(x) || "QR"}`).join(", ");
+        showStatus(`下段6QR ZXing解析: ${result.length}件 / QR合計 ${combined.length}件${versions.length ? ` / 軽QR ${versions.join(",")}` : ""}${slots ? ` / 検出 ${slots}` : ""}。OCR後に軽量処理しました。`);
       } catch (e) {
         if (!stopped) showStatus(`下段6QR ZXing解析エラー: ${e?.message || e}`);
       } finally {
