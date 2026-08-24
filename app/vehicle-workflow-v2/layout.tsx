@@ -7,6 +7,7 @@ import CertificateRecordDateGuard from "../certificate-record-date-guard";
 import CertificateRegistrationDateGuard from "../certificate-registration-date-guard";
 import CertificateIdentityQrRecovery from "../certificate-identity-qr-recovery";
 import CertificateIdentityOcrFallback from "../certificate-identity-ocr-fallback";
+import CertificateEngineModelOcrFallback from "../certificate-engine-model-ocr-fallback";
 
 // Vehicle certificate post-processing for /vehicle-workflow-v2.
 // QR is the primary source. OCR fallbacks are restricted to unresolved fields only;
@@ -24,6 +25,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateRegistrationDateGuard />
       <CertificateIdentityQrRecovery />
       <CertificateIdentityOcrFallback />
+      <CertificateEngineModelOcrFallback />
     </>
   );
 }
