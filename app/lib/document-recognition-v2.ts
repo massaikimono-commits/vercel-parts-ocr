@@ -106,9 +106,6 @@ export async function createDocumentRecognitionSession(
     minPaperConfidence: options.minPaperConfidence ?? 0.48,
   });
 
-  // Geometry correction is shared by every document type. It never depends on a
-  // vehicle, supplier, address, or a hard-coded sample image. Low-confidence skew
-  // estimates are ignored rather than risking a destructive correction.
   const deskewed = deskewDocument(initial.normalized);
   let prepared = initial;
   const warnings = [...initial.quality.warnings];
@@ -156,7 +153,7 @@ export async function recognizeDocumentRegion(
   return serial(async () => {
     const variantOrder = options.variants?.length
       ? options.variants
-      : (["original", "contrast", "binaryDark", "binaryLight"] as DocumentVariantName[]);
+      : (["original", "contrast", "adaptiveBinary", "binaryDark"] as DocumentVariantName[]);
     const crops: Array<{ name: string; canvas: HTMLCanvasElement }> = [];
     try {
       for (const name of variantOrder) {
@@ -191,7 +188,7 @@ export async function recognizeWholeDocument(
   return serial(async () => {
     const variantOrder = options.variants?.length
       ? options.variants
-      : (["original", "contrast", "binaryDark"] as DocumentVariantName[]);
+      : (["original", "contrast", "adaptiveBinary", "binaryDark"] as DocumentVariantName[]);
     const variants = variantOrder
       .map(name => ({ name, canvas: session.prepared.variants[name] }))
       .filter(x => !!x.canvas);
@@ -208,10 +205,7 @@ export async function recognizeWholeDocument(
   });
 }
 
-/**
- * Generic field profiles. They describe the kind of text, not a specific photo or vehicle.
- * The same profiles are shared by vehicle certificates and parts slips.
- */
+/** Generic profiles shared by certificates and parts slips. */
 export const OCR_FIELD_PRESETS = {
   japaneseText: {
     profile: "japanese" as OcrProfile,
