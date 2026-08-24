@@ -20,6 +20,10 @@ function isIdentity(item) {
   return /^(?:0|2)\d$/.test(version(item));
 }
 
+function isK2(item) {
+  return /^2\d$/.test(version(item));
+}
+
 function unique(items) {
   const map = new Map();
   for (const item of items || []) {
@@ -157,8 +161,10 @@ async function scanIdentity(file) {
         try {
           const hits = decodeJsQR(jsQR, canvas, `${name}/${mode}`);
           found.push(...hits);
+          const identities = unique(found).filter(isIdentity);
           logs.push(`${name}/${mode}: ${hits.map(version).filter(Boolean).join(",") || "なし"}`);
-          if (unique(found).some(isIdentity)) return { found: unique(found).filter(isIdentity), logs };
+          // K0だけなら登録番号・車台番号は取れるが、原動機型式を持つK2を続けて探す。
+          if (identities.some(isK2)) return { found: identities, logs };
         } finally {
           canvas.width = 1;
           canvas.height = 1;
@@ -176,7 +182,7 @@ async function scanIdentity(file) {
             const hits = await decodeZXing(zxing, canvas, `窓/x${x}/y${y}/${mode}`);
             found.push(...hits);
             const ids = unique(found).filter(isIdentity);
-            if (ids.length) return { found: ids, logs: [...logs, `窓検出: ${ids.map(version).join(",")}`] };
+            if (ids.some(isK2)) return { found: ids, logs: [...logs, `窓検出: ${ids.map(version).join(",")}`] };
           } finally {
             canvas.width = 1;
             canvas.height = 1;
@@ -241,9 +247,13 @@ export default function CertificateIdentityQrRecovery() {
     const timer = window.setInterval(async () => {
       if (!pending || running) return;
       const existing = unique(Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : []);
-      if (existing.some(isIdentity)) {
+      const existingIdentity = existing.filter(isIdentity);
+      const qr = window.__vehicleCertificateQrPriority || {};
+      // K2が取れていれば登録番号・車台番号・原動機型式まで揃うので終了。
+      // K0だけの場合はK2探索を続ける。
+      if (existingIdentity.some(isK2)) {
         pending = null;
-        showStatus(`既存QRで身元コード取得済み: ${existing.filter(isIdentity).map(version).join(",")}`);
+        showStatus(`K2取得済み: ${existingIdentity.map(version).join(",")}`);
         return;
       }
       if (document.querySelector(".progress")) {
@@ -258,7 +268,9 @@ export default function CertificateIdentityQrRecovery() {
       const myToken = token;
       pending = null;
       running = true;
-      showStatus("K0/K2だけを下段QR帯から再探索中…");
+      showStatus(existingIdentity.length || qr.registrationNumber || qr.chassisNumber
+        ? "K0/身元情報は取得済み。原動機型式を持つK2だけ追加探索中…"
+        : "K0/K2だけを下段QR帯から再探索中…");
       try {
         const result = await scanIdentity(file);
         if (myToken !== token) return;
@@ -270,7 +282,8 @@ export default function CertificateIdentityQrRecovery() {
         const combined = unique([...current, ...result.found]);
         window.__vehicleCertificateQr = combined;
         window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fallback-ready", { detail: combined }));
-        showStatus(`身元QR取得: ${result.found.map(version).join(",")} / QR合計 ${combined.length}件`, result.logs);
+        const ids = combined.filter(isIdentity);
+        showStatus(`身元QR取得: ${ids.map(version).join(",")} / QR合計 ${combined.length}件${ids.some(isK2) ? " / K2取得" : " / K2は未取得"}`, result.logs);
       } catch (error) {
         showStatus(`身元QR再探索エラー: ${error?.message || error}`);
       } finally {
