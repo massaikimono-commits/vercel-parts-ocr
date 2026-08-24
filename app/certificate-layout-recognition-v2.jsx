@@ -169,8 +169,6 @@ export default function CertificateLayoutRecognitionV2() {
             ...session.qualityWarnings.map(x => `画像品質: ${x}`),
           ]);
 
-          // Three genuinely different views are enough for page-level label geometry:
-          // raw print, enhanced contrast, and shadow-resistant local thresholding.
           const layoutVariants = [
             ["original", session.prepared.variants.original],
             ["contrast", session.prepared.variants.contrast],
@@ -180,7 +178,9 @@ export default function CertificateLayoutRecognitionV2() {
           const tokenCounts = [];
           for (const [name, canvas] of layoutVariants) {
             if (stopped || myToken !== token) return;
-            const layoutResult = await worker.recognize(canvas);
+            // Tesseract.js v6 may return text only unless geometry output is requested.
+            // Ask for both blocks and TSV; extractOcrTokens can consume either shape.
+            const layoutResult = await worker.recognize(canvas, {}, { text: true, blocks: true, tsv: true });
             const tokens = extractOcrTokens(layoutResult?.data);
             tokenSets.push({ name, tokens });
             tokenCounts.push(`${name}=${tokens.length}`);
