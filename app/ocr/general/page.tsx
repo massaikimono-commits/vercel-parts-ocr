@@ -3,6 +3,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { consumeOCRTransferImage } from "../transfer";
+import {
+  createDocumentRecognitionSession,
+  createSharedTesseractWorker,
+} from "../../lib/document-recognition-v2";
 
 type Part = {
   id: string;
@@ -33,7 +37,14 @@ type OCRLine = {
 type ColumnKey = "name" | "qty" | "retail" | "cost";
 type HeaderMatch = { key: ColumnKey; x: number; label: string };
 
-type CropBox = { x: number; y: number; w: number; h: number };
+type VariantAnalysis = {
+  name: string;
+  text: string;
+  lines: OCRLine[];
+  header: { index: number; matches: HeaderMatch[] } | null;
+  parts: Part[];
+  score: number;
+};
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -92,7 +103,12 @@ function cleanName(raw: string) {
 }
 
 function digits(raw: string) {
-  const s = normalize(raw).replace(/[Oo]/g, "0").replace(/[Il|]/g, "1");
+  const s = normalize(raw)
+    .replace(/[OoＯｏQq]/g, "0")
+    .replace(/[Il|!ｌＩ]/g, "1")
+    .replace(/[Zz]/g, "2")
+    .replace(/[Ss§]/g, "5")
+    .replace(/[Bb]/g, "8");
   return s.replace(/[^\d]/g, "");
 }
 
@@ -106,101 +122,6 @@ function qtyValue(raw: string) {
   return Number.isFinite(n) && n >= 1 && n <= 999 ? String(n) : "";
 }
 
-function loadImage(file: File) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像を開けませんでした。")); };
-    img.src = url;
-  });
-}
-
-function canvasBlob(canvas: HTMLCanvasElement, quality = 0.96) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("画像変換に失敗しました。")), "image/jpeg", quality);
-  });
-}
-
-async function sourceCanvas(file: File) {
-  const img = await loadImage(file);
-  const maxSide = 3200;
-  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("画像を処理できませんでした。");
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return canvas;
-}
-
-function detectPaper(canvas: HTMLCanvasElement): CropBox {
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
-  const { width: w, height: h } = canvas;
-  const data = ctx.getImageData(0, 0, w, h).data;
-  const step = Math.max(3, Math.floor(Math.max(w, h) / 700));
-  const bright = (r: number, g: number, b: number) => {
-    const v = (r + g + b) / 3;
-    return v > 145 && Math.max(r, g, b) - Math.min(r, g, b) < 95;
-  };
-  const rows: number[] = [];
-  for (let y = 0; y < h; y += step) {
-    let hit = 0; let total = 0;
-    for (let x = 0; x < w; x += step) {
-      const p = (y * w + x) * 4;
-      if (bright(data[p], data[p + 1], data[p + 2])) hit += 1;
-      total += 1;
-    }
-    if (total && hit / total > 0.18) rows.push(y);
-  }
-  if (rows.length < 4) return { x: 0, y: 0, w, h };
-  const top = Math.max(0, rows[0] - step * 3);
-  const bottom = Math.min(h - 1, rows[rows.length - 1] + step * 3);
-  const cols: number[] = [];
-  for (let x = 0; x < w; x += step) {
-    let hit = 0; let total = 0;
-    for (let y = top; y <= bottom; y += step) {
-      const p = (y * w + x) * 4;
-      if (bright(data[p], data[p + 1], data[p + 2])) hit += 1;
-      total += 1;
-    }
-    if (total && hit / total > 0.18) cols.push(x);
-  }
-  if (cols.length < 4) return { x: 0, y: 0, w, h };
-  const left = Math.max(0, cols[0] - step * 3);
-  const right = Math.min(w - 1, cols[cols.length - 1] + step * 3);
-  const box = { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
-  if (box.w < w * 0.45 || box.h < h * 0.35) return { x: 0, y: 0, w, h };
-  return box;
-}
-
-async function makeEnhanced(source: HTMLCanvasElement, box: CropBox) {
-  const targetWidth = Math.min(2600, Math.max(1500, box.w * 1.8));
-  const scale = targetWidth / box.w;
-  const out = document.createElement("canvas");
-  out.width = Math.round(box.w * scale);
-  out.height = Math.round(box.h * scale);
-  const ctx = out.getContext("2d", { willReadFrequently: true });
-  if (!ctx) throw new Error("画像処理を開始できませんでした。");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, out.width, out.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, box.x, box.y, box.w, box.h, 0, 0, out.width, out.height);
-  const image = ctx.getImageData(0, 0, out.width, out.height);
-  for (let p = 0; p < image.data.length; p += 4) {
-    const r = image.data[p]; const g = image.data[p + 1]; const b = image.data[p + 2];
-    let v = Math.round(r * 0.22 + g * 0.70 + b * 0.08);
-    v = Math.max(0, Math.min(255, Math.round((v - 128) * 1.22 + 150)));
-    if (v > 247) v = 255;
-    image.data[p] = v; image.data[p + 1] = v; image.data[p + 2] = v; image.data[p + 3] = 255;
-  }
-  ctx.putImageData(image, 0, 0);
-  return canvasBlob(out);
-}
-
 function parseTSV(tsv: string): OCRLine[] {
   if (!tsv.trim()) return [];
   const words: Word[] = [];
@@ -211,22 +132,42 @@ function parseTSV(tsv: string): OCRLine[] {
     const text = normalize(c.slice(11).join("\t"));
     const conf = Number(c[10]);
     if (!text || !Number.isFinite(conf) || conf < 12) continue;
-    words.push({ text, left: Number(c[6]), top: Number(c[7]), width: Number(c[8]), height: Number(c[9]), conf, lineKey: `${c[2]}-${c[3]}-${c[4]}` });
+    words.push({
+      text,
+      left: Number(c[6]),
+      top: Number(c[7]),
+      width: Number(c[8]),
+      height: Number(c[9]),
+      conf,
+      lineKey: `${c[2]}-${c[3]}-${c[4]}`,
+    });
   }
   const groups = new Map<string, Word[]>();
-  for (const word of words) { const list = groups.get(word.lineKey) || []; list.push(word); groups.set(word.lineKey, list); }
+  for (const word of words) {
+    const list = groups.get(word.lineKey) || [];
+    list.push(word);
+    groups.set(word.lineKey, list);
+  }
   return [...groups.values()].map((lineWords) => {
     const sorted = [...lineWords].sort((a, b) => a.left - b.left);
-    return { words: sorted, text: sorted.map((x) => x.text).join(" "), top: Math.min(...sorted.map((x) => x.top)), bottom: Math.max(...sorted.map((x) => x.top + x.height)) };
+    return {
+      words: sorted,
+      text: sorted.map((x) => x.text).join(" "),
+      top: Math.min(...sorted.map((x) => x.top)),
+      bottom: Math.max(...sorted.map((x) => x.top + x.height)),
+    };
   }).sort((a, b) => a.top - b.top);
 }
 
 function findLabelInWords(words: Word[], labels: string[]) {
   for (let i = 0; i < words.length; i += 1) {
-    for (let len = 1; len <= 3 && i + len <= words.length; len += 1) {
+    for (let len = 1; len <= 4 && i + len <= words.length; len += 1) {
       const slice = words.slice(i, i + len);
       const joined = labelText(slice.map((x) => x.text).join(""));
-      const label = labels.find((x) => { const target = labelText(x); return joined === target || joined.includes(target) || target.includes(joined) && joined.length >= 2; });
+      const label = labels.find((x) => {
+        const target = labelText(x);
+        return joined === target || joined.includes(target) || (target.includes(joined) && joined.length >= 2);
+      });
       if (label) {
         const left = Math.min(...slice.map((x) => x.left));
         const right = Math.max(...slice.map((x) => x.left + x.width));
@@ -269,7 +210,10 @@ function parseByColumns(lines: OCRLine[], header: { index: number; matches: Head
     const allText = normalize(line.text);
     if (STOP_WORDS.some((x) => allText.includes(x))) break;
     const cells: Record<ColumnKey, string[]> = { name: [], qty: [], retail: [], cost: [] };
-    for (const word of line.words) { const key = nearestColumn(word, headers); if (key) cells[key].push(word.text); }
+    for (const word of line.words) {
+      const key = nearestColumn(word, headers);
+      if (key) cells[key].push(word.text);
+    }
     const rawName = cleanName(cells.name.join(" "));
     let qty = qtyValue(cells.qty.join(" "));
     let retail = hasRetail ? moneyValue(cells.retail.join(" ")) : "";
@@ -277,7 +221,10 @@ function parseByColumns(lines: OCRLine[], header: { index: number; matches: Head
     if (!hasRetail && hasCost) cost = moneyValue(cells.cost.join(" "));
     if (hasRetail && !hasCost) retail = moneyValue(cells.retail.join(" "));
     const hasPrice = Boolean(retail || cost);
-    if (!hasPrice && rawName) { pendingName = pendingName ? `${pendingName} ${rawName}` : rawName; continue; }
+    if (!hasPrice && rawName) {
+      pendingName = pendingName ? `${pendingName} ${rawName}` : rawName;
+      continue;
+    }
     if (!hasPrice) continue;
     const name = cleanName([pendingName, rawName].filter(Boolean).join(" "));
     pendingName = "";
@@ -289,7 +236,9 @@ function parseByColumns(lines: OCRLine[], header: { index: number; matches: Head
 
 function amountValues(line: string) {
   const matches = normalize(line).match(/\d{1,3}(?:[,\.]\d{3})+|\d{3,7}/g) || [];
-  return matches.map((raw) => ({ raw, value: Number(raw.replace(/\D/g, "")) })).filter((x) => x.value >= 100 && x.value <= 5000000);
+  return matches
+    .map((raw) => ({ raw, value: Number(raw.replace(/\D/g, "")) }))
+    .filter((x) => x.value >= 100 && x.value <= 5000000);
 }
 
 function fallbackParse(text: string) {
@@ -306,7 +255,14 @@ function fallbackParse(text: string) {
       if (!name) name = previousName;
       const small = before.match(/(?:^|\s)(\d{1,3})(?=\s|$)/g) || [];
       const qty = small.length ? qtyValue(small[small.length - 1]) || "1" : "1";
-      found.push({ id: uid(), name, qty, retail: amounts[0] ? String(amounts[0].value) : "", cost: amounts[1] ? String(amounts[1].value) : "", source: line });
+      found.push({
+        id: uid(),
+        name,
+        qty,
+        retail: amounts[0] ? String(amounts[0].value) : "",
+        cost: amounts[1] ? String(amounts[1].value) : "",
+        source: line,
+      });
       previousName = "";
     } else {
       const candidate = cleanName(line);
@@ -326,12 +282,20 @@ function dedupe(parts: Part[]) {
   });
 }
 
+function analysisScore(header: VariantAnalysis["header"], parts: Part[], lines: OCRLine[]) {
+  const headerCount = header?.matches.length || 0;
+  const avgConf = lines.length
+    ? lines.flatMap(x => x.words).reduce((sum, word) => sum + word.conf, 0) / Math.max(1, lines.flatMap(x => x.words).length)
+    : 0;
+  return headerCount * 120 + parts.length * 24 + Math.min(80, avgConf);
+}
+
 export default function GeneralOCRPage() {
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState("A4・他社伝票の見出しと表構造を自動判定します。");
+  const [message, setMessage] = useState("共通OCR V2でA4・他社伝票の見出しと表構造を自動判定します。");
   const [preview, setPreview] = useState("");
   const [parts, setParts] = useState<Part[]>([]);
   const [rawText, setRawText] = useState("");
@@ -346,48 +310,118 @@ export default function GeneralOCRPage() {
   }, []);
 
   async function runOCR(file: File) {
-    setBusy(true); setProgress(1); setParts([]); setRawText(""); setDebug(""); setMessage("用紙全体を解析しています…");
+    setBusy(true);
+    setProgress(1);
+    setParts([]);
+    setRawText("");
+    setDebug("");
+    setMessage("共通OCR V2で用紙補正と表構造解析をしています…");
     if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(file));
+
     let worker: any = null;
     try {
-      const source = await sourceCanvas(file);
-      const paper = detectPaper(source);
-      const enhanced = await makeEnhanced(source, paper);
-      const tesseract: any = await import("tesseract.js");
-      worker = await tesseract.createWorker("jpn+eng", 1, { logger: (m: any) => { if (m.status === "recognizing text") setProgress(Math.max(5, Math.round((m.progress || 0) * 95))); } });
-      await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: tesseract.PSM?.AUTO ?? "3", user_defined_dpi: "300" });
-      const result = await worker.recognize(enhanced, {}, { text: true, tsv: true });
-      const text = result.data.text || "";
-      const tsv = result.data.tsv || "";
-      setRawText(text);
-      const lines = parseTSV(tsv);
-      const header = detectHeader(lines);
-      let extracted: Part[] = [];
-      if (header && header.matches.length >= 3) extracted = parseByColumns(lines, header);
-      if (!extracted.length) extracted = fallbackParse(text);
+      const session = await createDocumentRecognitionSession(file, {
+        maxSide: 3600,
+        cropPaper: true,
+        minPaperConfidence: 0.45,
+      });
+      const created = await createSharedTesseractWorker({
+        logger: (m: any) => {
+          if (m.status === "recognizing text") {
+            setProgress(Math.max(5, Math.min(94, Math.round((m.progress || 0) * 75) + 10)));
+          }
+        },
+      });
+      worker = created.worker;
+      const tesseract = created.tesseract;
+      await worker.setParameters({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: tesseract.PSM?.AUTO ?? "3",
+        user_defined_dpi: "300",
+        tessedit_char_whitelist: "",
+      });
+
+      const variants = ["original", "contrast", "binaryDark"] as const;
+      const analyses: VariantAnalysis[] = [];
+      for (const name of variants) {
+        setMessage(`共通OCR V2: ${name}画像で表構造を確認しています…`);
+        const result = await worker.recognize(session.prepared.variants[name], {}, { text: true, tsv: true });
+        const text = result.data.text || "";
+        const lines = parseTSV(result.data.tsv || "");
+        const header = detectHeader(lines);
+        const candidateParts = header && header.matches.length >= 3 ? parseByColumns(lines, header) : [];
+        analyses.push({
+          name,
+          text,
+          lines,
+          header,
+          parts: candidateParts,
+          score: analysisScore(header, candidateParts, lines),
+        });
+      }
+
+      analyses.sort((a, b) => b.score - a.score);
+      const best = analyses[0];
+      let extracted = best?.parts || [];
+      const combinedText = analyses.map((x) => `【${x.name}】\n${x.text}`).join("\n\n");
+      if (!extracted.length) extracted = fallbackParse(combinedText);
       extracted = dedupe(extracted);
       setParts(extracted);
-      const headerDebug = header ? `見出し行: ${header.index + 1}\n検出列: ${header.matches.map((x) => `${x.key}=${x.label}`).join(" / ")}` : "見出し行: 自動検出できず（全文フォールバック使用）";
-      const lineDebug = lines.slice(0, 80).map((x, i) => `${i + 1}: ${x.text}`).join("\n");
-      setDebug(`${headerDebug}\n\nOCR行データ\n${lineDebug}`);
+      setRawText(combinedText);
+
+      const variantDebug = analyses.map((analysis) => {
+        const headerText = analysis.header
+          ? analysis.header.matches.map((x) => `${x.key}=${x.label}`).join(" / ")
+          : "見出し未確定";
+        return `${analysis.name}: score=${analysis.score.toFixed(1)} / ${headerText} / parts=${analysis.parts.length}`;
+      }).join("\n");
+      const bestHeader = best?.header
+        ? `採用見出し行: ${best.header.index + 1}\n採用列: ${best.header.matches.map((x) => `${x.key}=${x.label}`).join(" / ")}`
+        : "採用見出し行: 自動検出できず（全文フォールバック使用）";
+      const lineDebug = (best?.lines || []).slice(0, 100).map((x, i) => `${i + 1}: ${x.text}`).join("\n");
+      setDebug([
+        `共通OCR V2 / 採用variant: ${best?.name || "なし"}`,
+        `傾き補正: ${session.geometry.deskewApplied ? `${session.geometry.deskewAngle.toFixed(2)}° conf=${session.geometry.deskewConfidence.toFixed(2)}` : "不要/保留"}`,
+        ...(session.qualityWarnings || []).map((x: string) => `画像品質: ${x}`),
+        "",
+        "variant比較",
+        variantDebug,
+        "",
+        bestHeader,
+        "",
+        "採用OCR行データ",
+        lineDebug,
+      ].join("\n"));
+
       setProgress(100);
-      setMessage(extracted.length ? `${extracted.length}件を候補抽出しました。内容を確認して保存してください。` : "候補を自動抽出できませんでした。OCR全文は残してあるので、実物に合わせて調整できます。");
+      setMessage(extracted.length
+        ? `${extracted.length}件を候補抽出しました。3種類の画像解析から最も安定した表構造を採用しています。`
+        : "候補を自動抽出できませんでした。OCR全文は残してあるので、誤入力せず保留しています。");
     } catch (error) {
       console.error(error);
-      setMessage("汎用OCR処理でエラーが出ました。画像を変えずにもう一度試してください。");
+      setMessage("汎用OCR処理でエラーが出ました。誤った値は保存していません。");
     } finally {
       if (worker) await worker.terminate().catch(() => {});
       setBusy(false);
     }
   }
 
-  function updatePart(index: number, key: keyof Part, value: string) { setParts((old) => old.map((p, i) => i === index ? { ...p, [key]: value } : p)); }
-  function addManual() { setParts((old) => [...old, { id: uid(), name: "", qty: "1", retail: "", cost: "" }]); }
+  function updatePart(index: number, key: keyof Part, value: string) {
+    setParts((old) => old.map((p, i) => i === index ? { ...p, [key]: value } : p));
+  }
+  function addManual() {
+    setParts((old) => [...old, { id: uid(), name: "", qty: "1", retail: "", cost: "" }]);
+  }
   function saveParts() {
     if (!parts.length) return;
     let current: Part[] = [];
-    try { current = JSON.parse(localStorage.getItem("parts-data") || "[]"); if (!Array.isArray(current)) current = []; } catch { current = []; }
+    try {
+      current = JSON.parse(localStorage.getItem("parts-data") || "[]");
+      if (!Array.isArray(current)) current = [];
+    } catch {
+      current = [];
+    }
     localStorage.setItem("parts-data", JSON.stringify([...parts, ...current]));
     setMessage(`${parts.length}件を部品データへ保存しました。`);
   }
@@ -397,7 +431,9 @@ export default function GeneralOCRPage() {
     setMessage("Excel貼り付け用データをコピーしました。");
   }
   function saveCSV() {
-    const text = [["部品名称", "個数", "定価", "仕入れ"], ...parts.map((p) => [p.name, p.qty, p.retail, p.cost])].map((row) => row.map((x) => `"${String(x).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const text = [["部品名称", "個数", "定価", "仕入れ"], ...parts.map((p) => [p.name, p.qty, p.retail, p.cost])]
+      .map((row) => row.map((x) => `"${String(x).replaceAll('"', '""')}"`).join(","))
+      .join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\ufeff" + text], { type: "text/csv;charset=utf-8" }));
     a.download = "parts-general-ocr.csv";
@@ -412,7 +448,7 @@ export default function GeneralOCRPage() {
       </div>
       <section style={styles.card}>
         <h1 style={styles.title}>汎用A4・他社伝票OCR</h1>
-        <p style={styles.text}>A4いっぱいに部品が並ぶ用紙や、まだ登録していない他社伝票向けです。用紙全体をOCRして「部品名称・数量・定価・仕入れ」に近い見出しを探し、表の列位置から複数行をまとめて抽出します。</p>
+        <p style={styles.text}>車検証と同じ共通OCR V2で紙検出・傾き補正を行い、原画像・コントラスト・二値化の3通りから「部品名称・数量・定価・仕入れ」の見出しと表構造を比較して読み取ります。</p>
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
         <input ref={libraryRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
@@ -420,13 +456,46 @@ export default function GeneralOCRPage() {
         <button disabled={busy} style={styles.secondary} onClick={() => libraryRef.current?.click()}>🖼 写真ライブラリから汎用OCR</button>
         {preview && <img src={preview} alt="読み取り画像" style={{ width: "100%", maxHeight: 460, objectFit: "contain", borderRadius: 14, marginTop: 16, background: "#eef2f7" }} />}
       </section>
+
       <section style={styles.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}><h2 style={{ marginTop: 0 }}>抽出データ</h2><button style={{ border: "1px solid #ccd5e2", borderRadius: 10, padding: "9px 12px", background: "#fff" }} onClick={addManual}>＋1行追加</button></div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+          <h2 style={{ marginTop: 0 }}>抽出データ</h2>
+          <button style={{ border: "1px solid #ccd5e2", borderRadius: 10, padding: "9px 12px", background: "#fff" }} onClick={addManual}>＋1行追加</button>
+        </div>
         {!parts.length && <p style={styles.text}>まだ抽出データはありません。</p>}
-        {parts.length > 0 && <><div style={{ overflowX: "auto" }}><div style={{ minWidth: 600 }}><div style={{ ...styles.row, fontWeight: 800 }}><div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div></div>{parts.map((p, i) => <div style={styles.row} key={p.id}><input style={styles.input} value={p.name} onChange={(e) => updatePart(i, "name", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.qty} onChange={(e) => updatePart(i, "qty", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.retail} onChange={(e) => updatePart(i, "retail", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.cost} onChange={(e) => updatePart(i, "cost", e.target.value)} /></div>)}</div></div><button style={styles.primary} onClick={saveParts}>✓ この内容を部品データへ保存</button><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><button style={styles.secondary} onClick={copyTSV}>📋 Excelへコピー</button><button style={styles.secondary} onClick={saveCSV}>CSV保存</button></div></>}
+        {parts.length > 0 && <>
+          <div style={{ overflowX: "auto" }}>
+            <div style={{ minWidth: 600 }}>
+              <div style={{ ...styles.row, fontWeight: 800 }}><div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div></div>
+              {parts.map((p, i) => <div style={styles.row} key={p.id}>
+                <input style={styles.input} value={p.name} onChange={(e) => updatePart(i, "name", e.target.value)} />
+                <input style={styles.input} inputMode="numeric" value={p.qty} onChange={(e) => updatePart(i, "qty", e.target.value)} />
+                <input style={styles.input} inputMode="numeric" value={p.retail} onChange={(e) => updatePart(i, "retail", e.target.value)} />
+                <input style={styles.input} inputMode="numeric" value={p.cost} onChange={(e) => updatePart(i, "cost", e.target.value)} />
+              </div>)}
+            </div>
+          </div>
+          <button style={styles.primary} onClick={saveParts}>✓ この内容を部品データへ保存</button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <button style={styles.secondary} onClick={copyTSV}>📋 Excelへコピー</button>
+            <button style={styles.secondary} onClick={saveCSV}>CSV保存</button>
+          </div>
+        </>}
       </section>
-      <section style={styles.card}><details><summary style={{ fontWeight: 800, cursor: "pointer" }}>OCR詳細（調整用）</summary><p style={styles.text}>実物のA4伝票が手に入った時は、ここに出る「検出列」とOCR行データを見ながら精度を合わせられます。</p><textarea readOnly value={debug} style={styles.debug} /></details></section>
-      <section style={styles.card}><details><summary style={{ fontWeight: 800, cursor: "pointer" }}>OCR全文</summary><textarea readOnly value={rawText} style={styles.debug} /></details></section>
+
+      <section style={styles.card}>
+        <details>
+          <summary style={{ fontWeight: 800, cursor: "pointer" }}>OCR詳細（調整用）</summary>
+          <p style={styles.text}>3種類の画像の見出し検出数と抽出行数を比較し、どの結果を採用したか確認できます。</p>
+          <textarea readOnly value={debug} style={styles.debug} />
+        </details>
+      </section>
+      <section style={styles.card}>
+        <details>
+          <summary style={{ fontWeight: 800, cursor: "pointer" }}>OCR全文</summary>
+          <textarea readOnly value={rawText} style={styles.debug} />
+        </details>
+      </section>
     </main>
   );
 }
