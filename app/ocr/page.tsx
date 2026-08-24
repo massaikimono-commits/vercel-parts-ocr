@@ -13,7 +13,6 @@ import {
 type Part = { id: string; name: string; qty: string; retail: string; cost: string; source?: string };
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-const SUPPLIER_PARTS: Record<string, string> = { "MC-E133": "クラッチM/C/ASSY" };
 
 const styles: Record<string, React.CSSProperties> = {
   page: { maxWidth: 920, margin: "0 auto", padding: "18px 14px 50px", color: "#162033" },
@@ -39,35 +38,8 @@ function normalizeText(text: string) {
     .trim();
 }
 
-function levenshtein(a: string, b: string) {
-  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i += 1) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j += 1) {
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    }
-    for (let j = 0; j <= b.length; j += 1) prev[j] = cur[j];
-  }
-  return prev[b.length];
-}
-
-function correctCommonPartWord(text: string) {
-  const words = ["クラッチ", "ブレーキ", "フィルター", "フィルタ", "ワイパー", "ガスケット", "ベルト", "ホース", "シール", "パッド", "ベアリング", "プラグ", "オイル"];
-  let corrected = text.replace(/リクフッチ|リクラッチ|クラツチ|クフッチ|ラクッチ|クフツチ|クラッヂ/g, "クラッチ");
-  corrected = corrected.replace(/[ァ-ヶー]{3,}/g, (token) => {
-    let best = token;
-    let distance = 99;
-    for (const word of words) {
-      const d = levenshtein(token, word);
-      if (d < distance) { distance = d; best = word; }
-    }
-    return distance <= (token.length >= 7 ? 3 : 2) ? best : token;
-  });
-  return corrected;
-}
-
 function cleanPartName(raw: string) {
-  let text = normalizeText(raw)
+  const text = normalizeText(raw)
     .replace(/([ぁ-んァ-ヶ一-龠])\s+(?=[ぁ-んァ-ヶ一-龠])/g, "$1")
     .replace(/^[\[\](){}|\\・:;.,\s]+/, "")
     .replace(/\bMC\s*-?\s*E\s*\d+\b/gi, " ")
@@ -77,10 +49,9 @@ function cleanPartName(raw: string) {
     .replace(/^[-:;|・.\s]+|[-:;|・.\s]+$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
-  text = correctCommonPartWord(text);
   const assy = text.match(/^(.*?\b(?:ASSY|COMP|KIT|SET)\b)(?:\s+(RH|LH|FR|RR))?.*$/i);
-  if (assy) text = assy[1] + (assy[2] ? ` ${assy[2]}` : "");
-  return text.trim();
+  if (assy) return (assy[1] + (assy[2] ? ` ${assy[2]}` : "")).trim();
+  return text;
 }
 
 function nameScore(text: string) {
@@ -92,7 +63,7 @@ function nameScore(text: string) {
   const alpha = cleaned.match(/[A-Za-z]/g)?.length || 0;
   const digits = cleaned.match(/\d/g)?.length || 0;
   score += Math.min(16, jp * 2) + Math.min(10, alpha);
-  if (/ASSY|COMP|KIT|SET|クラッチ|ブレーキ|パッド|フィルタ|オイル|ベルト|ホース|ガスケット/i.test(cleaned)) score += 18;
+  if (/ASSY|COMP|KIT|SET/i.test(cleaned)) score += 10;
   if (/[\/／]/.test(cleaned)) score += 5;
   if (digits > cleaned.length * 0.4) score -= 12;
   return score;
@@ -113,7 +84,6 @@ function bestName(texts: string[]) {
 
 function detectSupplierCode(texts: string[]) {
   const joined = normalizeText(texts.join(" ")).toUpperCase().replace(/\s+/g, "");
-  if (/M?C-?E[1IL]?33/.test(joined) || /M?C-?EI33/.test(joined)) return "MC-E133";
   return joined.match(/[A-Z]{1,4}-[A-Z0-9]{2,8}/)?.[0] || "";
 }
 
@@ -138,23 +108,23 @@ async function readName(session: any, worker: any, y: number) {
     height: 0.060,
   }, {
     ...OCR_FIELD_PRESETS.japaneseText,
-    variants: ["original", "contrast", "binaryDark", "binaryLight"],
+    variants: ["original", "contrast", "adaptiveBinary", "binaryDark"],
     psms: ["11", "7", "6"],
     targetWidth: 2500,
     minSimilarity: 0.58,
     minSupport: 2,
     minConfidence: 0.53,
+    recoveryMaxPasses: 6,
   });
   const texts = observationTexts(result);
   const supplierCode = detectSupplierCode(texts);
-  const dictionaryName = supplierCode ? SUPPLIER_PARTS[supplierCode] : "";
   const fallback = bestName(texts);
+  const recognized = cleanPartName(result?.value || fallback.name);
   return {
-    name: dictionaryName || cleanPartName(result?.value || fallback.name),
-    score: dictionaryName ? 100 : fallback.score,
+    name: recognized,
+    score: fallback.score,
     texts,
     supplierCode,
-    dictionaryHit: Boolean(dictionaryName),
     reason: result?.reason || "",
   };
 }
@@ -162,11 +132,12 @@ async function readName(session: any, worker: any, y: number) {
 async function readNumber(session: any, worker: any, region: any, max: number, qtyMode = false) {
   const result = await recognizeDocumentRegion(session, worker, region, {
     ...(qtyMode ? OCR_FIELD_PRESETS.number : OCR_FIELD_PRESETS.money),
-    variants: ["original", "contrast", "binaryDark", "binaryLight"],
+    variants: ["original", "contrast", "adaptiveBinary", "binaryDark"],
     psms: qtyMode ? ["10", "8", "7"] : ["8", "7"],
     targetWidth: qtyMode ? 1100 : 1700,
     minSupport: 2,
     minConfidence: qtyMode ? 0.56 : 0.60,
+    recoveryMaxPasses: 5,
     validate: (value: string) => {
       const n = Number(String(value).replace(/\D/g, ""));
       return Number.isFinite(n) && n > 0 && n <= max;
@@ -231,6 +202,7 @@ export default function HighAccuracyOCRPage() {
       const found: Part[] = [];
       const logs: string[] = [
         "共通OCR V2 / 大一用品商会 専用レイアウト",
+        "部品名称は辞書で置換せず、OCR結果そのものを採用",
         `傾き補正: ${session.geometry.deskewApplied ? `${session.geometry.deskewAngle.toFixed(2)}° conf=${session.geometry.deskewConfidence.toFixed(2)}` : "不要/保留"}`,
         ...(session.qualityWarnings || []).map((x: string) => `画像品質: ${x}`),
       ];
@@ -259,8 +231,7 @@ export default function HighAccuracyOCRPage() {
         logs.push(
           `【${row + 1}行目】`,
           `名称OCR: ${nameRead.texts.join(" / ") || "なし"}`,
-          `品番候補: ${nameRead.supplierCode || ""}`,
-          `辞書一致: ${nameRead.dictionaryHit ? "YES" : "NO"}`,
+          `品番候補(診断のみ): ${nameRead.supplierCode || ""}`,
           `名称採用: ${nameRead.name} / ${nameRead.reason}`,
           `個数: ${qtyRead.texts.join(" / ")} => ${qty} / ${qtyRead.reason}`,
           `定価: ${retailRead.texts.join(" / ")} => ${retail} / ${retailRead.reason}`,
@@ -268,12 +239,12 @@ export default function HighAccuracyOCRPage() {
           `金額補助: ${amountRead.texts.join(" / ")} => ${amountRead.value} / ${amountRead.reason}`,
         );
 
-        const strongName = nameScore(nameRead.name) >= 8 || nameRead.dictionaryHit;
+        const strongName = nameScore(nameRead.name) >= 8;
         const retailOk = Number(retail || 0) >= 100;
         const costOk = Number(cost || 0) >= 100;
         const isRealPartRow = (retailOk && costOk) || (strongName && (retailOk || costOk));
         if (isRealPartRow) {
-          found.push({ id: uid(), name: nameRead.name, qty, retail, cost, source: logs.slice(-9).join("\n") });
+          found.push({ id: uid(), name: nameRead.name, qty, retail, cost, source: logs.slice(-8).join("\n") });
           emptyRows = 0;
         } else {
           emptyRows += 1;
@@ -285,7 +256,7 @@ export default function HighAccuracyOCRPage() {
       setDebugText(logs.join("\n\n"));
       setProgress(100);
       setMessage(found.length
-        ? `${found.length}件を抽出しました。各セルは複数画像・複数PSMの近似一致で判定しています。`
+        ? `${found.length}件を抽出しました。名称は辞書で補わず、共通OCR V2の認識結果を表示しています。`
         : "部品行を安全に確定できませんでした。誤った値は保存していません。");
     } catch (error) {
       console.error(error);
@@ -320,7 +291,7 @@ export default function HighAccuracyOCRPage() {
       </div>
       <section style={styles.card}>
         <h1 style={styles.title}>部品伝票 高精度OCR</h1>
-        <p style={styles.text}>専用帳票の列位置は帳票仕様として利用し、文字認識そのものは車検証と同じ共通OCR V2で行います。原画像・コントラスト・二値化を比較し、複数結果が一致した値を優先します。</p>
+        <p style={styles.text}>専用帳票の列位置は帳票仕様として利用しますが、部品名称を辞書で正解へ置換しません。文字認識は車検証と同じ共通OCR V2で行い、原画像・コントラスト・影対応画像を比較して読み取ります。</p>
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
         <input ref={libraryRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
@@ -349,7 +320,7 @@ export default function HighAccuracyOCRPage() {
       <section style={styles.card}>
         <details>
           <summary style={{ fontWeight: 700, cursor: "pointer" }}>OCR詳細（調整用）</summary>
-          <p style={styles.text}>共通OCR V2の複数画像・複数PSMの候補と採用理由を表示します。</p>
+          <p style={styles.text}>共通OCR V2の複数画像・複数PSM・高解像度再読取の候補と採用理由を表示します。品番候補は診断用で、名称の自動置換には使いません。</p>
           <textarea readOnly value={debugText} style={styles.debug} />
         </details>
       </section>
