@@ -26,6 +26,7 @@ export type OcrConsensusResult = {
 };
 
 const DASHES = /[‐‑‒–—―ー−]/g;
+const GAP = "\u0000";
 
 function baseNormalize(value = "") {
   return String(value)
@@ -148,19 +149,101 @@ function medoid(cluster: Array<OcrObservation & { normalized: string }>) {
   return best;
 }
 
-function sameLengthCharacterConsensus(cluster: Array<OcrObservation & { normalized: string }>, pivot: string) {
-  const close = cluster.filter(x => x.normalized.length === pivot.length && ocrTextSimilarity(x.normalized, pivot) >= 0.72);
-  if (close.length < 2) return pivot;
+/**
+ * Global alignment against a scaffold. This lets OCR observations vote even when
+ * one pass dropped or inserted a character. We intentionally keep the scaffold
+ * as the longest close reading, because OCR more often drops thin characters than
+ * invents a stable extra character across several preprocessing variants.
+ */
+function alignToScaffold(scaffold: string, value: string) {
+  const rows = scaffold.length + 1;
+  const cols = value.length + 1;
+  const score = Array.from({ length: rows }, () => new Int16Array(cols));
+  const trace = Array.from({ length: rows }, () => new Uint8Array(cols));
+  const gapPenalty = -2;
+  const mismatchPenalty = -1;
+  const matchScore = 3;
+
+  for (let i = 1; i < rows; i++) {
+    score[i][0] = score[i - 1][0] + gapPenalty;
+    trace[i][0] = 1;
+  }
+  for (let j = 1; j < cols; j++) {
+    score[0][j] = score[0][j - 1] + gapPenalty;
+    trace[0][j] = 2;
+  }
+
+  for (let i = 1; i < rows; i++) {
+    for (let j = 1; j < cols; j++) {
+      const diag = score[i - 1][j - 1] + (scaffold[i - 1] === value[j - 1] ? matchScore : mismatchPenalty);
+      const up = score[i - 1][j] + gapPenalty;
+      const left = score[i][j - 1] + gapPenalty;
+      if (diag >= up && diag >= left) {
+        score[i][j] = diag;
+        trace[i][j] = 0;
+      } else if (up >= left) {
+        score[i][j] = up;
+        trace[i][j] = 1;
+      } else {
+        score[i][j] = left;
+        trace[i][j] = 2;
+      }
+    }
+  }
+
+  const aligned = Array.from({ length: scaffold.length }, () => GAP);
+  let i = scaffold.length;
+  let j = value.length;
+  while (i > 0 || j > 0) {
+    const step = trace[i][j];
+    if (i > 0 && j > 0 && step === 0) {
+      aligned[i - 1] = value[j - 1];
+      i--;
+      j--;
+    } else if (i > 0 && (j === 0 || step === 1)) {
+      aligned[i - 1] = GAP;
+      i--;
+    } else if (j > 0) {
+      // Insertion relative to the scaffold. Ignore here; if it is genuine it should
+      // appear in the longest close reading selected as scaffold.
+      j--;
+    } else {
+      break;
+    }
+  }
+  return aligned;
+}
+
+function alignedCharacterConsensus(cluster: Array<OcrObservation & { normalized: string }>, medoidValue: string) {
+  const close = cluster.filter(x => ocrTextSimilarity(x.normalized, medoidValue) >= 0.66);
+  if (close.length < 2) return medoidValue;
+
+  const longest = Math.max(...close.map(x => x.normalized.length));
+  const scaffoldCandidates = close.filter(x => x.normalized.length === longest);
+  const scaffoldObservation = scaffoldCandidates.sort((a, b) => weight(b) - weight(a))[0] || close[0];
+  const scaffold = scaffoldObservation.normalized;
+  const aligned = close.map(observation => ({ observation, chars: alignToScaffold(scaffold, observation.normalized) }));
   const chars: string[] = [];
-  for (let i = 0; i < pivot.length; i++) {
+
+  for (let i = 0; i < scaffold.length; i++) {
     const votes = new Map<string, number>();
-    for (const observation of close) {
-      const ch = observation.normalized[i];
-      if (!ch) continue;
-      votes.set(ch, (votes.get(ch) || 0) + weight(observation));
+    for (const item of aligned) {
+      const ch = item.chars[i] || GAP;
+      votes.set(ch, (votes.get(ch) || 0) + weight(item.observation));
     }
     const ranked = [...votes.entries()].sort((a, b) => b[1] - a[1]);
-    chars.push(ranked[0]?.[0] || pivot[i]);
+    const [winner, winnerWeight] = ranked[0] || [scaffold[i], 0];
+    const nonGap = ranked.find(([ch]) => ch !== GAP);
+
+    if (winner === GAP) {
+      // Drop a scaffold character only when gaps clearly dominate and at least two
+      // readings independently omitted it. Otherwise keep the best non-gap vote.
+      const gapCount = aligned.filter(x => x.chars[i] === GAP).length;
+      if (gapCount >= 2 && winnerWeight > (nonGap?.[1] || 0) * 1.18) continue;
+      chars.push(nonGap?.[0] || scaffold[i]);
+    } else {
+      chars.push(winner);
+    }
   }
   return chars.join("");
 }
@@ -209,7 +292,7 @@ export function buildOcrConsensus(
   }
 
   const pivot = medoid(bestCluster);
-  let value = sameLengthCharacterConsensus(bestCluster, pivot.normalized);
+  let value = alignedCharacterConsensus(bestCluster, pivot.normalized);
   value = normalizeForOcrProfile(value, profile);
 
   const support = bestCluster.filter(x => ocrTextSimilarity(x.normalized, value) >= minSimilarity).length;
@@ -229,8 +312,8 @@ export function buildOcrConsensus(
     observations: bestCluster.map(({ normalized: _normalized, ...rest }) => rest),
     normalized: bestCluster.map(x => x.normalized),
     reason: accepted
-      ? `採用: 近似一致${support}件 / variant=${variantSupport} / confidence=${confidence.toFixed(2)}`
-      : `保留: 近似一致${support}件 / variant=${variantSupport} / confidence=${confidence.toFixed(2)}${valid ? "" : " / validation NG"}`,
+      ? `採用: アラインメント近似一致${support}件 / variant=${variantSupport} / confidence=${confidence.toFixed(2)}`
+      : `保留: アラインメント近似一致${support}件 / variant=${variantSupport} / confidence=${confidence.toFixed(2)}${valid ? "" : " / validation NG"}`,
   };
 }
 
