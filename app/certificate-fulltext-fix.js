@@ -39,6 +39,53 @@ function findEngine(text) {
   return (t.match(/\d[A-Z]{2}\d/g) || [])[0] || (t.match(/[A-Z0-9]{3,8}/g) || []).find(x => /[A-Z]/.test(x) && /\d/.test(x) && !/^(TKG|QKG|PKG|SKG|DAA|DBA|ABA)/.test(x)) || "";
 }
 
+function canonicalCode(value = "") {
+  return compact(value).toUpperCase()
+    .replace(/[OQD]/g, "0")
+    .replace(/[IL|!]/g, "1")
+    .replace(/Z/g, "2")
+    .replace(/S/g, "5")
+    .replace(/G/g, "6")
+    .replace(/B/g, "8");
+}
+
+function normalizeChassisCandidate(raw = "", model = "") {
+  const t = compact(raw).toUpperCase().replace(/[‐‑‒–—―ー−]/g, "-");
+  const m = t.match(/([A-Z0-9]{2,10})-([0-9OQI|]{4,10})/);
+  if (!m) return "";
+  let prefix = m[1];
+  const suffix = m[2].replace(/[OQ]/g, "0").replace(/[I|]/g, "1");
+  if (!/[A-Z]/.test(prefix) || !/\d/.test(prefix) || !/^\d{4,10}$/.test(suffix)) return "";
+
+  const modelCore = compact(model).toUpperCase().split("-").pop() || "";
+  if (modelCore) {
+    const same = candidate => candidate.length === modelCore.length && canonicalCode(candidate) === canonicalCode(modelCore);
+    if (same(prefix)) prefix = modelCore;
+    else if (prefix.length === modelCore.length + 1 && (same(prefix.slice(1)) || same(prefix.slice(0, -1)))) prefix = modelCore;
+  }
+  return `${prefix}-${suffix}`;
+}
+
+function findChassis(text, model = "") {
+  const t = norm(text).toUpperCase();
+  const labelIndex = t.indexOf("車台番号");
+  const primary = labelIndex >= 0 ? t.slice(labelIndex, labelIndex + 260) : "";
+  const pools = [primary, t.slice(0, 1400)].filter(Boolean);
+  const modelCore = compact(model).toUpperCase().split("-").pop() || "";
+
+  for (let poolIndex = 0; poolIndex < pools.length; poolIndex += 1) {
+    const pool = pools[poolIndex];
+    for (const match of pool.matchAll(/[A-Z0-9]{2,10}\s*[-‐‑‒–—―ー−]\s*[0-9OQI|]{4,10}/g)) {
+      const value = normalizeChassisCandidate(match[0], model);
+      if (!value) continue;
+      if (poolIndex === 0 || !modelCore) return value;
+      const prefix = value.split("-")[0];
+      if (canonicalCode(prefix) === canonicalCode(modelCore)) return value;
+    }
+  }
+  return "";
+}
+
 function known(text, choices) {
   const t = compact(text);
   return choices.find(x => t.includes(compact(x))) || "";
@@ -84,6 +131,22 @@ function fuzzyRecordDate(raw) {
   return "";
 }
 
+function findRecordDate(debug, global) {
+  const direct = fuzzyRecordDate(rawField(debug, "記録年月日"));
+  if (direct) return direct;
+
+  const t = norm(global);
+  const labelMatch = t.match(/記録.{0,3}年月[日5]?/);
+  if (labelMatch && typeof labelMatch.index === "number") {
+    const nearby = fuzzyRecordDate(t.slice(labelMatch.index, labelMatch.index + 280));
+    if (nearby) return nearby;
+  }
+
+  // 電子車検証の記録年月日は先頭の基本情報より前に置かれる。
+  // 絶対座標や特定車両の値は使わず、文書冒頭の記録日候補だけを最終フォールバックにする。
+  return fuzzyRecordDate(t.slice(0, 520));
+}
+
 const nums = text => (numText(text).replace(/,/g, "").match(/\d{1,5}/g) || []).map(Number);
 
 function rowValues(text) {
@@ -124,9 +187,10 @@ function fuel(text, eng) {
 function parse(debug) {
   const g=globalText(debug); if(!g)return {};
   const v={};
-  v.recordDate=fuzzyRecordDate(rawField(debug,"記録年月日"));
+  v.recordDate=findRecordDate(debug,g);
   v.documentNumber=docNumber(g);
   v.model=findModel(g);
+  v.chassisNumber=findChassis(g,v.model);
   const gi=norm(g).indexOf("原動機の型式");
   v.engineModel=findEngine(gi>=0?norm(g).slice(gi,gi+160):g);
   v.vehicleName=maker(g);
@@ -158,9 +222,9 @@ function setFuel(val){if(!val)return;const s=section("基本情報"),sel=Array.f
 function apply(v){
   const d=l=>input("車検証読み取り情報",l),b=l=>input("基本情報",l);
   const list=[
-    ["記録年月日",v.recordDate],["記録事項番号",v.documentNumber],["使用者の氏名又は名称",v.userName],["使用の本拠の位置",v.baseLocation],["車名",v.vehicleName],["型式",v.model],["自動車の種別",v.vehicleClass],["用途",v.purpose],["自家用・事業用の別",v.privateBusiness],["車体の形状",v.bodyShape],["乗車定員",v.seatingCapacity],["最大積載量 kg",v.maxPayloadKg],["車両重量 kg",v.vehicleWeightKg],["車両総重量 kg",v.grossVehicleWeightKg],["長さ cm",v.lengthCm],["幅 cm",v.widthCm],["高さ cm",v.heightCm],["前前軸重 kg",v.frontFrontAxleWeightKg],["前後軸重 kg",v.frontRearAxleWeightKg,true],["後前軸重 kg",v.rearFrontAxleWeightKg,true],["後後軸重 kg",v.rearRearAxleWeightKg],["総排気量又は定格出力",v.displacementOrRatedOutput],["燃料の種類",v.fuel]
+    ["記録年月日",v.recordDate],["記録事項番号",v.documentNumber],["車台番号",v.chassisNumber],["使用者の氏名又は名称",v.userName],["使用の本拠の位置",v.baseLocation],["車名",v.vehicleName],["型式",v.model],["自動車の種別",v.vehicleClass],["用途",v.purpose],["自家用・事業用の別",v.privateBusiness],["車体の形状",v.bodyShape],["乗車定員",v.seatingCapacity],["最大積載量 kg",v.maxPayloadKg],["車両重量 kg",v.vehicleWeightKg],["車両総重量 kg",v.grossVehicleWeightKg],["長さ cm",v.lengthCm],["幅 cm",v.widthCm],["高さ cm",v.heightCm],["前前軸重 kg",v.frontFrontAxleWeightKg],["前後軸重 kg",v.frontRearAxleWeightKg,true],["後前軸重 kg",v.rearFrontAxleWeightKg,true],["後後軸重 kg",v.rearRearAxleWeightKg],["総排気量又は定格出力",v.displacementOrRatedOutput],["燃料の種類",v.fuel]
   ];
-  // 原動機型式は全体OCRでは確定しない。K2 QR / 重点再読取の結果だけを採用する。
+  // 原動機型式は全体OCRでは確定しない。K2 QR / 罫線セルOCRの複数候補で確定した時だけ採用する。
   for(const [l,x,e] of list)setInput(d(l),x,!!e);
   setInput(b("型式"),v.model);setInput(b("車両重量 kg"),v.vehicleWeightKg);setFuel(v.fuel);
 }
