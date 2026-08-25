@@ -4,28 +4,21 @@ import CertificateRegistrationNumberGuard from "../certificate-registration-numb
 import CertificateChassisNumberGuard from "../certificate-chassis-number-guard";
 import CertificateEngineModelQrGuard from "../certificate-engine-model-qr-guard";
 import CertificateIdentityQrRecovery from "../certificate-identity-qr-recovery";
-import CertificateLayoutRecognitionV6 from "../certificate-layout-recognition-v6";
-import CertificateLayoutConsolidationV7 from "../certificate-layout-consolidation-v7";
-import CertificateEvidenceSafetyV8 from "../certificate-evidence-safety-v8";
-import CertificateExistingEvidenceV9 from "../certificate-existing-evidence-v9";
-import CertificateTargetedCellRecoveryV13 from "../certificate-targeted-cell-recovery-v13";
+import CertificateOcrPipelineController from "../certificate-ocr-pipeline-controller";
 import CertificateTestSummary from "../certificate-test-summary";
 
 // Vehicle certificate recognition pipeline for /vehicle-workflow-v2:
-// 1. QR is authoritative whenever available.
-// 2. Shared OCR v6 finds semantically valid labels, detects ruled cells, and re-reads only
-//    the necessary cell/right/below neighbours.
-// 3. v7 does not run more OCR. It consolidates already-existing OCR evidence.
-// 4. v8 is a final no-extra-OCR safety layer. It rescues only strongly structured evidence
-//    and clears incomplete/unsupported values instead of guessing.
-// 5. v9 reuses only existing OCR diagnostics to recover model-consistent chassis codes and
-//    complete user-company names; it never runs additional OCR or injects sample values.
-// 6. v13 is the conditional weak-cell fallback. It combines semantic labels with ruled-grid
-//    geometry, and for chassis numbers can use the band between neighbouring registration rows.
-//    It only re-reads unresolved chassis/user/engine regions and does not use fixed photo Y coordinates.
-// 7. Field guards validate final values but never inject sample-specific values.
+// 1. QR and the normal/base OCR run first.
+// 2. The pipeline controller validates already-populated registration/date/weight/dimension fields.
+//    If those core fields are coherent, the expensive generic v6 full-page/cell OCR is skipped.
+//    If they are not coherent, v6 is replayed as a fallback for that vehicle only.
+// 3. Only after the v6 decision/fallback has finished do the no-extra-OCR v7/v8/v9 stages run.
+// 4. v13 is mounted from the start so it keeps the selected image, but it waits for the v6-ready
+//    marker and then re-reads only unresolved chassis/user/engine cells.
+// 5. Field guards validate final values but never inject sample-specific values.
 //
-// Older field-specific OCR passes, layout v2/v3/v4/v5, and fixed-position v10/v11/v12 fallbacks are intentionally not mounted.
+// This keeps the recognition logic generic across vehicles while avoiding duplicate expensive OCR
+// on certificates whose core fields were already read correctly by the base OCR/QR path.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -33,14 +26,10 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateFulltextFix />
       <CertificateClassificationNumberGuard />
       <CertificateIdentityQrRecovery />
-      <CertificateLayoutRecognitionV6 />
       <CertificateRegistrationNumberGuard />
       <CertificateChassisNumberGuard />
       <CertificateEngineModelQrGuard />
-      <CertificateLayoutConsolidationV7 />
-      <CertificateEvidenceSafetyV8 />
-      <CertificateExistingEvidenceV9 />
-      <CertificateTargetedCellRecoveryV13 />
+      <CertificateOcrPipelineController />
       <CertificateTestSummary />
     </>
   );
