@@ -40,7 +40,9 @@ function fieldInput(labelText) {
   return null;
 }
 
-function value(label) { return norm(fieldInput(label)?.value || ""); }
+function value(label) {
+  return norm(fieldInput(label)?.value || "");
+}
 
 function isCertificateInput(node) {
   if (!(node instanceof HTMLInputElement) || node.type !== "file") return false;
@@ -122,32 +124,26 @@ function ensureStageDebug(stageKey, text, options = {}) {
 }
 
 function resetPipelineDebug() {
-  ensureStageDebug("v6", "状態: 通常OCR＋QRの結果を確認して、重いv6が必要か判定中", { complete: false });
+  ensureStageDebug("v6", "状態: 高速ベースOCR＋QRを確認して、v6が必要か判定中", { complete: false });
   ensureStageDebug("v7", "状態: v6判定完了待ち", { complete: false });
-  ensureStageDebug("v8", "状態: v7完了待ち", { complete: false });
-  ensureStageDebug("v9", "状態: v8完了待ち", { complete: false });
-  ensureStageDebug("v13", "状態: v9完了後、未確定セルだけ再読取します", { complete: false, green: true, open: true });
+  ensureStageDebug("v8", "状態: v7起動待ち", { complete: false });
+  ensureStageDebug("v9", "状態: v8起動待ち", { complete: false });
+  ensureStageDebug("v13", "状態: 軽量統合後、未確定セルだけ再読取します", { complete: false, green: true, open: true });
 }
 
 function showSkippedV6Debug(checks) {
   ensureStageDebug("v6", [
     "状態: 共通罫線セルOCR v6 完了",
-    "高速経路: 通常OCR＋QRで主要項目が整合したため、重複する全文OCR/セルOCRを省略",
+    "高速経路: 高速ベースOCR＋QRで主要項目が整合したため、重いv6を省略",
     `登録番号=${checks.registration ? "OK" : "NG"} / 登録日=${checks.registrationDate ? "OK" : "NG"} / 初度=${checks.firstRegistration ? "OK" : "NG"} / 満了=${checks.expiry ? "OK" : "NG"}`,
     `重量=${checks.vehicleWeight ? "OK" : "NG"} / 総重量=${checks.grossWeight ? "OK" : "NG"} / 長さ=${checks.length ? "OK" : "NG"} / 幅=${checks.width ? "OK" : "NG"} / 高さ=${checks.height ? "OK" : "NG"}`,
-    "未確定の車台番号・使用者名・原動機型式は後段の弱セル再読取へ渡します。",
+    "未確定項目だけv13へ回します。",
   ].join("\n"), { complete: true });
 }
 
 function v6Finished() {
   const pre = document.querySelector(`#${STAGES.v6.id} pre`);
   return /共通罫線セルOCR v6 (?:完了|エラー)/.test(pre?.textContent || "");
-}
-
-function stageHasRun(stageKey) {
-  const pre = document.querySelector(`#${STAGES[stageKey].id} pre`);
-  const text = pre?.textContent || "";
-  return Boolean(text.trim() && !/待ち|待機|判定中|統合中/.test(text));
 }
 
 export default function CertificateOcrPipelineController() {
@@ -163,7 +159,7 @@ export default function CertificateOcrPipelineController() {
 
     const waitForBaseAndDecide = async generation => {
       const started = Date.now();
-      const deadline = started + 18000;
+      const deadline = started + 12000;
       let lastSignature = "";
       let stableSamples = 0;
 
@@ -174,12 +170,10 @@ export default function CertificateOcrPipelineController() {
           else stableSamples = 0;
           lastSignature = snapshot.signature;
           if (snapshot.coreReady && stableSamples >= 2) break;
-          if (!snapshot.coreReady && stableSamples >= 8 && Date.now() - started >= 7000) break;
+          if (!snapshot.coreReady && stableSamples >= 6 && Date.now() - started >= 5200) break;
         }
-        await new Promise(resolve => setTimeout(resolve, 350));
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
-      if (stopped || generation !== generationRef.current) return;
-      await new Promise(resolve => setTimeout(resolve, 300));
       if (stopped || generation !== generationRef.current) return;
 
       const snapshot = stableBaseSnapshot();
@@ -190,7 +184,7 @@ export default function CertificateOcrPipelineController() {
         return;
       }
 
-      ensureStageDebug("v6", "状態: 基本OCRだけでは主要項目が不足 → 共通罫線セルOCR v6 を実行中", { complete: false });
+      ensureStageDebug("v6", "状態: 高速ベースだけでは主要項目が不足 → 共通罫線セルOCR v6 実行中", { complete: false });
       replayedRef.current = 0;
       setPostStage(0);
       setHeavyV6(true);
@@ -239,31 +233,42 @@ export default function CertificateOcrPipelineController() {
       if (box) box.dataset.pipelineComplete = "true";
       setHeavyV6(false);
       setPostStage(7);
-    }, 300);
+    }, 250);
     return () => window.clearInterval(timer);
   }, [heavyV6]);
 
+  // v7/v8/v9 are lightweight parsers/validators. Advance them on a deterministic clock
+  // instead of waiting for debug DOM text mutations, which could leave Safari stuck forever.
   useEffect(() => {
-    if (![7, 8, 9].includes(postStage)) return;
-    const key = `v${postStage}`;
-    const next = postStage === 7 ? 8 : postStage === 8 ? 9 : 13;
-    const waitingText = postStage === 7 ? "状態: v6完了 → v7統合中" : postStage === 8 ? "状態: v7完了 → v8安全統合中" : "状態: v8完了 → v9再統合中";
-    ensureStageDebug(key, waitingText, { complete: false, open: postStage === 9 });
-
-    let seenActual = false;
-    const timer = window.setInterval(() => {
-      if (!stageHasRun(key)) return;
-      if (!seenActual) { seenActual = true; return; }
-      window.clearInterval(timer);
-      const box = document.getElementById(STAGES[key].id);
-      if (box) box.dataset.pipelineComplete = "true";
-      if (next === 13) {
-        ensureStageDebug("v13", "状態: v9完了 → 未確定セルの重点再読取を開始します", { complete: false, green: true, open: true });
-      }
-      setPostStage(next);
-    }, 350);
-
-    return () => window.clearInterval(timer);
+    if (postStage === 7) {
+      ensureStageDebug("v7", "状態: v6完了 → v7統合開始", { complete: false, open: true });
+      const timer = window.setTimeout(() => {
+        const box = document.getElementById(STAGES.v7.id);
+        if (box) box.dataset.pipelineComplete = "true";
+        setPostStage(8);
+      }, 500);
+      return () => window.clearTimeout(timer);
+    }
+    if (postStage === 8) {
+      ensureStageDebug("v8", "状態: v7起動済み → v8安全統合開始", { complete: false, open: true });
+      const timer = window.setTimeout(() => {
+        const box = document.getElementById(STAGES.v8.id);
+        if (box) box.dataset.pipelineComplete = "true";
+        setPostStage(9);
+      }, 500);
+      return () => window.clearTimeout(timer);
+    }
+    if (postStage === 9) {
+      ensureStageDebug("v9", "状態: v8起動済み → v9再統合開始", { complete: false, open: true });
+      const timer = window.setTimeout(() => {
+        const box = document.getElementById(STAGES.v9.id);
+        if (box) box.dataset.pipelineComplete = "true";
+        ensureStageDebug("v13", "状態: 軽量統合完了 → 未確定セルだけv13再読取開始", { complete: false, green: true, open: true });
+        setPostStage(13);
+      }, 700);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
   }, [postStage]);
 
   useEffect(() => {
@@ -272,17 +277,17 @@ export default function CertificateOcrPipelineController() {
       const event = new Event("change", { bubbles: true });
       event.__certificateV13Replay = true;
       inputRef.current?.dispatchEvent(event);
-    }, 250);
+    }, 220);
     return () => window.clearTimeout(timer);
   }, [postStage]);
 
   return (
     <>
       {heavyV6 ? <CertificateLayoutRecognitionV6 /> : null}
-      {postStage === 7 ? <CertificateLayoutConsolidationV7 /> : null}
-      {postStage === 8 ? <CertificateEvidenceSafetyV8 /> : null}
-      {postStage === 9 ? <CertificateExistingEvidenceV9 /> : null}
-      {postStage === 13 ? <CertificateTargetedCellRecoveryV13 /> : null}
+      {postStage >= 7 ? <CertificateLayoutConsolidationV7 /> : null}
+      {postStage >= 8 ? <CertificateEvidenceSafetyV8 /> : null}
+      {postStage >= 9 ? <CertificateExistingEvidenceV9 /> : null}
+      {postStage >= 13 ? <CertificateTargetedCellRecoveryV13 /> : null}
     </>
   );
 }
