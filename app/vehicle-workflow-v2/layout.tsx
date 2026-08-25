@@ -1,3 +1,5 @@
+import CertificateFastBaseReader from "../certificate-fast-base-reader";
+import CertificateUserNameGuard from "../certificate-user-name-guard";
 import CertificateFulltextFix from "../certificate-fulltext-fix";
 import CertificateClassificationNumberGuard from "../certificate-classification-number-guard";
 import CertificateRegistrationNumberGuard from "../certificate-registration-number-guard";
@@ -8,21 +10,19 @@ import CertificateOcrPipelineController from "../certificate-ocr-pipeline-contro
 import CertificateTestSummary from "../certificate-test-summary";
 
 // Vehicle certificate recognition pipeline for /vehicle-workflow-v2:
-// 1. QR and the normal/base OCR run first.
-// 2. The pipeline controller validates already-populated registration/date/weight/dimension fields.
-//    If those core fields are coherent, the expensive generic v6 full-page/cell OCR is skipped.
-//    If they are not coherent, v6 is replayed as a fallback for that vehicle only.
-// 3. Only after the v6 decision/fallback has finished do the no-extra-OCR v7/v8/v9 stages run.
-// 4. v13 is mounted from the start so it keeps the selected image, but it waits for the v6-ready
-//    marker and then re-reads only unresolved chassis/user/engine cells.
-// 5. Field guards validate final values but never inject sample-specific values.
-//
-// This keeps the recognition logic generic across vehicles while avoiding duplicate expensive OCR
-// on certificates whose core fields were already read correctly by the base OCR/QR path.
+// 1. The fast base reader intercepts the legacy page file-change handler so the old ~39 sequential
+//    cell OCR calls do not run. It performs one full-document OCR pass (two only when the first is poor).
+// 2. QR and the full-text parser populate fields from that shared evidence.
+// 3. The pipeline controller validates the populated core fields. v6 runs only as a true fallback.
+// 4. v7 -> v8 -> v9 run in order without extra OCR, then v13 re-reads only unresolved weak cells.
+// 5. The user-name guard remembers a safe complete name during the current read and prevents a later
+//    empty/stub result from erasing it.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
+      <CertificateFastBaseReader />
+      <CertificateUserNameGuard />
       <CertificateFulltextFix />
       <CertificateClassificationNumberGuard />
       <CertificateIdentityQrRecovery />
