@@ -175,7 +175,7 @@ export default function CertificateFastBaseReader() {
         window.__vehicleCertificateFastBaseActive = true;
 
         showDebug([
-          `状態: 高速ベースOCR 完了`,
+          "状態: 高速ベースOCR 完了",
           `OCR回数: ${passes}pass`,
           `所要: ${elapsed}ms`,
           `1pass conf=${first.confidence.toFixed(1)}${secondConfidence == null ? "" : ` / 2pass conf=${Number(secondConfidence).toFixed(1)}`}`,
@@ -199,10 +199,15 @@ export default function CertificateFastBaseReader() {
     };
 
     const onChange = event => {
+      if (event.__certificatePipelineReplay || event.__certificateV13Replay) return;
       const input = event.target;
       if (!isCertificateInput(input)) return;
       const file = input.files?.[0];
       if (!file || !file.type.startsWith("image/")) return;
+
+      // Keep the original source for late lightweight stages. They can use this directly instead
+      // of re-firing the file input and waking unrelated QR/OCR listeners again.
+      window.__vehicleCertificateSourceFile = file;
 
       // React's legacy page handler performs ~39 sequential Tesseract recognitions.
       // Stop propagation below document so the shared QR listeners still receive this same event,
