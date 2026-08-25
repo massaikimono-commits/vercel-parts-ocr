@@ -154,8 +154,8 @@ function hasIdentityKeiCode(items) {
 }
 
 async function recoverImportantKeiCodes(source, reader, found, known = []) {
-  // Heavy broad rescans are intentionally avoided. Only the important K2/K7/K0 slots get
-  // a small focused retry set; unresolved identity fields are handed to v13 OCR afterwards.
+  // QR is now the first stage. Concentrate retries on K2/K7/K0 only; everything else can be
+  // recovered by small OCR cells later without a full-page OCR pass.
   const plans = [
     { digit: "2", slot: 1, xs: [0.485, 0.515, 0.545] },
     { digit: "7", slot: 5, xs: [0.765, 0.795, 0.825] },
@@ -193,8 +193,6 @@ async function scanSixSlots(file, known = []) {
   const identityOnly = unique(known).length >= 3 && !hasIdentityKeiCode(known);
 
   const xs = [0.43, 0.52, 0.61, 0.70, 0.79, 0.875];
-  // One contrast sweep first, then one shifted contrast sweep, then color only for still-missing slots.
-  // This cuts the old four full sweeps while keeping a color fallback.
   const passes = [
     [0.80, "contrast"],
     [0.835, "contrast"],
@@ -264,11 +262,14 @@ export default function CertificateQrLowerSixFallback() {
     const timer = window.setInterval(async () => {
       if (stopped || running || !pending) return;
 
-      const fastActive = Boolean(window.__vehicleCertificateFastBaseActive);
-      const fastDone = Boolean(window.__vehicleCertificateFastBaseDone);
-      if (fastActive && !fastDone) return;
+      const fastPipeline = Boolean(
+        window.__vehicleCertificateFastPipelineRequested ||
+        window.__vehicleCertificateFastBaseActive
+      );
 
-      if (!fastActive && document.querySelector(".progress")) {
+      // Legacy pages may still own the page-level progress bar. The fast vehicle-certificate
+      // pipeline intentionally does not wait for OCR: QR gets the CPU first.
+      if (!fastPipeline && document.querySelector(".progress")) {
         sawProgress = true;
         return;
       }
@@ -277,14 +278,14 @@ export default function CertificateQrLowerSixFallback() {
       if (existing.length >= 3 && hasIdentityKeiCode(existing)) {
         pending = null;
         markDone();
-        showStatus("主要QR取得済み。車両番号・車台番号の追加スキャンは省略しました。");
+        showStatus("主要QR取得済み。QR先行処理を完了しました。");
         return;
       }
 
       const elapsed = Date.now() - startedAt;
-      if (fastActive) {
-        // In the fast pipeline the one-pass OCR is already finished here; do not wait 18 seconds.
-        if (elapsed < 900) return;
+      if (fastPipeline) {
+        // Give the normal QR reader a very short head start, then immediately scan the six lower slots.
+        if (elapsed < 250) return;
       } else {
         if (!sawProgress && elapsed < 18000) return;
         if (sawProgress && elapsed < 7000) return;
@@ -295,8 +296,8 @@ export default function CertificateQrLowerSixFallback() {
       pending = null;
       running = true;
       showStatus(existing.length >= 3
-        ? "既読QRは再走査せず、車両番号・車台番号QRだけを軽量解析中…"
-        : "高速ベースOCR後、下段6個を軽量ZXing解析中…");
+        ? "QR先行: 既読QRは再走査せず、K2/K7/K0だけ重点解析中…"
+        : "QR先行: OCRを始める前に下段6個を軽量ZXing解析中…");
       try {
         const result = await scanSixSlots(file, existing);
         if (stopped || myToken !== token) return;
@@ -316,14 +317,14 @@ export default function CertificateQrLowerSixFallback() {
         }
         const versions = [...new Set(combined.map(keiVersion).filter(Boolean))].sort();
         const slots = result.map((x) => `${Number.isFinite(x.slot) ? x.slot + 1 : "?"}:${keiVersion(x) || "QR"}`).join(", ");
-        showStatus(`下段6QR 軽量解析: 新規${result.length}件 / QR合計 ${combined.length}件${versions.length ? ` / 軽QR ${versions.join(",")}` : ""}${slots ? ` / 検出 ${slots}` : ""}。未取得の身元項目は重い総当たりをせずv13へ渡します。`);
+        showStatus(`QR先行完了: 新規${result.length}件 / QR合計 ${combined.length}件${versions.length ? ` / 軽QR ${versions.join(",")}` : ""}${slots ? ` / 検出 ${slots}` : ""}。不足項目だけ軽量セル補完v14へ渡します。`);
       } catch (e) {
         if (!stopped) showStatus(`下段6QR 軽量解析エラー: ${e?.message || e}`);
       } finally {
         running = false;
         if (myToken === token) markDone();
       }
-    }, 500);
+    }, 120);
 
     document.addEventListener("change", onChange, true);
     return () => {
