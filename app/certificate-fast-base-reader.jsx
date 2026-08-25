@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { createDocumentRecognitionSession, createSharedTesseractWorker } from "./lib/document-recognition-v2";
 
 const FAST_READY_EVENT = "vehicle-certificate-fast-base-ready";
-const BASE_MAX_SIDE = 2100;
-const BASE_CROP_RATIO = 0.70;
 
 const norm = (value = "") => String(value)
   .normalize("NFKC")
@@ -13,7 +10,6 @@ const norm = (value = "") => String(value)
   .replace(/\r/g, "")
   .replace(/[\u3000\t]+/g, " ")
   .replace(/ {2,}/g, " ")
-  .replace(/\n{3,}/g, "\n\n")
   .trim();
 
 function section(title) {
@@ -59,7 +55,7 @@ function ensureDebug() {
     box.style.border = "1px solid #9bb8e8";
     box.style.borderRadius = "12px";
     box.style.background = "#f5f9ff";
-    box.innerHTML = '<summary style="font-weight:800">OCR詳細（確認用）・高速ベース</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px"></pre>';
+    box.innerHTML = '<summary style="font-weight:800">読み取り詳細（確認用）・QR先行ベース</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px"></pre>';
     host.appendChild(box);
   }
   return box;
@@ -92,51 +88,23 @@ function ensurePreview(file, state) {
   image.src = state.url;
 }
 
-function cropTop(source, ratio = BASE_CROP_RATIO) {
-  const canvas = document.createElement("canvas");
-  canvas.width = source.width;
-  canvas.height = Math.max(1, Math.round(source.height * ratio));
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(source, 0, 0, source.width, canvas.height, 0, 0, canvas.width, canvas.height);
-  return canvas;
+function keiVersion(item) {
+  const fields = String(item?.data || "")
+    .normalize("NFKC")
+    .replace(/\u3000/g, " ")
+    .split("/")
+    .map(value => value.trim());
+  return fields[0] === "K" ? (fields[1] || "") : "";
 }
 
-async function recognize(worker, tesseract, canvas, psm) {
-  await worker.setParameters({
-    tessedit_pageseg_mode: String(psm),
-    preserve_interword_spaces: "1",
-    user_defined_dpi: "300",
-    tessedit_char_whitelist: "",
-  });
-  const result = await worker.recognize(canvas, {}, { text: true, tsv: true });
-  return {
-    text: norm(result?.data?.text || ""),
-    confidence: Number(result?.data?.confidence || 0),
-    data: result?.data || null,
-  };
-}
-
-function usefulCount(text = "") {
-  return (norm(text).match(/[一-龠々ぁ-んァ-ヶA-Za-z0-9]/g) || []).length;
-}
-
-function releaseSession(session) {
-  try {
-    const seen = new Set();
-    const all = [
-      session?.prepared?.source,
-      session?.prepared?.normalized,
-      ...Object.values(session?.prepared?.variants || {}),
-    ];
-    for (const canvas of all) {
-      if (!canvas || seen.has(canvas)) continue;
-      seen.add(canvas);
-      canvas.width = 1;
-      canvas.height = 1;
-    }
-  } catch {}
+function qrSummary() {
+  const items = Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : [];
+  const versions = [...new Set(items.map(keiVersion).filter(Boolean))].sort();
+  const priority = window.__vehicleCertificateQrPriority;
+  const fields = priority && typeof priority === "object"
+    ? Object.entries(priority).filter(([, value]) => typeof value === "string" && norm(value)).map(([key]) => key)
+    : [];
+  return { count: items.length, versions, fields };
 }
 
 export default function CertificateFastBaseReader() {
@@ -147,88 +115,56 @@ export default function CertificateFastBaseReader() {
     let stopped = false;
     const previewState = { url: "" };
 
-    const run = async (file, currentGeneration) => {
-      let worker = null;
-      let session = null;
-      let page = null;
-      let contrast = null;
+    const run = async currentGeneration => {
       const started = performance.now();
       try {
-        showDebug("状態: 高速ベースOCR準備中\n方式: 上側70%だけ1pass。備考欄・下段QRは全体OCR対象外にします");
-        session = await createDocumentRecognitionSession(file, {
-          maxSide: BASE_MAX_SIDE,
-          cropPaper: true,
-          minPaperConfidence: 0.38,
-        });
-        if (stopped || currentGeneration !== generation) return;
+        showDebug([
+          "状態: QR先行解析中",
+          "全体OCR: 0pass",
+          "方針: QRを先に確定し、不足項目だけ小さいセルOCRへ渡します。",
+        ].join("\n"));
 
-        const shared = await createSharedTesseractWorker();
-        worker = shared.worker;
-        const t = shared.tesseract;
-        const fullPage = session.prepared.normalized;
-        page = cropTop(fullPage, BASE_CROP_RATIO);
-
-        const first = await recognize(worker, t, page, t.PSM?.SPARSE_TEXT ?? 11);
-        if (stopped || currentGeneration !== generation) return;
-
-        let text = first.text;
-        let chosenData = first.data;
-        let passes = 1;
-        let secondConfidence = null;
-
-        // Only a genuinely poor first pass gets one fallback. Normal certificates remain one-pass.
-        if (usefulCount(text) < 260 || text.length < 430) {
-          const contrastFull = session.prepared.variants?.contrast || fullPage;
-          contrast = cropTop(contrastFull, BASE_CROP_RATIO);
-          const second = await recognize(worker, t, contrast, t.PSM?.SPARSE_TEXT ?? 11);
-          if (stopped || currentGeneration !== generation) return;
-          secondConfidence = second.confidence;
-          passes = 2;
-          if (usefulCount(second.text) > usefulCount(text)) {
-            text = second.text;
-            chosenData = second.data;
-          } else if (second.text && !text.includes(second.text)) {
-            text = `${text}\n${second.text}`.trim();
-          }
+        const deadline = performance.now() + 7000;
+        while (!stopped && currentGeneration === generation && performance.now() < deadline) {
+          if (window.__vehicleCertificateLowerSixDone) break;
+          await new Promise(resolve => window.setTimeout(resolve, 80));
         }
+        if (stopped || currentGeneration !== generation) return;
+
+        // Lower-six completion wakes the optional K7 helper. Give it a short bounded window,
+        // but never hold the pipeline for many seconds.
+        const settleDeadline = performance.now() + 1400;
+        while (!stopped && currentGeneration === generation && performance.now() < settleDeadline) {
+          const summary = qrSummary();
+          if (summary.versions.some(version => /^7\d$/.test(version))) break;
+          await new Promise(resolve => window.setTimeout(resolve, 100));
+        }
+        if (stopped || currentGeneration !== generation) return;
 
         const elapsed = Math.round(performance.now() - started);
-        window.__vehicleCertificateFastBaseText = text;
-        window.__vehicleCertificateFastBaseOcrData = chosenData;
-        window.__vehicleCertificateFastBaseGeometry = {
-          width: page.width,
-          height: page.height,
-          fullWidth: fullPage.width,
-          fullHeight: fullPage.height,
-          cropRatio: BASE_CROP_RATIO,
-        };
+        const summary = qrSummary();
+        window.__vehicleCertificateFastBaseText = "";
+        window.__vehicleCertificateFastBaseOcrData = null;
+        window.__vehicleCertificateFastBaseGeometry = null;
         window.__vehicleCertificateFastBaseDone = true;
         window.__vehicleCertificateFastBaseActive = true;
 
         showDebug([
-          "状態: 高速ベースOCR 完了",
-          `OCR回数: ${passes}pass`,
-          `所要: ${elapsed}ms`,
-          `対象: 上側${Math.round(BASE_CROP_RATIO * 100)}% / maxSide=${BASE_MAX_SIDE}`,
-          `1pass conf=${first.confidence.toFixed(1)}${secondConfidence == null ? "" : ` / 2pass conf=${Number(secondConfidence).toFixed(1)}`}`,
-          "方針: QR＋この軽量OCRで取れた項目を採用し、未確定セルだけ後段へ渡します。",
-          "",
-          "【車検証 全体OCR（必要範囲のみ）】",
-          text || "(空)",
-          "",
-          "【QR最終確定】 軽量QR解析と照合中",
+          "状態: QR先行ベース 完了",
+          "OCR回数: 0pass",
+          `所要: ${elapsed}ms（QR待ちを含む）`,
+          `QR合計: ${summary.count}件${summary.versions.length ? ` / 軽QR ${summary.versions.join(",")}` : ""}`,
+          `QR反映項目: ${summary.fields.length ? summary.fields.join(" / ") : "まだなし"}`,
+          "次段: QRで埋まらなかったセルだけ固定位置の軽量OCRで補完します。",
         ].join("\n"));
 
-        window.dispatchEvent(new CustomEvent(FAST_READY_EVENT, { detail: { passes, elapsed, textLength: text.length } }));
+        window.dispatchEvent(new CustomEvent(FAST_READY_EVENT, {
+          detail: { passes: 0, elapsed, qrCount: summary.count, qrVersions: summary.versions },
+        }));
       } catch (error) {
         window.__vehicleCertificateFastBaseDone = true;
-        showDebug(`状態: 高速ベースOCR エラー\n${String(error?.message || error)}\n全セルOCRは自動で走らせず、不足項目だけ後段へ渡します。`);
-        window.dispatchEvent(new CustomEvent(FAST_READY_EVENT, { detail: { error: String(error?.message || error) } }));
-      } finally {
-        if (worker) await worker.terminate().catch(() => {});
-        if (page) { page.width = 1; page.height = 1; }
-        if (contrast) { contrast.width = 1; contrast.height = 1; }
-        if (session) releaseSession(session);
+        showDebug(`状態: QR先行ベース エラー\n${String(error?.message || error)}\n全体OCRには戻さず、不足セル補完へ進みます。`);
+        window.dispatchEvent(new CustomEvent(FAST_READY_EVENT, { detail: { passes: 0, error: String(error?.message || error) } }));
       }
     };
 
@@ -240,11 +176,16 @@ export default function CertificateFastBaseReader() {
       if (!file || !file.type.startsWith("image/")) return;
 
       window.__vehicleCertificateSourceFile = file;
+      window.__vehicleCertificateFastPipelineRequested = true;
+
+      // Prevent the legacy React handler from starting its old dozens-of-OCR-calls path.
+      // Other document-level QR listeners on this same event still receive the event.
       event.stopPropagation();
 
       generation += 1;
       window.__vehicleCertificateFastBaseActive = true;
       window.__vehicleCertificateFastBaseDone = false;
+      window.__vehicleCertificateFastBaseText = "";
       window.__vehicleCertificateFastBaseOcrData = null;
       window.__vehicleCertificateFastBaseGeometry = null;
       window.__vehicleCertificateLowerSixDone = false;
@@ -254,8 +195,7 @@ export default function CertificateFastBaseReader() {
 
       clearCertificateFields();
       ensurePreview(file, previewState);
-      showDebug("状態: 高速ベースOCR 開始\n全セル個別OCRは停止。必要情報がある上側70%だけを1passで読みます。");
-      void run(file, generation);
+      void run(generation);
     };
 
     document.addEventListener("change", onChange, true);
@@ -264,6 +204,7 @@ export default function CertificateFastBaseReader() {
       generation += 1;
       document.removeEventListener("change", onChange, true);
       if (previewState.url) URL.revokeObjectURL(previewState.url);
+      window.__vehicleCertificateFastPipelineRequested = false;
     };
   }, []);
 
