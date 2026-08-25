@@ -6,16 +6,17 @@ import CertificateEngineModelQrGuard from "../certificate-engine-model-qr-guard"
 import CertificateIdentityQrRecovery from "../certificate-identity-qr-recovery";
 import CertificateLayoutRecognitionV6 from "../certificate-layout-recognition-v6";
 import CertificateLayoutConsolidationV7 from "../certificate-layout-consolidation-v7";
+import CertificateEvidenceSafetyV8 from "../certificate-evidence-safety-v8";
 import CertificateTestSummary from "../certificate-test-summary";
 
 // Vehicle certificate recognition pipeline for /vehicle-workflow-v2:
 // 1. QR is authoritative whenever available.
 // 2. Shared OCR v6 finds semantically valid labels, detects ruled cells, and re-reads only
 //    the necessary cell/right/below neighbours.
-// 3. v7 does not run more OCR. It consolidates already-existing OCR evidence: validated
-//    five-value dimension rows, plate-shaped registration values, model-family chassis
-//    candidates, and fully agreed engine codes.
-// 4. Field guards validate final values but never inject sample-specific values.
+// 3. v7 does not run more OCR. It consolidates already-existing OCR evidence.
+// 4. v8 is a final no-extra-OCR safety layer. It rescues only strongly structured evidence
+//    and clears incomplete/unsupported values instead of guessing.
+// 5. Field guards validate final values but never inject sample-specific values.
 //
 // Older field-specific OCR passes and layout v2/v3/v4/v5 are intentionally not mounted.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateChassisNumberGuard />
       <CertificateEngineModelQrGuard />
       <CertificateLayoutConsolidationV7 />
+      <CertificateEvidenceSafetyV8 />
       <CertificateTestSummary />
     </>
   );
