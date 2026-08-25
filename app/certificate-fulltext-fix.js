@@ -68,22 +68,21 @@ function normalizeChassisCandidate(raw = "", model = "") {
 
 function findChassis(text, model = "") {
   const t = norm(text).toUpperCase();
-  const labelIndex = t.indexOf("車台番号");
-  const primary = labelIndex >= 0 ? t.slice(labelIndex, labelIndex + 260) : "";
-  const pools = [primary, t.slice(0, 1400)].filter(Boolean);
   const modelCore = compact(model).toUpperCase().split("-").pop() || "";
+  const candidates = [];
 
-  for (let poolIndex = 0; poolIndex < pools.length; poolIndex += 1) {
-    const pool = pools[poolIndex];
-    for (const match of pool.matchAll(/[A-Z0-9]{2,10}\s*[-‐‑‒–—―ー−]\s*[0-9OQI|]{4,10}/g)) {
-      const value = normalizeChassisCandidate(match[0], model);
-      if (!value) continue;
-      if (poolIndex === 0 || !modelCore) return value;
-      const prefix = value.split("-")[0];
-      if (canonicalCode(prefix) === canonicalCode(modelCore)) return value;
-    }
+  for (const match of t.matchAll(/[A-Z0-9]{2,10}\s*[-‐‑‒–—―ー−]\s*[0-9OQI|]{4,10}/g)) {
+    const value = normalizeChassisCandidate(match[0], model);
+    if (!value) continue;
+    const prefix = value.split("-")[0];
+    if (modelCore && canonicalCode(prefix) !== canonicalCode(modelCore)) continue;
+    candidates.push(value);
   }
-  return "";
+
+  if (!candidates.length) return "";
+  const counts = new Map();
+  for (const value of candidates) counts.set(value, (counts.get(value) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
 }
 
 function known(text, choices) {
@@ -106,8 +105,18 @@ function company(text) {
   return "";
 }
 
+function normalizeEraText(value = "") {
+  return norm(value)
+    .replace(/作\s*和/g, "令和")
+    .replace(/三\s*和/g, "令和")
+    .replace(/今\s*和/g, "令和")
+    .replace(/令\s*[禾口]/g, "令和")
+    .replace(/平[或戊陰咸戌]/g, "平成")
+    .replace(/昭[禾口知]/g, "昭和");
+}
+
 function fuzzyRecordDate(raw) {
-  let t = norm(raw).replace(/作\s*和/g, "令和").replace(/三\s*和/g, "令和").replace(/今\s*和/g, "令和");
+  let t = normalizeEraText(raw);
   const era = t.match(/令和|平成|昭和/);
   if (!era) return "";
   t = t.slice((era.index || 0) + era[0].length);
@@ -131,20 +140,51 @@ function fuzzyRecordDate(raw) {
   return "";
 }
 
+function dateSignature(raw = "") {
+  const t = numText(raw).replace(/,/g, " ");
+  const groups = t.match(/\d{1,3}/g) || [];
+  for (let i = 0; i + 2 < groups.length; i += 1) {
+    const y = Number(groups[i]);
+    const m = Number(groups[i + 1]);
+    const d = Number(groups[i + 2]);
+    if (y >= 1 && y <= 99 && m >= 1 && m <= 12 && d >= 1 && d <= 31) return [y, m, d];
+  }
+  return null;
+}
+
+function collectFullJapaneseDates(text = "") {
+  const t = normalizeEraText(text).replace(/\s+/g, "");
+  const found = [];
+  const re = /(令和|平成|昭和)([0-9OQDGIL|SZB]{1,2})年?([0-9OQDGIL|SZB]{1,2})月?([0-9OQDGIL|SZB]{1,2})[日HＢB己昌曰]?/g;
+  for (const match of t.matchAll(re)) {
+    const y = Number(numText(match[2]).replace(/\D/g, ""));
+    const m = Number(numText(match[3]).replace(/\D/g, ""));
+    const d = Number(numText(match[4]).replace(/\D/g, ""));
+    if (!y || m < 1 || m > 12 || d < 1 || d > 31) continue;
+    found.push({ era: match[1], y, m, d, value: `${match[1]}${y}年${m}月${d}日` });
+  }
+  return found;
+}
+
 function findRecordDate(debug, global) {
-  const direct = fuzzyRecordDate(rawField(debug, "記録年月日"));
+  const raw = rawField(debug, "記録年月日");
+  const direct = fuzzyRecordDate(raw);
   if (direct) return direct;
 
+  // ラベル周辺で年/月/日数字だけ読めている場合は、文書内に同じ年月日の
+  // 完全な和暦表記が存在するときだけ時代名を補う。別の日付を近さだけで拾わない。
+  let signature = dateSignature(raw);
   const t = norm(global);
-  const labelMatch = t.match(/記録.{0,3}年月[日5]?/);
-  if (labelMatch && typeof labelMatch.index === "number") {
-    const nearby = fuzzyRecordDate(t.slice(labelMatch.index, labelMatch.index + 280));
-    if (nearby) return nearby;
+  if (!signature) {
+    const label = t.match(/記録.{0,3}年月[日5]?/);
+    if (label && typeof label.index === "number") signature = dateSignature(t.slice(label.index, label.index + 120));
   }
+  if (!signature) return "";
 
-  // 電子車検証の記録年月日は先頭の基本情報より前に置かれる。
-  // 絶対座標や特定車両の値は使わず、文書冒頭の記録日候補だけを最終フォールバックにする。
-  return fuzzyRecordDate(t.slice(0, 520));
+  const [y, m, d] = signature;
+  const matches = collectFullJapaneseDates(global).filter(item => item.y === y && item.m === m && item.d === d);
+  const unique = [...new Set(matches.map(item => item.value))];
+  return unique.length === 1 ? unique[0] : "";
 }
 
 const nums = text => (numText(text).replace(/,/g, "").match(/\d{1,5}/g) || []).map(Number);
@@ -184,13 +224,13 @@ function fuel(text, eng) {
   return /^(4JJ1|4JJ3|4JZ1|4HK1|4HK2|4JB1|4JG2|1KD|2KD|1GD|2GD|ZD30|4M50|4M51|4P10|J05E|J07E|J08E|N04C|S05C|S05D|GH5|GH7|GH11)$/.test((eng||"").toUpperCase()) ? "軽油" : "";
 }
 
-function parse(debug) {
+function parse(debug, allDiagnostics = "") {
   const g=globalText(debug); if(!g)return {};
   const v={};
   v.recordDate=findRecordDate(debug,g);
   v.documentNumber=docNumber(g);
   v.model=findModel(g);
-  v.chassisNumber=findChassis(g,v.model);
+  v.chassisNumber=findChassis(`${g}\n${allDiagnostics}`,v.model);
   const gi=norm(g).indexOf("原動機の型式");
   v.engineModel=findEngine(gi>=0?norm(g).slice(gi,gi+160):g);
   v.vehicleName=maker(g);
@@ -233,7 +273,19 @@ export default function CertificateFulltextFix(){
   useEffect(()=>{
     if(location.pathname!=="/vehicle-workflow-v2")return;
     let last="",dead=false;
-    const run=()=>{if(dead)return;const debug=Array.from(document.querySelectorAll("details pre")).map(x=>x.textContent||"").find(x=>x.includes("【車検証 全体OCR】"))||"";if(!debug||debug===last)return;last=debug;const v=parse(debug);apply(v);[500,1400,3200].forEach(ms=>setTimeout(()=>{if(!dead)apply(v);},ms));};
+    const run=()=>{
+      if(dead)return;
+      const blocks=Array.from(document.querySelectorAll("details pre")).map(x=>x.textContent||"").filter(Boolean);
+      const debug=blocks.find(x=>x.includes("【車検証 全体OCR】"))||"";
+      if(!debug)return;
+      const allDiagnostics=blocks.join("\n\n--- diagnostic source ---\n");
+      const key=`${debug}\n${allDiagnostics}`;
+      if(key===last)return;
+      last=key;
+      const v=parse(debug,allDiagnostics);
+      apply(v);
+      [500,1400,3200].forEach(ms=>setTimeout(()=>{if(!dead)apply(v);},ms));
+    };
     const obs=new MutationObserver(run);obs.observe(document.documentElement,{childList:true,subtree:true,characterData:true});const id=setInterval(run,700);run();return()=>{dead=true;obs.disconnect();clearInterval(id);};
   },[]);
   return null;
