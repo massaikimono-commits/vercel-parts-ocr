@@ -5,18 +5,19 @@ import CertificateChassisNumberGuard from "../certificate-chassis-number-guard";
 import CertificateEngineModelQrGuard from "../certificate-engine-model-qr-guard";
 import CertificateIdentityQrRecovery from "../certificate-identity-qr-recovery";
 import CertificateLayoutRecognitionV6 from "../certificate-layout-recognition-v6";
+import CertificateLayoutConsolidationV7 from "../certificate-layout-consolidation-v7";
 import CertificateTestSummary from "../certificate-test-summary";
 
 // Vehicle certificate recognition pipeline for /vehicle-workflow-v2:
 // 1. QR is authoritative whenever available.
-// 2. Shared OCR v6 finds semantically valid labels, detects the actual ruled cell around
-//    each label from image lines, then re-reads only that cell/right/below neighbour.
-// 3. Values need support from multiple image variants before being committed.
-// 4. Plate-region correction uses only OCR text from the registration-number cell and a
-//    registration-region vocabulary; customer addresses are never used to infer a plate.
-// 5. Field guards validate values but never inject sample-specific values.
+// 2. Shared OCR v6 finds semantically valid labels, detects ruled cells, and re-reads only
+//    the necessary cell/right/below neighbours.
+// 3. v7 does not run more OCR. It consolidates already-existing OCR evidence: validated
+//    five-value dimension rows, plate-shaped registration values, model-family chassis
+//    candidates, and fully agreed engine codes.
+// 4. Field guards validate final values but never inject sample-specific values.
 //
-// Older field-specific OCR passes and layout v2/v3/v4/v5 are intentionally not mounted here.
+// Older field-specific OCR passes and layout v2/v3/v4/v5 are intentionally not mounted.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -28,6 +29,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateRegistrationNumberGuard />
       <CertificateChassisNumberGuard />
       <CertificateEngineModelQrGuard />
+      <CertificateLayoutConsolidationV7 />
       <CertificateTestSummary />
     </>
   );
