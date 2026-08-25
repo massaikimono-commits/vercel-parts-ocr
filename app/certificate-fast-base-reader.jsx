@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { createDocumentRecognitionSession, createSharedTesseractWorker } from "./lib/document-recognition-v2";
 
 const FAST_READY_EVENT = "vehicle-certificate-fast-base-ready";
+const BASE_MAX_SIDE = 2100;
+const BASE_CROP_RATIO = 0.70;
 
 const norm = (value = "") => String(value)
   .normalize("NFKC")
@@ -90,6 +92,17 @@ function ensurePreview(file, state) {
   image.src = state.url;
 }
 
+function cropTop(source, ratio = BASE_CROP_RATIO) {
+  const canvas = document.createElement("canvas");
+  canvas.width = source.width;
+  canvas.height = Math.max(1, Math.round(source.height * ratio));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(source, 0, 0, source.width, canvas.height, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
 async function recognize(worker, tesseract, canvas, psm) {
   await worker.setParameters({
     tessedit_pageseg_mode: String(psm),
@@ -101,6 +114,7 @@ async function recognize(worker, tesseract, canvas, psm) {
   return {
     text: norm(result?.data?.text || ""),
     confidence: Number(result?.data?.confidence || 0),
+    data: result?.data || null,
   };
 }
 
@@ -136,11 +150,13 @@ export default function CertificateFastBaseReader() {
     const run = async (file, currentGeneration) => {
       let worker = null;
       let session = null;
+      let page = null;
+      let contrast = null;
       const started = performance.now();
       try {
-        showDebug("状態: 高速ベースOCR準備中\n方式: 全32セルの個別OCRは実行せず、全体1pass＋QRを先に使います");
+        showDebug("状態: 高速ベースOCR準備中\n方式: 上側70%だけ1pass。備考欄・下段QRは全体OCR対象外にします");
         session = await createDocumentRecognitionSession(file, {
-          maxSide: 3000,
+          maxSide: BASE_MAX_SIDE,
           cropPaper: true,
           minPaperConfidence: 0.38,
         });
@@ -149,28 +165,43 @@ export default function CertificateFastBaseReader() {
         const shared = await createSharedTesseractWorker();
         worker = shared.worker;
         const t = shared.tesseract;
-        const page = session.prepared.normalized;
+        const fullPage = session.prepared.normalized;
+        page = cropTop(fullPage, BASE_CROP_RATIO);
 
         const first = await recognize(worker, t, page, t.PSM?.SPARSE_TEXT ?? 11);
         if (stopped || currentGeneration !== generation) return;
 
         let text = first.text;
+        let chosenData = first.data;
         let passes = 1;
         let secondConfidence = null;
 
-        // Only poor first passes get one fallback. Normal certificates stay at one OCR pass.
-        if (usefulCount(text) < 320 || text.length < 520) {
-          const contrast = session.prepared.variants?.contrast || page;
+        // Only a genuinely poor first pass gets one fallback. Normal certificates remain one-pass.
+        if (usefulCount(text) < 260 || text.length < 430) {
+          const contrastFull = session.prepared.variants?.contrast || fullPage;
+          contrast = cropTop(contrastFull, BASE_CROP_RATIO);
           const second = await recognize(worker, t, contrast, t.PSM?.SPARSE_TEXT ?? 11);
           if (stopped || currentGeneration !== generation) return;
           secondConfidence = second.confidence;
           passes = 2;
-          if (usefulCount(second.text) > usefulCount(text)) text = second.text;
-          else if (second.text && !text.includes(second.text)) text = `${text}\n${second.text}`.trim();
+          if (usefulCount(second.text) > usefulCount(text)) {
+            text = second.text;
+            chosenData = second.data;
+          } else if (second.text && !text.includes(second.text)) {
+            text = `${text}\n${second.text}`.trim();
+          }
         }
 
         const elapsed = Math.round(performance.now() - started);
         window.__vehicleCertificateFastBaseText = text;
+        window.__vehicleCertificateFastBaseOcrData = chosenData;
+        window.__vehicleCertificateFastBaseGeometry = {
+          width: page.width,
+          height: page.height,
+          fullWidth: fullPage.width,
+          fullHeight: fullPage.height,
+          cropRatio: BASE_CROP_RATIO,
+        };
         window.__vehicleCertificateFastBaseDone = true;
         window.__vehicleCertificateFastBaseActive = true;
 
@@ -178,10 +209,11 @@ export default function CertificateFastBaseReader() {
           "状態: 高速ベースOCR 完了",
           `OCR回数: ${passes}pass`,
           `所要: ${elapsed}ms`,
+          `対象: 上側${Math.round(BASE_CROP_RATIO * 100)}% / maxSide=${BASE_MAX_SIDE}`,
           `1pass conf=${first.confidence.toFixed(1)}${secondConfidence == null ? "" : ` / 2pass conf=${Number(secondConfidence).toFixed(1)}`}`,
-          "方針: QRとこの全体OCRで確定できる項目を先に採用し、未確定項目だけ後段へ渡します。",
+          "方針: QR＋この軽量OCRで取れた項目を採用し、未確定セルだけ後段へ渡します。",
           "",
-          "【車検証 全体OCR】",
+          "【車検証 全体OCR（必要範囲のみ）】",
           text || "(空)",
           "",
           "【QR最終確定】 軽量QR解析と照合中",
@@ -190,10 +222,12 @@ export default function CertificateFastBaseReader() {
         window.dispatchEvent(new CustomEvent(FAST_READY_EVENT, { detail: { passes, elapsed, textLength: text.length } }));
       } catch (error) {
         window.__vehicleCertificateFastBaseDone = true;
-        showDebug(`状態: 高速ベースOCR エラー\n${String(error?.message || error)}\n重い全セルOCRは自動で走らせず、後段の不足項目判定へ渡します。`);
+        showDebug(`状態: 高速ベースOCR エラー\n${String(error?.message || error)}\n全セルOCRは自動で走らせず、不足項目だけ後段へ渡します。`);
         window.dispatchEvent(new CustomEvent(FAST_READY_EVENT, { detail: { error: String(error?.message || error) } }));
       } finally {
         if (worker) await worker.terminate().catch(() => {});
+        if (page) { page.width = 1; page.height = 1; }
+        if (contrast) { contrast.width = 1; contrast.height = 1; }
         if (session) releaseSession(session);
       }
     };
@@ -205,18 +239,14 @@ export default function CertificateFastBaseReader() {
       const file = input.files?.[0];
       if (!file || !file.type.startsWith("image/")) return;
 
-      // Keep the original source for late lightweight stages. They can use this directly instead
-      // of re-firing the file input and waking unrelated QR/OCR listeners again.
       window.__vehicleCertificateSourceFile = file;
-
-      // React's legacy page handler performs ~39 sequential Tesseract recognitions.
-      // Stop propagation below document so the shared QR listeners still receive this same event,
-      // while the page's delegated React onChange does not start the heavy path.
       event.stopPropagation();
 
       generation += 1;
       window.__vehicleCertificateFastBaseActive = true;
       window.__vehicleCertificateFastBaseDone = false;
+      window.__vehicleCertificateFastBaseOcrData = null;
+      window.__vehicleCertificateFastBaseGeometry = null;
       window.__vehicleCertificateLowerSixDone = false;
       window.__vehicleCertificateQrPriority = null;
       window.__vehicleCertificateQr = [];
@@ -224,7 +254,7 @@ export default function CertificateFastBaseReader() {
 
       clearCertificateFields();
       ensurePreview(file, previewState);
-      showDebug("状態: 高速ベースOCR 開始\n全セル個別OCR（約39回）は停止しました。まず1passで全体を読みます。");
+      showDebug("状態: 高速ベースOCR 開始\n全セル個別OCRは停止。必要情報がある上側70%だけを1passで読みます。");
       void run(file, generation);
     };
 
