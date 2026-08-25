@@ -8,6 +8,7 @@ import CertificateConsistencyFix from "./certificate-consistency-fix";
 import CertificatePdfBridge from "./certificate-pdf-bridge";
 import CertificateQrReader from "./certificate-qr-reader";
 import CertificateQrLowerSixFallback from "./certificate-qr-lower-six-fallback";
+import CertificateQrK7TargetedRecovery from "./certificate-qr-k7-targeted-recovery";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
 import CertificateFinalNativeFix from "./certificate-final-native-fix";
 import CertificateAdaptiveOcr from "./certificate-adaptive-ocr";
@@ -194,6 +195,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificatePdfBridge />
         <CertificateQrReader />
         <CertificateQrLowerSixFallback />
+        <CertificateQrK7TargetedRecovery />
         <CertificateQrApply />
         <CertificateFinalNativeFix />
         <CertificateAdaptiveOcr />
