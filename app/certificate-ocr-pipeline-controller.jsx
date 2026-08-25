@@ -5,7 +5,7 @@ import CertificateLayoutRecognitionV6 from "./certificate-layout-recognition-v6"
 import CertificateLayoutConsolidationV7 from "./certificate-layout-consolidation-v7";
 import CertificateEvidenceSafetyV8 from "./certificate-evidence-safety-v8";
 import CertificateExistingEvidenceV9 from "./certificate-existing-evidence-v9";
-import CertificateTargetedCellRecoveryV13 from "./certificate-targeted-cell-recovery-v13";
+import CertificateTargetedCellRecoveryV14 from "./certificate-targeted-cell-recovery-v14";
 
 const norm = (value = "") => String(value)
   .normalize("NFKC")
@@ -19,7 +19,7 @@ const STAGES = {
   v7: { id: "certificate-layout-consolidation-v7-debug", title: "共通OCR 最終統合 v7（確認用）" },
   v8: { id: "certificate-evidence-safety-v8-debug", title: "最終安全統合 v8（確認用）" },
   v9: { id: "certificate-existing-evidence-v9-debug", title: "既存OCR再統合 v9（確認用）" },
-  v13: { id: "certificate-targeted-cell-recovery-v13-debug", title: "罫線＋ラベル追従 弱セル再読取 v13（確認用）" },
+  v13: { id: "certificate-targeted-cell-recovery-v13-debug", title: "軽量セル補完 v14（確認用）" },
 };
 
 function section(title) {
@@ -145,7 +145,7 @@ function showSkippedV6Debug(checks, reason) {
     `高速経路: ${reason} → 重いv6は省略`,
     `登録番号=${checks.registration ? "OK" : "未確定"} / 登録日=${checks.registrationDate ? "OK" : "未確定"} / 初度=${checks.firstRegistration ? "OK" : "未確定"} / 満了=${checks.expiry ? "OK" : "未確定"}`,
     `重量=${checks.vehicleWeight ? "OK" : "未確定"} / 総重量=${checks.grossWeight ? "OK" : "未確定"} / 長さ=${checks.length ? "OK" : "未確定"} / 幅=${checks.width ? "OK" : "未確定"} / 高さ=${checks.height ? "OK" : "未確定"}`,
-    "空欄・弱セルは重い全体再OCRをせずv13へ渡します。",
+    "空欄・弱セルは重い全体再OCRをせず軽量セル補完へ渡します。",
   ].join("\n"), { complete: true });
 }
 
@@ -169,14 +169,12 @@ export default function CertificateOcrPipelineController() {
       const started = Date.now();
       const deadline = started + 6500;
 
-      // Wait mainly for the one-pass base reader, not for every field to become populated.
       while (!stopped && generation === generationRef.current && Date.now() < deadline) {
         if (window.__vehicleCertificateFastBaseDone) break;
         await new Promise(resolve => setTimeout(resolve, 160));
       }
       if (stopped || generation !== generationRef.current) return;
 
-      // Give QR/full-text state bridges a short moment to apply their already-computed evidence.
       const settleUntil = Date.now() + 1100;
       while (!stopped && generation === generationRef.current && Date.now() < settleUntil) {
         await new Promise(resolve => setTimeout(resolve, 140));
@@ -189,8 +187,6 @@ export default function CertificateOcrPipelineController() {
       const baseSignal = hasBaseSignal();
       const qrSignal = hasQrSignal();
 
-      // Heavy v6 is now an emergency fallback only. Missing registration/chassis/date/dimension
-      // fields are intentionally passed to the targeted stage instead of re-reading the whole page.
       if (useful >= 150 || baseSignal || qrSignal) {
         showSkippedV6Debug(snapshot.checks, `ベース証拠あり useful=${useful}${qrSignal ? " / QRあり" : ""}`);
         setHeavyV6(false);
@@ -251,7 +247,6 @@ export default function CertificateOcrPipelineController() {
     return () => window.clearInterval(timer);
   }, [heavyV6]);
 
-  // v7/v8/v9 do not run OCR. They only reconcile already available evidence, so keep them fast.
   useEffect(() => {
     if (postStage === 7) {
       ensureStageDebug("v7", "状態: v6判定完了 → v7軽量統合", { complete: false, open: true });
@@ -276,7 +271,7 @@ export default function CertificateOcrPipelineController() {
       const timer = window.setTimeout(() => {
         const box = document.getElementById(STAGES.v9.id);
         if (box) box.dataset.pipelineComplete = "true";
-        ensureStageDebug("v13", "状態: 軽量統合完了 → 未確定セルだけv13へ", { complete: false, green: true, open: true });
+        ensureStageDebug("v13", "状態: 軽量統合完了 → 未確定セルだけv14へ", { complete: false, green: true, open: true });
         setPostStage(13);
       }, 180);
       return () => window.clearTimeout(timer);
@@ -300,7 +295,7 @@ export default function CertificateOcrPipelineController() {
       {postStage >= 7 ? <CertificateLayoutConsolidationV7 /> : null}
       {postStage >= 8 ? <CertificateEvidenceSafetyV8 /> : null}
       {postStage >= 9 ? <CertificateExistingEvidenceV9 /> : null}
-      {postStage >= 13 ? <CertificateTargetedCellRecoveryV13 /> : null}
+      {postStage >= 13 ? <CertificateTargetedCellRecoveryV14 /> : null}
     </>
   );
 }
