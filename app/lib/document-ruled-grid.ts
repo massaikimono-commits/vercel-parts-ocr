@@ -60,10 +60,11 @@ function toRegion(
 /**
  * Generic ruled-form detector.
  *
- * It does not know certificate coordinates. For each OCR label it finds the nearest
- * strong horizontal/vertical rules in the image and returns the current ruled cell,
- * its right neighbour and its lower neighbour. The same primitive can be reused for
- * parts slips and other tabular forms.
+ * The detector knows no certificate coordinates. It first finds the horizontal rule
+ * enclosing a label, then deliberately looks one row farther down before accepting
+ * vertical boundaries. True table columns usually continue through the label row and
+ * value row, while character strokes and short decorative lines do not. This makes the
+ * same primitive suitable for vehicle certificates and parts-slip tables.
  */
 export function createRuledGridDetector(source: HTMLCanvasElement) {
   const { canvas, scale } = makeAnalysisCanvas(source);
@@ -131,7 +132,7 @@ export function createRuledGridDetector(source: HTMLCanvasElement) {
     return clusterHits(hits, 3);
   };
 
-  const verticalHits = (x0: number, x1: number, y0: number, y1: number, threshold = 0.58) => {
+  const verticalHits = (x0: number, x1: number, y0: number, y1: number, threshold = 0.52) => {
     const hits: LineHit[] = [];
     for (let x = Math.round(x0); x <= Math.round(x1); x += 1) {
       const score = verticalScore(x, y0, y1);
@@ -147,10 +148,10 @@ export function createRuledGridDetector(source: HTMLCanvasElement) {
     const ay1 = anchor.bbox.y1 * scale;
     const anchorHeight = Math.max(4, ay1 - ay0);
 
-    const scanX0 = Math.max(0, ax0 - width * 0.06);
-    const scanX1 = Math.min(width - 1, ax1 + width * 0.34);
+    const scanX0 = Math.max(0, ax0 - width * 0.08);
+    const scanX1 = Math.min(width - 1, ax1 + width * 0.40);
     const scanY0 = Math.max(0, ay0 - Math.max(anchorHeight * 4.0, height * 0.030));
-    const scanY1 = Math.min(height - 1, ay1 + Math.max(anchorHeight * 8.0, height * 0.065));
+    const scanY1 = Math.min(height - 1, ay1 + Math.max(anchorHeight * 13.0, height * 0.095));
     const hLines = horizontalHits(scanX0, scanX1, scanY0, scanY1);
 
     const top = [...hLines]
@@ -161,9 +162,29 @@ export function createRuledGridDetector(source: HTMLCanvasElement) {
       .sort((a, b) => a.position - b.position)[0] || null;
     if (!top || !bottom || bottom.position - top.position < anchorHeight * 1.15) return [];
 
-    const verticalScanX0 = Math.max(0, ax0 - width * 0.16);
-    const verticalScanX1 = Math.min(width - 1, ax1 + width * 0.46);
-    const vLines = verticalHits(verticalScanX0, verticalScanX1, top.position, bottom.position);
+    // Find the next horizontal rule before choosing columns. Vertical lines are then
+    // scored across both the label cell and its immediate lower neighbour, which filters
+    // out character strokes and short sub-cell rules.
+    let nextBelow = [...hLines]
+      .filter(line => line.position >= bottom.position + Math.max(3, anchorHeight * 0.35))
+      .sort((a, b) => a.position - b.position)[0] || null;
+
+    if (!nextBelow) {
+      const extended = horizontalHits(
+        scanX0,
+        scanX1,
+        bottom.position + Math.max(3, anchorHeight * 0.35),
+        Math.min(height - 1, bottom.position + Math.max(anchorHeight * 9.0, height * 0.065)),
+        0.31,
+      );
+      nextBelow = extended.sort((a, b) => a.position - b.position)[0] || null;
+    }
+
+    const verticalScanX0 = Math.max(0, ax0 - width * 0.18);
+    const verticalScanX1 = Math.min(width - 1, ax1 + width * 0.48);
+    const verticalY1 = nextBelow?.position || bottom.position;
+    const vLines = verticalHits(verticalScanX0, verticalScanX1, top.position, verticalY1);
+
     const left = [...vLines]
       .filter(line => line.position <= ax0 - 1)
       .sort((a, b) => b.position - a.position)[0] || null;
@@ -175,15 +196,6 @@ export function createRuledGridDetector(source: HTMLCanvasElement) {
     const nextRight = [...vLines]
       .filter(line => line.position >= right.position + Math.max(4, anchorHeight * 0.4))
       .sort((a, b) => a.position - b.position)[0] || null;
-
-    const localH = horizontalHits(
-      left.position,
-      right.position,
-      bottom.position + Math.max(3, anchorHeight * 0.25),
-      Math.min(height - 1, bottom.position + Math.max(anchorHeight * 7.0, height * 0.055)),
-      0.34,
-    );
-    const nextBelow = [...localH].sort((a, b) => a.position - b.position)[0] || null;
 
     const sx = pageWidth / width;
     const sy = pageHeight / height;
@@ -238,7 +250,7 @@ export function createRuledGridDetector(source: HTMLCanvasElement) {
       if (region) regions.push({
         region,
         direction: "below",
-        geometryScore: 1.06 + belowConfidence * 0.24,
+        geometryScore: 1.14 + belowConfidence * 0.28,
         lineConfidence: belowConfidence,
       });
     }
