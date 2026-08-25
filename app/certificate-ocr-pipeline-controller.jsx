@@ -14,6 +14,29 @@ const norm = (value = "") => String(value)
   .replace(/ {2,}/g, " ")
   .trim();
 
+const STAGES = {
+  v6: {
+    id: "certificate-layout-recognition-v6-debug",
+    title: "共通罫線セルOCR v6（確認用）",
+  },
+  v7: {
+    id: "certificate-layout-consolidation-v7-debug",
+    title: "共通OCR 最終統合 v7（確認用）",
+  },
+  v8: {
+    id: "certificate-evidence-safety-v8-debug",
+    title: "最終安全統合 v8（確認用）",
+  },
+  v9: {
+    id: "certificate-existing-evidence-v9-debug",
+    title: "既存OCR再統合 v9（確認用）",
+  },
+  v13: {
+    id: "certificate-targeted-cell-recovery-v13-debug",
+    title: "罫線＋ラベル追従 弱セル再読取 v13（確認用）",
+  },
+};
+
 function section(title) {
   return [...document.querySelectorAll("section.card")].find(node =>
     node.querySelector("h2")?.textContent?.includes(title)
@@ -81,8 +104,21 @@ function stableBaseSnapshot() {
     height: Number.isFinite(height) && height >= 100 && height <= 600,
   };
 
-  const coreReady = Object.values(checks).every(Boolean);
-  return { coreReady, checks };
+  return {
+    coreReady: Object.values(checks).every(Boolean),
+    checks,
+    signature: JSON.stringify({
+      registration,
+      registrationDate,
+      firstRegistration,
+      expiry,
+      vehicleWeight,
+      grossWeight,
+      length,
+      width,
+      height,
+    }),
+  };
 }
 
 function hasBaseSignal() {
@@ -94,46 +130,65 @@ function hasBaseSignal() {
   );
 }
 
-function removeSyntheticV6Debug() {
-  const box = document.getElementById("certificate-layout-recognition-v6-debug");
-  if (box?.dataset?.pipelineSynthetic === "true") box.remove();
+function ensureStageDebug(stageKey, text, options = {}) {
+  const config = STAGES[stageKey];
+  const host = section("車検証から読み取る");
+  if (!config || !host) return null;
+
+  let box = document.getElementById(config.id);
+  if (!box) {
+    box = document.createElement("details");
+    box.id = config.id;
+    box.style.marginTop = "12px";
+    box.style.padding = "12px";
+    box.style.border = options.green ? "1px solid #69a985" : "1px solid #cfd8e6";
+    box.style.borderRadius = "12px";
+    if (options.green) box.style.background = "#ecfdf5";
+    box.innerHTML = `<summary style="font-weight:800">${config.title}</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px"></pre>`;
+    host.appendChild(box);
+  }
+  if (options.open) box.open = true;
+  const pre = box.querySelector("pre");
+  if (pre && typeof text === "string") pre.textContent = text;
+  if (options.complete === true) box.dataset.pipelineComplete = "true";
+  if (options.complete === false) delete box.dataset.pipelineComplete;
+  return box;
+}
+
+function resetPipelineDebug() {
+  ensureStageDebug("v6", "状態: 通常OCR＋QRの結果を確認して、重いv6が必要か判定中", { complete: false });
+  ensureStageDebug("v7", "状態: v6判定完了待ち", { complete: false });
+  ensureStageDebug("v8", "状態: v7完了待ち", { complete: false });
+  ensureStageDebug("v9", "状態: v8完了待ち", { complete: false });
+  ensureStageDebug("v13", "状態: v9完了後、未確定セルだけ再読取します", { complete: false, green: true, open: true });
 }
 
 function showSkippedV6Debug(checks) {
-  const host = section("車検証から読み取る");
-  if (!host) return;
-  removeSyntheticV6Debug();
-  const box = document.createElement("details");
-  box.id = "certificate-layout-recognition-v6-debug";
-  box.dataset.pipelineSynthetic = "true";
-  box.style.marginTop = "12px";
-  box.style.padding = "12px";
-  box.style.border = "1px solid #86b79b";
-  box.style.borderRadius = "12px";
-  box.style.background = "#f0fdf4";
-  box.innerHTML = '<summary style="font-weight:800">共通罫線セルOCR v6（高速判定）</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px"></pre>';
-  const pre = box.querySelector("pre");
-  if (pre) {
-    pre.textContent = [
-      "状態: 共通罫線セルOCR v6 完了",
-      "高速経路: 通常OCR＋QRで主要項目が整合したため、重複する全文OCR/セルOCRを省略",
-      `登録番号=${checks.registration ? "OK" : "NG"} / 登録日=${checks.registrationDate ? "OK" : "NG"} / 初度=${checks.firstRegistration ? "OK" : "NG"} / 満了=${checks.expiry ? "OK" : "NG"}`,
-      `重量=${checks.vehicleWeight ? "OK" : "NG"} / 総重量=${checks.grossWeight ? "OK" : "NG"} / 長さ=${checks.length ? "OK" : "NG"} / 幅=${checks.width ? "OK" : "NG"} / 高さ=${checks.height ? "OK" : "NG"}`,
-      "未確定の車台番号・使用者名・原動機型式は後段の弱セル再読取へ渡します。",
-    ].join("\n");
-  }
-  host.appendChild(box);
+  ensureStageDebug("v6", [
+    "状態: 共通罫線セルOCR v6 完了",
+    "高速経路: 通常OCR＋QRで主要項目が整合したため、重複する全文OCR/セルOCRを省略",
+    `登録番号=${checks.registration ? "OK" : "NG"} / 登録日=${checks.registrationDate ? "OK" : "NG"} / 初度=${checks.firstRegistration ? "OK" : "NG"} / 満了=${checks.expiry ? "OK" : "NG"}`,
+    `重量=${checks.vehicleWeight ? "OK" : "NG"} / 総重量=${checks.grossWeight ? "OK" : "NG"} / 長さ=${checks.length ? "OK" : "NG"} / 幅=${checks.width ? "OK" : "NG"} / 高さ=${checks.height ? "OK" : "NG"}`,
+    "未確定の車台番号・使用者名・原動機型式は後段の弱セル再読取へ渡します。",
+  ].join("\n"), { complete: true });
 }
 
 function v6Finished() {
-  const pre = document.querySelector("#certificate-layout-recognition-v6-debug pre");
+  const pre = document.querySelector(`#${STAGES.v6.id} pre`);
+  return /共通罫線セルOCR v6 (?:完了|エラー)/.test(pre?.textContent || "");
+}
+
+function stageHasRun(stageKey) {
+  const pre = document.querySelector(`#${STAGES[stageKey].id} pre`);
   const text = pre?.textContent || "";
-  return /共通罫線セルOCR v6 (?:完了|エラー)/.test(text);
+  if (!text.trim()) return false;
+  if (/待ち|待機|判定中/.test(text)) return false;
+  return true;
 }
 
 export default function CertificateOcrPipelineController() {
   const [heavyV6, setHeavyV6] = useState(false);
-  const [postReady, setPostReady] = useState(false);
+  const [postStage, setPostStage] = useState(0);
   const inputRef = useRef(null);
   const generationRef = useRef(0);
   const replayedRef = useRef(0);
@@ -143,33 +198,43 @@ export default function CertificateOcrPipelineController() {
     let stopped = false;
 
     const waitForBaseAndDecide = async generation => {
-      let stableNoProgress = 0;
-      const deadline = Date.now() + 60000;
+      const started = Date.now();
+      const deadline = started + 18000;
+      let lastSignature = "";
+      let stableSamples = 0;
+
       while (!stopped && generation === generationRef.current && Date.now() < deadline) {
-        const busy = Boolean(document.querySelector(".progress"));
-        if (!busy && hasBaseSignal()) stableNoProgress += 1;
-        else stableNoProgress = 0;
-        if (stableNoProgress >= 3) break;
+        if (hasBaseSignal()) {
+          const snapshot = stableBaseSnapshot();
+          if (snapshot.signature === lastSignature) stableSamples += 1;
+          else stableSamples = 0;
+          lastSignature = snapshot.signature;
+
+          // Fast path: two stable samples with every core field coherent.
+          if (snapshot.coreReady && stableSamples >= 2) break;
+
+          // If a partial result has stopped changing for a while, do not wait a full minute.
+          // Move to v6 fallback after the base path had enough time to settle.
+          if (!snapshot.coreReady && stableSamples >= 8 && Date.now() - started >= 7000) break;
+        }
         await new Promise(resolve => setTimeout(resolve, 350));
       }
       if (stopped || generation !== generationRef.current) return;
 
-      // Give QR/state reconciliation one final short window before deciding whether the
-      // expensive generic v6 OCR is actually necessary.
-      await new Promise(resolve => setTimeout(resolve, 650));
+      await new Promise(resolve => setTimeout(resolve, 300));
       if (stopped || generation !== generationRef.current) return;
 
       const snapshot = stableBaseSnapshot();
       if (snapshot.coreReady) {
         showSkippedV6Debug(snapshot.checks);
         setHeavyV6(false);
-        setPostReady(true);
+        setPostStage(7);
         return;
       }
 
-      removeSyntheticV6Debug();
+      ensureStageDebug("v6", "状態: 基本OCRだけでは主要項目が不足 → 共通罫線セルOCR v6 を実行中", { complete: false });
       replayedRef.current = 0;
-      setPostReady(false);
+      setPostStage(0);
       setHeavyV6(true);
     };
 
@@ -181,9 +246,9 @@ export default function CertificateOcrPipelineController() {
       if (!file || !file.type.startsWith("image/")) return;
       inputRef.current = input;
       generationRef.current += 1;
-      removeSyntheticV6Debug();
       setHeavyV6(false);
-      setPostReady(false);
+      setPostStage(0);
+      resetPipelineDebug();
       void waitForBaseAndDecide(generationRef.current);
     };
 
@@ -212,25 +277,47 @@ export default function CertificateOcrPipelineController() {
     const timer = window.setInterval(() => {
       if (!v6Finished()) return;
       window.clearInterval(timer);
-      setPostReady(true);
-      // Unmount v6 after this generation finishes so the next real file selection cannot
-      // accidentally start the expensive path before the controller makes its decision.
+      const box = document.getElementById(STAGES.v6.id);
+      if (box) box.dataset.pipelineComplete = "true";
       setHeavyV6(false);
-    }, 350);
+      setPostStage(7);
+    }, 300);
     return () => window.clearInterval(timer);
   }, [heavyV6]);
+
+  useEffect(() => {
+    if (![7, 8, 9].includes(postStage)) return;
+    const key = `v${postStage}`;
+    const next = postStage === 7 ? 8 : postStage === 8 ? 9 : 13;
+    const waitingText = postStage === 7 ? "状態: v6完了 → v7統合中" : postStage === 8 ? "状態: v7完了 → v8安全統合中" : "状態: v8完了 → v9再統合中";
+    ensureStageDebug(key, waitingText, { complete: false, open: postStage === 9 });
+
+    let seenActual = false;
+    const timer = window.setInterval(() => {
+      if (!stageHasRun(key)) return;
+      if (!seenActual) {
+        seenActual = true;
+        return;
+      }
+      window.clearInterval(timer);
+      const box = document.getElementById(STAGES[key].id);
+      if (box) box.dataset.pipelineComplete = "true";
+      if (next === 13) {
+        ensureStageDebug("v13", "状態: v9完了 → 未確定セルの重点再読取を開始します", { complete: false, green: true, open: true });
+      }
+      setPostStage(next);
+    }, 350);
+
+    return () => window.clearInterval(timer);
+  }, [postStage]);
 
   return (
     <>
       <CertificateTargetedCellRecoveryV13 />
       {heavyV6 ? <CertificateLayoutRecognitionV6 /> : null}
-      {postReady ? (
-        <>
-          <CertificateLayoutConsolidationV7 />
-          <CertificateEvidenceSafetyV8 />
-          <CertificateExistingEvidenceV9 />
-        </>
-      ) : null}
+      {postStage === 7 ? <CertificateLayoutConsolidationV7 /> : null}
+      {postStage === 8 ? <CertificateEvidenceSafetyV8 /> : null}
+      {postStage === 9 ? <CertificateExistingEvidenceV9 /> : null}
     </>
   );
 }
