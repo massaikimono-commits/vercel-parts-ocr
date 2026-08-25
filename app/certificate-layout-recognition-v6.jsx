@@ -36,8 +36,6 @@ const LABELS = {
 const LABEL_RULES = {
   recordDate: { all: ["記録"] },
   registrationNumber: { all: ["番号"], any: ["車両", "登録"] },
-  // 番号 is often split/partially lost by OCR, so 台 + 番 is enough for candidacy;
-  // visual similarity to 車台番号 still decides the final anchor.
   chassisNumber: { all: ["台"], any: ["番", "番号"] },
   registrationDate: { any: ["交付", "登録"] },
   firstRegistration: { all: ["初度"] },
@@ -359,17 +357,55 @@ function qrHas(key) {
   return Boolean(qr[key]);
 }
 
+function inferredChassisAnchor(anchors) {
+  const upper = anchors.registrationNumber;
+  const lower = anchors.registrationDate;
+  if (!upper || !lower) return null;
+
+  const upperCenter = (upper.bbox.y0 + upper.bbox.y1) / 2;
+  const lowerCenter = (lower.bbox.y0 + lower.bbox.y1) / 2;
+  const upperHeight = Math.max(1, upper.bbox.y1 - upper.bbox.y0);
+  const lowerHeight = Math.max(1, lower.bbox.y1 - lower.bbox.y0);
+  const gap = lowerCenter - upperCenter;
+  const averageHeight = (upperHeight + lowerHeight) / 2;
+
+  // 車両番号と日付ラベルの間に独立した1行が成立するときだけ仮想アンカーを作る。
+  // 絶対座標は使わず、実際に認識した上下ラベルの相対位置だけを使う。
+  if (gap < averageHeight * 1.7 || gap > averageHeight * 6.5) return null;
+
+  const yCenter = upperCenter + gap / 2;
+  const height = Math.max(upperHeight, lowerHeight);
+  return {
+    ...upper,
+    label: "車台番号",
+    matchedText: "(上下ラベルから車台番号行を推定)",
+    confidence: Math.min(0.76, Math.max(0.48, (upper.confidence + lower.confidence) / 2 * 0.82)),
+    bbox: {
+      x0: upper.bbox.x0,
+      x1: upper.bbox.x1,
+      y0: yCenter - height / 2,
+      y1: yCenter + height / 2,
+    },
+    tokens: [],
+    inferred: true,
+  };
+}
+
 const SPECS = {
-  registrationNumber: { profile: { ...OCR_FIELD_PRESETS.japaneseText, minSimilarity: 0.50 }, extract: extractRegistration, order: ["right", "cell", "below"], fuzzy: false, output: "registrationNumber", minVariants: 2 },
-  chassisNumber: { profile: { ...OCR_FIELD_PRESETS.code, minSimilarity: 0.54 }, extract: extractChassis, order: ["right", "cell", "below"], fuzzy: true, output: "chassisNumber", allowAmbiguousCode: true, minVariants: 2 },
+  // 登録番号は値の形が非常に厳格で、地域名も登録番号欄のOCR文字列だけを辞書照合する。
+  // そのため他variantが崩れていても、1variantで完全形式を満たせば候補にできる。
+  registrationNumber: { profile: { ...OCR_FIELD_PRESETS.japaneseText, minSimilarity: 0.50 }, extract: extractRegistration, order: ["right", "cell", "below"], fuzzy: false, output: "registrationNumber", minVariants: 1, preferWideRight: true },
+  chassisNumber: { profile: { ...OCR_FIELD_PRESETS.code, minSimilarity: 0.54 }, extract: extractChassis, order: ["right", "cell", "below"], fuzzy: true, output: "chassisNumber", allowAmbiguousCode: true, minVariants: 2, preferWideRight: true },
   registrationDate: { profile: { ...OCR_FIELD_PRESETS.date, minSimilarity: 0.50 }, extract: normalizeJapaneseDate, order: ["cell", "below", "right"], fuzzy: false, output: "registrationDate", minVariants: 2 },
   recordDate: { profile: { ...OCR_FIELD_PRESETS.date, minSimilarity: 0.50 }, extract: normalizeJapaneseDate, order: ["right", "cell", "below"], fuzzy: false, output: "recordDate", minVariants: 2 },
-  engineModel: { profile: { ...OCR_FIELD_PRESETS.code, minSimilarity: 0.52 }, extract: extractEngine, order: ["right", "cell", "below"], fuzzy: true, output: "engineModel", allowAmbiguousCode: false, minVariants: 2 },
+  engineModel: { profile: { ...OCR_FIELD_PRESETS.code, minSimilarity: 0.52 }, extract: extractEngine, order: ["right", "cell", "below"], fuzzy: true, output: "engineModel", allowAmbiguousCode: false, minVariants: 2, preferWideRight: true },
   vehicleWeightKg: { profile: OCR_FIELD_PRESETS.number, extract: numberExtractor(100, 50000), order: ["cell", "below", "right"], fuzzy: false, output: "vehicleWeightKg", minVariants: 2 },
   grossVehicleWeightKg: { profile: OCR_FIELD_PRESETS.number, extract: numberExtractor(100, 80000), order: ["cell", "below", "right"], fuzzy: false, output: "grossVehicleWeightKg", minVariants: 2 },
   lengthCm: { profile: OCR_FIELD_PRESETS.number, extract: numberExtractor(100, 3000), order: ["cell", "below", "right"], fuzzy: false, output: "lengthCm", minVariants: 2 },
-  widthCm: { profile: OCR_FIELD_PRESETS.number, extract: numberExtractor(50, 500), order: ["cell", "below", "right"], fuzzy: false, output: "widthCm", minVariants: 2 },
-  heightCm: { profile: OCR_FIELD_PRESETS.number, extract: numberExtractor(50, 600), order: ["cell", "below", "right"], fuzzy: false, output: "heightCm", minVariants: 2 },
+  // 道路車両の幅として300cmを超えるOCR値は、隣列混入の可能性が高いため採用しない。
+  // 正解値は埋め込まず、物理的な妥当性だけで候補を絞る。
+  widthCm: { profile: OCR_FIELD_PRESETS.number, extract: numberExtractor(100, 300), order: ["cell", "below", "right"], fuzzy: false, output: "widthCm", minVariants: 2 },
+  heightCm: { profile: OCR_FIELD_PRESETS.number, extract: numberExtractor(100, 600), order: ["cell", "below", "right"], fuzzy: false, output: "heightCm", minVariants: 2 },
   frontAxleKg: { profile: OCR_FIELD_PRESETS.number, extract: numberExtractor(0, 50000), order: ["cell", "below", "right"], fuzzy: false, output: "frontFrontAxleWeightKg", minVariants: 2 },
   rearAxleKg: { profile: OCR_FIELD_PRESETS.number, extract: numberExtractor(0, 50000), order: ["cell", "below", "right"], fuzzy: false, output: "rearRearAxleWeightKg", minVariants: 2 },
 };
@@ -429,11 +465,12 @@ async function readField(session, worker, anchor, anchors, tokenSets, detector, 
     padY: 0.004,
   });
 
-  const pools = [
-    ruled,
-    grid,
-    [{ region: fallbackRight, direction: "right", geometryScore: 0.30 }],
-  ];
+  const fallbackPool = [{ region: fallbackRight, direction: "right", geometryScore: 0.30 }];
+  // コード系の長い値は、誤検出した縦罫線で途中分断されることがある。
+  // 追加OCRはせず、同じOCRセッションで既存の広い右側候補を先に評価する。
+  const pools = spec.preferWideRight
+    ? [fallbackPool, ruled, grid]
+    : [ruled, grid, fallbackPool];
 
   for (const pool of pools) {
     for (const direction of spec.order) {
@@ -508,9 +545,6 @@ export default function CertificateLayoutRecognitionV6() {
           });
           const anchors = { ...consensus.anchors };
 
-          // Rescue only genuinely missing labels with a lower visual threshold while
-          // keeping the same semantic requirements. This prevents 車両番号 from being
-          // used as 車台番号 while allowing partially damaged 車台番... OCR to survive.
           for (const key of ["chassisNumber", "recordDate"]) {
             if (anchors[key]) continue;
             const rescue = findSemanticConsensusLabelAnchors(
@@ -528,6 +562,13 @@ export default function CertificateLayoutRecognitionV6() {
             if (rescue.anchors[key]) anchors[key] = rescue.anchors[key];
           }
 
+          // 車台番号ラベルそのものが潰れても、上下の意味ラベルが安定していれば
+          // その間の独立行だけを車台番号候補として再読取する。
+          if (!anchors.chassisNumber) {
+            const inferred = inferredChassisAnchor(anchors);
+            if (inferred) anchors.chassisNumber = inferred;
+          }
+
           const ruledSource = session.prepared.variants.binaryDark || session.prepared.variants.contrast;
           const detector = createRuledGridDetector(ruledSource);
           const lines = [
@@ -538,7 +579,8 @@ export default function CertificateLayoutRecognitionV6() {
 
           for (const [key, labels] of Object.entries(LABELS)) {
             const anchor = anchors[key];
-            lines.push(`${key}: ${anchor ? `${anchor.matchedText} conf=${anchor.confidence.toFixed(2)} support=${consensus.support[key] || 1}` : `未検出 (${labels[0]})`}`);
+            const inferred = Boolean(anchor?.inferred);
+            lines.push(`${key}: ${anchor ? `${anchor.matchedText} conf=${anchor.confidence.toFixed(2)} support=${inferred ? "relative" : (consensus.support[key] || 1)}` : `未検出 (${labels[0]})`}`);
           }
           showDebug("意味ラベル＋罫線セル検出完了", lines);
 
@@ -572,6 +614,15 @@ export default function CertificateLayoutRecognitionV6() {
             delete patch.vehicleWeightKg;
             delete patch.grossVehicleWeightKg;
             lines.push("重量: 車両総重量 < 車両重量 のため両方保留");
+          }
+
+          if (patch.widthCm && Number(patch.widthCm) > 300) {
+            delete patch.widthCm;
+            lines.push("widthCm: 車両幅として300cm超のため保留");
+          }
+          if (patch.lengthCm && patch.widthCm && Number(patch.widthCm) >= Number(patch.lengthCm)) {
+            delete patch.widthCm;
+            lines.push("widthCm: 幅>=長さ のため隣列混入として保留");
           }
 
           if (Object.keys(patch).length) {
