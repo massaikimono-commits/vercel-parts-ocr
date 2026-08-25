@@ -52,7 +52,6 @@ function cleanCandidate(value = "") {
     .replace(/[|｜]+$/g, "")
     .trim();
 
-  // OCR often inserts separators around the corporate prefix.
   text = text
     .replace(/^(株式会社|有限会社|合同会社)\s*[-=:：|｜]+\s*/g, "$1 ")
     .replace(/ {2,}/g, " ")
@@ -147,6 +146,7 @@ export default function CertificateUserNameGuard() {
     };
 
     const onChange = event => {
+      if (event.__certificatePipelineReplay || event.__certificateV13Replay) return;
       const target = event.target;
       if (isCertificateInput(target)) {
         generation += 1;
