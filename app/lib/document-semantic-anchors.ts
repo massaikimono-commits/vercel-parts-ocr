@@ -40,14 +40,6 @@ function allowed(value: string, rule?: SemanticLabelRule) {
   return true;
 }
 
-function lineCompatible(a: OcrToken, b: OcrToken) {
-  const ah = a.bbox.y1 - a.bbox.y0;
-  const bh = b.bbox.y1 - b.bbox.y0;
-  const cyA = (a.bbox.y0 + a.bbox.y1) / 2;
-  const cyB = (b.bbox.y0 + b.bbox.y1) / 2;
-  return Math.abs(cyA - cyB) <= Math.max(ah, bh) * 0.78;
-}
-
 function mergeBox(tokens: OcrToken[]) {
   return {
     x0: Math.min(...tokens.map(token => token.bbox.x0)),
@@ -55,6 +47,59 @@ function mergeBox(tokens: OcrToken[]) {
     x1: Math.max(...tokens.map(token => token.bbox.x1)),
     y1: Math.max(...tokens.map(token => token.bbox.y1)),
   };
+}
+
+function tokenCenterY(token: OcrToken) {
+  return (token.bbox.y0 + token.bbox.y1) / 2;
+}
+
+function tokenHeight(token: OcrToken) {
+  return Math.max(1, token.bbox.y1 - token.bbox.y0);
+}
+
+/**
+ * Rebuild visual text lines from OCR geometry instead of trusting Tesseract's token order.
+ * Ruled forms frequently return neighbouring cells out of reading order; reconstructing
+ * lines by Y/X position lets split labels such as 車台 + 番号 become candidates again.
+ */
+function spatialLines(tokens: OcrToken[], options: Options) {
+  const sorted = [...tokens]
+    .filter(token => String(token.text || "").trim())
+    .sort((a, b) => tokenCenterY(a) - tokenCenterY(b) || a.bbox.x0 - b.bbox.x0);
+
+  const lines: Array<{ cy: number; height: number; tokens: OcrToken[] }> = [];
+  for (const token of sorted) {
+    const cy = tokenCenterY(token);
+    const height = tokenHeight(token);
+    let best: typeof lines[number] | null = null;
+    let bestDistance = Infinity;
+
+    for (const line of lines) {
+      const tolerance = Math.max(height, line.height) * 0.72;
+      const distance = Math.abs(cy - line.cy);
+      if (distance <= tolerance && distance < bestDistance) {
+        best = line;
+        bestDistance = distance;
+      }
+    }
+
+    if (!best) {
+      lines.push({ cy, height, tokens: [token] });
+      continue;
+    }
+
+    best.tokens.push(token);
+    const count = best.tokens.length;
+    best.cy = (best.cy * (count - 1) + cy) / count;
+    best.height = Math.max(best.height, height);
+  }
+
+  return lines
+    .sort((a, b) => a.cy - b.cy)
+    .map(line => ({
+      ...line,
+      tokens: line.tokens.sort((a, b) => a.bbox.x0 - b.bbox.x0),
+    }));
 }
 
 function averageAnchor(group: LabelAnchor[]) {
@@ -94,33 +139,44 @@ function enumerateCandidates(
   const minSimilarity = options.minSimilarity ?? 0.58;
   const maxTokens = options.maxTokens ?? 8;
   const candidates: Array<LabelAnchor & { _score: number }> = [];
+  const maxGap = Math.max(8, options.pageWidth * 0.022);
 
-  for (let start = 0; start < tokens.length; start += 1) {
-    const group: OcrToken[] = [];
-    for (let end = start; end < Math.min(tokens.length, start + maxTokens); end += 1) {
-      if (group.length && !lineCompatible(group[group.length - 1], tokens[end])) break;
-      group.push(tokens[end]);
-      const raw = group.map(token => token.text).join("");
-      if (!allowed(raw, rule)) continue;
-      const text = compact(raw);
-      if (!text) continue;
+  for (const line of spatialLines(tokens, options)) {
+    const lineTokens = line.tokens;
+    for (let start = 0; start < lineTokens.length; start += 1) {
+      const group: OcrToken[] = [];
+      for (let end = start; end < Math.min(lineTokens.length, start + maxTokens); end += 1) {
+        const token = lineTokens[end];
+        if (group.length) {
+          const previous = group[group.length - 1];
+          const gap = token.bbox.x0 - previous.bbox.x1;
+          const localHeight = Math.max(tokenHeight(previous), tokenHeight(token));
+          if (gap > Math.max(maxGap, localHeight * 3.2)) break;
+        }
+        group.push(token);
 
-      for (const label of labels) {
-        const target = compact(label);
-        if (!target) continue;
-        const similarity = ocrTextSimilarity(text, target);
-        if (similarity < minSimilarity) continue;
-        const avgConfidence = group.reduce((sum, token) => sum + token.confidence, 0) / group.length / 100;
-        const lengthPenalty = Math.abs(text.length - target.length) / Math.max(text.length, target.length, 1);
-        const score = similarity * 0.80 + avgConfidence * 0.18 - lengthPenalty * 0.14;
-        candidates.push({
-          label,
-          matchedText: raw,
-          confidence: Math.max(0, Math.min(1, score)),
-          bbox: mergeBox(group),
-          tokens: [...group],
-          _score: score,
-        });
+        const raw = group.map(item => item.text).join("");
+        if (!allowed(raw, rule)) continue;
+        const text = compact(raw);
+        if (!text) continue;
+
+        for (const label of labels) {
+          const target = compact(label);
+          if (!target) continue;
+          const similarity = ocrTextSimilarity(text, target);
+          if (similarity < minSimilarity) continue;
+          const avgConfidence = group.reduce((sum, item) => sum + item.confidence, 0) / group.length / 100;
+          const lengthPenalty = Math.abs(text.length - target.length) / Math.max(text.length, target.length, 1);
+          const score = similarity * 0.80 + avgConfidence * 0.18 - lengthPenalty * 0.14;
+          candidates.push({
+            label,
+            matchedText: raw,
+            confidence: Math.max(0, Math.min(1, score)),
+            bbox: mergeBox(group),
+            tokens: [...group],
+            _score: score,
+          });
+        }
       }
     }
   }
@@ -142,12 +198,8 @@ function enumerateCandidates(
 
 /**
  * Semantic-first label consensus.
- *
- * Unlike a "pick best then reject" strategy, semantic requirements are applied before
- * spatial consensus. If 車両番号 is the most visually similar OCR string while the
- * requested field is 車台番号, that wrong candidate is removed and the next valid
- * 車台番号 candidate can still win. The API is generic so parts-slip headers can use
- * the same mechanism for labels such as 定価 / 仕入 / 数量.
+ * Semantic requirements are applied before spatial consensus, then candidates from
+ * different image variants are clustered by physical position.
  */
 export function findSemanticConsensusLabelAnchors(
   tokenSets: TokenSet[],
