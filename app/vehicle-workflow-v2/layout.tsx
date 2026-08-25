@@ -6,20 +6,15 @@ import CertificateClassificationNumberGuard from "../certificate-classification-
 import CertificateRegistrationNumberGuard from "../certificate-registration-number-guard";
 import CertificateChassisNumberGuard from "../certificate-chassis-number-guard";
 import CertificateEngineModelQrGuard from "../certificate-engine-model-qr-guard";
-import CertificateOcrPipelineController from "../certificate-ocr-pipeline-controller";
+import CertificateTargetedBandRecoveryV15 from "../certificate-targeted-band-recovery-v15";
 import CertificateTestSummary from "../certificate-test-summary";
 
 // Vehicle certificate recognition pipeline for /vehicle-workflow-v2:
-// 1. Internal v6/v13 replay events are blocked from the legacy React file handler so they cannot
-//    restart the old ~39-pass OCR. The fast base reader handles the real user file selection once.
-// 2. The fast base reader performs one full-document OCR pass (two only when the first is poor).
-// 3. QR and the full-text parser populate fields from that shared evidence. The lightweight lower-six
-//    QR fallback is the only automatic QR retry; the old broad K0/K2 identity rescan is intentionally
-//    not mounted because unresolved identity fields are cheaper and safer to hand to v13 OCR.
-// 4. The pipeline controller validates the populated core fields. v6 runs only as a true fallback.
-// 5. v7 -> v8 -> v9 run in order without extra OCR, then v13 re-reads only unresolved weak cells.
-// 6. The user-name guard remembers a safe complete name during the current read and prevents a later
-//    empty/stub result from erasing it.
+// 1. QR is decoded first with the quick two-sweep reader.
+// 2. The base reader performs zero OCR passes and only waits for structured QR evidence.
+// 3. v15 reads at most four fixed bands/cells to fill only the information QR could not provide.
+// 4. Legacy v6/v7/v8/v9 and the 27-cell v14 recovery are intentionally not mounted here.
+// 5. Safety guards remain mounted so later state updates cannot overwrite trusted values.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -32,7 +27,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateRegistrationNumberGuard />
       <CertificateChassisNumberGuard />
       <CertificateEngineModelQrGuard />
-      <CertificateOcrPipelineController />
+      <CertificateTargetedBandRecoveryV15 />
       <CertificateTestSummary />
     </>
   );
