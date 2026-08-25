@@ -15,26 +15,11 @@ const norm = (value = "") => String(value)
   .trim();
 
 const STAGES = {
-  v6: {
-    id: "certificate-layout-recognition-v6-debug",
-    title: "共通罫線セルOCR v6（確認用）",
-  },
-  v7: {
-    id: "certificate-layout-consolidation-v7-debug",
-    title: "共通OCR 最終統合 v7（確認用）",
-  },
-  v8: {
-    id: "certificate-evidence-safety-v8-debug",
-    title: "最終安全統合 v8（確認用）",
-  },
-  v9: {
-    id: "certificate-existing-evidence-v9-debug",
-    title: "既存OCR再統合 v9（確認用）",
-  },
-  v13: {
-    id: "certificate-targeted-cell-recovery-v13-debug",
-    title: "罫線＋ラベル追従 弱セル再読取 v13（確認用）",
-  },
+  v6: { id: "certificate-layout-recognition-v6-debug", title: "共通罫線セルOCR v6（確認用）" },
+  v7: { id: "certificate-layout-consolidation-v7-debug", title: "共通OCR 最終統合 v7（確認用）" },
+  v8: { id: "certificate-evidence-safety-v8-debug", title: "最終安全統合 v8（確認用）" },
+  v9: { id: "certificate-existing-evidence-v9-debug", title: "既存OCR再統合 v9（確認用）" },
+  v13: { id: "certificate-targeted-cell-recovery-v13-debug", title: "罫線＋ラベル追従 弱セル再読取 v13（確認用）" },
 };
 
 function section(title) {
@@ -55,9 +40,7 @@ function fieldInput(labelText) {
   return null;
 }
 
-function value(label) {
-  return norm(fieldInput(label)?.value || "");
-}
+function value(label) { return norm(fieldInput(label)?.value || ""); }
 
 function isCertificateInput(node) {
   if (!(node instanceof HTMLInputElement) || node.type !== "file") return false;
@@ -71,8 +54,7 @@ function asNumber(label) {
 }
 
 function validRegistrationNumber(raw) {
-  const text = norm(raw);
-  return /[ぁ-んァ-ヶ一-龠]{1,8}\s*\d{3}\s*[ぁ-ん]\s*\d{1,4}/.test(text);
+  return /[ぁ-んァ-ヶ一-龠]{1,8}\s*\d{3}\s*[ぁ-ん]\s*\d{1,4}/.test(norm(raw));
 }
 
 function validEraDate(raw, allowMonthOnly = false) {
@@ -107,34 +89,18 @@ function stableBaseSnapshot() {
   return {
     coreReady: Object.values(checks).every(Boolean),
     checks,
-    signature: JSON.stringify({
-      registration,
-      registrationDate,
-      firstRegistration,
-      expiry,
-      vehicleWeight,
-      grossWeight,
-      length,
-      width,
-      height,
-    }),
+    signature: JSON.stringify({ registration, registrationDate, firstRegistration, expiry, vehicleWeight, grossWeight, length, width, height }),
   };
 }
 
 function hasBaseSignal() {
-  return Boolean(
-    value("記録事項番号") ||
-    value("型式") ||
-    value("有効期間の満了する日") ||
-    value("車両重量 kg")
-  );
+  return Boolean(value("記録事項番号") || value("型式") || value("有効期間の満了する日") || value("車両重量 kg"));
 }
 
 function ensureStageDebug(stageKey, text, options = {}) {
   const config = STAGES[stageKey];
   const host = section("車検証から読み取る");
   if (!config || !host) return null;
-
   let box = document.getElementById(config.id);
   if (!box) {
     box = document.createElement("details");
@@ -181,9 +147,7 @@ function v6Finished() {
 function stageHasRun(stageKey) {
   const pre = document.querySelector(`#${STAGES[stageKey].id} pre`);
   const text = pre?.textContent || "";
-  if (!text.trim()) return false;
-  if (/待ち|待機|判定中/.test(text)) return false;
-  return true;
+  return Boolean(text.trim() && !/待ち|待機|判定中|統合中/.test(text));
 }
 
 export default function CertificateOcrPipelineController() {
@@ -209,18 +173,12 @@ export default function CertificateOcrPipelineController() {
           if (snapshot.signature === lastSignature) stableSamples += 1;
           else stableSamples = 0;
           lastSignature = snapshot.signature;
-
-          // Fast path: two stable samples with every core field coherent.
           if (snapshot.coreReady && stableSamples >= 2) break;
-
-          // If a partial result has stopped changing for a while, do not wait a full minute.
-          // Move to v6 fallback after the base path had enough time to settle.
           if (!snapshot.coreReady && stableSamples >= 8 && Date.now() - started >= 7000) break;
         }
         await new Promise(resolve => setTimeout(resolve, 350));
       }
       if (stopped || generation !== generationRef.current) return;
-
       await new Promise(resolve => setTimeout(resolve, 300));
       if (stopped || generation !== generationRef.current) return;
 
@@ -239,7 +197,7 @@ export default function CertificateOcrPipelineController() {
     };
 
     const onChange = event => {
-      if (event.__certificatePipelineReplay) return;
+      if (event.__certificatePipelineReplay || event.__certificateV13Replay) return;
       const input = event.target;
       if (!isCertificateInput(input)) return;
       const file = input.files?.[0];
@@ -295,10 +253,7 @@ export default function CertificateOcrPipelineController() {
     let seenActual = false;
     const timer = window.setInterval(() => {
       if (!stageHasRun(key)) return;
-      if (!seenActual) {
-        seenActual = true;
-        return;
-      }
+      if (!seenActual) { seenActual = true; return; }
       window.clearInterval(timer);
       const box = document.getElementById(STAGES[key].id);
       if (box) box.dataset.pipelineComplete = "true";
@@ -311,13 +266,23 @@ export default function CertificateOcrPipelineController() {
     return () => window.clearInterval(timer);
   }, [postStage]);
 
+  useEffect(() => {
+    if (postStage !== 13 || !inputRef.current) return;
+    const timer = window.setTimeout(() => {
+      const event = new Event("change", { bubbles: true });
+      event.__certificateV13Replay = true;
+      inputRef.current?.dispatchEvent(event);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [postStage]);
+
   return (
     <>
-      <CertificateTargetedCellRecoveryV13 />
       {heavyV6 ? <CertificateLayoutRecognitionV6 /> : null}
       {postStage === 7 ? <CertificateLayoutConsolidationV7 /> : null}
       {postStage === 8 ? <CertificateEvidenceSafetyV8 /> : null}
       {postStage === 9 ? <CertificateExistingEvidenceV9 /> : null}
+      {postStage === 13 ? <CertificateTargetedCellRecoveryV13 /> : null}
     </>
   );
 }
