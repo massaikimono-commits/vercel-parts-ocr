@@ -154,9 +154,8 @@ function hasIdentityKeiCode(items) {
 }
 
 async function recoverImportantKeiCodes(source, reader, found, known = []) {
-  // 旧・軽自動車紙車検証で重要なコード2(車台/原動機)、コード6(種別/用途/形状等)、
-  // さらにコード1(車両番号/車台)だけを狭い切り出しで再試行する。
-  // 全面再走査はせず、Safariの負荷を抑える。
+  // Heavy broad rescans are intentionally avoided. Only the important K2/K7/K0 slots get
+  // a small focused retry set; unresolved identity fields are handed to v13 OCR afterwards.
   const plans = [
     { digit: "2", slot: 1, xs: [0.485, 0.515, 0.545] },
     { digit: "7", slot: 5, xs: [0.765, 0.795, 0.825] },
@@ -164,7 +163,6 @@ async function recoverImportantKeiCodes(source, reader, found, known = []) {
   ];
   const attempts = [
     [0.79, "contrast"],
-    [0.835, "contrast"],
     [0.805, "color"],
   ];
   const all = () => [...known, ...found];
@@ -194,14 +192,13 @@ async function scanSixSlots(file, known = []) {
   const found = [];
   const identityOnly = unique(known).length >= 3 && !hasIdentityKeiCode(known);
 
-  // QRがほとんど未取得なら従来の軽量6枠スキャン。
-  // すでに3件以上取得済みなら、重複スキャンせず車両番号/車台番号を持つ重要QRだけを狙う。
   const xs = [0.43, 0.52, 0.61, 0.70, 0.79, 0.875];
+  // One contrast sweep first, then one shifted contrast sweep, then color only for still-missing slots.
+  // This cuts the old four full sweeps while keeping a color fallback.
   const passes = [
-    [0.80, "color"],
     [0.80, "contrast"],
-    [0.835, "color"],
     [0.835, "contrast"],
+    [0.80, "color"],
   ];
 
   try {
@@ -209,13 +206,13 @@ async function scanSixSlots(file, known = []) {
       for (const [y, mode] of passes) {
         for (let slot = 0; slot < xs.length; slot += 1) {
           if (found.some((x) => x.slot === slot)) continue;
-          const crop = cropSlot(source, xs[slot], y, mode);
+          const slotCanvas = cropSlot(source, xs[slot], y, mode);
           try {
-            const hit = await decodeSlot(reader, crop, slot, `y${y}/${mode}`);
+            const hit = await decodeSlot(reader, slotCanvas, slot, `y${y}/${mode}`);
             if (hit) found.push(hit);
           } finally {
-            crop.width = 1;
-            crop.height = 1;
+            slotCanvas.width = 1;
+            slotCanvas.height = 1;
           }
           await new Promise((resolve) => window.setTimeout(resolve, 0));
         }
@@ -246,6 +243,11 @@ export default function CertificateQrLowerSixFallback() {
     let sawProgress = false;
     let running = false;
 
+    const markDone = () => {
+      window.__vehicleCertificateLowerSixDone = true;
+      window.dispatchEvent(new Event("vehicle-certificate-lower-six-done"));
+    };
+
     const onChange = (event) => {
       const input = event.target;
       if (!isCertificateFileInput(input)) return;
@@ -256,11 +258,17 @@ export default function CertificateQrLowerSixFallback() {
       startedAt = Date.now();
       sawProgress = false;
       running = false;
+      window.__vehicleCertificateLowerSixDone = false;
     };
 
     const timer = window.setInterval(async () => {
       if (stopped || running || !pending) return;
-      if (document.querySelector(".progress")) {
+
+      const fastActive = Boolean(window.__vehicleCertificateFastBaseActive);
+      const fastDone = Boolean(window.__vehicleCertificateFastBaseDone);
+      if (fastActive && !fastDone) return;
+
+      if (!fastActive && document.querySelector(".progress")) {
         sawProgress = true;
         return;
       }
@@ -268,21 +276,27 @@ export default function CertificateQrLowerSixFallback() {
       const existing = Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : [];
       if (existing.length >= 3 && hasIdentityKeiCode(existing)) {
         pending = null;
+        markDone();
         showStatus("主要QR取得済み。車両番号・車台番号の追加スキャンは省略しました。");
         return;
       }
 
       const elapsed = Date.now() - startedAt;
-      if (!sawProgress && elapsed < 18000) return;
-      if (sawProgress && elapsed < 7000) return;
+      if (fastActive) {
+        // In the fast pipeline the one-pass OCR is already finished here; do not wait 18 seconds.
+        if (elapsed < 900) return;
+      } else {
+        if (!sawProgress && elapsed < 18000) return;
+        if (sawProgress && elapsed < 7000) return;
+      }
 
       const file = pending;
       const myToken = token;
       pending = null;
       running = true;
       showStatus(existing.length >= 3
-        ? "既読QRは再走査せず、車両番号・車台番号QRだけを重点解析中…"
-        : "OCR完了後に、下段6個をZXingで個別解析中…");
+        ? "既読QRは再走査せず、車両番号・車台番号QRだけを軽量解析中…"
+        : "高速ベースOCR後、下段6個を軽量ZXing解析中…");
       try {
         const result = await scanSixSlots(file, existing);
         if (stopped || myToken !== token) return;
@@ -302,13 +316,14 @@ export default function CertificateQrLowerSixFallback() {
         }
         const versions = [...new Set(combined.map(keiVersion).filter(Boolean))].sort();
         const slots = result.map((x) => `${Number.isFinite(x.slot) ? x.slot + 1 : "?"}:${keiVersion(x) || "QR"}`).join(", ");
-        showStatus(`下段6QR ZXing解析: 新規${result.length}件 / QR合計 ${combined.length}件${versions.length ? ` / 軽QR ${versions.join(",")}` : ""}${slots ? ` / 検出 ${slots}` : ""}。既読QRの重複処理を省きました。`);
+        showStatus(`下段6QR 軽量解析: 新規${result.length}件 / QR合計 ${combined.length}件${versions.length ? ` / 軽QR ${versions.join(",")}` : ""}${slots ? ` / 検出 ${slots}` : ""}。未取得の身元項目は重い総当たりをせずv13へ渡します。`);
       } catch (e) {
-        if (!stopped) showStatus(`下段6QR ZXing解析エラー: ${e?.message || e}`);
+        if (!stopped) showStatus(`下段6QR 軽量解析エラー: ${e?.message || e}`);
       } finally {
         running = false;
+        if (myToken === token) markDone();
       }
-    }, 1000);
+    }, 500);
 
     document.addEventListener("change", onChange, true);
     return () => {
