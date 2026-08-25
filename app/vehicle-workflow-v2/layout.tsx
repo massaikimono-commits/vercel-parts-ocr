@@ -8,7 +8,7 @@ import CertificateLayoutRecognitionV6 from "../certificate-layout-recognition-v6
 import CertificateLayoutConsolidationV7 from "../certificate-layout-consolidation-v7";
 import CertificateEvidenceSafetyV8 from "../certificate-evidence-safety-v8";
 import CertificateExistingEvidenceV9 from "../certificate-existing-evidence-v9";
-import CertificateTargetedCellRecoveryV12 from "../certificate-targeted-cell-recovery-v12";
+import CertificateTargetedCellRecoveryV13 from "../certificate-targeted-cell-recovery-v13";
 import CertificateTestSummary from "../certificate-test-summary";
 
 // Vehicle certificate recognition pipeline for /vehicle-workflow-v2:
@@ -20,12 +20,12 @@ import CertificateTestSummary from "../certificate-test-summary";
 //    and clears incomplete/unsupported values instead of guessing.
 // 5. v9 reuses only existing OCR diagnostics to recover model-consistent chassis codes and
 //    complete user-company names; it never runs additional OCR or injects sample values.
-// 6. v12 is a conditional fallback for unresolved chassis/user/engine fields. It locates the
-//    printed field label first, then high-resolution OCRs only that label's right-hand value cell.
-//    This follows the form geometry instead of fixed photo Y coordinates.
+// 6. v13 is the conditional weak-cell fallback. It combines semantic labels with ruled-grid
+//    geometry, and for chassis numbers can use the band between neighbouring registration rows.
+//    It only re-reads unresolved chassis/user/engine regions and does not use fixed photo Y coordinates.
 // 7. Field guards validate final values but never inject sample-specific values.
 //
-// Older field-specific OCR passes, layout v2/v3/v4/v5, and fixed-position v10/v11 fallbacks are intentionally not mounted.
+// Older field-specific OCR passes, layout v2/v3/v4/v5, and fixed-position v10/v11/v12 fallbacks are intentionally not mounted.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -40,7 +40,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateLayoutConsolidationV7 />
       <CertificateEvidenceSafetyV8 />
       <CertificateExistingEvidenceV9 />
-      <CertificateTargetedCellRecoveryV12 />
+      <CertificateTargetedCellRecoveryV13 />
       <CertificateTestSummary />
     </>
   );
