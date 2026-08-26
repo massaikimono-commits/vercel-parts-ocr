@@ -16,6 +16,23 @@ function modelFamily(value = "") {
   return /^[A-Z0-9]{3,8}$/.test(tail) && /[A-Z]/.test(tail) && /\d/.test(tail) ? tail : "";
 }
 
+function isFamilyCompatible(prefix = "", family = "") {
+  const p = norm(prefix).toUpperCase().replace(/\s+/g, "");
+  const f = norm(family).toUpperCase().replace(/\s+/g, "");
+  if (!p || !f) return true;
+  if (p === f) return true;
+
+  // 国内型式では、型式側だけ末尾にボディ/仕様記号が付く例がある。
+  // 例: 型式 6AA-ZWE219H / 車台番号 ZWE219-4008770。
+  // 車台番号側の系列を先頭に保ち、追加分が英字1〜2文字だけなら同一車系として扱う。
+  if (f.startsWith(p)) {
+    const extra = f.slice(p.length);
+    if (/^[A-Z]{1,2}$/.test(extra)) return true;
+  }
+
+  return false;
+}
+
 function parseChassis(value = "") {
   const text = norm(value).toUpperCase();
   const compact = text.replace(/\s+/g, "");
@@ -111,37 +128,43 @@ export default function CertificateChassisNumberGuard() {
       if (!input) return;
 
       const qrRaw = window.__vehicleCertificateQrPriority?.chassisNumber || "";
+      const pdfRaw = window.__vehicleCertificatePdfPriority?.chassisNumber || "";
       const current = input.value || "";
-      const source = qrRaw ? "QR" : "OCR";
-      const raw = qrRaw || current;
+      const source = qrRaw ? "QR" : pdfRaw ? "PDF" : "OCR";
+      const raw = qrRaw || pdfRaw || current;
       if (!raw) return;
 
       const parsed = parseChassis(raw);
       const family = modelFamily(findInput("型式")?.value || "");
-      const familyMismatch = !qrRaw && parsed.kind === "国内形式" && family && parsed.prefix !== family;
+
+      // QR/PDFは既に上流で構造的に確定した情報源なので、OCR向けの車系ガードで破棄しない。
+      // OCRだけは誤読防止のため型式との整合性を確認する。
+      const familyMismatch = source === "OCR" && parsed.kind === "国内形式" && family && !isFamilyCompatible(parsed.prefix, family);
       const key = `${source}|${raw}|${parsed.value}|${family}|${familyMismatch ? 1 : 0}`;
       if (key === lastKey) return;
       lastKey = key;
 
       if (parsed.value && !familyMismatch) {
         if (parsed.value !== current) setReactInputValue(input, parsed.value);
-        if (parsed.value !== raw || parsed.suspicious || qrRaw) {
-          const reason = parsed.kind === "国内形式" && parsed.suspicious
+        const reason = source === "PDF"
+          ? "PDF文字レイヤーで構造確定した車台番号を保持しました。"
+          : parsed.kind === "国内形式" && parsed.suspicious
             ? "数字部のO/Q→0、I/|→1のみ安全補正しました。"
             : parsed.kind === "VIN" ? "VIN形式として確認しました。" : "";
+        if (parsed.value !== raw || parsed.suspicious || qrRaw || pdfRaw) {
           showDebug(raw, parsed.value, source, reason);
         }
         return;
       }
 
-      if (!qrRaw && current) {
+      if (source === "OCR" && current) {
         setReactInputValue(input, "");
         showDebug(
           raw,
           "",
           source,
           familyMismatch
-            ? `型式の車系 ${family} と一致しないため保留（空欄）にしました。`
+            ? `型式の車系 ${family} と整合しないため保留（空欄）にしました。`
             : "車台番号の形式として確定できないため保留（空欄）にしました。"
         );
       }
