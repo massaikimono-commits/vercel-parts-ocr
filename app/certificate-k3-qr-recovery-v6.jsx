@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 const DONE_EVENT = "vehicle-certificate-k3-recovery-done";
+const LOWER_EVENT = "vehicle-certificate-lower-six-done";
 
 function hex(bytes = []) {
   return Array.from(bytes).map((v) => Number(v).toString(16).padStart(2, "0")).join(" ").toUpperCase();
@@ -145,6 +146,12 @@ function showStatus(text) {
 }
 function signalDone(detail = {}) {
   window.dispatchEvent(new CustomEvent(DONE_EVENT, { detail }));
+  // v16へはK3探索が終わってから同じ完了イベントを再送する。
+  window.setTimeout(() => {
+    const resume = new Event(LOWER_EVENT);
+    resume.__certificateK3Resume = true;
+    window.dispatchEvent(resume);
+  }, detail?.found ? 100 : 20);
 }
 
 export default function CertificateK3QrRecoveryV6() {
@@ -180,7 +187,6 @@ export default function CertificateK3QrRecoveryV6() {
       const centers = [0.445, 0.525, 0.602, 0.678, 0.755, 0.838];
       let targets = [1, 2, 3, 4, 5, 6].filter((slot) => !slots.has(slot));
       if (!targets.length) targets = [4];
-      // 高速QRで4件以上取れている時は未読枠だけ。情報が少ない時だけ全枠を軽く確認する。
       if (known.length >= 4 && targets.length > 2) targets = targets.slice(0, 2);
       else if (known.length < 4) targets = [1, 2, 3, 4, 5, 6];
 
@@ -196,8 +202,6 @@ export default function CertificateK3QrRecoveryV6() {
         if (stopped || mine !== generation) return;
         const found = [];
 
-        // 以前K3を実際に取得できた狭いZXing領域を最優先。
-        // 全面再走査はせず、未読の物理QR枠に対してだけ位置・縦幅を少し振る。
         const plansFor = (center) => [
           { x: center - 0.0625, y: 0.800, w: 0.125, h: 0.145, contrast: false, target: 1350 },
           { x: center - 0.0625, y: 0.800, w: 0.125, h: 0.145, contrast: true, target: 1350 },
@@ -215,7 +219,6 @@ export default function CertificateK3QrRecoveryV6() {
             const p = plans[i];
             const canvas = cropRegion(source, p.x, p.y, p.w, p.h, p.contrast, p.target);
             try {
-              // K3はZXing TRY_HARDERを先に使う。失敗時だけjsQR。
               let hit = await fromZxing(zxing, canvas, `K3-v6/QR${slot}/try${i + 1}/ZXing`);
               if (!hit) hit = fromJs(jsQR, canvas, `K3-v6/QR${slot}/try${i + 1}/jsQR`);
               if (hit) {
@@ -252,14 +255,19 @@ export default function CertificateK3QrRecoveryV6() {
       }
     };
 
-    const onLowerDone = () => window.setTimeout(() => { void run(); }, 20);
+    const onLowerDone = (event) => {
+      if (event?.__certificateK3Resume) return;
+      // K3補完より後ろのv16等を、この1〜2秒の探索が終わるまで止める。
+      event?.stopImmediatePropagation?.();
+      window.setTimeout(() => { void run(); }, 20);
+    };
     document.addEventListener("change", onChange, true);
-    window.addEventListener("vehicle-certificate-lower-six-done", onLowerDone);
+    window.addEventListener(LOWER_EVENT, onLowerDone);
     return () => {
       stopped = true;
       generation += 1;
       document.removeEventListener("change", onChange, true);
-      window.removeEventListener("vehicle-certificate-lower-six-done", onLowerDone);
+      window.removeEventListener(LOWER_EVENT, onLowerDone);
     };
   }, []);
   return null;
