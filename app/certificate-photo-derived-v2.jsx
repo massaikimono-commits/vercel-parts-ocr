@@ -43,7 +43,7 @@ function repairedChassis(current = "", model = "") {
   if (!hit || !m) return "";
   const left = hit[1];
   if (left === m) return c;
-  if ((m.endsWith(left) || left.endsWith(m)) && Math.abs(m.length - left.length) <= 1) return `${m}-${hit[2]}`;
+  if ((m.endsWith(left) || left.endsWith(m)) && Math.abs(m.length - left.length) <= 2) return `${m}-${hit[2]}`;
   return "";
 }
 
@@ -90,7 +90,7 @@ async function sourceCanvas(file) {
     });
     const iw = img.naturalWidth || img.width;
     const ih = img.naturalHeight || img.height;
-    const scale = Math.min(1, 3600 / Math.max(iw, ih));
+    const scale = Math.min(1, 3800 / Math.max(iw, ih));
     const c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(iw * scale));
     c.height = Math.max(1, Math.round(ih * scale));
@@ -104,11 +104,10 @@ async function sourceCanvas(file) {
   }
 }
 
-function cropBand(source, y0, binary = false) {
-  const x0 = 0.055, w0 = 0.89, h0 = 0.105;
+function cropRegion(source, x0, y0, w0, h0, binary = false, target = 3000) {
   const sx = Math.round(source.width * x0), sy = Math.round(source.height * y0);
-  const sw = Math.round(source.width * w0), sh = Math.round(source.height * h0);
-  const scale = Math.max(1, Math.min(6, 3000 / Math.max(1, sw)));
+  const sw = Math.max(1, Math.round(source.width * w0)), sh = Math.max(1, Math.round(source.height * h0));
+  const scale = Math.max(1, Math.min(8, target / Math.max(1, sw)));
   const c = document.createElement("canvas");
   c.width = Math.round(sw * scale);
   c.height = Math.round(sh * scale);
@@ -164,6 +163,13 @@ function numericTuple(raw) {
   return best;
 }
 
+function decimalCandidate(raw) {
+  const t = String(raw || "").replace(/,/g, ".").replace(/[^0-9.]/g, " ");
+  const vals = t.match(/\d+(?:\.\d+)?/g) || [];
+  const candidates = vals.map(Number).filter((n) => Number.isFinite(n) && n > 0 && n < 20);
+  return candidates.find((n) => n < 10 && !Number.isInteger(n)) || null;
+}
+
 function showStatus(text) {
   const host = document.querySelector("img.preview")?.closest("section.card");
   if (!host) return;
@@ -201,45 +207,79 @@ export default function CertificatePhotoDerivedV2() {
           await new Promise((resolve) => setTimeout(resolve, 200));
         }
         if (dead || id !== token) return;
-        await new Promise((resolve) => setTimeout(resolve, 400));
+        await new Promise((resolve) => setTimeout(resolve, 450));
 
         const derived = safeDerivedPatch();
         send(derived);
 
         const needDimensions = ["長さcm", "幅cm", "高さcm"].some((label) => !fieldValue(label));
-        if (!needDimensions) {
-          showStatus(`写真補完v2: 安全導出 ${Object.keys(derived).length}項目 / 寸法OCR不要`);
+        const needOutput = !fieldValue("総排気量又は定格出力");
+        if (!needDimensions && !needOutput) {
+          showStatus(`写真補完v2: 安全導出 ${Object.keys(derived).length}項目 / 追加OCR不要`);
           return;
         }
 
-        showStatus("写真補完v2: 重量・寸法行だけ再読取中…");
+        showStatus("写真補完v2: 不足している数値セルだけ再読取中…");
         const source = await sourceCanvas(file);
         const t = await import("tesseract.js");
         const worker = await t.createWorker("eng", 1);
-        let raw = "";
         let tuple = null;
+        let output = null;
         let passes = 0;
+        const logs = [];
         try {
           const P = t.PSM;
-          const psm = P?.SPARSE_TEXT ?? "11";
-          for (const plan of [[0.485, false], [0.515, false], [0.500, true]]) {
-            const [y, binary] = plan;
-            passes += 1;
-            const c = cropBand(source, y, binary);
-            try {
-              await worker.setParameters({
-                tessedit_pageseg_mode: String(psm),
-                preserve_interword_spaces: "1",
-                user_defined_dpi: "300",
-                tessedit_char_whitelist: "0123456789 -kgKGMcmCM",
-              });
-              raw += `\n${(await worker.recognize(c)).data.text || ""}`;
-            } finally {
-              c.width = 1;
-              c.height = 1;
+          const sparse = P?.SPARSE_TEXT ?? "11";
+          const line = P?.SINGLE_LINE ?? "7";
+
+          if (needDimensions) {
+            let raw = "";
+            // 軽自動車記録事項の「車両重量/総重量/長さ/幅/高さ」1行を広めに読む。
+            for (const plan of [[0.485, false], [0.510, false], [0.500, true], [0.530, true]]) {
+              const [y, binary] = plan;
+              passes += 1;
+              const c = cropRegion(source, .055, y, .89, .105, binary, 3200);
+              try {
+                await worker.setParameters({
+                  tessedit_pageseg_mode: String(sparse),
+                  preserve_interword_spaces: "1",
+                  user_defined_dpi: "300",
+                  tessedit_char_whitelist: "0123456789 -kgKGMcmCM",
+                });
+                const part = (await worker.recognize(c)).data.text || "";
+                raw += `\n${part}`;
+                logs.push(`寸法${binary ? "白黒" : "灰"}@${y}=${compact(part).slice(0, 90)}`);
+              } finally {
+                c.width = 1;
+                c.height = 1;
+              }
+              tuple = numericTuple(raw);
+              if (tuple && tuple.score >= 12) break;
             }
-            tuple = numericTuple(raw);
-            if (tuple && tuple.score >= 8) break;
+          }
+
+          if (needOutput) {
+            // 右端の「総排気量又は定格出力」セル。軽自動車では 0.xx L が多い。
+            for (const plan of [[.805, .555, .16, .075, false], [.800, .575, .17, .070, true]]) {
+              passes += 1;
+              const [x, y, w, h, binary] = plan;
+              const c = cropRegion(source, x, y, w, h, binary, 1800);
+              try {
+                await worker.setParameters({
+                  tessedit_pageseg_mode: String(line),
+                  preserve_interword_spaces: "1",
+                  user_defined_dpi: "300",
+                  tessedit_char_whitelist: "0123456789.,LlkKWw ",
+                });
+                const raw = (await worker.recognize(c)).data.text || "";
+                logs.push(`排気量${binary ? "白黒" : "灰"}=${compact(raw)}`);
+                output = decimalCandidate(raw);
+                if (output) break;
+              } finally {
+                c.width = 1;
+                c.height = 1;
+              }
+            }
           }
         } finally {
           source.width = 1;
@@ -256,8 +296,9 @@ export default function CertificatePhotoDerivedV2() {
           if (!fieldValue("幅cm")) patch.widthCm = String(tuple.width);
           if (!fieldValue("高さcm")) patch.heightCm = String(tuple.height);
         }
+        if (output && !fieldValue("総排気量又は定格出力")) patch.displacementOrRatedOutput = String(output);
         send(patch);
-        showStatus(`写真補完v2: 安全導出 ${Object.keys(derived).length}項目 / 寸法OCR ${passes}pass / ${tuple ? `候補score ${tuple.score}` : "候補なし"}`);
+        showStatus(`写真補完v2: 安全導出 ${Object.keys(derived).length}項目 / 数値OCR ${passes}pass / ${tuple ? `寸法score ${tuple.score}` : "寸法候補なし"}${output ? ` / 排気量 ${output}` : ""}${logs.length ? ` / ${logs.join(" | ").slice(0, 180)}` : ""}`);
       })().catch((e) => {
         if (!dead && id === token) showStatus(`写真補完v2エラー: ${e?.message || e}`);
       });
