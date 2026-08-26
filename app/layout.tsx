@@ -8,7 +8,10 @@ import CertificateConsistencyFix from "./certificate-consistency-fix";
 import CertificatePdfNativeReader from "./certificate-pdf-native-reader";
 import CertificatePdfBridge from "./certificate-pdf-bridge";
 import CertificateQrFast from "./certificate-qr-fast";
+import CertificateQrRescue from "./certificate-qr-rescue";
+import CertificateKeiBaseline from "./certificate-kei-baseline";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
+import CertificatePhotoRescue from "./certificate-photo-rescue";
 import CertificateFinalNativeFix from "./certificate-final-native-fix";
 
 export const metadata = {
@@ -193,7 +196,10 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificatePdfNativeReader />
         <CertificatePdfBridge />
         <CertificateQrFast />
+        <CertificateQrRescue />
+        <CertificateKeiBaseline />
         <CertificateQrApply />
+        <CertificatePhotoRescue />
         <CertificateFinalNativeFix />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
       </body>
