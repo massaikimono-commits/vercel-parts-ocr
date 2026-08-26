@@ -5,6 +5,7 @@ import CertificateRowPriorityFix from "./certificate-row-priority-fix";
 import CertificateFuelClassificationFix from "./certificate-fuel-classification-fix";
 import CertificateChassisCorrectionFix from "./certificate-chassis-correction-fix";
 import CertificateConsistencyFix from "./certificate-consistency-fix";
+import CertificatePdfNativeReader from "./certificate-pdf-native-reader";
 import CertificatePdfBridge from "./certificate-pdf-bridge";
 import CertificateQrReader from "./certificate-qr-reader";
 import CertificateQrLowerSixFallback from "./certificate-qr-lower-six-fallback";
@@ -191,6 +192,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificateFuelClassificationFix />
         <CertificateChassisCorrectionFix />
         <CertificateConsistencyFix />
+        <CertificatePdfNativeReader />
         <CertificatePdfBridge />
         <CertificateQrReader />
         <CertificateQrLowerSixFallback />
