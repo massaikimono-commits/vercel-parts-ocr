@@ -54,19 +54,50 @@ function showStatus(text) {
     box.style.border = "1px solid #69a985";
     box.style.borderRadius = "12px";
     box.style.background = "#f0fdf4";
-    box.innerHTML = '<summary style="font-weight:800">軽自動車 高さガード v4（確認用）</summary><div data-height-status style="margin-top:8px;font-weight:700"></div>';
+    box.innerHTML = '<summary style="font-weight:800">軽自動車 高さガード v5（確認用）</summary><div data-height-status style="margin-top:8px;font-weight:700"></div>';
     host.appendChild(box);
   }
   const node = box.querySelector("[data-height-status]");
   if (node) node.textContent = text;
 }
-function crop(source, [x, y, w, h], targetWidth = 1450, binary = false) {
+function preprocess(ctx, width, height) {
+  const image = ctx.getImageData(0, 0, width, height);
+  const gray = new Uint8Array(width * height);
+  let sum = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const p = (y * width + x) * 4;
+      const g = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+      gray[y * width + x] = g;
+      sum += g;
+    }
+  }
+  const rowDark = new Uint16Array(height);
+  const colDark = new Uint16Array(width);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (gray[y * width + x] < 145) { rowDark[y] += 1; colDark[x] += 1; }
+    }
+  }
+  const threshold = Math.max(118, Math.min(205, sum / Math.max(1, width * height) - 18));
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const p = (y * width + x) * 4;
+      const grid = rowDark[y] > width * .68 || colDark[x] > height * .78;
+      const v = grid ? 255 : (gray[y * width + x] < threshold ? 0 : 255);
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
+      image.data[p + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+}
+function crop(source, [x, y, w, h], targetWidth = 1350) {
   const sx = Math.max(0, Math.floor(source.width * x));
   const sy = Math.max(0, Math.floor(source.height * y));
   const sw = Math.max(1, Math.min(source.width - sx, Math.floor(source.width * w)));
   const sh = Math.max(1, Math.min(source.height - sy, Math.floor(source.height * h)));
-  const scale = Math.max(1, Math.min(5, targetWidth / Math.max(1, sw)));
-  const pad = 18;
+  const scale = Math.max(1, Math.min(9, targetWidth / Math.max(1, sw)));
+  const pad = 28;
   const c = document.createElement("canvas");
   c.width = Math.round(sw * scale) + pad * 2;
   c.height = Math.round(sh * scale) + pad * 2;
@@ -76,39 +107,21 @@ function crop(source, [x, y, w, h], targetWidth = 1450, binary = false) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, sx, sy, sw, sh, pad, pad, c.width - pad * 2, c.height - pad * 2);
-  if (binary) {
-    const im = ctx.getImageData(0, 0, c.width, c.height);
-    let sum = 0;
-    for (let p = 0; p < im.data.length; p += 4) {
-      const g = Math.round(im.data[p] * .22 + im.data[p + 1] * .70 + im.data[p + 2] * .08);
-      im.data[p] = im.data[p + 1] = im.data[p + 2] = g;
-      sum += g;
-    }
-    const th = Math.max(112, Math.min(212, sum / Math.max(1, im.data.length / 4) - 15));
-    for (let p = 0; p < im.data.length; p += 4) {
-      const v = im.data[p] < th ? 0 : 255;
-      im.data[p] = im.data[p + 1] = im.data[p + 2] = v;
-      im.data[p + 3] = 255;
-    }
-    ctx.putImageData(im, 0, 0);
-  }
+  preprocess(ctx, c.width, c.height);
   return c;
 }
 function composite(canvases) {
   const width = Math.max(...canvases.map((c) => c.width));
-  const gap = 26;
-  const height = canvases.reduce((s, c) => s + c.height, 0) + gap * (canvases.length - 1);
+  const gap = 34;
+  const height = canvases.reduce((s, c) => s + c.height, 0) + gap * Math.max(0, canvases.length - 1);
   const out = document.createElement("canvas");
   out.width = width;
   out.height = height;
-  const ctx = out.getContext("2d", { willReadFrequently: true });
+  const ctx = out.getContext("2d");
   ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.fillRect(0, 0, width, height);
   let y = 0;
-  for (const c of canvases) {
-    ctx.drawImage(c, 0, y);
-    y += c.height + gap;
-  }
+  for (const c of canvases) { ctx.drawImage(c, 0, y); y += c.height + gap; }
   return out;
 }
 function releaseSession(session) {
@@ -153,7 +166,7 @@ export default function CertificateKeiHeightGuardV4() {
       generation += 1;
       running = false;
       locked = "";
-      showStatus("v16完了後、幅・高さの右側セルだけ1pass確認します");
+      showStatus("v16完了後、右端の高さセルだけ1pass確認します");
     };
 
     const timer = window.setInterval(async () => {
@@ -179,47 +192,42 @@ export default function CertificateKeiHeightGuardV4() {
       let combo = null;
       const parts = [];
       try {
-        session = await createDocumentRecognitionSession(file, { maxSide: 2300, cropPaper: true, minPaperConfidence: 0.38 });
+        session = await createDocumentRecognitionSession(file, { maxSide: 2450, cropPaper: true, minPaperConfidence: 0.38 });
         if (stopped || mine !== generation) return;
         const source = session.prepared.normalized;
         const shared = await createSharedTesseractWorker();
         const worker = shared.worker;
         const t = shared.tesseract;
 
-        // 同じ右側セルを縦位置だけ少しずつずらし、通常/二値を1枚に合成してrecognizeは1回だけ。
+        // 幅147や後軸340を巻き込まないよう、右端の高さセルだけを縦に少しずらして1枚へ合成。
         const regions = [
-          [0.63, 0.486, 0.35, 0.050],
-          [0.63, 0.500, 0.35, 0.050],
-          [0.63, 0.514, 0.35, 0.050],
+          [0.815, 0.482, 0.175, 0.050],
+          [0.815, 0.496, 0.175, 0.050],
+          [0.815, 0.510, 0.175, 0.050],
         ];
-        parts.push(crop(source, regions[0], 1450, false));
-        parts.push(crop(source, regions[1], 1450, false));
-        parts.push(crop(source, regions[2], 1450, true));
+        for (const r of regions) parts.push(crop(source, r));
         combo = composite(parts);
 
         await worker.setParameters({
           tessedit_pageseg_mode: String(t.PSM?.SPARSE_TEXT ?? 11),
           preserve_interword_spaces: "1",
           user_defined_dpi: "300",
-          tessedit_char_whitelist: "0123456789 cmCM",
+          tessedit_char_whitelist: "0123456789",
         });
         const result = await worker.recognize(combo);
         const text = norm(result?.data?.text || "");
         const confidence = Number(result?.data?.confidence || 0);
-        const values = (text.match(/\d{3}/g) || []).map(Number);
         const width = Number(norm(fieldInput("幅 cm")?.value || ""));
+        const values = (text.match(/\d{3}/g) || []).map(Number).filter((n) => n >= 100 && n <= 200 && (!width || n !== width));
         const counts = new Map();
-        for (const n of values) {
-          if (n < 100 || n > 200 || (width && n === width)) continue;
-          counts.set(n, (counts.get(n) || 0) + 1);
-        }
+        for (const n of values) counts.set(n, (counts.get(n) || 0) + 1);
         const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
         const height = ranked[0]?.[0] || 0;
 
         if (!height) {
           setReactInputValue(fieldInput("高さ cm"), "");
           pending = null;
-          showStatus(`高さ未確定 / OCR=${text || "空"} / conf=${confidence.toFixed(1)} → 空欄維持`);
+          showStatus(`高さ未確定 / 1pass / OCR=${text || "空"} / conf=${confidence.toFixed(1)} → 空欄維持`);
           return;
         }
 
