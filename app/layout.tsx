@@ -7,11 +7,9 @@ import CertificateChassisCorrectionFix from "./certificate-chassis-correction-fi
 import CertificateConsistencyFix from "./certificate-consistency-fix";
 import CertificatePdfNativeReader from "./certificate-pdf-native-reader";
 import CertificatePdfBridge from "./certificate-pdf-bridge";
-import CertificateQrReader from "./certificate-qr-reader";
-import CertificateQrLowerSixFallback from "./certificate-qr-lower-six-fallback";
+import CertificateQrFast from "./certificate-qr-fast";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
 import CertificateFinalNativeFix from "./certificate-final-native-fix";
-import CertificateAdaptiveOcr from "./certificate-adaptive-ocr";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -194,11 +192,9 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificateConsistencyFix />
         <CertificatePdfNativeReader />
         <CertificatePdfBridge />
-        <CertificateQrReader />
-        <CertificateQrLowerSixFallback />
+        <CertificateQrFast />
         <CertificateQrApply />
         <CertificateFinalNativeFix />
-        <CertificateAdaptiveOcr />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
       </body>
     </html>
