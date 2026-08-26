@@ -47,19 +47,50 @@ function showStatus(text) {
     box.style.border = "1px solid #d9b45b";
     box.style.borderRadius = "12px";
     box.style.background = "#fffaf0";
-    box.innerHTML = '<summary style="font-weight:800">空欄日付だけ補完 v1（確認用）</summary><div data-date-status style="margin-top:8px;font-weight:700"></div>';
+    box.innerHTML = '<summary style="font-weight:800">空欄日付だけ補完 v2（確認用）</summary><div data-date-status style="margin-top:8px;font-weight:700"></div>';
     host.appendChild(box);
   }
   const node = box.querySelector("[data-date-status]");
   if (node) node.textContent = text;
 }
-function crop(source, [x, y, w, h], targetWidth = 1900, binary = false) {
+function preprocess(ctx, width, height) {
+  const image = ctx.getImageData(0, 0, width, height);
+  const gray = new Uint8Array(width * height);
+  let sum = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const p = (y * width + x) * 4;
+      const g = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+      gray[y * width + x] = g;
+      sum += g;
+    }
+  }
+  const rowDark = new Uint16Array(height);
+  const colDark = new Uint16Array(width);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (gray[y * width + x] < 150) { rowDark[y] += 1; colDark[x] += 1; }
+    }
+  }
+  const threshold = Math.max(120, Math.min(205, sum / Math.max(1, width * height) - 20));
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const p = (y * width + x) * 4;
+      const onGrid = rowDark[y] > width * .62 || colDark[x] > height * .72;
+      const v = onGrid ? 255 : (gray[y * width + x] < threshold ? 0 : 255);
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
+      image.data[p + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+}
+function crop(source, [x, y, w, h], targetWidth = 1800) {
   const sx = Math.max(0, Math.floor(source.width * x));
   const sy = Math.max(0, Math.floor(source.height * y));
   const sw = Math.max(1, Math.min(source.width - sx, Math.floor(source.width * w)));
   const sh = Math.max(1, Math.min(source.height - sy, Math.floor(source.height * h)));
-  const scale = Math.max(1, Math.min(7, targetWidth / Math.max(1, sw)));
-  const pad = 24;
+  const scale = Math.max(1, Math.min(8, targetWidth / Math.max(1, sw)));
+  const pad = 26;
   const c = document.createElement("canvas");
   c.width = Math.round(sw * scale) + pad * 2;
   c.height = Math.round(sh * scale) + pad * 2;
@@ -69,51 +100,67 @@ function crop(source, [x, y, w, h], targetWidth = 1900, binary = false) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, sx, sy, sw, sh, pad, pad, c.width - pad * 2, c.height - pad * 2);
-  if (binary) {
-    const im = ctx.getImageData(0, 0, c.width, c.height);
-    let sum = 0;
-    for (let p = 0; p < im.data.length; p += 4) {
-      const g = Math.round(im.data[p] * .22 + im.data[p + 1] * .70 + im.data[p + 2] * .08);
-      im.data[p] = im.data[p + 1] = im.data[p + 2] = g;
-      sum += g;
-    }
-    const th = Math.max(115, Math.min(215, sum / Math.max(1, im.data.length / 4) - 16));
-    for (let p = 0; p < im.data.length; p += 4) {
-      const v = im.data[p] < th ? 0 : 255;
-      im.data[p] = im.data[p + 1] = im.data[p + 2] = v;
-      im.data[p + 3] = 255;
-    }
-    ctx.putImageData(im, 0, 0);
-  }
+  preprocess(ctx, c.width, c.height);
   return c;
 }
-function parseDate(raw = "") {
-  const text = norm(raw)
-    .replace(/信和|今和|作和|三和|令禾|令入|命和/g, "令和")
+function composite(canvases) {
+  const width = Math.max(...canvases.map((c) => c.width));
+  const gap = 42;
+  const height = canvases.reduce((sum, c) => sum + c.height, 0) + gap * Math.max(0, canvases.length - 1);
+  const out = document.createElement("canvas");
+  out.width = width;
+  out.height = height;
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, width, height);
+  let y = 0;
+  for (const c of canvases) { ctx.drawImage(c, 0, y); y += c.height + gap; }
+  return out;
+}
+function repair(raw = "") {
+  return norm(raw)
+    .replace(/信和|今和|作和|三和|令禾|令入|命和|合和/g, "令和")
     .replace(/平[或戊陰咸戌]/g, "平成")
     .replace(/昭[禾口知]/g, "昭和")
     .replace(/[OoQqDd]/g, "0").replace(/[Il|!]/g, "1").replace(/[Zz]/g, "2").replace(/[Ss§]/g, "5").replace(/[Bb]/g, "8");
-  const m = text.match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/);
-  if (!m) return "";
-  const mo = Number(m[3]), d = Number(m[4]);
-  if (mo < 1 || mo > 12 || d < 1 || d > 31) return "";
-  return `${m[1]}${m[2] === "元" ? "元" : Number(m[2])}年${mo}月${d}日`;
+}
+function allDates(raw = "") {
+  const text = repair(raw);
+  const out = [];
+  for (const m of text.matchAll(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*[日H]?/g)) {
+    const mo = Number(m[3]), d = Number(m[4]);
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) continue;
+    out.push(`${m[1]}${m[2] === "元" ? "元" : Number(m[2])}年${mo}月${d}日`);
+  }
+  return [...new Set(out)];
 }
 function eraYear(era, y) {
   const n = y === "元" ? 1 : Number(y);
   return era === "令和" ? 2018 + n : era === "平成" ? 1988 + n : era === "昭和" ? 1925 + n : 0;
 }
-function dateOrdinal(v = "") {
+function ordinal(v = "") {
   const m = norm(v).match(/(令和|平成|昭和)(元|\d{1,2})年(\d{1,2})月(\d{1,2})日/);
-  if (!m) return 0;
-  return eraYear(m[1], m[2]) * 10000 + Number(m[3]) * 100 + Number(m[4]);
+  return m ? eraYear(m[1], m[2]) * 10000 + Number(m[3]) * 100 + Number(m[4]) : 0;
 }
-function plausibleRegistrationDate(v) {
-  const n = dateOrdinal(v);
+function monthKey(v = "") {
+  const m = norm(v).match(/(令和|平成|昭和)(元|\d{1,2})年(\d{1,2})月/);
+  return m ? `${m[1]}:${m[2]}:${Number(m[3])}` : "";
+}
+function plausible(v) {
+  const n = ordinal(v);
   if (!n) return false;
-  const expiry = dateOrdinal(window.__vehicleCertificateQrPriority?.inspectionExpiry || fieldInput("有効期間の満了する日")?.value || "");
-  if (expiry && n > expiry) return false;
-  return true;
+  const expiry = ordinal(window.__vehicleCertificateQrPriority?.inspectionExpiry || fieldInput("有効期間の満了する日")?.value || "");
+  return !expiry || n <= expiry;
+}
+function chooseRegistration(values) {
+  const expiry = norm(window.__vehicleCertificateQrPriority?.inspectionExpiry || fieldInput("有効期間の満了する日")?.value || "");
+  const firstMonth = monthKey(window.__vehicleCertificateQrPriority?.firstRegistration || fieldInput("初度登録年月")?.value || "");
+  const filtered = values.filter((v) => plausible(v) && norm(v) !== expiry);
+  return filtered.find((v) => firstMonth && monthKey(v) === firstMonth) || filtered[0] || "";
+}
+function chooseRecord(values) {
+  const expiry = norm(window.__vehicleCertificateQrPriority?.inspectionExpiry || fieldInput("有効期間の満了する日")?.value || "");
+  return values.filter((v) => plausible(v) && norm(v) !== expiry).sort((a, b) => ordinal(b) - ordinal(a))[0] || "";
 }
 function releaseSession(session) {
   try {
@@ -143,7 +190,7 @@ export default function CertificateMissingDatesV1() {
       generation += 1;
       running = false;
       startedAt = Date.now();
-      showStatus("v16完了後、空欄の日付セルだけ確認します");
+      showStatus("v16完了後、空欄の日付セルだけ最大2passで確認します");
     };
 
     const timer = window.setInterval(async () => {
@@ -154,13 +201,9 @@ export default function CertificateMissingDatesV1() {
 
       const recordInput = fieldInput("記録年月日");
       const regInput = fieldInput("登録年月日／交付年月日");
-      const needRecord = !parseDate(recordInput?.value || "");
-      const needReg = !parseDate(regInput?.value || "");
-      if (!needRecord && !needReg) {
-        showStatus("日付2項目とも取得済み → OCR省略");
-        pending = null;
-        return;
-      }
+      const needRecord = !allDates(recordInput?.value || "").length;
+      const needReg = !allDates(regInput?.value || "").length;
+      if (!needRecord && !needReg) { showStatus("日付2項目とも取得済み → 追加OCRなし"); pending = null; return; }
 
       running = true;
       const file = pending;
@@ -170,40 +213,42 @@ export default function CertificateMissingDatesV1() {
       const patch = {};
       const notes = [];
       try {
-        session = await createDocumentRecognitionSession(file, { maxSide: 2300, cropPaper: true, minPaperConfidence: 0.38 });
+        session = await createDocumentRecognitionSession(file, { maxSide: 2550, cropPaper: true, minPaperConfidence: 0.38 });
         if (stopped || mine !== generation) return;
         const source = session.prepared.normalized;
         const shared = await createSharedTesseractWorker();
         const worker = shared.worker;
         const t = shared.tesseract;
 
-        const readOne = async (regions, label) => {
-          for (let i = 0; i < regions.length; i += 1) {
-            const c = crop(source, regions[i], 1900, i === 1);
-            try {
-              await worker.setParameters({
-                tessedit_pageseg_mode: String(t.PSM?.SINGLE_LINE ?? 7),
-                preserve_interword_spaces: "1",
-                user_defined_dpi: "300",
-              });
-              const r = await worker.recognize(c);
-              passCount += 1;
-              const raw = norm(r?.data?.text || "");
-              const value = parseDate(raw);
-              notes.push(`${label}${i + 1}: ${raw || "空"} => ${value || "保留"}`);
-              if (value) return value;
-            } finally { c.width = 1; c.height = 1; }
+        const readComposite = async (regions, label, chooser) => {
+          const parts = regions.map((r) => crop(source, r));
+          const combo = composite(parts);
+          try {
+            await worker.setParameters({
+              tessedit_pageseg_mode: String(t.PSM?.SPARSE_TEXT ?? 11),
+              preserve_interword_spaces: "1",
+              user_defined_dpi: "300",
+            });
+            const result = await worker.recognize(combo);
+            passCount += 1;
+            const raw = norm(result?.data?.text || "");
+            const values = allDates(raw);
+            const value = chooser(values);
+            notes.push(`${label}: ${raw || "空"} => ${value || "保留"}`);
+            return value;
+          } finally {
+            for (const c of parts) { c.width = 1; c.height = 1; }
+            combo.width = 1; combo.height = 1;
           }
-          return "";
         };
 
         if (needRecord) {
-          const value = await readOne([[0.60, 0.070, 0.34, 0.055], [0.57, 0.060, 0.39, 0.070]], "記録");
+          const value = await readComposite([[0.60, 0.074, 0.36, 0.058], [0.62, 0.085, 0.32, 0.042]], "記録", chooseRecord);
           if (value) patch.recordDate = value;
         }
         if (needReg) {
-          const value = await readOne([[0.10, 0.205, 0.42, 0.060], [0.08, 0.190, 0.46, 0.080]], "交付");
-          if (value && plausibleRegistrationDate(value)) patch.registrationDate = value;
+          const value = await readComposite([[0.135, 0.198, 0.33, 0.060], [0.155, 0.212, 0.27, 0.040]], "交付", chooseRegistration);
+          if (value) patch.registrationDate = value;
         }
 
         if (patch.recordDate) setReactInputValue(recordInput, patch.recordDate);
@@ -217,7 +262,7 @@ export default function CertificateMissingDatesV1() {
         releaseSession(session);
         running = false;
       }
-    }, 350);
+    }, 320);
 
     document.addEventListener("change", onChange, true);
     return () => {
