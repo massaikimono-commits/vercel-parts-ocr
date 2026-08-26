@@ -179,18 +179,19 @@ async function rescue(file, missing) {
   const started = performance.now();
   const recovered = [];
 
-  // 軽自動車の6個QRは左から K0/K2/K3/K5/K6/K7。
-  // ここでの x は切り出し左端。高速QRと同じ実測位置を使う。
+  // 6個QRの実測中心は概ね 0.51/0.60/0.68/0.77/0.85/0.94。
+  // crop幅0.078なので左端は中心-約0.039。上下左右に少しだけ振る。
   const plans = {
-    "0": { slot: 0, xs: [0.395, 0.425, 0.455] },
-    "2": { slot: 1, xs: [0.485, 0.515, 0.545] },
-    "7": { slot: 5, xs: [0.845, 0.875, 0.905] },
+    "0": { slot: 0, xs: [0.445, 0.468, 0.490] },
+    "2": { slot: 1, xs: [0.535, 0.556, 0.578] },
+    "7": { slot: 5, xs: [0.875, 0.899, 0.915] },
   };
   const attempts = [
-    [0.775, "contrast"],
-    [0.805, "contrast"],
-    [0.835, "binary"],
-    [0.790, "color"],
+    [0.825, "contrast"],
+    [0.850, "contrast"],
+    [0.875, "binary"],
+    [0.845, "binary"],
+    [0.850, "color"],
   ];
 
   try {
