@@ -51,7 +51,7 @@ async function sourceCanvas(file) {
     });
     const iw = img.naturalWidth || img.width;
     const ih = img.naturalHeight || img.height;
-    const scale = Math.min(1, 4400 / Math.max(iw, ih));
+    const scale = Math.min(1, 4600 / Math.max(iw, ih));
     const c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(iw * scale));
     c.height = Math.max(1, Math.round(ih * scale));
@@ -66,13 +66,13 @@ async function sourceCanvas(file) {
 }
 
 function cropQr(source, x0, y0, mode = "contrast") {
-  const w0 = 0.072;
-  const h0 = 0.105;
+  const w0 = 0.078;
+  const h0 = 0.115;
   const sx = Math.max(0, Math.round(source.width * x0));
   const sy = Math.max(0, Math.round(source.height * y0));
   const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * w0)));
   const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * h0)));
-  const scale = Math.max(1, Math.min(7.5, 1500 / Math.max(1, sw)));
+  const scale = Math.max(1, Math.min(7.5, 1550 / Math.max(1, sw)));
   const pad = 64;
   const c = document.createElement("canvas");
   c.width = Math.round(sw * scale) + pad * 2;
@@ -179,17 +179,18 @@ async function rescue(file, missing) {
   const started = performance.now();
   const recovered = [];
 
+  // 軽自動車の6個QRは左から K0/K2/K3/K5/K6/K7。
+  // ここでの x は切り出し左端。高速QRと同じ実測位置を使う。
   const plans = {
-    "0": { slot: 0, xs: [0.410, 0.423, 0.436] },
-    "2": { slot: 1, xs: [0.488, 0.501, 0.514] },
-    "7": { slot: 5, xs: [0.802, 0.815, 0.828] },
+    "0": { slot: 0, xs: [0.395, 0.425, 0.455] },
+    "2": { slot: 1, xs: [0.485, 0.515, 0.545] },
+    "7": { slot: 5, xs: [0.845, 0.875, 0.905] },
   };
   const attempts = [
-    [0.815, "contrast"],
-    [0.835, "contrast"],
-    [0.805, "binary"],
+    [0.775, "contrast"],
+    [0.805, "contrast"],
     [0.835, "binary"],
-    [0.815, "color"],
+    [0.790, "color"],
   ];
 
   try {
@@ -247,11 +248,11 @@ export default function CertificateQrRescueV2() {
         const before = Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : [];
         const missing = ["0", "2", "7"].filter((d) => !hasCode(before, d));
         if (!missing.length) {
-          showStatus("重要QR 1/2/6 取得済み。追加解析は省略しました。");
+          showStatus("重要QR K0/K2/K7 取得済み。追加解析は省略しました。");
           return;
         }
 
-        showStatus(`不足QR ${missing.map((d) => d === "0" ? "コード1" : d === "2" ? "コード2" : "コード6").join("・")} を重点補完中…`);
+        showStatus(`不足QR K${missing.join(",K")} を重点補完中…`);
         const { recovered, elapsed } = await rescue(file, missing);
         if (dead || id !== token) return;
 
@@ -269,8 +270,8 @@ export default function CertificateQrRescueV2() {
           window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fallback-ready", { detail: combined }));
         }
         const got = ["0", "2", "7"].filter((d) => hasCode(combined, d));
-        const labels = got.map((d) => d === "0" ? "コード1" : d === "2" ? "コード2" : "コード6");
-        showStatus(`QR重点補完: ${recovered.length}件 / ${elapsed}ms / ${labels.join("・") || "重要QR未取得"}`);
+        const still = ["0", "2", "7"].filter((d) => !hasCode(combined, d));
+        showStatus(`QR重点補完: +${recovered.length}件 / ${elapsed}ms / 取得 ${got.map((d) => `K${d}`).join(",") || "なし"}${still.length ? ` / 未読 K${still.join(",K")}` : ""}`);
       })().catch((e) => {
         if (!dead && id === token) showStatus(`QR重点補完エラー: ${e?.message || e}`);
       });
