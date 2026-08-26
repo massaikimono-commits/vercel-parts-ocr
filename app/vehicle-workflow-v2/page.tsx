@@ -1,7 +1,7 @@
 "use client";
 
-import VehicleWorkflowV3 from "../vehicle-workflow-v3/page";
+import VehicleWorkflowFast from "../vehicle-workflow-fast/page";
 
 export default function VehicleWorkflowV2() {
-  return <VehicleWorkflowV3 />;
+  return <VehicleWorkflowFast />;
 }
