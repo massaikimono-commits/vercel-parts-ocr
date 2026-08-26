@@ -2,23 +2,28 @@
   "name": "vercel-parts-ocr-app",
   "version": "1.0.0",
   "private": true,
-  "scripts": {"dev":"next dev","build":"next build","start":"next start"},
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test:certificate": "node scripts/vehicle-certificate-regression.mjs"
+  },
   "dependencies": {
-    "next":"14.2.25",
-    "react":"18.3.1",
-    "react-dom":"18.3.1",
-    "tesseract.js":"^5.1.1",
-    "@supabase/supabase-js":"^2.54.0",
-    "jspdf":"^2.5.2",
-    "jsqr":"^1.4.0",
-    "@zxing/browser":"^0.1.5",
-    "@zxing/library":"^0.21.3",
-    "pdfjs-dist":"^4.10.38"
+    "next": "14.2.25",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tesseract.js": "^5.1.1",
+    "@supabase/supabase-js": "^2.54.0",
+    "jspdf": "^2.5.2",
+    "jsqr": "^1.4.0",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
+    "pdfjs-dist": "^4.10.38"
   },
   "devDependencies": {
-    "@types/node":"^20.17.24",
-    "@types/react":"^18.3.18",
-    "@types/react-dom":"^18.3.5",
-    "typescript":"^5.8.2"
+    "@types/node": "^20.17.24",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "typescript": "^5.8.2"
   }
 }
