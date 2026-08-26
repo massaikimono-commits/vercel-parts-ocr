@@ -40,7 +40,10 @@ function hasQr(codeDigit) {
 }
 
 function jpDate(text) {
-  const m = norm(text).match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/);
+  const t = norm(text)
+    .replace(/今和|合和|令乱|信和|伶和/g, "令和")
+    .replace(/平[或戊陰]/g, "平成");
+  const m = t.match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/);
   if (!m) return "";
   const mo = Number(m[3]), d = Number(m[4]);
   if (mo < 1 || mo > 12 || d < 1 || d > 31) return "";
@@ -58,8 +61,13 @@ function docNumber(text) {
   return "";
 }
 
+function modelFamily(model = "") {
+  const t = compact(model).toUpperCase();
+  return (t.split("-").pop() || t).replace(/[^A-Z0-9]/g, "");
+}
+
 function engineCandidate(text, model, chassis) {
-  const fam = compact(model).toUpperCase().split("-").pop() || "";
+  const fam = modelFamily(model);
   const cf = compact(chassis).toUpperCase().split("-")[0] || "";
   const t = norm(text).toUpperCase().replace(/\s*[-‐‑‒–—―ー]\s*/g, "-");
   const candidates = t.match(/[A-Z0-9]{2,8}-[A-Z0-9]{2,10}/g) || [];
@@ -76,6 +84,28 @@ function engineCandidate(text, model, chassis) {
     scored.push({ value: v, score });
   }
   return scored.sort((a, b) => b.score - a.score)[0]?.value || "";
+}
+
+function chassisCandidate(text, model) {
+  const fam = modelFamily(model);
+  const t = compact(text).toUpperCase().replace(/[‐‑‒–—―ー]/g, "-");
+  const candidates = t.match(/[A-Z0-9]{3,9}-[0-9OQI|]{5,9}/g) || [];
+  let best = "";
+  let score = -1;
+  for (const raw of candidates) {
+    const [left0, right0] = raw.split("-");
+    let left = left0;
+    const right = String(right0 || "").replace(/[OQ]/g, "0").replace(/[I|]/g, "1");
+    if (!/^\d{5,9}$/.test(right)) continue;
+    let s = 1;
+    if (fam) {
+      if (left === fam) s += 15;
+      else if (fam.endsWith(left) && fam.length - left.length <= 2) { left = fam; s += 12; }
+      else if (fam.startsWith(left) && fam.length - left.length <= 2) s += 7;
+    }
+    if (s > score) { score = s; best = `${left}-${right}`; }
+  }
+  return best;
 }
 
 function send(patch) {
@@ -96,7 +126,7 @@ async function sourceCanvas(file) {
     });
     const iw = img.naturalWidth || img.width;
     const ih = img.naturalHeight || img.height;
-    const scale = Math.min(1, 3800 / Math.max(iw, ih));
+    const scale = Math.min(1, 4000 / Math.max(iw, ih));
     const c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(iw * scale));
     c.height = Math.max(1, Math.round(ih * scale));
@@ -110,10 +140,10 @@ async function sourceCanvas(file) {
   }
 }
 
-function crop(source, x0, y0, w0, h0, binary = false, target = 2600) {
+function crop(source, x0, y0, w0, h0, binary = false, target = 2800) {
   const sx = Math.round(source.width * x0), sy = Math.round(source.height * y0);
   const sw = Math.max(1, Math.round(source.width * w0)), sh = Math.max(1, Math.round(source.height * h0));
-  const scale = Math.max(1, Math.min(7, target / Math.max(1, sw)));
+  const scale = Math.max(1, Math.min(8, target / Math.max(1, sw)));
   const c = document.createElement("canvas");
   c.width = Math.round(sw * scale);
   c.height = Math.round(sh * scale);
@@ -133,7 +163,7 @@ function crop(source, x0, y0, w0, h0, binary = false, target = 2600) {
   const th = Math.max(100, Math.min(215, sum / Math.max(1, im.data.length / 4) - 16));
   for (let p = 0; p < im.data.length; p += 4) {
     const g = im.data[p];
-    const v = binary ? (g < th ? 0 : 255) : Math.max(0, Math.min(255, Math.round((g - 128) * 1.75 + 154)));
+    const v = binary ? (g < th ? 0 : 255) : Math.max(0, Math.min(255, Math.round((g - 128) * 1.85 + 154)));
     im.data[p] = im.data[p + 1] = im.data[p + 2] = v;
     im.data[p + 3] = 255;
   }
@@ -188,12 +218,20 @@ export default function CertificatePhotoCriticalOcrV2() {
           await new Promise((resolve) => setTimeout(resolve, 200));
         }
         if (dead || id !== token) return;
-        await new Promise((resolve) => setTimeout(resolve, 700));
+        // QR重点補完の反映も少し待つ。
+        await new Promise((resolve) => setTimeout(resolve, 900));
 
+        const haveCriticalQr = hasQr("0") || hasQr("2");
         const needTopRight = !fieldValue("記録年月日") || !fieldValue("記録事項番号");
         const needEngine = !fieldValue("原動機の型式") && !window.__vehicleCertificateQrPriority?.engineModel;
-        const needReg = !hasQr("0") && !hasQr("2");
-        if (!needTopRight && !needEngine && !needReg) {
+        const needReg = !haveCriticalQr;
+        const currentChassis = fieldValue("車台番号");
+        const model = fieldValue("型式") || window.__vehicleCertificateQrPriority?.model || "";
+        const fam = modelFamily(model);
+        const currentPrefix = compact(currentChassis).toUpperCase().split("-")[0] || "";
+        const needChassis = !haveCriticalQr && (!currentChassis || (fam && currentPrefix && currentPrefix !== fam));
+
+        if (!needTopRight && !needEngine && !needReg && !needChassis) {
           showStatus("重要欄補完v2: QR/OCRで取得済みのため追加OCRなし");
           return;
         }
@@ -210,50 +248,68 @@ export default function CertificatePhotoCriticalOcrV2() {
           const line = P?.SINGLE_LINE ?? "7";
 
           if (needTopRight) {
-            passes += 1;
-            const c = crop(source, .53, .085, .44, .13, false, 3000);
-            try {
-              const raw = await recognize(worker, c, sparse);
-              logs.push(`右上=${raw}`);
-              if (!fieldValue("記録年月日")) {
-                const d = jpDate(raw);
-                if (d) patch.recordDate = d;
-              }
-              if (!fieldValue("記録事項番号")) {
-                const n = docNumber(raw);
-                if (n) patch.documentNumber = n;
-              }
-            } finally { c.width = 1; c.height = 1; }
+            for (const binary of [false, true]) {
+              passes += 1;
+              const c = crop(source, .55, .085, .42, .13, binary, 3000);
+              try {
+                const raw = await recognize(worker, c, sparse);
+                logs.push(`右上${binary ? "白黒" : "灰"}=${raw}`);
+                if (!patch.recordDate && !fieldValue("記録年月日")) {
+                  const d = jpDate(raw);
+                  if (d) patch.recordDate = d;
+                }
+                if (!patch.documentNumber && !fieldValue("記録事項番号")) {
+                  const n = docNumber(raw);
+                  if (n) patch.documentNumber = n;
+                }
+                if ((!needTopRight || patch.recordDate) && (fieldValue("記録事項番号") || patch.documentNumber)) break;
+              } finally { c.width = 1; c.height = 1; }
+            }
           }
 
           if (needEngine) {
-            passes += 1;
-            const c = crop(source, .43, .385, .53, .13, false, 3000);
-            try {
-              const raw = await recognize(worker, c, sparse, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ");
-              logs.push(`原動機帯=${raw}`);
-              const engine = engineCandidate(raw, fieldValue("型式"), fieldValue("車台番号"));
-              if (engine) patch.engineModel = engine;
-            } finally { c.width = 1; c.height = 1; }
+            for (const binary of [false, true]) {
+              passes += 1;
+              const c = crop(source, .40, .405, .57, .115, binary, 3200);
+              try {
+                const raw = await recognize(worker, c, sparse, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ");
+                logs.push(`原動機${binary ? "白黒" : "灰"}=${raw}`);
+                const engine = engineCandidate(raw, model, fieldValue("車台番号"));
+                if (engine) { patch.engineModel = engine; break; }
+              } finally { c.width = 1; c.height = 1; }
+            }
           }
 
           if (needReg) {
             const candidates = [];
-            for (const binary of [false, true]) {
+            for (const [y, binary] of [[.165, false], [.180, true]]) {
               passes += 1;
-              const c = crop(source, .075, .135, .70, .13, binary, 3200);
+              const c = crop(source, .075, y, .77, .075, binary, 3300);
               try {
                 const raw = await recognize(worker, c, line);
-                logs.push(`登録帯${binary ? "白黒" : "灰"}=${raw}`);
+                logs.push(`登録${binary ? "白黒" : "灰"}@${y}=${raw}`);
                 const parsed = parseRegistrationNumber(raw);
                 if (parsed?.canonical) candidates.push(parsed.canonical);
               } finally { c.width = 1; c.height = 1; }
             }
-            if (candidates.length >= 2 && candidates.every((x) => x === candidates[0])) {
-              patch.registrationNumber = candidates[0];
-            } else if (!fieldValue("自動車登録番号又は車両番号") && candidates.length === 1) {
-              patch.registrationNumber = candidates[0];
+            const unique = [...new Set(candidates)];
+            if (unique.length === 1) patch.registrationNumber = unique[0];
+          }
+
+          if (needChassis) {
+            const candidates = [];
+            for (const [y, binary] of [[.215, false], [.230, true]]) {
+              passes += 1;
+              const c = crop(source, .075, y, .78, .075, binary, 3300);
+              try {
+                const raw = await recognize(worker, c, line, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ");
+                logs.push(`車台${binary ? "白黒" : "灰"}@${y}=${raw}`);
+                const value = chassisCandidate(raw, model);
+                if (value) candidates.push(value);
+              } finally { c.width = 1; c.height = 1; }
             }
+            const unique = [...new Set(candidates)];
+            if (unique.length === 1) patch.chassisNumber = unique[0];
           }
         } finally {
           source.width = 1;
@@ -263,7 +319,7 @@ export default function CertificatePhotoCriticalOcrV2() {
 
         if (dead || id !== token) return;
         send(patch);
-        showStatus(`重要欄補完v2: ${Object.keys(patch).length}項目 / ${passes}pass${logs.length ? ` / ${logs.join(" | ").slice(0, 220)}` : ""}`);
+        showStatus(`重要欄補完v2: ${Object.keys(patch).length}項目 / ${passes}pass${logs.length ? ` / ${logs.join(" | ").slice(0, 260)}` : ""}`);
       })().catch((e) => {
         if (!dead && id === token) showStatus(`重要欄補完v2エラー: ${e?.message || e}`);
       });
