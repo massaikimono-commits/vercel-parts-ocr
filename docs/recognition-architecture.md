@@ -45,3 +45,16 @@ Parts slips generally have no usable QR source, so reuse the OCR primitives deve
 - Keep regression fixtures for every layout class already proven in production tests.
 - Batch meaningful changes and deploy once; do not use no-op or tiny pushes for Vercel testing.
 - If a proposed change conflicts with this document, treat it as an architecture change and explicitly revisit the decision before implementation.
+
+## QR regression guard
+
+The six-code kei certificate row has a known stable scan baseline from 2026-08-24:
+- scan all six slots at y=0.80 color
+- retry only missing slots at y=0.80 contrast
+- retry only missing slots at y=0.835 color
+- retry only missing slots at y=0.835 contrast
+- stop immediately when six codes are present
+
+Do not replace this with contrast-only or identity-only scanning unless the same real-device fixture proves equal or better six-code recovery and speed.
+
+Targeted QR rescue must never start while the fast six-slot scan is still running. Rescue begins only after fast scan completion and only for codes still missing. Rescue has a strict time budget.
