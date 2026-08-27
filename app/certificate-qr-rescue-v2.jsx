@@ -194,13 +194,16 @@ async function rescue(file, missing) {
     [0.850, "color"],
   ];
 
+  const budgetMs = 6500;
   try {
     for (const digit of missing) {
+      if (performance.now() - started >= budgetMs) break;
       const plan = plans[digit];
       let done = false;
       for (const [y, mode] of attempts) {
-        if (done) break;
+        if (done || performance.now() - started >= budgetMs) break;
         for (const x of plan.xs) {
+          if (performance.now() - started >= budgetMs) break;
           const c = cropQr(source, x, y, mode);
           try {
             const z = await decodeZxing(reader, c, plan.slot, `K${digit}/x${x}/y${y}/${mode}`);
@@ -244,7 +247,15 @@ export default function CertificateQrRescueV2() {
       const id = ++token;
 
       void (async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1250));
+        // 高速QRの完了前に重い救済処理を始めると、同じQRを二重解析して20秒超になる。
+        // fast-readyを待ち、完了後の不足コードだけを救済する。
+        const waitStarted = performance.now();
+        while (!dead && id === token) {
+          const state = window.__vehicleCertificateQrFastState;
+          if (state && state.running === false) break;
+          if (performance.now() - waitStarted > 6500) break;
+          await new Promise((resolve) => setTimeout(resolve, 120));
+        }
         if (dead || id !== token) return;
         const before = Array.isArray(window.__vehicleCertificateQr) ? window.__vehicleCertificateQr : [];
         const missing = ["0", "2", "7"].filter((d) => !hasCode(before, d));
@@ -253,7 +264,7 @@ export default function CertificateQrRescueV2() {
           return;
         }
 
-        showStatus(`不足QR K${missing.join(",K")} を重点補完中…`);
+        showStatus(`高速QR完了後、不足QR K${missing.join(",K")} だけを重点補完中…`);
         const { recovered, elapsed } = await rescue(file, missing);
         if (dead || id !== token) return;
 
