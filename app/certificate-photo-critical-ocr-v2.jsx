@@ -6,7 +6,7 @@ import { parseRegistrationNumber } from "./lib/registration-number";
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 
 function norm(v = "") {
-  return String(v || "").normalize("NFKC").replace(/[‐‑‒–—―ー]/g, "-").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
+  return String(v || "").normalize("NFKC").replace(/[‐‑‒–—―]/g, "-").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
 }
 
 function compact(v = "") {
@@ -88,7 +88,7 @@ function engineCandidate(text, model, chassis) {
 
 function chassisCandidate(text, model) {
   const fam = modelFamily(model);
-  const t = compact(text).toUpperCase().replace(/[‐‑‒–—―ー]/g, "-");
+  const t = compact(text).toUpperCase().replace(/[‐‑‒–—―]/g, "-");
   const candidates = t.match(/[A-Z0-9]{3,9}-[0-9OQI|]{5,9}/g) || [];
   let best = "";
   let score = -1;
@@ -111,7 +111,7 @@ function chassisCandidate(text, model) {
 function send(patch) {
   const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => typeof v === "string" && v.trim()));
   if (!Object.keys(clean).length) return;
-  window.__vehicleCertificateQrPriority = { ...(window.__vehicleCertificateQrPriority || {}), ...clean };
+  window.__vehicleCertificatePhotoPriority = { ...(window.__vehicleCertificatePhotoPriority || {}), ...clean };
   window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: clean }));
 }
 
@@ -223,10 +223,10 @@ export default function CertificatePhotoCriticalOcrV2() {
 
         const haveCriticalQr = hasQr("0") || hasQr("2");
         const needTopRight = !fieldValue("記録年月日") || !fieldValue("記録事項番号");
-        const needEngine = !fieldValue("原動機の型式") && !window.__vehicleCertificateQrPriority?.engineModel;
-        const needReg = !haveCriticalQr;
+        const needEngine = !fieldValue("原動機の型式") && !window.__vehicleCertificatePhotoPriority?.engineModel && !window.__vehicleCertificateQrPriority?.engineModel;
+        const needReg = !fieldValue("自動車登録番号又は車両番号") && !haveCriticalQr;
         const currentChassis = fieldValue("車台番号");
-        const model = fieldValue("型式") || window.__vehicleCertificateQrPriority?.model || "";
+        const model = fieldValue("型式") || window.__vehicleCertificatePhotoPriority?.model || window.__vehicleCertificateQrPriority?.model || "";
         const fam = modelFamily(model);
         const currentPrefix = compact(currentChassis).toUpperCase().split("-")[0] || "";
         const needChassis = !haveCriticalQr && (!currentChassis || (fam && currentPrefix && currentPrefix !== fam));
