@@ -108,23 +108,45 @@ function parseStructured(lines) {
   const patch = {};
   const allText = lines.map((line) => line.text).join("\n");
   const put = (key, value) => {
-    if (value !== undefined && value !== null && String(value).trim() !== "") patch[key] = String(value).trim();
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      patch[key] = String(value).trim();
+    }
   };
+  const rowText = (index) => norm(lines[index]?.text || "");
+  const joinedAfter = (index, count = 3) =>
+    lines
+      .slice(Math.max(0, index + 1), Math.min(lines.length, index + 1 + count))
+      .map((line) => norm(line.text))
+      .filter(Boolean)
+      .join(" ");
 
   // 作成日付（記録年月日）
   const firstLine = lines.find((line) => compact(line.text).includes("作成日付"));
   if (firstLine) {
-    const m = norm(firstLine.text).match(/作成日付\s*[:：]?\s*((?:令和|平成|昭和)\s*(?:元|\d{1,2})\s*年?\s*\d{1,2}\s*月?\s*\d{1,2}\s*日?)/);
+    const m = norm(firstLine.text).match(
+      /作成日付\s*[:：]?\s*((?:令和|平成|昭和)\s*(?:元|\d{1,2})\s*年?\s*\d{1,2}\s*月?\s*\d{1,2}\s*日?)/
+    );
     if (m) put("recordDate", jpDate(m[1]));
   }
 
-  // 登録番号・登録日・初度登録・種別・用途・自家用・形状
-  const topHeader = findLineIndex(lines, (t) => t.includes("自動車登録番号又は車両番号") && t.includes("初度登録年月") && t.includes("車体の形状"));
+  // 普通車/軽自動車の双方に対応。
+  // 軽自動車の記録事項PDFでは「車両番号」「交付年月日」「初度検査年月」と表記される。
+  const topHeader = findLineIndex(
+    lines,
+    (t) =>
+      (t.includes("自動車登録番号又は車両番号") || t.includes("車両番号")) &&
+      (t.includes("初度登録年月") || t.includes("初度検査年月")) &&
+      t.includes("車体の形状")
+  );
   const topValue = nextNonEmptyLine(lines, topHeader, 3)?.line;
   if (topValue) {
     const text = norm(topValue.text);
     put("registrationNumber", registration(text));
-    const dates = [...text.matchAll(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?(?:\s*(\d{1,2})\s*日?)?/g)];
+    const dates = [
+      ...text.matchAll(
+        /(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?(?:\s*(\d{1,2})\s*日?)?/g
+      ),
+    ];
     if (dates[0]) put("registrationDate", jpDate(dates[0][0]));
     if (dates[1]) put("firstRegistration", jpMonth(dates[1][0]));
     put("vehicleClass", ["普通", "小型", "軽自動車", "大型特殊"].find((v) => text.includes(v)) || "");
@@ -133,8 +155,16 @@ function parseStructured(lines) {
     put("bodyShape", BODY_TYPES.find((v) => text.includes(v)) || "");
   }
 
-  // 車名・定員・最大積載量・車両重量・車両総重量
-  const weightHeader = findLineIndex(lines, (t) => t.includes("車名") && t.includes("乗車定員") && t.includes("最大積載量") && t.includes("車両重量") && t.includes("車両総重量"));
+  // 普通車の車名/重量行。
+  const weightHeader = findLineIndex(
+    lines,
+    (t) =>
+      t.includes("車名") &&
+      t.includes("乗車定員") &&
+      t.includes("最大積載量") &&
+      t.includes("車両重量") &&
+      t.includes("車両総重量")
+  );
   const weightValue = nextNonEmptyLine(lines, weightHeader, 3)?.line;
   if (weightValue) {
     const text = norm(weightValue.text);
@@ -149,12 +179,59 @@ function parseStructured(lines) {
     }
   }
 
-  // 車台番号・寸法・4軸重
-  const dimensionHeader = findLineIndex(lines, (t) => t.includes("車台番号") && t.includes("長さ") && t.includes("幅") && t.includes("高さ") && t.includes("前前軸重") && t.includes("後後軸重"));
+  // 軽自動車の記録事項PDFは、車台番号・定員・重量・寸法を同じ見出しにし、
+  // 値を2行に分けることがある。ブラケット内の管理値は無視し、単位付き値を採用する。
+  const keiChassisHeader = findLineIndex(
+    lines,
+    (t) =>
+      t.includes("車台番号") &&
+      t.includes("乗車定員") &&
+      t.includes("最大積載量") &&
+      t.includes("車両重量") &&
+      t.includes("長さ") &&
+      t.includes("幅") &&
+      t.includes("高さ")
+  );
+  if (keiChassisHeader >= 0) {
+    const text = joinedAfter(keiChassisHeader, 3).toUpperCase();
+    const chassis = text.match(/\b([A-Z]{1,6}[A-Z0-9]{0,8}-[A-Z0-9]{4,14})\b/i);
+    if (chassis) put("chassisNumber", chassis[1].replace(/O/g, "0"));
+
+    const seat = text.match(/(\d{1,2})\s*人/);
+    if (seat) put("seatingCapacity", String(Number(seat[1])));
+
+    const kg = [...text.matchAll(/(-|\d{1,5})\s*kg/gi)].map((m) => m[1]);
+    if (kg.length >= 3) {
+      put("maxPayloadKg", kg[0] === "-" ? "-" : String(Number(kg[0])));
+      put("vehicleWeightKg", kg[1] === "-" ? "-" : String(Number(kg[1])));
+      put("grossVehicleWeightKg", kg[2] === "-" ? "-" : String(Number(kg[2])));
+    }
+
+    const cm = [...text.matchAll(/(\d{2,4})\s*cm/gi)].map((m) => m[1]);
+    if (cm.length >= 3) {
+      put("lengthCm", String(Number(cm[0])));
+      put("widthCm", String(Number(cm[1])));
+      put("heightCm", String(Number(cm[2])));
+    }
+  }
+
+  // 普通車の車台番号・寸法・4軸重。
+  const dimensionHeader = findLineIndex(
+    lines,
+    (t) =>
+      t.includes("車台番号") &&
+      t.includes("長さ") &&
+      t.includes("幅") &&
+      t.includes("高さ") &&
+      t.includes("前前軸重") &&
+      t.includes("後後軸重")
+  );
   const dimensionValue = nextNonEmptyLine(lines, dimensionHeader, 3)?.line;
   if (dimensionValue) {
     const text = norm(dimensionValue.text).toUpperCase();
-    const m = text.match(/([A-Z]{1,5}[A-Z0-9]{2,8}-[0-9O]{4,12})\s+(\d{2,4})\s*cm\s+(\d{2,4})\s*cm\s+(\d{2,4})\s*cm\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg/i);
+    const m = text.match(
+      /([A-Z]{1,6}[A-Z0-9]{0,8}-[A-Z0-9]{4,14})\s+(\d{2,4})\s*cm\s+(\d{2,4})\s*cm\s+(\d{2,4})\s*cm\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg/i
+    );
     if (m) {
       put("chassisNumber", m[1].replace(/O/g, "0"));
       put("lengthCm", String(Number(m[2])));
@@ -167,60 +244,189 @@ function parseStructured(lines) {
     }
   }
 
-  // 型式・原動機・排気量・燃料・指定番号・類別番号
-  const modelHeader = findLineIndex(lines, (t) => t.includes("型式") && t.includes("原動機の型式") && t.includes("総排気量又は定格出力") && t.includes("燃料の種類") && t.includes("型式指定番号") && t.includes("類別区分番号"));
+  // 型式・原動機・排気量・燃料・指定番号・類別番号。
+  // 値の並びは普通車と軽自動車で異なるため、1本の厳しい正規表現に依存しない。
+  const modelHeader = findLineIndex(
+    lines,
+    (t) =>
+      t.includes("型式") &&
+      t.includes("原動機の型式") &&
+      t.includes("総排気量又は定格出力") &&
+      t.includes("燃料の種類") &&
+      t.includes("型式指定番号") &&
+      t.includes("類別区分番号")
+  );
   if (modelHeader >= 0) {
     let next = nextNonEmptyLine(lines, modelHeader, 4);
     if (next && /^KW$/i.test(norm(next.line.text))) next = nextNonEmptyLine(lines, next.index, 2);
     if (next) {
-      const text = norm(next.line.text).toUpperCase();
-      const m = text.match(/((?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{3,14})\s+([A-Z0-9]{2,8}-[A-Z0-9]{2,10})\s+(\d+(?:\.\d+)?)\s*(L|KW)?\s+(軽油|ガソリン|揮発油|電気|LPG|CNG|水素)\s+(\d{1,6})\s+(\d{4})/i);
-      if (m) {
-        put("model", m[1]);
-        put("engineModel", m[2]);
-        put("displacementOrRatedOutput", `${m[3]}${m[4] ? ` ${m[4]}` : ""}`);
-        put("fuel", m[5]);
-        put("modelDesignationNumber", m[6]);
-        put("classificationNumber", m[7]);
+      const raw = norm(next.line.text);
+      const text = raw.toUpperCase();
+
+      put("vehicleName", MAKERS.find((v) => raw.includes(v)) || patch.vehicleName || "");
+
+      const modelMatch = text.match(/\b((?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{2,14})\b/i);
+      if (modelMatch) {
+        put("model", modelMatch[1]);
+        const rest = text.slice((modelMatch.index || 0) + modelMatch[0].length).trim();
+        const engine = rest.match(/^([A-Z0-9]{2,10}(?:-[A-Z0-9]{2,10})?)(?:\s|$)/i);
+        if (engine && !["L", "KW"].includes(engine[1].toUpperCase())) put("engineModel", engine[1]);
+      }
+
+      const fuel = ["軽油", "ガソリン", "揮発油", "電気", "LPG", "CNG", "水素"].find((v) =>
+        raw.includes(v)
+      );
+      if (fuel) put("fuel", fuel);
+
+      let displacement = null;
+      if (fuel) {
+        displacement =
+          raw.match(new RegExp("(\\d+(?:\\.\\d+)?)\\s*(L|kW|KW)\\s+" + fuel, "i")) ||
+          raw.match(new RegExp(fuel + "\\s+(\\d+(?:\\.\\d+)?)\\s*(L|kW|KW)", "i"));
+      }
+      if (!displacement) displacement = raw.match(/(\d+(?:\.\d+)?)\s*(L|kW|KW)\b/i);
+      if (displacement) {
+        put(
+          "displacementOrRatedOutput",
+          String(displacement[1]) + " " + String(displacement[2]).toUpperCase()
+        );
+      }
+
+      const tail = text.match(/(?:^|\s)(\d{4,6})\s+(\d{4})\s*$/);
+      if (tail) {
+        put("modelDesignationNumber", tail[1]);
+        put("classificationNumber", tail[2]);
+      }
+
+      // 軽自動車では「前軸重」「後軸重」の2値。4軸形式の互換フィールドに安全に割り当てる。
+      const headerDense = compact(rowText(modelHeader));
+      const axleKg = [...raw.matchAll(/(\d{1,5})\s*kg/gi)].map((m) => m[1]);
+      if (headerDense.includes("前軸重") && headerDense.includes("後軸重") && axleKg.length >= 2) {
+        put("frontFrontAxleWeightKg", String(Number(axleKg[0])));
+        put("rearRearAxleWeightKg", String(Number(axleKg[1])));
       }
     }
   }
 
-  // 使用者情報。所有者と混同しないよう、該当ラベルの行だけから右側を取得する。
+  // 使用者情報。通常レイアウトを優先。
   const userNameLine = lines.find((line) => compact(line.text).includes("使用者の氏名又は名称"));
-  if (userNameLine) put("userName", valueAfterLabel(userNameLine, "使用者の氏名又は名称").replace(/\s*\[[0-9\s]+\]\s*$/, "").trim());
-  const userAddressLine = lines.find((line) => compact(line.text).includes("使用者の住所") && !compact(line.text).includes("所有者の住所"));
-  if (userAddressLine) put("userAddress", valueAfterLabel(userAddressLine, "使用者の住所").replace(/\s*\[[0-9\s]+\]\s*$/, "").trim());
+  if (userNameLine) {
+    put(
+      "userName",
+      valueAfterLabel(userNameLine, "使用者の氏名又は名称")
+        .replace(/\s*\[[0-9\s]+\]\s*$/, "")
+        .trim()
+    );
+  }
+  const userAddressLine = lines.find(
+    (line) => compact(line.text).includes("使用者の住所") && !compact(line.text).includes("所有者の住所")
+  );
+  if (userAddressLine) {
+    put(
+      "userAddress",
+      valueAfterLabel(userAddressLine, "使用者の住所")
+        .replace(/\s*\[[0-9\s]+\]\s*$/, "")
+        .trim()
+    );
+  }
 
-  // 使用の本拠は値が無いPDFでは空欄のままにする。
+  // 軽自動車PDFでは「使 / 用 / 者」が縦方向に分割される場合がある。
+  if (!patch.userName) {
+    const sectionStart = Math.max(0, modelHeader + 1);
+    const baseIndex = findLineIndex(lines, (t) => t.includes("使用の本拠の位置"));
+    const sectionEnd = Math.min(lines.length, baseIndex >= 0 ? baseIndex : sectionStart + 12);
+    for (let i = sectionStart; i < sectionEnd; i += 1) {
+      const text = norm(lines[i].text);
+      const dense = compact(text);
+      if (!dense.includes("氏名又は名称")) continue;
+      const value = text.replace(/^.*?氏名又は名称\s*/, "").trim();
+      if (value && value !== "使用者に同じ" && !value.includes("所有者")) {
+        put("userName", value.replace(/\s*\[[0-9\s]+\]\s*$/, "").trim());
+        for (let j = i + 1; j < Math.min(sectionEnd, i + 5); j += 1) {
+          const addressText = norm(lines[j].text);
+          if (!compact(addressText).includes("住所")) continue;
+          const address = addressText
+            .replace(/^.*?住\s*所\s*/, "")
+            .replace(/\s*\[[0-9\s]+\]\s*$/, "")
+            .trim();
+          if (address && address !== "使用者に同じ") put("userAddress", address);
+          break;
+        }
+        break;
+      }
+    }
+  }
+
+  // 使用の本拠は値が無いPDFでは空欄のまま。
   const baseLine = lines.find((line) => compact(line.text).includes("使用の本拠の位置"));
   if (baseLine) {
     const base = valueAfterLabel(baseLine, "使用の本拠の位置").trim();
     if (base && base.length <= 100) put("baseLocation", base);
   }
 
-  // 有効期限
-  const expiryHeader = findLineIndex(lines, (t) => t.includes("有効期間の満了する日") && t.includes("車検期間"));
-  const expiryValue = nextNonEmptyLine(lines, expiryHeader, 3)?.line;
-  if (expiryValue) put("inspectionExpiry", jpDate(expiryValue.text));
+  // 有効期限。軽自動車PDFでは追加情報行を挟むことがあるので数行先まで探す。
+  const expiryHeader = findLineIndex(lines, (t) => t.includes("有効期間の満了する日"));
+  if (expiryHeader >= 0) {
+    for (let i = expiryHeader; i < Math.min(lines.length, expiryHeader + 7); i += 1) {
+      const value = jpDate(lines[i].text);
+      if (value) {
+        put("inspectionExpiry", value);
+        break;
+      }
+    }
+  }
 
-  // 全体からの安全な補完（構造行に無かった時のみ）
+  // 全体からの安全な補完（構造行に無かった時のみ）。
   if (!patch.registrationNumber) put("registrationNumber", registration(allText));
   if (!patch.vehicleName) put("vehicleName", MAKERS.find((v) => allText.includes(v)) || "");
 
   const required = [
-    "registrationNumber", "chassisNumber", "model", "vehicleName", "registrationDate", "firstRegistration",
-    "vehicleClass", "purpose", "privateBusiness", "bodyShape", "seatingCapacity", "maxPayloadKg",
-    "vehicleWeightKg", "grossVehicleWeightKg", "lengthCm", "widthCm", "heightCm",
-    "frontFrontAxleWeightKg", "frontRearAxleWeightKg", "rearFrontAxleWeightKg", "rearRearAxleWeightKg",
-    "engineModel", "displacementOrRatedOutput", "fuel", "modelDesignationNumber", "classificationNumber",
-    "userName", "userAddress", "inspectionExpiry"
+    "registrationNumber",
+    "chassisNumber",
+    "model",
+    "vehicleName",
+    "registrationDate",
+    "firstRegistration",
+    "vehicleClass",
+    "purpose",
+    "privateBusiness",
+    "bodyShape",
+    "seatingCapacity",
+    "maxPayloadKg",
+    "vehicleWeightKg",
+    "grossVehicleWeightKg",
+    "lengthCm",
+    "widthCm",
+    "heightCm",
+    "frontFrontAxleWeightKg",
+    "frontRearAxleWeightKg",
+    "rearFrontAxleWeightKg",
+    "rearRearAxleWeightKg",
+    "engineModel",
+    "displacementOrRatedOutput",
+    "fuel",
+    "modelDesignationNumber",
+    "classificationNumber",
+    "userName",
+    "userAddress",
+    "inspectionExpiry",
   ];
-  const found = required.filter((key) => Object.prototype.hasOwnProperty.call(patch, key) && patch[key] !== "").length;
+  const found = required.filter(
+    (key) => Object.prototype.hasOwnProperty.call(patch, key) && patch[key] !== ""
+  ).length;
   const strong = Boolean(
-    patch.registrationNumber && patch.chassisNumber && patch.model && patch.vehicleName &&
-    patch.vehicleWeightKg && patch.grossVehicleWeightKg && patch.lengthCm && patch.widthCm && patch.heightCm &&
-    patch.engineModel && patch.fuel && found >= 22
+    patch.registrationNumber &&
+      patch.chassisNumber &&
+      patch.model &&
+      patch.vehicleName &&
+      patch.vehicleWeightKg &&
+      patch.grossVehicleWeightKg &&
+      patch.lengthCm &&
+      patch.widthCm &&
+      patch.heightCm &&
+      patch.engineModel &&
+      patch.fuel &&
+      found >= 22
   );
   return { patch, found, strong, lines, allText };
 }
