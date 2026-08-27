@@ -61,6 +61,62 @@ function docNumber(text) {
   return "";
 }
 
+const MAKERS = ["日野","トヨタ","レクサス","日産","ニッサン","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","UDトラックス","BMW","アウディ","ボルボ"];
+const BODY_TYPES = ["キャブオーバ","ステーションワゴン","ピックアップ","ボンネット","トラック","ダンプ","セダン","箱型","バン","バス","幌型"];
+
+function pickKnown(text, values) {
+  const t = compact(text);
+  return values.find((v) => t.includes(compact(v))) || "";
+}
+
+function seatingCandidate(text) {
+  const t = norm(text);
+  const near = t.match(/乗車定員[\s\S]{0,45}?(\d{1,2})\s*人/);
+  if (near) return String(Number(near[1]));
+  const vals = [...t.matchAll(/(?:^|\s)(\d{1,2})\s*人(?:\s|$)/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= 80);
+  const unique = [...new Set(vals)];
+  return unique.length === 1 ? String(unique[0]) : "";
+}
+
+function payloadCandidate(text, purposeValue = "") {
+  if (compact(purposeValue) === "乗用") return "-";
+  const t = norm(text);
+  const near = t.match(/最大積載量[\s\S]{0,55}?(-|\d{1,5})\s*(?:kg)?/i);
+  if (!near) return "";
+  if (near[1] === "-") return "-";
+  const n = Number(near[1]);
+  return n >= 0 && n <= 30000 ? String(n) : "";
+}
+
+function outputCandidate(text) {
+  const t = norm(text);
+  const near = t.match(/(?:総排気量又は定格出力|総排気量|定格出力)[\s\S]{0,65}?(\d+(?:[.,]\d+)?)\s*(L|l|kW|KW|kw)/);
+  const hit = near || t.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*(L|l|kW|KW|kw)(?:\s|$)/);
+  if (!hit) return "";
+  const n = Number(String(hit[1]).replace(",", "."));
+  const unit = String(hit[2]).toLowerCase() === "l" ? "L" : "kW";
+  if (!Number.isFinite(n) || n <= 0) return "";
+  if (unit === "L" && n > 20) return "";
+  if (unit === "kW" && n > 1500) return "";
+  return `${String(n)} ${unit}`;
+}
+
+function profilePatch(text) {
+  const purposeValue = pickKnown(text, ["貨物","乗用","乗合","特種"]);
+  const patch = {};
+  const put = (key, value) => { if (value) patch[key] = value; };
+  put("vehicleName", pickKnown(text, MAKERS));
+  put("vehicleClass", pickKnown(text, ["普通","小型","軽自動車","大型特殊"]));
+  put("purpose", purposeValue);
+  put("privateBusiness", pickKnown(text, ["自家用","事業用"]));
+  put("bodyShape", pickKnown(text, BODY_TYPES));
+  put("seatingCapacity", seatingCandidate(text));
+  put("maxPayloadKg", payloadCandidate(text, purposeValue));
+  put("fuel", pickKnown(text, ["軽油","ガソリン","揮発油","電気","LPG","CNG","水素"]));
+  put("displacementOrRatedOutput", outputCandidate(text));
+  return patch;
+}
+
 function modelFamily(model = "") {
   const t = compact(model).toUpperCase();
   return (t.split("-").pop() || t).replace(/[^A-Z0-9]/g, "");
@@ -230,8 +286,13 @@ export default function CertificatePhotoCriticalOcrV2() {
         const fam = modelFamily(model);
         const currentPrefix = compact(currentChassis).toUpperCase().split("-")[0] || "";
         const needChassis = !haveCriticalQr && (!currentChassis || (fam && currentPrefix && currentPrefix !== fam));
+        const profileLabels = [
+          "車名","自動車の種別","用途","自家用・事業用の別","車体の形状","乗車定員","最大積載量 kg"
+        ];
+        const needProfile = profileLabels.some((label) => !fieldValue(label));
+        const needOutput = !fieldValue("総排気量又は定格出力");
 
-        if (!needTopRight && !needEngine && !needReg && !needChassis) {
+        if (!needTopRight && !needEngine && !needReg && !needChassis && !needProfile && !needOutput) {
           showStatus("重要欄補完v2: QR/OCRで取得済みのため追加OCRなし");
           return;
         }
@@ -277,6 +338,47 @@ export default function CertificatePhotoCriticalOcrV2() {
                 const engine = engineCandidate(raw, model, fieldValue("車台番号"));
                 if (engine) { patch.engineModel = engine; break; }
               } finally { c.width = 1; c.height = 1; }
+            }
+          }
+
+          // QRで埋まらなかった車両プロフィールだけを、重なりを変えた2パスで狙い撃ち。
+          // 固定辞書・単位・範囲で検証し、自由文字の推測値は採用しない。
+          if (needProfile || needOutput) {
+            const foundByKey = {};
+            for (const [y, h, binary] of [[.345, .225, false], [.315, .285, true]]) {
+              passes += 1;
+              const c = crop(source, .045, y, .91, h, binary, 3400);
+              try {
+                const raw = await recognize(worker, c, sparse);
+                logs.push(`不足プロフィール${binary ? "白黒" : "灰"}@${y}=${raw}`);
+                const candidate = profilePatch(raw);
+                for (const [key, value] of Object.entries(candidate)) {
+                  if (!value) continue;
+                  if (!foundByKey[key]) foundByKey[key] = [];
+                  foundByKey[key].push(value);
+                }
+              } finally { c.width = 1; c.height = 1; }
+            }
+
+            const labelByKey = {
+              vehicleName:"車名",
+              vehicleClass:"自動車の種別",
+              purpose:"用途",
+              privateBusiness:"自家用・事業用の別",
+              bodyShape:"車体の形状",
+              seatingCapacity:"乗車定員",
+              maxPayloadKg:"最大積載量 kg",
+              fuel:"燃料の種類",
+              displacementOrRatedOutput:"総排気量又は定格出力",
+            };
+            for (const [key, values] of Object.entries(foundByKey)) {
+              const unique = [...new Set(values)];
+              const label = labelByKey[key];
+              if (!label || fieldValue(label)) continue;
+              // 2パス一致を最優先。固定カテゴリは1パスでも安全に採用、
+              // 数値は一意候補の時だけ採用する。
+              const categorical = ["vehicleName","vehicleClass","purpose","privateBusiness","bodyShape","fuel"].includes(key);
+              if (unique.length === 1 && (categorical || values.length >= 1)) patch[key] = unique[0];
             }
           }
 
