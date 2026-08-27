@@ -9,6 +9,18 @@ function hex(bytes = []) {
     .toUpperCase();
 }
 
+function decodeRawText(bytes = []) {
+  const raw = Uint8Array.from(bytes || []);
+  if (!raw.length) return "";
+  for (const encoding of ["shift_jis", "utf-8"]) {
+    try {
+      const text = new TextDecoder(encoding).decode(raw).replace(/\0/g, "").trim();
+      if (text && (text.includes("/") || /^K/.test(text))) return text;
+    } catch {}
+  }
+  return "";
+}
+
 function isCertificateFileInput(node) {
   if (!(node instanceof HTMLInputElement) || node.type !== "file") return false;
   const section = node.closest("section.card");
@@ -90,10 +102,10 @@ async function makeReader() {
 async function decode(reader, canvas, slot, tag) {
   try {
     const result = await reader.decodeFromCanvas(canvas);
-    const data = result?.getText?.() || result?.text || "";
     const raw = result?.getRawBytes?.() || result?.rawBytes || [];
-    if (!data && !raw?.length) return null;
     const binary = Array.from(raw || []);
+    const data = result?.getText?.() || result?.text || decodeRawText(binary) || "";
+    if (!data && !binary.length) return null;
     return {
       slot,
       label: `高速下段6個/QR${slot + 1}/${tag}/ZXing`,
@@ -157,7 +169,8 @@ async function scanFast(file) {
       const canvas = cropRegion(source, xs[slot], y, 0.125, 0.145, mode, mode === "color" ? 1250 : 1450);
       try {
         const hit = await decode(reader, canvas, slot, `y${y}/${mode}`);
-        if (hit) found.push(hit);
+        // raw bytes onlyでは後段で解釈できないので「読めた」と扱わず、別前処理を続ける。
+        if (hit?.data) found.push(hit);
       } finally {
         canvas.width = 1;
         canvas.height = 1;
@@ -171,9 +184,13 @@ async function scanFast(file) {
     await runPass(0.80, "contrast");
     // 2) 取りこぼしだけ位置を少し下げて再試行。
     if (unique(found).length < 6) await runPass(0.835, "contrast");
-    // 3) 重要QR(車両番号/車台番号系)だけ最後に原色で再試行。
-    const important = [0, 1, 5].filter((slot) => !found.some((x) => x.slot === slot));
+    // 3) 重要QR(K0/K2/K7: 登録番号/車台番号/用途・車名系)を重点再試行。
+    let important = [0, 1, 5].filter((slot) => !found.some((x) => x.slot === slot));
     if (important.length) await runPass(0.805, "color", important);
+    important = [0, 1, 5].filter((slot) => !found.some((x) => x.slot === slot));
+    if (important.length) await runPass(0.785, "binary", important);
+    important = [0, 1, 5].filter((slot) => !found.some((x) => x.slot === slot));
+    if (important.length) await runPass(0.825, "binary", important);
   } finally {
     source.width = 1;
     source.height = 1;
