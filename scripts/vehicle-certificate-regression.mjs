@@ -5,8 +5,19 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = path.resolve(__dirname, "../test/fixtures/vehicle-certificates");
 
-const MAKERS = ["トヨタ", "レクサス", "日産", "ホンダ", "三菱", "マツダ", "スバル", "スズキ", "ダイハツ", "いすゞ", "日野", "UDトラックス", "メルセデス・ベンツ", "フォルクスワーゲン", "アウディ", "BMW", "ボルボ"];
+const MAKERS = ["トヨタ", "レクサス", "日産", "ニッサン", "ホンダ", "三菱", "マツダ", "スバル", "スズキ", "ダイハツ", "いすゞ", "日野", "UDトラックス", "メルセデス・ベンツ", "フォルクスワーゲン", "アウディ", "BMW", "ボルボ"];
 const BODY_TYPES = ["キャブオーバ", "ステーションワゴン", "ボンネット", "ピックアップ", "トラック", "ダンプ", "セダン", "箱型", "バン", "バス", "幌型"];
+
+function makerFromText(text) {
+  const raw = norm(text);
+  const dense = compact(raw);
+  return MAKERS.find((value) => raw.includes(value) || dense.includes(compact(value))) || "";
+}
+
+function bodyTypeFromText(text) {
+  const dense = compact(text);
+  return BODY_TYPES.find((value) => dense.includes(compact(value))) || "";
+}
 
 function norm(value) {
   return String(value || "")
@@ -108,7 +119,7 @@ function parseRows(rawRows) {
     put("vehicleClass", ["普通", "小型", "軽自動車", "大型特殊"].find((v) => topValue.includes(v)) || "");
     put("purpose", ["乗用", "貨物", "乗合", "特種"].find((v) => topValue.includes(v)) || "");
     put("privateBusiness", ["自家用", "事業用"].find((v) => topValue.includes(v)) || "");
-    put("bodyShape", BODY_TYPES.find((v) => topValue.includes(v)) || "");
+    put("bodyShape", bodyTypeFromText(topValue));
   }
 
   const weightHeader = findRow(
@@ -122,7 +133,7 @@ function parseRows(rawRows) {
   );
   const weightValue = nextRow(rows, weightHeader.index, 3).row;
   if (weightValue) {
-    put("vehicleName", MAKERS.find((v) => weightValue.includes(v)) || "");
+    put("vehicleName", makerFromText(weightValue));
     const seat = weightValue.match(/(?:\[[^\]]+\]\s*)?(\d{1,2})\s*人/);
     if (seat) put("seatingCapacity", String(Number(seat[1])));
     const kg = [...weightValue.matchAll(/(-|\d{1,5})\s*kg/gi)].map((m) => m[1]);
@@ -211,7 +222,7 @@ function parseRows(rawRows) {
       const raw = norm(next.row);
       const text = raw.toUpperCase();
 
-      put("vehicleName", MAKERS.find((v) => raw.includes(v)) || out.vehicleName || "");
+      put("vehicleName", makerFromText(raw) || out.vehicleName || "");
 
       const modelMatch = text.match(/\b((?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{2,14})\b/i);
       if (modelMatch) {
@@ -316,7 +327,7 @@ function parseRows(rawRows) {
 
   const allText = rows.join("\n");
   if (!out.registrationNumber) put("registrationNumber", registration(allText));
-  if (!out.vehicleName) put("vehicleName", MAKERS.find((v) => allText.includes(v)) || "");
+  if (!out.vehicleName) put("vehicleName", makerFromText(allText));
 
   return out;
 }
