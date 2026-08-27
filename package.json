@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run test:certificate && next build",
     "start": "next start",
     "test:certificate": "node scripts/vehicle-certificate-regression.mjs"
   },
