@@ -33,7 +33,7 @@ const AUTH_EVENT="vehicle-certificate-authoritative";
 const ACTIVE_KEY="parts-active-vehicle";
 const BEFORE_KEY="parts-before-ocr-ids";
 
-function norm(s:string){return String(s||"").normalize("NFKC").replace(/[‐‑‒–—―ー]/g,"-").replace(/\r/g,"").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim();}
+function norm(s:string){return String(s||"").normalize("NFKC").replace(/[‐‑‒–—―]/g,"-").replace(/\r/g,"").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim();}
 function compact(s:string){return norm(s).replace(/\s+/g,"");}
 function digits(s:string){return String(s||"").replace(/\D/g,"");}
 function eraYear(e:string,y:string){const n=y==="元"?1:Number(y);return e==="令和"?2018+n:e==="平成"?1988+n:e==="昭和"?1925+n:0;}
@@ -45,7 +45,7 @@ function toInt(s:string){const n=Number(s);return s&&s!=="-"&&Number.isFinite(n)
 function serialFromRegistration(v:string){const p=parseRegistrationNumber(v);if(p)return p.serial;const m=norm(v).match(/([0-9]{1,4})(?!.*[0-9])/);return m?.[1]||"";}
 function display(v:Vehicle){return v.registration||v.chassis||v.number||"車両";}
 function pick(s:string,values:string[]){const t=compact(s);return values.find(v=>t.includes(compact(v)))||"";}
-const maker=(s:string)=>pick(s,["日野","トヨタ","レクサス","日産","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","UDトラックス","BMW","アウディ","ボルボ"]);
+const maker=(s:string)=>pick(s,["日野","トヨタ","レクサス","日産","ニッサン","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","UDトラックス","BMW","アウディ","ボルボ"]);
 const vehicleClass=(s:string)=>pick(s,["普通","小型","軽自動車","大型特殊"]);
 const purpose=(s:string)=>pick(s,["貨物","乗用","乗合","特種"]);
 const privateBiz=(s:string)=>pick(s,["自家用","事業用"]);
@@ -57,6 +57,11 @@ function valueNear(text:string,labels:string[],parser:(s:string)=>string,span=3)
 function freeJp(s:string){const t=norm(s).replace(/\[[0-9\s_-]+\]/g,"").replace(/^[\s|:：,，.。・/\\-]+|[\s|:：,，.。・/\\-]+$/g,"").trim();if(!t||t.length>100)return"";return /[一-龠ぁ-んァ-ヶA-Za-z0-9]/.test(t)?t:"";}
 function docNo(s:string){return (digits(s).match(/\d{10,14}/)||[])[0]||"";}
 function output(s:string){return norm(s).match(/\d+(?:\.\d+)?\s*(?:L|l|kW|KW|kw)/)?.[0]?.replace(/\s+/g,"")||norm(s).match(/\b\d+\.\d+\b/)?.[0]||"";}
+function seatingCandidate(s:string){const t=norm(s);const direct=valueNear(t,["乗車定員"],x=>(x.match(/(\d{1,2})\s*人/)||[])[1]||"",2);if(direct)return direct;const vals=[...t.matchAll(/(?:^|\s)(\d{1,2})\s*人(?:\s|$)/g)].map(m=>m[1]);return [...new Set(vals)].length===1?vals[0]:"";}
+function payloadCandidate(s:string,purposeValue=""){const t=norm(s);const a=lines(t);for(let i=0;i<a.length;i++){if(!compact(a[i]).includes("最大積載量"))continue;const near=[a[i],a[i+1]||"",a[i+2]||""].join(" ");if(/(?:^|\s)[-－](?:\s|kg|$)/i.test(near))return"-";const m=near.match(/(\d{1,5})\s*kg/i);if(m)return String(Number(m[1]));}if(compact(purposeValue)==="乗用")return"-";return"";}
+function fillVisualFields(text:string,patch:Patch,qr:Patch){const all=norm(text);const put=(k:string,v:string)=>{if(v&&!(patch as any)[k]&&!(qr as any)[k])(patch as any)[k]=v;};put("registrationNumber",parseRegistrationNumber(all)?.canonical||"");put("recordDate",valueNear(all,["記録年月日","記録年月"],jpDate,2));put("vehicleName",maker(all));put("vehicleClass",vehicleClass(all));put("purpose",purpose(all));put("privateBusiness",privateBiz(all));put("bodyShape",body(all));put("seatingCapacity",seatingCandidate(all));put("maxPayloadKg",payloadCandidate(all,String((patch as any).purpose||(qr as any).purpose||purpose(all)||"")));put("displacementOrRatedOutput",output(all));return patch;}
+function needsVisualFallback(patch:Patch,qr:Patch){const merged={...patch,...qr} as any;return ["registrationNumber","recordDate","vehicleName","purpose","privateBusiness","bodyShape","seatingCapacity","maxPayloadKg","displacementOrRatedOutput"].some(k=>!String(merged[k]||"").trim());}
+
 function modelCandidate(s:string){const t=compact(s).toUpperCase();const all=t.match(/(?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{3,14}/g)||[];return all.filter(x=>!/^([A-Z0-9]{3,8})-\d{4,12}$/.test(x)).sort((a,b)=>b.length-a.length)[0]||"";}
 function modelFamily(model:string){const t=compact(model).toUpperCase();return (t.split("-").pop()||t).replace(/[^A-Z0-9]/g,"");}
 function chassisCandidate(text:string,model=""){const fam=modelFamily(model),a=lines(text),out:{value:string;score:number}[]=[];for(let i=0;i<a.length;i++){const u=a[i].toUpperCase().replace(/[‐‑‒–—―ー]/g,"-");for(const raw of u.match(/[A-Z0-9]{3,9}\s*-\s*[A-Z0-9]{4,12}/g)||[]){const [l0,r0]=raw.replace(/\s+/g,"").split("-");const l=l0.replace(/O(?=\d)|(?<=\d)O/g,"0"),r=r0.replace(/O/g,"0");if(!l||r.length<4||r.length>10)continue;if(/^(DAA|DBA|ABA|CBA|EBD|HBD|LDA|TDA|TKG|TPG|QKG|QPG|2RG|2PG|3BA|4BA|5BA|5AA|6AA|7BA|8BA)$/.test(l))continue;let score=2;if(/^\d+$/.test(r))score+=4;if(fam&&(fam===l||fam.startsWith(l)||l.startsWith(fam)))score+=8;const around=`${a[i-1]||""} ${a[i]} ${a[i+1]||""}`;if(/車台番号/.test(around))score+=8;out.push({value:`${l}-${r}`,score});}}return out.sort((x,y)=>y.score-x.score)[0]?.value||"";}
@@ -94,7 +99,7 @@ export default function VehicleWorkflowFast(){
   function update(k:string,val:string){mergePatch({[k]:val});}
 
   async function readPhoto(file:File){
-    fileKind.current="image";setDocBusy(true);setProgress(2);setDebug("");setMessage("QRを先に解析し、不足項目だけOCRしています…");if(preview)URL.revokeObjectURL(preview);setPreview(URL.createObjectURL(file));
+    fileKind.current="image";setDocBusy(true);setProgress(2);setDebug("");setMessage("写真OCRを本体として解析し、読めたQRは補助に使っています…");if(preview)URL.revokeObjectURL(preview);setPreview(URL.createObjectURL(file));
     (window as any).__vehicleCertificateQrPriority=null;(window as any).__vehicleCertificateQr=[];
     let worker:any=null;const started=performance.now();let passes=0;
     try{
@@ -102,8 +107,8 @@ export default function VehicleWorkflowFast(){
       await wait(250);let qr=readQr();
       const [src,t]:any=await Promise.all([srcPromise,tessPromise]);const paper=detectPaper(src);setProgress(12);
       const workerPromise=t.createWorker("jpn+eng",1);const P=t.PSM,block=P?.SINGLE_BLOCK??"6",sparse=P?.SPARSE_TEXT??"11";
-      // QRはOCR worker起動と並列。最大約1.5秒だけ先行待ちする。
-      for(let i=0;i<5&&!Object.keys(qr).length;i++){await wait(250);qr=readQr();}
+      // QRは補助。OCR開始を待たせないよう先行待ちは最大約0.5秒だけ。
+      for(let i=0;i<2&&!Object.keys(qr).length;i++){await wait(250);qr=readQr();}
       mergePatch(qr);setProgress(22);
       worker=await workerPromise;
       const rr=async(box:[number,number,number,number],psm:any,binary=false)=>{passes++;return recognize(worker,crop(src,rel(paper,...box),2300,binary),psm);};
@@ -149,6 +154,17 @@ export default function VehicleWorkflowFast(){
       patch.modelDesignationNumber=String(qr.modelDesignationNumber||"");
       patch.classificationNumber=String(qr.classificationNumber||"");
 
+      // QR非依存の重なり帯域。車検証の罫線/撮影ずれで4帯域から落ちた項目を拾う。
+      // 同じ考え方を部品伝票にも再利用できるよう、見出し語 + 値形式で確定する。
+      if(needsVisualFallback(patch,qr)){
+        const visualUpper=await rr([.035,.055,.93,.305],sparse,false);setProgress(89);
+        fillVisualFields([top,visualUpper].join("\n"),patch,qr);
+      }
+      if(needsVisualFallback(patch,qr)){
+        const visualBody=await rr([.035,.185,.93,.405],sparse,true);setProgress(91);
+        fillVisualFields([top,user,core,spec,visualBody].join("\n"),patch,qr);
+      }
+
       // 登録番号・車台番号・登録年月日が欠けた時だけ上段を1回だけ二値化再読取。
       if(!patch.registrationNumber||!patch.chassisNumber||!patch.registrationDate||!patch.recordDate){
         const retry=await rr([.045,.070,.91,.225],sparse,true);setProgress(93);
@@ -165,7 +181,7 @@ export default function VehicleWorkflowFast(){
       if(finalPatch.engineModel&&fam&&compact(finalPatch.engineModel).toUpperCase().includes(fam))delete finalPatch.engineModel;
       mergePatch(finalPatch);window.dispatchEvent(new CustomEvent(AUTH_EVENT,{detail:finalPatch}));
       const elapsed=Math.round(performance.now()-started),qrCount=Array.isArray((window as any).__vehicleCertificateQr)?(window as any).__vehicleCertificateQr.length:0;
-      setDebug([`写真高速OCR v1`, `所要: ${elapsed}ms`, `OCR: ${passes}pass`, `QR: ${qrCount}/6`, `紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`,"","--- 上段 ---",top,"","--- 使用者 ---",user,"","--- 車両 ---",core,"","--- 数値 ---",spec].join("\n"));
+      setDebug([`写真OCR v3（QR非依存フォールバック）`, `所要: ${elapsed}ms`, `OCR: ${passes}pass`, `QR: ${qrCount}/6`, `紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`,"","--- 上段 ---",top,"","--- 使用者 ---",user,"","--- 車両 ---",core,"","--- 数値 ---",spec].join("\n"));
       setProgress(100);setMessage(`写真高速OCR完了: ${elapsed}ms / OCR ${passes}pass / QR ${qrCount}/6。内容を確認してください。`);
     }catch(e:any){console.error(e);setMessage(`写真OCRエラー: ${e?.message||"読み取りに失敗しました"}`);}finally{if(worker)await worker.terminate().catch(()=>{});setDocBusy(false);}
   }
