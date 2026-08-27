@@ -7,8 +7,19 @@ const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
 const QR_PRIORITY_KEY = "__vehicleCertificateQrPriority";
 const PASS_KEY = "pdfStructuredV3PassThrough";
 
-const MAKERS = ["トヨタ", "レクサス", "日産", "ホンダ", "三菱", "マツダ", "スバル", "スズキ", "ダイハツ", "いすゞ", "日野", "UDトラックス", "メルセデス・ベンツ", "フォルクスワーゲン", "アウディ", "BMW", "ボルボ"];
+const MAKERS = ["トヨタ", "レクサス", "日産", "ニッサン", "ホンダ", "三菱", "マツダ", "スバル", "スズキ", "ダイハツ", "いすゞ", "日野", "UDトラックス", "メルセデス・ベンツ", "フォルクスワーゲン", "アウディ", "BMW", "ボルボ"];
 const BODY_TYPES = ["キャブオーバ", "ステーションワゴン", "ボンネット", "ピックアップ", "トラック", "ダンプ", "セダン", "箱型", "バン", "バス", "幌型"];
+
+function makerFromText(text) {
+  const raw = norm(text);
+  const dense = compact(raw);
+  return MAKERS.find((value) => raw.includes(value) || dense.includes(compact(value))) || "";
+}
+
+function bodyTypeFromText(text) {
+  const dense = compact(text);
+  return BODY_TYPES.find((value) => dense.includes(compact(value))) || "";
+}
 
 function norm(value) {
   return String(value || "")
@@ -152,7 +163,7 @@ function parseStructured(lines) {
     put("vehicleClass", ["普通", "小型", "軽自動車", "大型特殊"].find((v) => text.includes(v)) || "");
     put("purpose", ["乗用", "貨物", "乗合", "特種"].find((v) => text.includes(v)) || "");
     put("privateBusiness", ["自家用", "事業用"].find((v) => text.includes(v)) || "");
-    put("bodyShape", BODY_TYPES.find((v) => text.includes(v)) || "");
+    put("bodyShape", bodyTypeFromText(text));
   }
 
   // 普通車の車名/重量行。
@@ -168,7 +179,7 @@ function parseStructured(lines) {
   const weightValue = nextNonEmptyLine(lines, weightHeader, 3)?.line;
   if (weightValue) {
     const text = norm(weightValue.text);
-    put("vehicleName", MAKERS.find((v) => text.includes(v)) || "");
+    put("vehicleName", makerFromText(text));
     const seat = text.match(/(?:\[[^\]]+\]\s*)?(\d{1,2})\s*人/);
     if (seat) put("seatingCapacity", String(Number(seat[1])));
     const kg = [...text.matchAll(/(-|\d{1,5})\s*kg/gi)].map((m) => m[1]);
@@ -263,7 +274,7 @@ function parseStructured(lines) {
       const raw = norm(next.line.text);
       const text = raw.toUpperCase();
 
-      put("vehicleName", MAKERS.find((v) => raw.includes(v)) || patch.vehicleName || "");
+      put("vehicleName", makerFromText(raw) || patch.vehicleName || "");
 
       const modelMatch = text.match(/\b((?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{2,14})\b/i);
       if (modelMatch) {
@@ -378,7 +389,7 @@ function parseStructured(lines) {
 
   // 全体からの安全な補完（構造行に無かった時のみ）。
   if (!patch.registrationNumber) put("registrationNumber", registration(allText));
-  if (!patch.vehicleName) put("vehicleName", MAKERS.find((v) => allText.includes(v)) || "");
+  if (!patch.vehicleName) put("vehicleName", makerFromText(allText));
 
   const required = [
     "registrationNumber",
