@@ -5,7 +5,7 @@ import { useEffect } from "react";
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 
 function compact(v = "") {
-  return String(v || "").normalize("NFKC").replace(/[‐‑‒–—―ー]/g, "-").replace(/\s+/g, "").trim();
+  return String(v || "").normalize("NFKC").replace(/[‐‑‒–—―]/g, "-").replace(/\s+/g, "").trim();
 }
 
 function isCertificateInput(node) {
@@ -50,13 +50,13 @@ function repairedChassis(current = "", model = "") {
 function send(patch) {
   const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => typeof v === "string" && v.trim()));
   if (!Object.keys(clean).length) return;
-  window.__vehicleCertificateQrPriority = { ...(window.__vehicleCertificateQrPriority || {}), ...clean };
+  window.__vehicleCertificatePhotoPriority = { ...(window.__vehicleCertificatePhotoPriority || {}), ...clean };
   window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: clean }));
 }
 
 function safeDerivedPatch() {
   const patch = {};
-  const model = fieldValue("型式") || window.__vehicleCertificateQrPriority?.model || "";
+  const model = fieldValue("型式") || window.__vehicleCertificatePhotoPriority?.model || window.__vehicleCertificateQrPriority?.model || "";
   const currentChassis = fieldValue("車台番号");
   const repaired = repairedChassis(currentChassis, model);
   if (repaired && repaired !== compact(currentChassis).toUpperCase()) patch.chassisNumber = repaired;
