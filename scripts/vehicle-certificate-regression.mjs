@@ -22,7 +22,7 @@ function bodyTypeFromText(text) {
 function norm(value) {
   return String(value || "")
     .normalize("NFKC")
-    .replace(/[‐‑‒–—―ー]/g, "-")
+    .replace(/[‐‑‒–—―]/g, "-")
     .replace(/\r/g, "")
     .replace(/[ \t]+/g, " ")
     .trim();
