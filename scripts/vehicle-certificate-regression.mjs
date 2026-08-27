@@ -73,20 +73,36 @@ function parseRows(rawRows) {
   const rows = rawRows.map(norm).filter(Boolean);
   const out = {};
   const put = (key, value) => {
-    if (value !== undefined && value !== null && String(value).trim() !== "") out[key] = String(value).trim();
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      out[key] = String(value).trim();
+    }
   };
+  const joinedAfter = (index, count = 3) =>
+    rows.slice(Math.max(0, index + 1), Math.min(rows.length, index + 1 + count)).join(" ");
 
   const created = rows.find((row) => compact(row).includes("作成日付"));
   if (created) {
-    const m = created.match(/作成日付\s*[:：]?\s*((?:令和|平成|昭和)\s*(?:元|\d{1,2})\s*年?\s*\d{1,2}\s*月?\s*\d{1,2}\s*日?)/);
+    const m = created.match(
+      /作成日付\s*[:：]?\s*((?:令和|平成|昭和)\s*(?:元|\d{1,2})\s*年?\s*\d{1,2}\s*月?\s*\d{1,2}\s*日?)/
+    );
     if (m) put("recordDate", jpDate(m[1]));
   }
 
-  const topHeader = findRow(rows, (t) => t.includes("自動車登録番号又は車両番号") && t.includes("初度登録年月") && t.includes("車体の形状"));
+  const topHeader = findRow(
+    rows,
+    (t) =>
+      (t.includes("自動車登録番号又は車両番号") || t.includes("車両番号")) &&
+      (t.includes("初度登録年月") || t.includes("初度検査年月")) &&
+      t.includes("車体の形状")
+  );
   const topValue = nextRow(rows, topHeader.index, 3).row;
   if (topValue) {
     put("registrationNumber", registration(topValue));
-    const dates = [...topValue.matchAll(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?(?:\s*(\d{1,2})\s*日?)?/g)];
+    const dates = [
+      ...topValue.matchAll(
+        /(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?(?:\s*(\d{1,2})\s*日?)?/g
+      ),
+    ];
     if (dates[0]) put("registrationDate", jpDate(dates[0][0]));
     if (dates[1]) put("firstRegistration", jpMonth(dates[1][0]));
     put("vehicleClass", ["普通", "小型", "軽自動車", "大型特殊"].find((v) => topValue.includes(v)) || "");
@@ -95,7 +111,15 @@ function parseRows(rawRows) {
     put("bodyShape", BODY_TYPES.find((v) => topValue.includes(v)) || "");
   }
 
-  const weightHeader = findRow(rows, (t) => t.includes("車名") && t.includes("乗車定員") && t.includes("最大積載量") && t.includes("車両重量") && t.includes("車両総重量"));
+  const weightHeader = findRow(
+    rows,
+    (t) =>
+      t.includes("車名") &&
+      t.includes("乗車定員") &&
+      t.includes("最大積載量") &&
+      t.includes("車両重量") &&
+      t.includes("車両総重量")
+  );
   const weightValue = nextRow(rows, weightHeader.index, 3).row;
   if (weightValue) {
     put("vehicleName", MAKERS.find((v) => weightValue.includes(v)) || "");
@@ -109,10 +133,55 @@ function parseRows(rawRows) {
     }
   }
 
-  const dimensionHeader = findRow(rows, (t) => t.includes("車台番号") && t.includes("長さ") && t.includes("幅") && t.includes("高さ") && t.includes("前前軸重") && t.includes("後後軸重"));
+  const keiChassisHeader = findRow(
+    rows,
+    (t) =>
+      t.includes("車台番号") &&
+      t.includes("乗車定員") &&
+      t.includes("最大積載量") &&
+      t.includes("車両重量") &&
+      t.includes("長さ") &&
+      t.includes("幅") &&
+      t.includes("高さ")
+  );
+  if (keiChassisHeader.index >= 0) {
+    const text = joinedAfter(keiChassisHeader.index, 3).toUpperCase();
+    const chassis = text.match(/\b([A-Z]{1,6}[A-Z0-9]{0,8}-[A-Z0-9]{4,14})\b/i);
+    if (chassis) put("chassisNumber", chassis[1].replace(/O/g, "0"));
+
+    const seat = text.match(/(\d{1,2})\s*人/);
+    if (seat) put("seatingCapacity", String(Number(seat[1])));
+
+    const kg = [...text.matchAll(/(-|\d{1,5})\s*kg/gi)].map((m) => m[1]);
+    if (kg.length >= 3) {
+      put("maxPayloadKg", kg[0] === "-" ? "-" : String(Number(kg[0])));
+      put("vehicleWeightKg", kg[1] === "-" ? "-" : String(Number(kg[1])));
+      put("grossVehicleWeightKg", kg[2] === "-" ? "-" : String(Number(kg[2])));
+    }
+
+    const cm = [...text.matchAll(/(\d{2,4})\s*cm/gi)].map((m) => m[1]);
+    if (cm.length >= 3) {
+      put("lengthCm", String(Number(cm[0])));
+      put("widthCm", String(Number(cm[1])));
+      put("heightCm", String(Number(cm[2])));
+    }
+  }
+
+  const dimensionHeader = findRow(
+    rows,
+    (t) =>
+      t.includes("車台番号") &&
+      t.includes("長さ") &&
+      t.includes("幅") &&
+      t.includes("高さ") &&
+      t.includes("前前軸重") &&
+      t.includes("後後軸重")
+  );
   const dimensionValue = nextRow(rows, dimensionHeader.index, 3).row.toUpperCase();
   if (dimensionValue) {
-    const m = dimensionValue.match(/([A-Z]{1,5}[A-Z0-9]{2,8}-[0-9O]{4,12})\s+(\d{2,4})\s*cm\s+(\d{2,4})\s*cm\s+(\d{2,4})\s*cm\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg/i);
+    const m = dimensionValue.match(
+      /([A-Z]{1,6}[A-Z0-9]{0,8}-[A-Z0-9]{4,14})\s+(\d{2,4})\s*cm\s+(\d{2,4})\s*cm\s+(\d{2,4})\s*cm\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg\s+(-|\d{1,5})\s*kg/i
+    );
     if (m) {
       put("chassisNumber", m[1].replace(/O/g, "0"));
       put("lengthCm", String(Number(m[2])));
@@ -125,31 +194,129 @@ function parseRows(rawRows) {
     }
   }
 
-  const modelHeader = findRow(rows, (t) => t.includes("型式") && t.includes("原動機の型式") && t.includes("総排気量又は定格出力") && t.includes("燃料の種類") && t.includes("型式指定番号") && t.includes("類別区分番号"));
+  const modelHeader = findRow(
+    rows,
+    (t) =>
+      t.includes("型式") &&
+      t.includes("原動機の型式") &&
+      t.includes("総排気量又は定格出力") &&
+      t.includes("燃料の種類") &&
+      t.includes("型式指定番号") &&
+      t.includes("類別区分番号")
+  );
   if (modelHeader.index >= 0) {
     let next = nextRow(rows, modelHeader.index, 4);
     if (/^KW$/i.test(next.row)) next = nextRow(rows, next.index, 2);
-    const text = next.row.toUpperCase();
-    const m = text.match(/((?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{3,14})\s+([A-Z0-9]{2,8}-[A-Z0-9]{2,10})\s+(\d+(?:\.\d+)?)\s*(L|KW)?\s+(軽油|ガソリン|揮発油|電気|LPG|CNG|水素)\s+(\d{1,6})\s+(\d{4})/i);
-    if (m) {
-      put("model", m[1]);
-      put("engineModel", m[2]);
-      put("displacementOrRatedOutput", `${m[3]}${m[4] ? ` ${m[4]}` : ""}`);
-      put("fuel", m[5]);
-      put("modelDesignationNumber", m[6]);
-      put("classificationNumber", m[7]);
+    if (next.row) {
+      const raw = norm(next.row);
+      const text = raw.toUpperCase();
+
+      put("vehicleName", MAKERS.find((v) => raw.includes(v)) || out.vehicleName || "");
+
+      const modelMatch = text.match(/\b((?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{2,14})\b/i);
+      if (modelMatch) {
+        put("model", modelMatch[1]);
+        const rest = text.slice((modelMatch.index || 0) + modelMatch[0].length).trim();
+        const engine = rest.match(/^([A-Z0-9]{2,10}(?:-[A-Z0-9]{2,10})?)(?:\s|$)/i);
+        if (engine && !["L", "KW"].includes(engine[1].toUpperCase())) put("engineModel", engine[1]);
+      }
+
+      const fuel = ["軽油", "ガソリン", "揮発油", "電気", "LPG", "CNG", "水素"].find((v) =>
+        raw.includes(v)
+      );
+      if (fuel) put("fuel", fuel);
+
+      let displacement = null;
+      if (fuel) {
+        displacement =
+          raw.match(new RegExp("(\\d+(?:\\.\\d+)?)\\s*(L|kW|KW)\\s+" + fuel, "i")) ||
+          raw.match(new RegExp(fuel + "\\s+(\\d+(?:\\.\\d+)?)\\s*(L|kW|KW)", "i"));
+      }
+      if (!displacement) displacement = raw.match(/(\d+(?:\.\d+)?)\s*(L|kW|KW)\b/i);
+      if (displacement) {
+        put(
+          "displacementOrRatedOutput",
+          String(displacement[1]) + " " + String(displacement[2]).toUpperCase()
+        );
+      }
+
+      const tail = text.match(/(?:^|\s)(\d{4,6})\s+(\d{4})\s*$/);
+      if (tail) {
+        put("modelDesignationNumber", tail[1]);
+        put("classificationNumber", tail[2]);
+      }
+
+      const headerDense = compact(modelHeader.row);
+      const axleKg = [...raw.matchAll(/(\d{1,5})\s*kg/gi)].map((m) => m[1]);
+      if (headerDense.includes("前軸重") && headerDense.includes("後軸重") && axleKg.length >= 2) {
+        put("frontFrontAxleWeightKg", String(Number(axleKg[0])));
+        put("rearRearAxleWeightKg", String(Number(axleKg[1])));
+      }
     }
   }
 
   const userNameRow = rows.find((row) => compact(row).includes("使用者の氏名又は名称"));
-  if (userNameRow) put("userName", afterLabel(userNameRow, "使用者の氏名又は名称").replace(/\s*\[[0-9\s]+\]\s*$/, "").trim());
+  if (userNameRow) {
+    put(
+      "userName",
+      afterLabel(userNameRow, "使用者の氏名又は名称")
+        .replace(/\s*\[[0-9\s]+\]\s*$/, "")
+        .trim()
+    );
+  }
 
-  const userAddressRow = rows.find((row) => compact(row).includes("使用者の住所") && !compact(row).includes("所有者の住所"));
-  if (userAddressRow) put("userAddress", afterLabel(userAddressRow, "使用者の住所").replace(/\s*\[[0-9\s]+\]\s*$/, "").trim());
+  const userAddressRow = rows.find(
+    (row) => compact(row).includes("使用者の住所") && !compact(row).includes("所有者の住所")
+  );
+  if (userAddressRow) {
+    put(
+      "userAddress",
+      afterLabel(userAddressRow, "使用者の住所")
+        .replace(/\s*\[[0-9\s]+\]\s*$/, "")
+        .trim()
+    );
+  }
 
-  const expiryHeader = findRow(rows, (t) => t.includes("有効期間の満了する日") && t.includes("車検期間"));
-  const expiryValue = nextRow(rows, expiryHeader.index, 3).row;
-  if (expiryValue) put("inspectionExpiry", jpDate(expiryValue));
+  if (!out.userName) {
+    const sectionStart = Math.max(0, modelHeader.index + 1);
+    const baseIndex = rows.findIndex((row) => compact(row).includes("使用の本拠の位置"));
+    const sectionEnd = Math.min(rows.length, baseIndex >= 0 ? baseIndex : sectionStart + 12);
+    for (let i = sectionStart; i < sectionEnd; i += 1) {
+      const text = rows[i];
+      const dense = compact(text);
+      if (!dense.includes("氏名又は名称")) continue;
+      const value = text.replace(/^.*?氏名又は名称\s*/, "").trim();
+      if (value && value !== "使用者に同じ" && !value.includes("所有者")) {
+        put("userName", value.replace(/\s*\[[0-9\s]+\]\s*$/, "").trim());
+        for (let j = i + 1; j < Math.min(sectionEnd, i + 5); j += 1) {
+          const addressText = rows[j];
+          if (!compact(addressText).includes("住所")) continue;
+          const address = addressText
+            .replace(/^.*?住\s*所\s*/, "")
+            .replace(/\s*\[[0-9\s]+\]\s*$/, "")
+            .trim();
+          if (address && address !== "使用者に同じ") put("userAddress", address);
+          break;
+        }
+        break;
+      }
+    }
+  }
+
+  const expiryHeader = rows.findIndex((row) => compact(row).includes("有効期間の満了する日"));
+  if (expiryHeader >= 0) {
+    for (let i = expiryHeader; i < Math.min(rows.length, expiryHeader + 7); i += 1) {
+      const value = jpDate(rows[i]);
+      if (value) {
+        put("inspectionExpiry", value);
+        break;
+      }
+    }
+  }
+
+  const allText = rows.join("\n");
+  if (!out.registrationNumber) put("registrationNumber", registration(allText));
+  if (!out.vehicleName) put("vehicleName", MAKERS.find((v) => allText.includes(v)) || "");
 
   return out;
 }
