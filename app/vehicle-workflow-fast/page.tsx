@@ -57,12 +57,6 @@ function valueNear(text:string,labels:string[],parser:(s:string)=>string,span=3)
 function freeJp(s:string){const t=norm(s).replace(/\[[0-9\s_-]+\]/g,"").replace(/^[\s|:：,，.。・/\\-]+|[\s|:：,，.。・/\\-]+$/g,"").trim();if(!t||t.length>100)return"";return /[一-龠ぁ-んァ-ヶA-Za-z0-9]/.test(t)?t:"";}
 function docNo(s:string){return (digits(s).match(/\d{10,14}/)||[])[0]||"";}
 function output(s:string){return norm(s).match(/\d+(?:\.\d+)?\s*(?:L|l|kW|KW|kw)/)?.[0]?.replace(/\s+/g,"")||norm(s).match(/\b\d+\.\d+\b/)?.[0]||"";}
-function outputCandidate(s:string){const direct=valueNear(s,["総排気量又は定格出力","総排気量","定格出力"],x=>output(x),2);if(direct)return direct;const vals=[...norm(s).matchAll(/\d+(?:\.\d+)?\s*(?:L|l|kW|KW|kw)/g)].map(m=>m[0].replace(/\s+/g,""));return [...new Set(vals)].length===1?vals[0]:"";}
-function seatingCandidate(s:string){const t=norm(s);const direct=valueNear(t,["乗車定員"],x=>(x.match(/(\d{1,2})\s*人/)||[])[1]||"",2);if(direct)return direct;const vals=[...t.matchAll(/(?:^|\s)(\d{1,2})\s*人(?:\s|$)/g)].map(m=>m[1]);return [...new Set(vals)].length===1?vals[0]:"";}
-function payloadCandidate(s:string,purposeValue=""){if(compact(purposeValue)==="乗用")return"-";const t=norm(s);const a=lines(t);for(let i=0;i<a.length;i++){if(!compact(a[i]).includes("最大積載量"))continue;const near=[a[i],a[i+1]||"",a[i+2]||""].join(" ");if(/(?:^|\s)[-－](?:\s|kg|$)/i.test(near))return"-";const m=near.match(/(\d{1,5})\s*kg/i);if(m)return String(Number(m[1]));}return"";}
-function fillVisualFields(text:string,patch:Patch,qr:Patch){const all=norm(text);const put=(k:string,v:string)=>{if(v&&!(patch as any)[k]&&!(qr as any)[k])(patch as any)[k]=v;};put("registrationNumber",valueNear(all,["自動車登録番号又は車両番号","車両番号"],x=>parseRegistrationNumber(x)?.canonical||"",2));put("recordDate",valueNear(all,["記録年月日","記録年月"],jpDate,2));put("vehicleName",maker(all));put("vehicleClass",vehicleClass(all));put("purpose",purpose(all));put("privateBusiness",privateBiz(all));put("bodyShape",body(all));put("seatingCapacity",seatingCandidate(all));put("maxPayloadKg",payloadCandidate(all,String((patch as any).purpose||(qr as any).purpose||purpose(all)||"")));put("displacementOrRatedOutput",outputCandidate(all));return patch;}
-function needsVisualFallback(patch:Patch,qr:Patch){const merged={...patch,...qr} as any;return ["registrationNumber","recordDate","vehicleName","purpose","privateBusiness","bodyShape","seatingCapacity","maxPayloadKg","displacementOrRatedOutput"].some(k=>!String(merged[k]||"").trim());}
-
 function modelCandidate(s:string){const t=compact(s).toUpperCase();const all=t.match(/(?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{3,14}/g)||[];return all.filter(x=>!/^([A-Z0-9]{3,8})-\d{4,12}$/.test(x)).sort((a,b)=>b.length-a.length)[0]||"";}
 function modelFamily(model:string){const t=compact(model).toUpperCase();return (t.split("-").pop()||t).replace(/[^A-Z0-9]/g,"");}
 function chassisCandidate(text:string,model=""){const fam=modelFamily(model),a=lines(text),out:{value:string;score:number}[]=[];for(let i=0;i<a.length;i++){const u=a[i].toUpperCase().replace(/[‐‑‒–—―ー]/g,"-");for(const raw of u.match(/[A-Z0-9]{3,9}\s*-\s*[A-Z0-9]{4,12}/g)||[]){const [l0,r0]=raw.replace(/\s+/g,"").split("-");const l=l0.replace(/O(?=\d)|(?<=\d)O/g,"0"),r=r0.replace(/O/g,"0");if(!l||r.length<4||r.length>10)continue;if(/^(DAA|DBA|ABA|CBA|EBD|HBD|LDA|TDA|TKG|TPG|QKG|QPG|2RG|2PG|3BA|4BA|5BA|5AA|6AA|7BA|8BA)$/.test(l))continue;let score=2;if(/^\d+$/.test(r))score+=4;if(fam&&(fam===l||fam.startsWith(l)||l.startsWith(fam)))score+=8;const around=`${a[i-1]||""} ${a[i]} ${a[i+1]||""}`;if(/車台番号/.test(around))score+=8;out.push({value:`${l}-${r}`,score});}}return out.sort((x,y)=>y.score-x.score)[0]?.value||"";}
@@ -100,7 +94,7 @@ export default function VehicleWorkflowFast(){
   function update(k:string,val:string){mergePatch({[k]:val});}
 
   async function readPhoto(file:File){
-    fileKind.current="image";setDocBusy(true);setProgress(2);setDebug("");setMessage("写真OCRを本体として解析し、読めたQRは補助に使っています…");if(preview)URL.revokeObjectURL(preview);setPreview(URL.createObjectURL(file));
+    fileKind.current="image";setDocBusy(true);setProgress(2);setDebug("");setMessage("QRを先に解析し、不足項目だけOCRしています…");if(preview)URL.revokeObjectURL(preview);setPreview(URL.createObjectURL(file));
     (window as any).__vehicleCertificateQrPriority=null;(window as any).__vehicleCertificatePhotoPriority=null;(window as any).__vehicleCertificateQr=[];
     let worker:any=null;const started=performance.now();let passes=0;
     try{
@@ -108,8 +102,8 @@ export default function VehicleWorkflowFast(){
       await wait(250);let qr=readQr();
       const [src,t]:any=await Promise.all([srcPromise,tessPromise]);const paper=detectPaper(src);setProgress(12);
       const workerPromise=t.createWorker("jpn+eng",1);const P=t.PSM,block=P?.SINGLE_BLOCK??"6",sparse=P?.SPARSE_TEXT??"11";
-      // QRは補助。OCR開始を待たせないよう先行待ちは最大約0.5秒だけ。
-      for(let i=0;i<2&&!Object.keys(qr).length;i++){await wait(250);qr=readQr();}
+      // QRはOCR worker起動と並列。最大約1.5秒だけ先行待ちする。
+      for(let i=0;i<5&&!Object.keys(qr).length;i++){await wait(250);qr=readQr();}
       mergePatch(qr);setProgress(22);
       worker=await workerPromise;
       const rr=async(box:[number,number,number,number],psm:any,binary=false)=>{passes++;return recognize(worker,crop(src,rel(paper,...box),2300,binary),psm);};
@@ -155,17 +149,6 @@ export default function VehicleWorkflowFast(){
       patch.modelDesignationNumber=String(qr.modelDesignationNumber||"");
       patch.classificationNumber=String(qr.classificationNumber||"");
 
-      // QR非依存の重なり帯域。車検証の罫線/撮影ずれで4帯域から落ちた項目を拾う。
-      // 同じ考え方を部品伝票にも再利用できるよう、見出し語 + 値形式で確定する。
-      if(needsVisualFallback(patch,qr)){
-        const visualUpper=await rr([.035,.055,.93,.305],sparse,false);setProgress(89);
-        fillVisualFields([top,visualUpper].join("\n"),patch,qr);
-      }
-      if(needsVisualFallback(patch,qr)){
-        const visualBody=await rr([.035,.185,.93,.405],sparse,true);setProgress(91);
-        fillVisualFields([top,user,core,spec,visualBody].join("\n"),patch,qr);
-      }
-
       // 登録番号・車台番号・登録年月日が欠けた時だけ上段を1回だけ二値化再読取。
       if(!patch.registrationNumber||!patch.chassisNumber||!patch.registrationDate||!patch.recordDate){
         const retry=await rr([.045,.070,.91,.225],sparse,true);setProgress(93);
@@ -182,7 +165,7 @@ export default function VehicleWorkflowFast(){
       if(finalPatch.engineModel&&fam&&compact(finalPatch.engineModel).toUpperCase().includes(fam))delete finalPatch.engineModel;
       mergePatch(finalPatch);window.dispatchEvent(new CustomEvent(AUTH_EVENT,{detail:finalPatch}));
       const elapsed=Math.round(performance.now()-started),qrCount=Array.isArray((window as any).__vehicleCertificateQr)?(window as any).__vehicleCertificateQr.length:0;
-      setDebug([`写真OCR v3（QR非依存フォールバック）`, `所要: ${elapsed}ms`, `OCR: ${passes}pass`, `QR: ${qrCount}/6`, `紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`,"","--- 上段 ---",top,"","--- 使用者 ---",user,"","--- 車両 ---",core,"","--- 数値 ---",spec].join("\n"));
+      setDebug([`写真高速OCR v1`, `所要: ${elapsed}ms`, `OCR: ${passes}pass`, `QR: ${qrCount}/6`, `紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`,"","--- 上段 ---",top,"","--- 使用者 ---",user,"","--- 車両 ---",core,"","--- 数値 ---",spec].join("\n"));
       setProgress(100);setMessage(`写真高速OCR完了: ${elapsed}ms / OCR ${passes}pass / QR ${qrCount}/6。内容を確認してください。`);
     }catch(e:any){console.error(e);setMessage(`写真OCRエラー: ${e?.message||"読み取りに失敗しました"}`);}finally{if(worker)await worker.terminate().catch(()=>{});setDocBusy(false);}
   }
@@ -194,7 +177,7 @@ export default function VehicleWorkflowFast(){
 
   return <main className="page"><div className="top"><button onClick={()=>location.assign("/")}>← メインへ</button><strong>icb</strong></div>
     <section className="card"><h1>作業車両を選択</h1><div className="notice">{busy?"車両一覧を読み込み中…":message}</div><input placeholder="ナンバー / 車台番号 / 型式" value={search} onChange={e=>setSearch(e.target.value)}/><div className="list">{filtered.map(v=><button key={v.id||v.number} className={`row ${vehicle.id===v.id&&v.id?"active":""}`} onClick={()=>select(v)}><b>{v.registration||v.number}</b><span>{v.model||"型式未入力"}　番号 {v.last4||"----"}</span><small>{v.chassis||v.number}</small></button>)}</div></section>
-    <section className="card"><h2>車検証から読み取る</h2><p>写真はOCRを中心に読み取り、QRは読めた場合だけ補助情報として利用します。PDFは文字レイヤーを直接利用します。</p><input ref={cam} className="hidden" type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files?.[0];if(f)onFile(f);e.currentTarget.value="";}}/><input ref={lib} className="hidden" type="file" accept="image/*,application/pdf" onChange={e=>{const f=e.target.files?.[0];if(f)onFile(f);e.currentTarget.value="";}}/><div className="actions"><button className="primary" disabled={docBusy} onClick={()=>cam.current?.click()}>📷 今撮影して読み取る</button><button disabled={docBusy} onClick={()=>lib.current?.click()}>📄 PDF / 写真から読み取る</button></div>{docBusy&&<><div className="progress"><div style={{width:`${progress}%`}}/></div><p>読み取り中 {progress}%</p></>}{preview&&<img className="preview" src={preview} alt="車検証"/>}{debug&&<details><summary>高速読み取り詳細（確認用）</summary><pre>{debug}</pre></details>}</section>
+    <section className="card"><h2>車検証から読み取る</h2><p>写真はQRを先に解析し、QRで埋まらない部分だけを帯域OCRします。PDFは文字レイヤーを直接利用します。</p><input ref={cam} className="hidden" type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files?.[0];if(f)onFile(f);e.currentTarget.value="";}}/><input ref={lib} className="hidden" type="file" accept="image/*,application/pdf" onChange={e=>{const f=e.target.files?.[0];if(f)onFile(f);e.currentTarget.value="";}}/><div className="actions"><button className="primary" disabled={docBusy} onClick={()=>cam.current?.click()}>📷 今撮影して読み取る</button><button disabled={docBusy} onClick={()=>lib.current?.click()}>📄 PDF / 写真から読み取る</button></div>{docBusy&&<><div className="progress"><div style={{width:`${progress}%`}}/></div><p>読み取り中 {progress}%</p></>}{preview&&<img className="preview" src={preview} alt="車検証"/>}{debug&&<details><summary>高速読み取り詳細（確認用）</summary><pre>{debug}</pre></details>}</section>
     <section className="card"><h2>基本情報</h2><div className="grid"><label>登録番号<input value={vehicle.registration} onChange={e=>update("registrationNumber",e.target.value)}/></label><label>ナンバー番号<input value={vehicle.last4} onChange={e=>setVehicle(p=>({...p,last4:digits(e.target.value).slice(-4)}))}/></label><label>車台番号<input value={vehicle.chassis} onChange={e=>update("chassisNumber",e.target.value)}/></label><label>型式<input value={vehicle.model} onChange={e=>update("model",e.target.value)}/></label><label>燃料<select value={vehicle.type} onChange={e=>setVehicle(p=>({...p,type:e.target.value as FuelType}))}><option>EV</option><option>ガソリン</option><option>HV</option><option>ディーゼル</option><option>その他</option></select></label><label>車両重量 kg<input value={vehicle.weight} onChange={e=>update("vehicleWeightKg",e.target.value)}/></label><label>初度登録<input value={vehicle.firstRegistration} onChange={e=>update("firstRegistration",e.target.value)}/></label></div></section>
     <section className="card"><h2>車検証読み取り情報</h2><div className="grid">{FIELDS.map(([k,l])=><label key={k}><span>{l}</span><input value={cert[k]||""} onChange={e=>update(k,e.target.value)}/></label>)}</div><div className="axles"><b>軸重</b><span>前前 {cert.frontFrontAxleWeightKg||"未読"} kg</span><span>前後 {cert.frontRearAxleWeightKg||"未読"} kg</span><span>後前 {cert.rearFrontAxleWeightKg||"未読"} kg</span><span>後後 {cert.rearRearAxleWeightKg||"未読"} kg</span></div><div className="actions"><button onClick={()=>setVehicle({...EMPTY,certificate:emptyCert()})}>＋新規車両</button><button onClick={save}>車両を保存</button></div><button className="primary wide" onClick={startOCR}>この車両で伝票OCRへ →</button></section>
     <style jsx global>{`*{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:900px;margin:auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}h2{font-size:24px;margin:0 0 8px}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:14px;margin:14px 0}.list{display:grid;gap:8px;margin-top:12px;max-height:300px;overflow:auto}.row{text-align:left;display:grid;gap:3px}.row span,.row small{color:#5d6878;font-weight:500}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.grid label{display:grid;gap:6px;color:#5d6878;font-weight:700}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.actions>*{flex:1 1 220px}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.wide{width:100%;margin-top:12px;font-size:18px;padding:16px}.hidden{display:none}.preview{width:100%;max-height:560px;object-fit:contain;border-radius:14px;margin-top:14px;background:#f4f6fa}.progress{height:8px;background:#e4eaf3;border-radius:999px;overflow:hidden;margin-top:14px}.progress>div{height:100%;background:#2f6fe4}details{margin-top:14px;border:1px solid #d9e0ea;border-radius:12px;padding:12px}pre{white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto;background:#f8fafc;border-radius:10px;padding:10px;font-size:12px}.axles{margin-top:16px;background:#eef4ff;border:1px solid #c8d8fb;border-radius:14px;padding:14px;display:flex;gap:12px;flex-wrap:wrap}.axles b{width:100%}.axles span{font-weight:700;color:#315fba}@media(max-width:650px){.grid{grid-template-columns:1fr}.card{padding:18px}.page{padding-left:10px;padding-right:10px}}`}</style>
