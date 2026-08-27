@@ -100,7 +100,7 @@ export default function VehicleWorkflowFast(){
 
   async function readPhoto(file:File){
     fileKind.current="image";setDocBusy(true);setProgress(2);setDebug("");setMessage("写真OCRを本体として解析し、読めたQRは補助に使っています…");if(preview)URL.revokeObjectURL(preview);setPreview(URL.createObjectURL(file));
-    (window as any).__vehicleCertificateQrPriority=null;(window as any).__vehicleCertificateQr=[];
+    (window as any).__vehicleCertificateQrPriority=null;(window as any).__vehicleCertificatePhotoPriority=null;(window as any).__vehicleCertificateQr=[];
     let worker:any=null;const started=performance.now();let passes=0;
     try{
       const srcPromise=loadCanvas(file);const tessPromise=import("tesseract.js");
