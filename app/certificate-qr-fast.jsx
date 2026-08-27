@@ -180,17 +180,12 @@ async function scanFast(file) {
   };
 
   try {
-    // 1) 最初の1巡は最も成功率が高かったコントラスト版だけ。
-    await runPass(0.80, "contrast");
-    // 2) 取りこぼしだけ位置を少し下げて再試行。
+    // 2026-08-24に6QR取得が安定していた順序へ戻す。
+    // 各passは未取得slotだけを処理するため、6件そろえば後段は実行しない。
+    await runPass(0.80, "color");
+    if (unique(found).length < 6) await runPass(0.80, "contrast");
+    if (unique(found).length < 6) await runPass(0.835, "color");
     if (unique(found).length < 6) await runPass(0.835, "contrast");
-    // 3) 重要QR(K0/K2/K7: 登録番号/車台番号/用途・車名系)を重点再試行。
-    let important = [0, 1, 5].filter((slot) => !found.some((x) => x.slot === slot));
-    if (important.length) await runPass(0.805, "color", important);
-    important = [0, 1, 5].filter((slot) => !found.some((x) => x.slot === slot));
-    if (important.length) await runPass(0.785, "binary", important);
-    important = [0, 1, 5].filter((slot) => !found.some((x) => x.slot === slot));
-    if (important.length) await runPass(0.825, "binary", important);
   } finally {
     source.width = 1;
     source.height = 1;
@@ -211,15 +206,22 @@ export default function CertificateQrFast() {
       const file = input.files?.[0];
       if (!file || file.type === "application/pdf") return;
       const myToken = ++token;
+      window.__vehicleCertificateQrFastState = { running: true, token: myToken, count: 0, elapsed: 0 };
       showStatus("高速QR解析中…");
       void scanFast(file).then(({ result, elapsed }) => {
         if (stopped || myToken !== token) return;
         window.__vehicleCertificateQr = result;
+        window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: result.length, elapsed };
+        window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fast-ready", { detail: { result, elapsed } }));
         window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fallback-ready", { detail: result }));
         const versions = [...new Set(result.map(keiVersion).filter(Boolean))].sort();
         showStatus(`高速QR: ${result.length}/6件 / ${elapsed}ms${versions.length ? ` / 軽QR ${versions.join(",")}` : ""}`);
       }).catch((e) => {
-        if (!stopped && myToken === token) showStatus(`高速QR解析エラー: ${e?.message || e}`);
+        if (!stopped && myToken === token) {
+          window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: 0, elapsed: 0, error: String(e?.message || e) };
+          window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fast-ready", { detail: { result: [], elapsed: 0, error: String(e?.message || e) } }));
+          showStatus(`高速QR解析エラー: ${e?.message || e}`);
+        }
       });
     };
 
