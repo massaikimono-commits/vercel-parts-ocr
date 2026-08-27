@@ -293,7 +293,7 @@ export default function CertificatePhotoCriticalOcrV2() {
         const needOutput = !fieldValue("総排気量又は定格出力");
 
         if (!needTopRight && !needEngine && !needReg && !needChassis && !needProfile && !needOutput) {
-          showStatus("重要欄補完v2: QR/OCRで取得済みのため追加OCRなし");
+          showStatus("重要欄補完v3: QR/OCRで取得済みのため追加OCRなし");
           return;
         }
 
@@ -421,7 +421,7 @@ export default function CertificatePhotoCriticalOcrV2() {
 
         if (dead || id !== token) return;
         send(patch);
-        showStatus(`重要欄補完v2: ${Object.keys(patch).length}項目 / ${passes}pass${logs.length ? ` / ${logs.join(" | ").slice(0, 260)}` : ""}`);
+        showStatus(`重要欄補完v3: ${Object.keys(patch).length}項目 / ${passes}pass${logs.length ? ` / ${logs.join(" | ").slice(0, 260)}` : ""}`);
       })().catch((e) => {
         if (!dead && id === token) showStatus(`重要欄補完v2エラー: ${e?.message || e}`);
       });
