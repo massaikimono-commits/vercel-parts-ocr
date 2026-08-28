@@ -1,0 +1,8 @@
+{
+  "id": "parts-legacy-tab-001",
+  "description": "旧形式のタブ区切りOCR。",
+  "ocrText": "品名\t数量\t定価\t仕入れ\nワイパーゴム\t2\t2200\t1400",
+  "expected": [
+    {"name":"ワイパーゴム","qty":"2","retail":"2200","cost":"1400"}
+  ]
+}
