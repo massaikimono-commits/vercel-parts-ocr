@@ -1,0 +1,14 @@
+{
+  "id": "parts-photo-white-list-001",
+  "description": "実写真2枚から作成した匿名化グラウンドトゥルース。個人名・車両識別情報は保存しない。単価しかない帳票なので4項目への価格マッピングは未確定。",
+  "captureVariants": 2,
+  "characteristics": ["90度回転", "白紙", "表形式", "部品名称の折返し", "異なる撮影距離"],
+  "sourceColumns": ["部品名称", "数量", "単価", "計"],
+  "expectedSourceRows": [
+    {"name":"ガスケット, ロッカー カバー","qty":"1","unitPrice":"1210","lineTotal":"1210"},
+    {"name":"スパークプラグ","qty":"4","unitPrice":"2700","lineTotal":"10800"},
+    {"name":"ガスケット, インテーク マニホールド","qty":"1","unitPrice":"410","lineTotal":"410"},
+    {"name":"ショックアブソーバー キット, リア","qty":"2","unitPrice":"9630","lineTotal":"19260"},
+    {"name":"ブッシュ, リア ショック アブソーバー","qty":"4","unitPrice":"850","lineTotal":"3400"}
+  ]
+}
