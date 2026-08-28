@@ -1,0 +1,31 @@
+name: Vehicle certificate regression
+
+on:
+  push:
+    branches:
+      - main
+      - fix/certificate-pdf-native-v1
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  certificate-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run vehicle-certificate regression
+        run: npm run test:certificate
