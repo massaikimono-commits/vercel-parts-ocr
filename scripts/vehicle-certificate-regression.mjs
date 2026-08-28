@@ -1,9 +1,83 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { detectCertificateQrDensityCenters } from "../app/lib/certificate-qr-density.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = path.resolve(__dirname, "../test/fixtures/vehicle-certificates");
+
+function syntheticQrImage(width, height, centers) {
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  rgba.fill(255);
+  for (let p = 3; p < rgba.length; p += 4) rgba[p] = 255;
+
+  // Non-QR text-like noise on the left should not become scan targets.
+  for (let y = Math.floor(height * .84); y < Math.floor(height * .94); y += 18) {
+    for (let x = 80; x < Math.floor(width * .34); x += 9) {
+      const on = ((x + y) / 9) % 3 < 1;
+      if (!on) continue;
+      for (let yy = y; yy < Math.min(height, y + 3); yy += 1) {
+        for (let xx = x; xx < Math.min(width, x + 5); xx += 1) {
+          const p = (yy * width + xx) * 4;
+          rgba[p] = rgba[p + 1] = rgba[p + 2] = 20;
+        }
+      }
+    }
+  }
+
+  const size = Math.max(42, Math.round(width * .052));
+  const cell = Math.max(3, Math.floor(size / 13));
+  const cy = Math.floor(height * .90);
+  for (const center of centers) {
+    const cx = Math.round(width * center);
+    const left = Math.max(0, cx - Math.floor(size / 2));
+    const top = Math.max(0, cy - Math.floor(size / 2));
+    for (let yy = 0; yy < size; yy += 1) {
+      for (let xx = 0; xx < size; xx += 1) {
+        const gx = Math.floor(xx / cell);
+        const gy = Math.floor(yy / cell);
+        const finder =
+          (gx < 4 && gy < 4) ||
+          (gx >= 9 && gy < 4) ||
+          (gx < 4 && gy >= 9);
+        const dark = finder
+          ? (gx + gy) % 2 === 0 || gx % 3 === 0 || gy % 3 === 0
+          : ((gx * 3 + gy * 5 + gx * gy) % 7) < 3;
+        if (!dark) continue;
+        const x = left + xx, y = top + yy;
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        const p = (y * width + x) * 4;
+        rgba[p] = rgba[p + 1] = rgba[p + 2] = 10;
+      }
+    }
+  }
+  return rgba;
+}
+
+function runQrDensityRegression() {
+  const cases = [
+    { name: "kei-six", centers: [.485, .574, .658, .744, .829, .911] },
+    { name: "registered-five-left", centers: [.511, .567, .617, .733, .789] },
+    { name: "registered-five-right", centers: [.538, .598, .651, .789, .853] },
+    { name: "legacy-two", centers: [.703, .928] },
+  ];
+  for (const test of cases) {
+    const width = 1200, height = 1697;
+    const rgba = syntheticQrImage(width, height, test.centers);
+    const actual = detectCertificateQrDensityCenters(rgba, width, height).map((item) => item.x);
+    if (actual.length < test.centers.length) {
+      throw new Error(`QR density ${test.name}: expected at least ${test.centers.length} centers, got ${actual.length}: ${actual.join(",")}`);
+    }
+    for (const expected of test.centers) {
+      if (!actual.some((x) => Math.abs(x - expected) <= .025)) {
+        throw new Error(`QR density ${test.name}: missing center ${expected}; actual=${actual.join(",")}`);
+      }
+    }
+  }
+  console.log(`PASS QR density targeting: ${cases.length} layout(s)`);
+}
+
+runQrDensityRegression();
 
 const MAKERS = ["トヨタ", "レクサス", "日産", "ニッサン", "ホンダ", "三菱", "マツダ", "スバル", "スズキ", "ダイハツ", "いすゞ", "日野", "UDトラックス", "メルセデス・ベンツ", "フォルクスワーゲン", "アウディ", "BMW", "ボルボ"];
 const BODY_TYPES = ["キャブオーバ", "ステーションワゴン", "ボンネット", "ピックアップ", "トラック", "ダンプ", "セダン", "箱型", "バン", "バス", "幌型"];
