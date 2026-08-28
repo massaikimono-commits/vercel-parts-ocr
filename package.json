@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:certificate && next build",
+    "build": "npm run test:certificate && npm run test:parts && next build",
     "start": "next start",
-    "test:certificate": "node scripts/vehicle-certificate-regression.mjs"
+    "test:certificate": "node scripts/vehicle-certificate-regression.mjs",
+    "test:parts": "node scripts/parts-slip-regression.mjs"
   },
   "dependencies": {
     "next": "14.2.25",
