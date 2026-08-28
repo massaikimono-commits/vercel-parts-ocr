@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { expectedCertificateQrCount, normalizeCertificateCanvas } from "./lib/certificate-photo-normalize";
+import { detectCertificateQrDensityCenters } from "./lib/certificate-qr-density.mjs";
 
 function hex(bytes = []) {
   return Array.from(bytes).map((v) => Number(v).toString(16).padStart(2, "0")).join(" ").toUpperCase();
@@ -197,6 +198,25 @@ function keiVersions(items) {
     return f[0] === "K" ? f[1] : "";
   }).filter(Boolean))].sort();
 }
+function qrDensityCenters(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return [];
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return detectCertificateQrDensityCenters(image.data, image.width, image.height)
+    .map((item) => Number(item.x))
+    .filter((x) => Number.isFinite(x) && x >= .4 && x <= .98);
+}
+function mergeCenters(primary, fallback) {
+  const out = [];
+  for (const value of [...(primary || []), ...(fallback || [])]) {
+    const x = Number(value);
+    if (!Number.isFinite(x)) continue;
+    if (out.some((known) => Math.abs(known - x) < .026)) continue;
+    out.push(x);
+  }
+  return out;
+}
+
 function showStatus(text) {
   const host = document.getElementById("certificate-qr-debug") || document.querySelector("img.preview")?.closest("section.card");
   if (!host) return;
@@ -219,6 +239,9 @@ async function scanFast(file) {
   const started = performance.now();
   // QRが全部拾えれば後段OCRを減らせるため、弱い写真だけ最大4.6秒までQR救済を許可する。
   const budgetMs = 4600;
+  // 実写真では登録車5QRの横位置が撮影・用紙補正で数%ずれる。
+  // 先にQRらしい高周波領域を画像だけで探し、固定座標より優先して個別ZXingへ渡す。
+  const densityCenters = qrDensityCenters(source);
   let found = [];
 
   const add = (items) => {
@@ -244,7 +267,8 @@ async function scanFast(file) {
     } finally { band.width = 1; band.height = 1; }
   };
   const scanSlots = async (useRaw, y, mode) => {
-    const centers = [.46, .545, .63, .715, .82, .91];
+    const fixedCenters = [.46, .545, .63, .715, .82, .91];
+    const centers = mergeCenters(densityCenters, fixedCenters);
     for (const center of centers) {
       if (performance.now() - started >= budgetMs) break;
       if (found.some((x) => Math.abs(Number(x.xCenter) - center) < .038)) continue;
@@ -293,6 +317,7 @@ async function scanFast(file) {
     expected,
     normalizeMode: normalized.mode,
     normalizeConfidence: normalized.confidence,
+    densityCenters,
   };
 }
 export default function CertificateQrFast() {
@@ -308,14 +333,14 @@ export default function CertificateQrFast() {
       const myToken = ++token;
       window.__vehicleCertificateQrFastState = { running: true, token: myToken, count: 0, elapsed: 0 };
       showStatus("高速QR解析中…");
-      void scanFast(file).then(({ result, elapsed, expected, normalizeMode, normalizeConfidence }) => {
+      void scanFast(file).then(({ result, elapsed, expected, normalizeMode, normalizeConfidence, densityCenters }) => {
         if (stopped || myToken !== token) return;
         window.__vehicleCertificateQr = result;
-        window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: result.length, elapsed, expected: expected.count, kind: expected.kind };
+        window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: result.length, elapsed, expected: expected.count, kind: expected.kind, densityCenters };
         window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fast-ready", { detail: { result, elapsed, expected } }));
         window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fallback-ready", { detail: result }));
         const versions = keiVersions(result);
-        showStatus("高速QR: " + result.length + "/" + expected.count + "件 / " + elapsed + "ms / " + expected.label + (versions.length ? " / 軽QR " + versions.join(",") : "") + " / 用紙補正 " + normalizeMode + " " + Math.round(normalizeConfidence * 100) + "%");
+        showStatus("高速QR: " + result.length + "/" + expected.count + "件 / " + elapsed + "ms / " + expected.label + (versions.length ? " / 軽QR " + versions.join(",") : "") + " / QR候補 " + densityCenters.length + " / 用紙補正 " + normalizeMode + " " + Math.round(normalizeConfidence * 100) + "%");
       }).catch((e) => {
         if (!stopped && myToken === token) {
           window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: 0, elapsed: 0, error: String(e?.message || e) };
