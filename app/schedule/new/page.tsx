@@ -96,6 +96,12 @@ export default function ScheduleNewPage() {
   const [hardErrors, setHardErrors] = useState<string[]>([]);
 
   useEffect(() => {
+    const q = new URLSearchParams(location.search).get("day");
+    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q !== day) {
+      setDay(q);
+      setDeliveryDay(q);
+      return;
+    }
     setDeliveryDay(day);
   }, [day]);
 
