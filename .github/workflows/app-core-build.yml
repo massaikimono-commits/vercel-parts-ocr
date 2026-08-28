@@ -1,0 +1,40 @@
+name: App core build check
+
+on:
+  push:
+    branches:
+      - work/app-core-v1
+    paths:
+      - "app/**"
+      - "package.json"
+      - "next.config.mjs"
+      - "tsconfig.json"
+      - ".github/workflows/app-core-build.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run OCR regressions
+        run: |
+          npm run test:certificate
+          npm run test:parts
+
+      - name: Build Next.js app
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build
