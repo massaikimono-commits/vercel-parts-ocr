@@ -173,6 +173,18 @@ function parseOCR(text) {
   });
 }
 
+function stressVariants(text = "") {
+  const source = String(text || "");
+  const fullwidthDigits = source.replace(/[0-9]/g, (d) => String.fromCharCode(d.charCodeAt(0) + 0xFEE0));
+  return [
+    { name: "base", text: source },
+    { name: "wide-spaces", text: source.replace(/ /g, "   ") },
+    { name: "dash-glyphs", text: source.replace(/-/g, "—") },
+    { name: "fullwidth-digits", text: fullwidthDigits },
+    { name: "japanese-comma", text: source.replace(/,/g, "，") },
+  ];
+}
+
 function compareParts(actual, expected) {
   const failures = [];
   if (actual.length !== expected.length) {
@@ -199,24 +211,29 @@ if (!files.length) {
 }
 
 let failed = 0;
+let cases = 0;
 for (const file of files) {
   const fixture = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, file), "utf8"));
-  const actual = parseOCR(fixture.ocrText || "");
-  const failures = compareParts(actual, fixture.expected || []);
-  if (failures.length) {
-    failed += 1;
-    console.error(`FAIL ${fixture.id || file}: ${failures.length} mismatch(es)`);
-    for (const item of failures) {
-      console.error(`  ${item.key}: expected=${JSON.stringify(item.expected)} actual=${JSON.stringify(item.actual)}`);
+  for (const run of stressVariants(fixture.ocrText || "")) {
+    cases += 1;
+    const actual = parseOCR(run.text);
+    const failures = compareParts(actual, fixture.expected || []);
+    const label = `${fixture.id || file}/${run.name}`;
+    if (failures.length) {
+      failed += 1;
+      console.error(`FAIL ${label}: ${failures.length} mismatch(es)`);
+      for (const item of failures) {
+        console.error(`  ${item.key}: expected=${JSON.stringify(item.expected)} actual=${JSON.stringify(item.actual)}`);
+      }
+    } else {
+      console.log(`PASS ${label}: ${actual.length} part(s)`);
     }
-  } else {
-    console.log(`PASS ${fixture.id || file}: ${actual.length} part(s)`);
   }
 }
 
 if (failed) {
-  console.error(`\n${failed}/${files.length} fixture(s) failed.`);
+  console.error(`\n${failed}/${cases} parts-slip case(s) failed.`);
   process.exit(1);
 }
 
-console.log(`\nAll ${files.length} parts-slip fixture(s) passed.`);
+console.log(`\nAll ${cases} parts-slip case(s) passed across ${files.length} fixture(s).`);
