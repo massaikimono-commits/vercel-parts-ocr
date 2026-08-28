@@ -332,6 +332,36 @@ function parseRows(rawRows) {
   return out;
 }
 
+function stressVariants(rows = []) {
+  const source = rows.map((row) => String(row || ""));
+  const variants = [];
+
+  variants.push({
+    name: "wide-spaces",
+    rows: source.map((row) => row.replace(/ /g, "   ")),
+  });
+
+  variants.push({
+    name: "dash-glyphs",
+    rows: source.map((row) => row.replace(/-/g, "—")),
+  });
+
+  variants.push({
+    name: "registration-digit-spacing",
+    rows: source.map((row) => {
+      if (!/(?:普通|小型|軽自動車|大型特殊)/.test(row)) return row;
+      const eraAt = row.search(/令和|平成|昭和/);
+      if (eraAt < 0) return row;
+      const head = row.slice(0, eraAt)
+        .replace(/(?<!\d)(\d{3})(?!\d)/g, (m) => m.split("").join(" "))
+        .replace(/(?<!\d)(\d{4})(?!\d)/g, (m) => m.split("").join(" "));
+      return head + row.slice(eraAt);
+    }),
+  });
+
+  return variants;
+}
+
 function compareFixture(fixture) {
   const actual = parseRows(fixture.rows || []);
   const expected = fixture.expected || {};
@@ -355,21 +385,31 @@ if (!files.length) {
 }
 
 let failed = 0;
+let cases = 0;
 for (const file of files) {
   const fixture = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, file), "utf8"));
-  const { failures } = compareFixture(fixture);
-  if (failures.length) {
-    failed += 1;
-    console.error(`FAIL ${fixture.id || file}: ${failures.length} mismatch(es)`);
-    for (const item of failures) console.error(`  ${item.key}: expected=${JSON.stringify(item.expected)} actual=${JSON.stringify(item.actual)}`);
-  } else {
-    console.log(`PASS ${fixture.id || file}: ${Object.keys(fixture.expected || {}).length} fields`);
+  const runs = [
+    { name: "base", rows: fixture.rows || [] },
+    ...stressVariants(fixture.rows || []),
+  ];
+
+  for (const run of runs) {
+    cases += 1;
+    const { failures } = compareFixture({ ...fixture, rows: run.rows });
+    const label = `${fixture.id || file}/${run.name}`;
+    if (failures.length) {
+      failed += 1;
+      console.error(`FAIL ${label}: ${failures.length} mismatch(es)`);
+      for (const item of failures) console.error(`  ${item.key}: expected=${JSON.stringify(item.expected)} actual=${JSON.stringify(item.actual)}`);
+    } else {
+      console.log(`PASS ${label}: ${Object.keys(fixture.expected || {}).length} fields`);
+    }
   }
 }
 
 if (failed) {
-  console.error(`\n${failed}/${files.length} fixture(s) failed.`);
+  console.error(`\n${failed}/${cases} vehicle-certificate case(s) failed.`);
   process.exit(1);
 }
 
-console.log(`\nAll ${files.length} vehicle-certificate fixture(s) passed.`);
+console.log(`\nAll ${cases} vehicle-certificate case(s) passed across ${files.length} fixture(s).`);
