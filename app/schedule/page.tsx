@@ -117,6 +117,11 @@ export default function SchedulePage() {
   const [message, setMessage] = useState("当日の入出庫予定を読み込みます。");
 
   useEffect(() => {
+    const q = new URLSearchParams(location.search).get("day");
+    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q !== day) {
+      setDay(q);
+      return;
+    }
     void load();
   }, [day]);
 
@@ -289,6 +294,7 @@ export default function SchedulePage() {
         <input type="date" value={day} onChange={(e) => setDay(e.target.value)} />
         <button onClick={() => setDay(localDateString())}>今日</button>
         <button onClick={() => setDay(addDay(day, 1))}>翌日 →</button>
+        <button className="newEntry" onClick={() => location.assign(`/schedule/new?day=${day}`)}>＋ 予定を登録</button>
         <button className="print" onClick={() => window.print()}>🖨 1日予定を印刷</button>
       </div>
 
@@ -325,7 +331,7 @@ export default function SchedulePage() {
         .summary small{color:#718096}
         .dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
         .dateNav input{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}
-        .dateNav .print{margin-left:auto;background:#2f6fe4;color:#fff;border-color:#2f6fe4}
+        .dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}
         .sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}
         .columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}
         .scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}
