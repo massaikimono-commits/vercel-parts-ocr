@@ -17,7 +17,7 @@ function normalizeOCR(text) {
     .replace(/[，、]/g, ",")
     .replace(/[‐‑‒–—―]/g, "-")
     .replace(/[｜¦]/g, "|")
-    .replace(/[ \t]+/g, " ")
+    .replace(/ +/g, " ")
     .replace(/\r/g, "");
 }
 
@@ -76,7 +76,11 @@ function findNearbyName(lines, rowIndex) {
   let bestScore = -100;
   for (let i = Math.max(0, rowIndex - 5); i <= Math.min(lines.length - 1, rowIndex + 1); i += 1) {
     if (i === rowIndex) continue;
-    const score = nameScore(lines[i]);
+    const base = nameScore(lines[i]);
+    const distance = Math.abs(rowIndex - i);
+    const proximity = Math.max(0, 3 - distance * 0.6);
+    const previousBonus = i < rowIndex ? 1.5 : 0;
+    const score = base + proximity + previousBonus;
     if (score > bestScore) {
       bestScore = score;
       best = cleanName(lines[i]);
@@ -88,6 +92,31 @@ function findNearbyName(lines, rowIndex) {
 function parseOCR(text) {
   const lines = normalizeOCR(text).split(/\n+/).map((x) => x.trim()).filter(Boolean);
   const out = [];
+
+  // タブ/パイプ区切りの旧形式は、一般OCR推測より先に確定する。
+  const structured = [];
+  for (const line of lines) {
+    if (!/[\t|]/.test(line)) continue;
+    const c = line.split(/[\t|]+/).map((x) => x.trim()).filter(Boolean);
+    if (c.length < 4 || OCR_HEADERS.some((h) => c[0].includes(h))) continue;
+    const n = c.slice(1).filter((x) => /\d/.test(x));
+    if (n.length < 3) continue;
+    structured.push({
+      name: c[0],
+      qty: n[0].replace(/[^\d.-]/g, ""),
+      retail: money(n[1]),
+      cost: money(n[2]),
+    });
+  }
+  if (structured.length) {
+    const seen = new Set();
+    return structured.filter((p) => {
+      const key = `${p.name.replace(/\s/g, "").toLowerCase()}|${p.qty}|${p.retail}|${p.cost}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
