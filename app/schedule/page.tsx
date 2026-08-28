@@ -19,12 +19,17 @@ type ScheduleEntry = {
 
 type WorkOrder = {
   id: string;
+  vehicle_id: string;
   reason: "点検" | "車検" | "一般整備" | "板金塗装";
   status: string;
   worker_name: string | null;
   expected_completion_date: string | null;
   delivery_completed: boolean;
   work_completed: boolean;
+  scheduled_at: string | null;
+  checked_in_at: string | null;
+  checked_out_at: string | null;
+  planned_delivery_at: string | null;
 };
 
 type Vehicle = {
@@ -138,7 +143,8 @@ export default function SchedulePage() {
           .order("starts_at", { ascending: true }),
         supabase
           .from("work_orders")
-          .select("id,reason,status,worker_name,expected_completion_date,delivery_completed,work_completed"),
+          .select("id,vehicle_id,reason,status,worker_name,expected_completion_date,delivery_completed,work_completed,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at")
+          .neq("status", "cancelled"),
         supabase
           .from("vehicles")
           .select("id,customer_id,registration_number,registration_number_last4,vehicle_number,chassis_number,maker,model"),
@@ -177,6 +183,29 @@ export default function SchedulePage() {
   const morning = enriched.filter(({ entry }) => hourInJst(entry.starts_at) < 12);
   const afternoon = enriched.filter(({ entry }) => hourInJst(entry.starts_at) >= 12);
 
+  const stayingVehicles = useMemo(() => {
+    const endOfDay = new Date(`${day}T23:59:59+09:00`).getTime();
+    return workOrders
+      .filter((work) => {
+        if (work.work_completed || work.delivery_completed || work.checked_out_at || work.status === "completed") return false;
+        const activelyCheckedIn = Boolean(work.checked_in_at);
+        const inProgress = work.status === "in_progress";
+        if (!activelyCheckedIn && !inProgress) return false;
+        const base = work.checked_in_at || work.scheduled_at;
+        return !base || new Date(base).getTime() <= endOfDay;
+      })
+      .map((work) => {
+        const vehicle = vehicleMap.get(work.vehicle_id) || null;
+        const customer = vehicle?.customer_id ? customerMap.get(vehicle.customer_id) || null : null;
+        return { work, vehicle, customer };
+      })
+      .sort((a, b) => {
+        const ad = a.work.expected_completion_date || "9999-12-31";
+        const bd = b.work.expected_completion_date || "9999-12-31";
+        return ad.localeCompare(bd);
+      });
+  }, [workOrders, vehicleMap, customerMap, day]);
+
   async function toggleCompleted(entry: ScheduleEntry) {
     const next = !entry.completed;
     setEntries((old) => old.map((x) => x.id === entry.id ? { ...x, completed: next } : x));
@@ -187,6 +216,59 @@ export default function SchedulePage() {
       return;
     }
     setMessage(next ? "予定を完了にしました。" : "予定を未完了へ戻しました。");
+  }
+
+  async function toggleWorkCompleted(work: WorkOrder) {
+    const next = !work.work_completed;
+    try {
+      const rpc = next ? "complete_work_order_one_tap" : "reopen_work_order";
+      const args = next
+        ? { p_work_order_id: work.id, p_actor: "app" }
+        : { p_work_order_id: work.id, p_actor: "app" };
+      const { error } = await supabase.rpc(rpc, args);
+      if (error) throw error;
+      setWorkOrders((old) => old.map((x) => x.id === work.id ? {
+        ...x,
+        work_completed: next,
+        status: next ? "completed" : "in_progress",
+      } : x));
+      setMessage(next ? "作業完了にしました。" : "作業中へ戻しました。");
+    } catch (error: any) {
+      setMessage(`作業状態の保存エラー: ${error?.message || error}`);
+    }
+  }
+
+  function renderStayingVehicle(item: typeof stayingVehicles[number]) {
+    const { work, vehicle, customer } = item;
+    const customerName =
+      customer?.schedule_display_name ||
+      customer?.company_name ||
+      customer?.name ||
+      "お客様未登録";
+    const last4 =
+      vehicle?.registration_number_last4 ||
+      vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] ||
+      "----";
+    return (
+      <article key={work.id} className="stayItem">
+        <div className="itemTop">
+          <div>
+            <b>{customerName}</b>
+            <div className="sub">下4桁 {last4}　{work.reason}</div>
+          </div>
+          <button className="complete noPrint" onClick={() => void toggleWorkCompleted(work)}>作業完了</button>
+        </div>
+        <div className="meta">
+          {work.worker_name && <span>担当 {work.worker_name}</span>}
+          <span>完成予定 {work.expected_completion_date || "未定"}</span>
+          {work.planned_delivery_at && <span>納車予定あり</span>}
+        </div>
+        {(vehicle?.maker || vehicle?.model) && (
+          <div className="sub">{[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>
+        )}
+        {vehicle && <button className="open noPrint" onClick={() => setActiveVehicle(vehicle)}>車両を開く →</button>}
+      </article>
+    );
   }
 
   function setActiveVehicle(vehicle: Vehicle | null) {
@@ -301,6 +383,15 @@ export default function SchedulePage() {
       {section("午前", morning, "morning")}
       {section("午後", afternoon, "afternoon")}
 
+      <section className="card staySection">
+        <div className="sectionTitle">
+          <h2>滞留車両</h2>
+          <span>{stayingVehicles.length}台</span>
+        </div>
+        {!stayingVehicles.length && <div className="empty">現在の滞留車両はありません。</div>}
+        <div className="stayGrid">{stayingVehicles.map(renderStayingVehicle)}</div>
+      </section>
+
       <section className="card noPrint">
         <h2>次の機能へ</h2>
         <div className="quick">
@@ -347,9 +438,11 @@ export default function SchedulePage() {
         .open{margin-top:10px}
         .empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}
         .quick{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:14px}
+        .stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+        .stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}
         .printPeriod{display:none}
         @media(max-width:720px){
-          .hero{display:block}.summary{margin-top:12px}.columns{grid-template-columns:1fr}
+          .hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}
           .quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}
         }
         @media print{
