@@ -118,7 +118,7 @@ function safePhotoPatch(patch:Patch){
   if(p.bodyShape&&!["キャブオーバ","ステーションワゴン","ピックアップ","ボンネット","トラック","ダンプ","セダン","箱型","バン","バス","幌型"].includes(String(p.bodyShape)))drop("bodyShape");
   if(p.seatingCapacity&&!boundedInt(String(p.seatingCapacity),1,99))drop("seatingCapacity");
   if(p.maxPayloadKg&&p.maxPayloadKg!=="-"&&!boundedInt(String(p.maxPayloadKg),1,30000))drop("maxPayloadKg");
-  const ranges:any={vehicleWeightKg:[300,30000],grossVehicleWeightKg:[300,50000],lengthCm:[100,2000],widthCm:[100,300],heightCm:[100,450],frontFrontAxleWeightKg:[1,30000],frontRearAxleWeightKg:[1,30000],rearFrontAxleWeightKg:[1,30000],rearRearAxleWeightKg:[1,30000]};
+  const ranges:Record<string,[number,number]>={vehicleWeightKg:[300,30000],grossVehicleWeightKg:[300,50000],lengthCm:[100,2000],widthCm:[100,300],heightCm:[100,450],frontFrontAxleWeightKg:[1,30000],frontRearAxleWeightKg:[1,30000],rearFrontAxleWeightKg:[1,30000],rearRearAxleWeightKg:[1,30000]};
   for(const [k,[min,max]] of Object.entries(ranges)){if(p[k]&&p[k]!=="-"&&!boundedInt(String(p[k]),Number(min),Number(max)))drop(k);}
   const w=Number(p.vehicleWeightKg||0),g=Number(p.grossVehicleWeightKg||0);
   if(w&&g&&(g<w||g>w*4.2))drop("grossVehicleWeightKg");
