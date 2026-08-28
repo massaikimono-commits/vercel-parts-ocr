@@ -1,4 +1,4 @@
-name: Vehicle certificate regression
+name: OCR regression
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
       - main
 
 jobs:
-  certificate-regression:
+  regression:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -29,3 +29,6 @@ jobs:
 
       - name: Run vehicle-certificate regression
         run: npm run test:certificate
+
+      - name: Run parts-slip regression
+        run: npm run test:parts
