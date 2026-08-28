@@ -9,13 +9,21 @@ function hex(bytes = []) {
 function decodeRawText(bytes = []) {
   const raw = Uint8Array.from(bytes || []);
   if (!raw.length) return "";
-  for (const encoding of ["shift_jis", "utf-8"]) {
+  const candidates = [];
+  for (const encoding of ["utf-8", "shift_jis"]) {
     try {
-      const text = new TextDecoder(encoding).decode(raw).replace(/\0/g, "").trim();
-      if (text && (text.includes("/") || /^K/.test(text))) return text;
+      const text = new TextDecoder(encoding, { fatal: true }).decode(raw).replace(/\0/g, "").trim();
+      if (!text) continue;
+      let score = 0;
+      if (/^(?:2|K)\//.test(text)) score += 12;
+      if (text.includes("/")) score += 5;
+      if (/[一-龠ぁ-んァ-ヶ]/.test(text)) score += 2;
+      const controls = (text.match(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
+      score -= controls * 4;
+      candidates.push({ text, score });
     } catch {}
   }
-  return "";
+  return candidates.sort((a, b) => b.score - a.score)[0]?.text || "";
 }
 function isCertificateFileInput(node) {
   if (!(node instanceof HTMLInputElement) || node.type !== "file") return false;
@@ -140,7 +148,7 @@ function decodeBand(jsQR, canvas, tag) {
     const result = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
     if (!result) break;
     const binary = Array.from(result.binaryData || []);
-    const data = result.data || decodeRawText(binary);
+    const data = decodeRawText(binary) || result.data || "";
     const b = qrBounds(result, canvas.width, canvas.height);
     if (data || binary.length) {
       found.push({ slot: null, scanTag: "帯域/" + tag + "/jsQR", data, binary, hex: binary.length ? hex(binary) : "", xCenter: b ? b.centerX / canvas.width : .5 });
@@ -164,7 +172,7 @@ async function decodeZxing(reader, canvas, xCenter, tag) {
     const result = await reader.decodeFromCanvas(canvas);
     const raw = result?.getRawBytes?.() || result?.rawBytes || [];
     const binary = Array.from(raw || []);
-    const data = result?.getText?.() || result?.text || decodeRawText(binary) || "";
+    const data = decodeRawText(binary) || result?.getText?.() || result?.text || "";
     if (!data && !binary.length) return null;
     return { slot: null, scanTag: "個別/" + tag + "/ZXing", data, binary, hex: hex(binary), xCenter };
   } catch {
