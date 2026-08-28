@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { parseRegistrationNumber } from "./lib/registration-number";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const compact = (v = "") => String(v).normalize("NFKC").replace(/\u3000/g, " ").replace(/\s+/g, " ").trim();
@@ -106,33 +107,92 @@ function qrByPosition(items, n) {
   return items.find((item) => new RegExp(`(?:^|/)QR${n}(?:/|$)`).test(String(item?.label || "")));
 }
 
+function registrationFromQr2(value) {
+  const raw = String(value || "").normalize("NFKC").replace(/\u3000/g, " ");
+  const chars = Array.from(raw);
+  if (chars.length >= 12) {
+    const region = chars.slice(0, 4).join("").trim();
+    const cls = chars.slice(4, 7).join("").trim();
+    const kana = chars.slice(7, 8).join("").trim();
+    const serial = chars.slice(8, 12).join("").trim();
+    const parsed = parseRegistrationNumber([region, cls, kana, serial].filter(Boolean).join(" "));
+    if (parsed) return parsed.canonical;
+  }
+  const parsed = parseRegistrationNumber(raw);
+  return parsed?.canonical || raw.trim();
+}
+
+function parseRegisteredQr2(items) {
+  const q4 = qrByPosition(items, 4);
+  const q5 = qrByPosition(items, 5);
+  if (!q4 || !q5) return null;
+  const joined = [q4, q5].map((x) => String(x?.data || "").normalize("NFKC").replace(/\u3000/g, " ")).join("");
+  const f = joined.split("/").map((x) => String(x || "").trim());
+  if (f.length < 6 || f[0] !== "2") return null;
+  const out = {};
+  const registration = registrationFromQr2(f[1]);
+  const chassis = cleanAscii(f[3]);
+  const engine = cleanAscii(f[4]);
+  if (registration) out.registrationNumber = registration;
+  if (chassis) out.chassisNumber = chassis;
+  if (engine && !/^\*(?:FUMEI|SHISAKU|KUMITATE)/.test(engine)) out.engineModel = engine;
+  return { kind: "registered", values: out, versions: ["登録車QR2"] };
+}
+
 function parseRegisteredQr3(items) {
   const q1 = qrByPosition(items, 1);
   const q2 = qrByPosition(items, 2);
   const q3 = qrByPosition(items, 3);
   if (!q1 || !q2 || !q3) return null;
-  const joined = [q1, q2, q3]
-    .map((x) => String(x?.data || "").normalize("NFKC").replace(/\u3000/g, " "))
-    .join("");
-  const f = joined.split("/").map(compact);
-  if (f.length < 19 || f[0] !== "2") return null;
-  const fuelCode = String(f[18] || "").replace(/\D/g, "");
-  return {
-    kind: "registered",
-    values: {
-      inspectionExpiry: date6(f[3]),
-      firstRegistration: month4(f[4]),
-      model: compact(f[5]).replace(/\s/g, "").toUpperCase(),
-      frontFrontAxleWeightKg: axle(f[6]),
-      frontRearAxleWeightKg: axleOrDash(f[7]),
-      rearFrontAxleWeightKg: axleOrDash(f[8]),
-      rearRearAxleWeightKg: axle(f[9]),
-      fuel: fuelMap[fuelCode] || "",
-    },
-    versions: ["登録車QR3"],
-  };
+  const joined = [q1, q2, q3].map((x) => String(x?.data || "").normalize("NFKC").replace(/\u3000/g, " ")).join("");
+  const f = joined.split("/").map((x) => String(x || "").trim());
+  if (f[0] !== "2") return null;
+  const out = {};
+
+  if (f.length >= 21) {
+    splitDesignation(f[2], out);
+    const expiry = date6(f[5]);
+    const first = month4(f[6]);
+    const model = cleanAscii(f[7]);
+    const ff = axleOrDash(f[8]), fr = axleOrDash(f[9]), rf = axleOrDash(f[10]), rr = axleOrDash(f[11]);
+    const fuelCode = String(f[20] || "").replace(/\D/g, "");
+    if (expiry) out.inspectionExpiry = expiry;
+    if (first) out.firstRegistration = first;
+    if (model && !/^\*(?:SHISAKU|KUMITATE|FUMEI)/.test(model)) out.model = model;
+    if (ff) out.frontFrontAxleWeightKg = ff;
+    if (fr) out.frontRearAxleWeightKg = fr;
+    if (rf) out.rearFrontAxleWeightKg = rf;
+    if (rr) out.rearRearAxleWeightKg = rr;
+    if (fuelMap[fuelCode]) out.fuel = fuelMap[fuelCode];
+  } else if (f.length >= 19) {
+    const expiry = date6(f[3]);
+    const first = month4(f[4]);
+    const model = cleanAscii(f[5]);
+    const ff = axle(f[6]), fr = axleOrDash(f[7]), rf = axleOrDash(f[8]), rr = axle(f[9]);
+    const fuelCode = String(f[18] || "").replace(/\D/g, "");
+    if (expiry) out.inspectionExpiry = expiry;
+    if (first) out.firstRegistration = first;
+    if (model) out.model = model;
+    if (ff) out.frontFrontAxleWeightKg = ff;
+    if (fr) out.frontRearAxleWeightKg = fr;
+    if (rf) out.rearFrontAxleWeightKg = rf;
+    if (rr) out.rearRearAxleWeightKg = rr;
+    if (fuelMap[fuelCode]) out.fuel = fuelMap[fuelCode];
+  }
+  const cleaned = Object.fromEntries(Object.entries(out).filter(([, v]) => typeof v === "string" && v.trim()));
+  return Object.keys(cleaned).length ? { kind: "registered", values: cleaned, versions: ["登録車QR3"] } : null;
 }
 
+function parseRegistered(items) {
+  const qr3 = parseRegisteredQr3(items);
+  const qr2 = parseRegisteredQr2(items);
+  if (!qr3 && !qr2) return null;
+  return {
+    kind: "registered",
+    values: { ...(qr3?.values || {}), ...(qr2?.values || {}) },
+    versions: [...(qr3?.versions || []), ...(qr2?.versions || [])],
+  };
+}
 function keiCode(items, codeNumber) {
   return items.find((item) => {
     const f = qrFields(item);
@@ -235,7 +295,7 @@ function parseKei(items) {
 function parseAnyQr(items) {
   const kei = parseKei(items);
   if (kei) return kei;
-  return parseRegisteredQr3(items);
+  return parseRegistered(items);
 }
 
 function isCertificateFileInput(node) {

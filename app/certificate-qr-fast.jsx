@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
+import { expectedCertificateQrCount, normalizeCertificateCanvas } from "./lib/certificate-photo-normalize";
 
 function hex(bytes = []) {
-  return Array.from(bytes)
-    .map((v) => Number(v).toString(16).padStart(2, "0"))
-    .join(" ")
-    .toUpperCase();
+  return Array.from(bytes).map((v) => Number(v).toString(16).padStart(2, "0")).join(" ").toUpperCase();
 }
-
 function decodeRawText(bytes = []) {
   const raw = Uint8Array.from(bytes || []);
   if (!raw.length) return "";
@@ -20,13 +17,11 @@ function decodeRawText(bytes = []) {
   }
   return "";
 }
-
 function isCertificateFileInput(node) {
   if (!(node instanceof HTMLInputElement) || node.type !== "file") return false;
   const section = node.closest("section.card");
   return !!section?.querySelector("h2")?.textContent?.includes("車検証から読み取る");
 }
-
 async function sourceCanvas(file) {
   const url = URL.createObjectURL(file);
   try {
@@ -38,58 +33,84 @@ async function sourceCanvas(file) {
     });
     const iw = img.naturalWidth || img.width;
     const ih = img.naturalHeight || img.height;
-    const scale = Math.min(1, 4200 / Math.max(iw, ih));
+    const scale = Math.min(1, 4400 / Math.max(iw, ih));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(iw * scale));
     canvas.height = Math.max(1, Math.round(ih * scale));
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     return canvas;
   } finally {
     URL.revokeObjectURL(url);
   }
 }
-
-function cropRegion(source, x0, y0, w0, h0, mode = "color", target = 1350) {
+function cropRegion(source, x0, y0, w0, h0, mode, target) {
   const sx = Math.max(0, Math.round(source.width * x0));
   const sy = Math.max(0, Math.round(source.height * y0));
   const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * w0)));
   const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * h0)));
-  const scale = Math.max(1, Math.min(5.2, target / Math.max(1, sw)));
-  const pad = 42;
+  const scale = Math.max(1, Math.min(5.5, (target || 2200) / Math.max(1, sw)));
+  const pad = 36;
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(sw * scale) + pad * 2;
   canvas.height = Math.round(sh * scale) + pad * 2;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(source, sx, sy, sw, sh, pad, pad, canvas.width - pad * 2, canvas.height - pad * 2);
-
   if (mode !== "color") {
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
     let sum = 0;
     for (let p = 0; p < image.data.length; p += 4) {
-      const g = Math.round(image.data[p] * 0.22 + image.data[p + 1] * 0.70 + image.data[p + 2] * 0.08);
-      sum += g;
-      image.data[p] = image.data[p + 1] = image.data[p + 2] = g;
+      const g = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+      sum += g; image.data[p] = image.data[p + 1] = image.data[p + 2] = g;
     }
     const avg = sum / Math.max(1, image.data.length / 4);
-    const threshold = Math.max(95, Math.min(225, avg - 8));
+    const threshold = Math.max(90, Math.min(225, avg - 8));
     for (let p = 0; p < image.data.length; p += 4) {
-      let v = image.data[p];
-      if (mode === "contrast") v = Math.max(0, Math.min(255, Math.round((v - 128) * 2.15 + 148)));
-      if (mode === "binary") v = v < threshold ? 0 : 255;
-      image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
-      image.data[p + 3] = 255;
+      const g = image.data[p];
+      const v = mode === "binary" ? (g < threshold ? 0 : 255) : Math.max(0, Math.min(255, Math.round((g - 128) * 2.05 + 150)));
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = v; image.data[p + 3] = 255;
     }
     ctx.putImageData(image, 0, 0);
   }
   return canvas;
 }
-
+function qrBounds(code, width, height) {
+  const loc = code && code.location;
+  if (!loc) return null;
+  const pts = [loc.topLeftCorner, loc.topRightCorner, loc.bottomLeftCorner, loc.bottomRightCorner].filter(Boolean);
+  if (!pts.length) return null;
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const pad = Math.max(14, Math.round(Math.min(width, height) * .018));
+  return {
+    left: Math.max(0, Math.floor(Math.min(...xs) - pad)),
+    top: Math.max(0, Math.floor(Math.min(...ys) - pad)),
+    right: Math.min(width, Math.ceil(Math.max(...xs) + pad)),
+    bottom: Math.min(height, Math.ceil(Math.max(...ys) + pad)),
+    centerX: (Math.min(...xs) + Math.max(...xs)) / 2,
+  };
+}
+function decodeBand(jsQR, canvas, tag) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const found = [];
+  for (let attempt = 0; attempt < 7; attempt += 1) {
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
+    if (!result) break;
+    const binary = Array.from(result.binaryData || []);
+    const data = result.data || decodeRawText(binary);
+    const b = qrBounds(result, canvas.width, canvas.height);
+    if (data || binary.length) {
+      found.push({ slot: null, scanTag: "帯域/" + tag + "/jsQR", data, binary, hex: binary.length ? hex(binary) : "", xCenter: b ? b.centerX / canvas.width : .5 });
+    }
+    if (!b) break;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(b.left, b.top, Math.max(1, b.right - b.left), Math.max(1, b.bottom - b.top));
+  }
+  return found;
+}
 async function makeReader() {
   const browser = await import("@zxing/browser");
   const lib = await import("@zxing/library");
@@ -98,46 +119,36 @@ async function makeReader() {
   hints.set(lib.DecodeHintType.TRY_HARDER, true);
   return new browser.BrowserQRCodeReader(hints);
 }
-
-async function decode(reader, canvas, slot, tag) {
+async function decodeZxing(reader, canvas, xCenter, tag) {
   try {
     const result = await reader.decodeFromCanvas(canvas);
     const raw = result?.getRawBytes?.() || result?.rawBytes || [];
     const binary = Array.from(raw || []);
     const data = result?.getText?.() || result?.text || decodeRawText(binary) || "";
     if (!data && !binary.length) return null;
-    return {
-      slot,
-      label: `高速下段6個/QR${slot + 1}/${tag}/ZXing`,
-      data,
-      binary,
-      hex: hex(binary),
-    };
+    return { slot: null, scanTag: "個別/" + tag + "/ZXing", data, binary, hex: hex(binary), xCenter };
   } catch {
     return null;
   }
 }
-
-function unique(items) {
+function keyOf(item) { return item && (item.hex || item.data || ""); }
+function orderedUnique(items) {
   const map = new Map();
-  for (const item of items) {
-    if (!item) continue;
-    const key = item.hex || item.data;
+  for (const item of items || []) {
+    const key = keyOf(item);
     if (!key || map.has(key)) continue;
     map.set(key, item);
   }
-  return [...map.values()].sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99));
+  return [...map.values()]
+    .sort((a, b) => Number(a.xCenter ?? 9) - Number(b.xCenter ?? 9))
+    .map((item, slot) => ({ ...item, slot, label: "高速QR/QR" + (slot + 1) + "/" + String(item.scanTag || "") }));
 }
-
-function keiVersion(item) {
-  const f = String(item?.data || "")
-    .normalize("NFKC")
-    .replace(/\u3000/g, " ")
-    .split("/")
-    .map((x) => x.trim());
-  return f[0] === "K" ? (f[1] || "") : "";
+function keiVersions(items) {
+  return [...new Set((items || []).map((item) => {
+    const f = String(item?.data || "").normalize("NFKC").replace(/\u3000/g, " ").split("/").map((x) => x.trim());
+    return f[0] === "K" ? f[1] : "";
+  }).filter(Boolean))].sort();
 }
-
 function showStatus(text) {
   const host = document.getElementById("certificate-qr-debug") || document.querySelector("img.preview")?.closest("section.card");
   if (!host) return;
@@ -145,61 +156,71 @@ function showStatus(text) {
   if (!box) {
     box = document.createElement("div");
     box.id = "certificate-qr-fast-status";
-    box.style.marginTop = "10px";
-    box.style.padding = "10px";
-    box.style.borderRadius = "10px";
-    box.style.background = "#eefaf2";
-    box.style.border = "1px solid #bfe6ce";
-    box.style.fontWeight = "800";
+    box.style.marginTop = "10px"; box.style.padding = "10px"; box.style.borderRadius = "10px";
+    box.style.background = "#eefaf2"; box.style.border = "1px solid #bfe6ce"; box.style.fontWeight = "800";
     host.appendChild(box);
   }
   box.textContent = text;
 }
-
 async function scanFast(file) {
-  const source = await sourceCanvas(file);
-  const reader = await makeReader();
-  const found = [];
-  const xs = [0.43, 0.52, 0.61, 0.70, 0.79, 0.875];
+  const raw = await sourceCanvas(file);
+  const normalized = normalizeCertificateCanvas(raw, 1800);
+  const source = normalized.canvas;
+  const [reader, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
+  const jsQR = jsMod.default || jsMod;
   const started = performance.now();
+  const budgetMs = 3400;
+  let found = [];
 
-  const runPass = async (y, mode, slots = [0, 1, 2, 3, 4, 5]) => {
-    for (const slot of slots) {
-      if (found.some((x) => x.slot === slot)) continue;
-      const canvas = cropRegion(source, xs[slot], y, 0.125, 0.145, mode, mode === "color" ? 1250 : 1450);
-      try {
-        const hit = await decode(reader, canvas, slot, `y${y}/${mode}`);
-        // raw bytes onlyでは後段で解釈できないので「読めた」と扱わず、別前処理を続ける。
-        if (hit?.data) found.push(hit);
-      } finally {
-        canvas.width = 1;
-        canvas.height = 1;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
+  const runBand = async (y, mode) => {
+    const band = cropRegion(source, .36, y, .63, .20, mode, 3200);
+    try {
+      const hits = decodeBand(jsQR, band, "y" + y + "/" + mode).map((hit) => ({ ...hit, xCenter: .36 + hit.xCenter * .63 }));
+      found.push(...hits);
+    } finally { band.width = 1; band.height = 1; }
+    found = orderedUnique(found);
   };
 
   try {
-    // 2026-08-24に6QR取得が安定していた順序へ戻す。
-    // 各passは未取得slotだけを処理するため、6件そろえば後段は実行しない。
-    await runPass(0.80, "color");
-    if (unique(found).length < 6) await runPass(0.80, "contrast");
-    if (unique(found).length < 6) await runPass(0.835, "color");
-    if (unique(found).length < 6) await runPass(0.835, "contrast");
+    await runBand(.775, "color");
+    let expected = expectedCertificateQrCount(found);
+    if (found.length < expected.count && performance.now() - started < budgetMs) await runBand(.775, "contrast");
+    expected = expectedCertificateQrCount(found);
+
+    const centers = [.485, .56, .635, .71, .82, .90];
+    for (const mode of ["color", "contrast"]) {
+      if (found.length >= expected.count || performance.now() - started >= budgetMs) break;
+      for (const center of centers) {
+        if (performance.now() - started >= budgetMs) break;
+        if (found.some((x) => Math.abs(Number(x.xCenter) - center) < .038)) continue;
+        const c = cropRegion(source, Math.max(0, center - .058), .80, .116, .135, mode, mode === "color" ? 1200 : 1450);
+        try {
+          const hit = await decodeZxing(reader, c, center, "x" + center + "/" + mode);
+          if (hit) found.push(hit);
+        } finally { c.width = 1; c.height = 1; }
+        found = orderedUnique(found);
+        expected = expectedCertificateQrCount(found);
+        if (found.length >= expected.count) break;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+
+    expected = expectedCertificateQrCount(found);
+    if (found.length < expected.count && performance.now() - started < budgetMs) await runBand(.79, "binary");
   } finally {
-    source.width = 1;
-    source.height = 1;
+    raw.width = 1; raw.height = 1;
+    source.width = 1; source.height = 1;
   }
 
-  return { result: unique(found), elapsed: Math.round(performance.now() - started) };
+  found = orderedUnique(found);
+  const expected = expectedCertificateQrCount(found);
+  return { result: found, elapsed: Math.round(performance.now() - started), expected, normalizeMode: normalized.mode, normalizeConfidence: normalized.confidence };
 }
-
 export default function CertificateQrFast() {
   useEffect(() => {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
     let stopped = false;
     let token = 0;
-
     const onChange = (event) => {
       const input = event.target;
       if (!isCertificateFileInput(input)) return;
@@ -208,28 +229,24 @@ export default function CertificateQrFast() {
       const myToken = ++token;
       window.__vehicleCertificateQrFastState = { running: true, token: myToken, count: 0, elapsed: 0 };
       showStatus("高速QR解析中…");
-      void scanFast(file).then(({ result, elapsed }) => {
+      void scanFast(file).then(({ result, elapsed, expected, normalizeMode, normalizeConfidence }) => {
         if (stopped || myToken !== token) return;
         window.__vehicleCertificateQr = result;
-        window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: result.length, elapsed };
-        window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fast-ready", { detail: { result, elapsed } }));
+        window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: result.length, elapsed, expected: expected.count, kind: expected.kind };
+        window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fast-ready", { detail: { result, elapsed, expected } }));
         window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fallback-ready", { detail: result }));
-        const versions = [...new Set(result.map(keiVersion).filter(Boolean))].sort();
-        showStatus(`高速QR: ${result.length}/6件 / ${elapsed}ms${versions.length ? ` / 軽QR ${versions.join(",")}` : ""}`);
+        const versions = keiVersions(result);
+        showStatus("高速QR: " + result.length + "/" + expected.count + "件 / " + elapsed + "ms / " + expected.label + (versions.length ? " / 軽QR " + versions.join(",") : "") + " / 用紙補正 " + normalizeMode + " " + Math.round(normalizeConfidence * 100) + "%");
       }).catch((e) => {
         if (!stopped && myToken === token) {
           window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: 0, elapsed: 0, error: String(e?.message || e) };
           window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fast-ready", { detail: { result: [], elapsed: 0, error: String(e?.message || e) } }));
-          showStatus(`高速QR解析エラー: ${e?.message || e}`);
+          showStatus("高速QR解析エラー: " + (e?.message || e));
         }
       });
     };
-
     document.addEventListener("change", onChange, true);
-    return () => {
-      stopped = true;
-      document.removeEventListener("change", onChange, true);
-    };
+    return () => { stopped = true; document.removeEventListener("change", onChange, true); };
   }, []);
   return null;
 }

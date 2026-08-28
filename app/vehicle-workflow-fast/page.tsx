@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase";
 import { parseRegistrationNumber } from "../lib/registration-number";
+import { expectedCertificateQrCount, normalizeCertificateCanvas } from "../lib/certificate-photo-normalize";
 
 type FuelType = "EV" | "ガソリン" | "HV" | "ディーゼル" | "その他";
 type Cert = Record<string, string>;
@@ -67,7 +68,71 @@ function dateOrdinal(s:string){const m=compact(s).match(/(令和|平成|昭和)(
 function monthOrdinal(s:string){const m=compact(s).match(/(令和|平成|昭和)(元|\d{1,2})年(\d{1,2})月/);if(!m)return 0;return eraYear(m[1],m[2])*12+Number(m[3]);}
 function chooseRegistrationDate(text:string,first:string,expiry:string){const direct=valueNear(text,["登録年月日/交付年月日","登録年月日／交付年月日","登録年月日","交付年月日"],jpDate,2);if(direct)return direct;const f=monthOrdinal(first),e=dateOrdinal(expiry);const c=allDates(text).filter(v=>{const r=dateOrdinal(v),y=Math.floor(r/10000),m=Math.floor((r%10000)/100);return r&&(!f||y*12+m>=f)&&(!e||r<=e)&&compact(v)!==compact(expiry);});return c[0]||"";}
 
-function numericTuple(text:string,qr:Patch){const nums=(norm(text).replace(/,/g,"").match(/\d{2,5}/g)||[]).map(Number);const ff=Number(qr.frontFrontAxleWeightKg||0),fr=Number(qr.frontRearAxleWeightKg||0),rf=Number(qr.rearFrontAxleWeightKg||0),rr=Number(qr.rearRearAxleWeightKg||0);const axle=[ff,fr,rf,rr].filter(x=>x>0).reduce((a,b)=>a+b,0);const kei=/軽自動車/.test(qr.vehicleClass||"");let best:any=null;for(let a=0;a<nums.length-4;a++)for(let b=a+1;b<nums.length-3;b++)for(let c=b+1;c<nums.length-2;c++)for(let d=c+1;d<nums.length-1;d++)for(let e=d+1;e<nums.length;e++){const [w,g,l,wi,h]=[nums[a],nums[b],nums[c],nums[d],nums[e]];if(w<300||w>30000||g<w||g>50000||l<100||l>3000||wi<100||wi>300||h<100||h>450)continue;if(kei&&(w>2200||g>3000||l>340||wi>148||h>220))continue;if(axle&&Math.abs(w-axle)>Math.max(60,axle*.08))continue;let score=1;if(axle&&Math.abs(w-axle)<=20)score+=10;if(kei&&l<=340&&wi<=148)score+=5;if(/車両重量/.test(text))score+=2;if(!best||score>best.score)best={score,vehicleWeightKg:String(w),grossVehicleWeightKg:String(g),lengthCm:String(l),widthCm:String(wi),heightCm:String(h)};}return best||{};}
+function boundedInt(v:string,min:number,max:number){const n=Number(String(v||"").replace(/\D/g,""));return Number.isFinite(n)&&n>=min&&n<=max?String(n):"";}
+function numericTuple(text:string,qr:Patch){
+  const t=norm(text).replace(/,/g,"");
+  const kei=/軽自動車/.test(String(qr.vehicleClass||""));
+  const valid=(w:number,g:number,l:number,wi:number,h:number)=>w>=300&&w<=30000&&g>=w&&g<=50000&&g<=w*4.2&&l>=100&&l<=2000&&wi>=100&&wi<=300&&h>=100&&h<=450&&l>=wi&&(!kei||(w<=2200&&g<=3000&&l<=340&&wi<=148&&h<=220));
+  const axle=[Number(qr.frontFrontAxleWeightKg||0),Number(qr.frontRearAxleWeightKg||0),Number(qr.rearFrontAxleWeightKg||0),Number(qr.rearRearAxleWeightKg||0)].filter(x=>x>0).reduce((a,b)=>a+b,0);
+  const cm=[...t.matchAll(/(\d{2,4})\s*c\s*m/gi)];
+  if(cm.length>=3){
+    for(let ci=0;ci+2<cm.length;ci++){
+      const l=Number(cm[ci][1]),wi=Number(cm[ci+1][1]),h=Number(cm[ci+2][1]);
+      if(l<100||l>2000||wi<100||wi>300||h<100||h>450||l<wi)continue;
+      const before=t.slice(0,cm[ci].index||t.length);
+      const nums=(before.match(/\d{3,5}/g)||[]).map(Number);
+      for(let i=Math.max(0,nums.length-5);i+1<nums.length;i++){
+        const w=nums[i],g=nums[i+1];
+        if(!valid(w,g,l,wi,h))continue;
+        if(axle&&Math.abs(w-axle)>Math.max(100,axle*.12))continue;
+        return{score:axle&&Math.abs(w-axle)<=20?16:8,vehicleWeightKg:String(w),grossVehicleWeightKg:String(g),lengthCm:String(l),widthCm:String(wi),heightCm:String(h)};
+      }
+    }
+  }
+  const all=(t.match(/\d{2,5}/g)||[]).map(Number);
+  let best:any=null;
+  for(let i=0;i+4<all.length;i++){
+    const [w,g,l,wi,h]=all.slice(i,i+5);
+    if(!valid(w,g,l,wi,h))continue;
+    let score=2;
+    if(axle&&Math.abs(w-axle)<=20)score+=12;else if(axle&&Math.abs(w-axle)<=80)score+=5;
+    if(kei&&l<=340&&wi<=148)score+=5;
+    if(!best||score>best.score)best={score,vehicleWeightKg:String(w),grossVehicleWeightKg:String(g),lengthCm:String(l),widthCm:String(wi),heightCm:String(h)};
+  }
+  return best||{};
+}
+function safePhotoPatch(patch:Patch){
+  const p:any={...patch};
+  const drop=(k:string)=>{delete p[k];};
+  for(const k of ["recordDate","registrationDate","inspectionExpiry"])if(p[k]&&!jpDate(String(p[k])))drop(k);
+  if(p.firstRegistration&&!jpMonth(String(p.firstRegistration)))drop("firstRegistration");
+  if(p.documentNumber&&!/^\d{13}$/.test(digits(String(p.documentNumber))))drop("documentNumber");
+  if(p.registrationNumber){const r=parseRegistrationNumber(String(p.registrationNumber));if(r)p.registrationNumber=r.canonical;else drop("registrationNumber");}
+  if(p.chassisNumber&&!/^[A-Z0-9]{2,10}-[A-Z0-9]{4,12}$/i.test(compact(String(p.chassisNumber))))drop("chassisNumber");
+  if(p.model&&!/^(?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{3,14}$/i.test(compact(String(p.model))))drop("model");
+  if(p.engineModel&&!/^[A-Z0-9]{2,8}(?:-[A-Z0-9]{1,10})?$/i.test(compact(String(p.engineModel))))drop("engineModel");
+  if(p.vehicleName&&!["日野","トヨタ","レクサス","日産","ニッサン","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","UDトラックス","BMW","アウディ","ボルボ"].includes(String(p.vehicleName)))drop("vehicleName");
+  if(p.vehicleClass&&!["普通","小型","軽自動車","大型特殊"].includes(String(p.vehicleClass)))drop("vehicleClass");
+  if(p.purpose&&!["貨物","乗用","乗合","特種"].includes(String(p.purpose)))drop("purpose");
+  if(p.privateBusiness&&!["自家用","事業用"].includes(String(p.privateBusiness)))drop("privateBusiness");
+  if(p.bodyShape&&!["キャブオーバ","ステーションワゴン","ピックアップ","ボンネット","トラック","ダンプ","セダン","箱型","バン","バス","幌型"].includes(String(p.bodyShape)))drop("bodyShape");
+  if(p.seatingCapacity&&!boundedInt(String(p.seatingCapacity),1,99))drop("seatingCapacity");
+  if(p.maxPayloadKg&&p.maxPayloadKg!=="-"&&!boundedInt(String(p.maxPayloadKg),1,30000))drop("maxPayloadKg");
+  const ranges:any={vehicleWeightKg:[300,30000],grossVehicleWeightKg:[300,50000],lengthCm:[100,2000],widthCm:[100,300],heightCm:[100,450],frontFrontAxleWeightKg:[1,30000],frontRearAxleWeightKg:[1,30000],rearFrontAxleWeightKg:[1,30000],rearRearAxleWeightKg:[1,30000]};
+  for(const [k,[min,max]] of Object.entries(ranges)){if(p[k]&&p[k]!=="-"&&!boundedInt(String(p[k]),Number(min),Number(max)))drop(k);}
+  const w=Number(p.vehicleWeightKg||0),g=Number(p.grossVehicleWeightKg||0);
+  if(w&&g&&(g<w||g>w*4.2))drop("grossVehicleWeightKg");
+  const l=Number(p.lengthCm||0),wi=Number(p.widthCm||0),h=Number(p.heightCm||0);
+  if(l&&wi&&l<wi)drop("lengthCm");
+  if(String(p.vehicleClass||"")==="軽自動車"){if(l>340)drop("lengthCm");if(wi>148)drop("widthCm");if(h>220)drop("heightCm");}
+  if(p.fuel&&!["軽油","ガソリン","揮発油","電気","LPG","CNG","水素","ガソリン・電気"].includes(String(p.fuel)))drop("fuel");
+  if(p.modelDesignationNumber&&!/^\d{4,6}$/.test(String(p.modelDesignationNumber)))drop("modelDesignationNumber");
+  if(p.classificationNumber&&!/^\d{4}$/.test(String(p.classificationNumber)))drop("classificationNumber");
+  if(p.userName&&(/^\d/.test(String(p.userName).trim())||String(p.userName).length>100))drop("userName");
+  if(p.userAddress&&(String(p.userAddress).length>120||!/[都道府県市区町村丁目番0-9]/.test(String(p.userAddress))))drop("userAddress");
+  if(p.baseLocation&&String(p.baseLocation)!=="***"&&!/同じ/.test(String(p.baseLocation))&&(String(p.baseLocation).length>120||!/[都道府県市区町村丁目番0-9]/.test(String(p.baseLocation))))drop("baseLocation");
+  return p as Patch;
+}
 
 async function loadCanvas(file:File){const url=URL.createObjectURL(file);try{const img=await new Promise<HTMLImageElement>((res,rej)=>{const x=new Image();x.onload=()=>res(x);x.onerror=()=>rej(new Error("画像を開けませんでした"));x.src=url;});const scale=Math.min(1,3400/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*scale);c.height=Math.round(img.naturalHeight*scale);const ctx=c.getContext("2d",{willReadFrequently:true})!;ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);return c;}finally{URL.revokeObjectURL(url);}}
 function detectPaper(c:HTMLCanvasElement):Box{const ctx=c.getContext("2d",{willReadFrequently:true});if(!ctx)return{x:0,y:0,w:c.width,h:c.height};const w=c.width,h=c.height,d=ctx.getImageData(0,0,w,h).data,step=Math.max(4,Math.floor(Math.max(w,h)/650));const ok=(x:number,y:number)=>{const p=(y*w+x)*4,r=d[p],g=d[p+1],b=d[p+2],br=(r+g+b)/3;return br>112&&Math.max(r,g,b)-Math.min(r,g,b)<100;};const ys:number[]=[];for(let y=0;y<h;y+=step){let hit=0,n=0;for(let x=0;x<w;x+=step){if(ok(x,y))hit++;n++;}if(hit/Math.max(1,n)>.22)ys.push(y);}if(ys.length<10)return{x:0,y:0,w,h};const top=Math.max(0,ys[0]-step*2),bottom=Math.min(h-1,ys[ys.length-1]+step*2);const xs:number[]=[];for(let x=0;x<w;x+=step){let hit=0,n=0;for(let y=top;y<=bottom;y+=step){if(ok(x,y))hit++;n++;}if(hit/Math.max(1,n)>.22)xs.push(x);}if(xs.length<10)return{x:0,y:top,w,h:bottom-top+1};const left=Math.max(0,xs[0]-step*2),right=Math.min(w-1,xs[xs.length-1]+step*2);return{x:left,y:top,w:right-left+1,h:bottom-top+1};}
@@ -100,7 +165,7 @@ export default function VehicleWorkflowFast(){
     try{
       const srcPromise=loadCanvas(file);const tessPromise=import("tesseract.js");
       await wait(250);let qr=readQr();
-      const [src,t]:any=await Promise.all([srcPromise,tessPromise]);const paper=detectPaper(src);setProgress(12);
+      const [rawSrc,t]:any=await Promise.all([srcPromise,tessPromise]);const normalized=normalizeCertificateCanvas(rawSrc,1800);const src=normalized.canvas;rawSrc.width=1;rawSrc.height=1;const paper={x:0,y:0,w:src.width,h:src.height};setProgress(12);
       const workerPromise=t.createWorker("jpn+eng",1);const P=t.PSM,block=P?.SINGLE_BLOCK??"6",sparse=P?.SPARSE_TEXT??"11";
       // QRはOCR worker起動と並列。最大約1.5秒だけ先行待ちする。
       for(let i=0;i<5&&!Object.keys(qr).length;i++){await wait(250);qr=readQr();}
@@ -159,14 +224,12 @@ export default function VehicleWorkflowFast(){
       }
 
       // QRは最後にもう一度だけ取り込み、OCRより優先。
-      qr=readQr();const finalPatch={...patch,...qr};
+      qr=readQr();const finalPatch={...safePhotoPatch(patch),...qr};
       // 型式由来の誤読を原動機として確定しない。
       const fam=modelFamily(String(finalPatch.model||""));
       if(finalPatch.engineModel&&fam&&compact(finalPatch.engineModel).toUpperCase().includes(fam))delete finalPatch.engineModel;
       mergePatch(finalPatch);window.dispatchEvent(new CustomEvent(AUTH_EVENT,{detail:finalPatch}));
-      const elapsed=Math.round(performance.now()-started),qrCount=Array.isArray((window as any).__vehicleCertificateQr)?(window as any).__vehicleCertificateQr.length:0;
-      setDebug([`写真高速OCR v1`, `所要: ${elapsed}ms`, `OCR: ${passes}pass`, `QR: ${qrCount}/6`, `紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`,"","--- 上段 ---",top,"","--- 使用者 ---",user,"","--- 車両 ---",core,"","--- 数値 ---",spec].join("\n"));
-      setProgress(100);setMessage(`写真高速OCR完了: ${elapsed}ms / OCR ${passes}pass / QR ${qrCount}/6。内容を確認してください。`);
+      const elapsed=Math.round(performance.now()-started),qrItems=Array.isArray((window as any).__vehicleCertificateQr)?(window as any).__vehicleCertificateQr:[],qrCount=qrItems.length,qrExpected=expectedCertificateQrCount(qrItems,String(finalPatch.recordDate||""));\n      setDebug([`写真高速OCR v2`, `所要: ${elapsed}ms`, `OCR: ${passes}pass`, `QR: ${qrCount}/${qrExpected.count} (${qrExpected.label})`, `用紙補正: ${normalized.mode} / ${Math.round(normalized.confidence*100)}%`,"","--- 上段 ---",top,"","--- 使用者 ---",user,"","--- 車両 ---",core,"","--- 数値 ---",spec].join("\\n"));\n      src.width=1;src.height=1;setProgress(100);setMessage(`写真高速OCR完了: ${elapsed}ms / OCR ${passes}pass / QR ${qrCount}/${qrExpected.count}。内容を確認してください。`);
     }catch(e:any){console.error(e);setMessage(`写真OCRエラー: ${e?.message||"読み取りに失敗しました"}`);}finally{if(worker)await worker.terminate().catch(()=>{});setDocBusy(false);}
   }
 
