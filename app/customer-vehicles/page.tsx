@@ -457,6 +457,7 @@ export default function CustomerVehiclesPage() {
             <div className="actions">
               <button className="primary" onClick={startOCR}>📷 この車両で伝票OCR</button>
               <button onClick={openParts}>③ 部品データ</button>
+              <button onClick={() => location.assign("/schedule")}>📅 入出庫予定</button>
               <button onClick={() => location.assign("/vehicle-workflow")}>車両情報を編集</button>
             </div>
           </section>
