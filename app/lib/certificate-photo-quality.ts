@@ -80,7 +80,9 @@ export function analyzeCertificatePhotoQuality(image: ImageData): CertificatePho
 
   const warnings: string[] = [];
   const minSide = Math.min(width, height);
-  if (megapixels < 2.0 || minSide < 1200) warnings.push("解像度が低いため、文字が潰れる可能性があります。");
+  // 実写真の検証では 1152x1536 (約1.77MP) でも十分な文字/QR情報が残っていたため、
+  // iPhone共有時の縮小画像を不必要に弾かない範囲まで下限を調整する。
+  if (megapixels < 1.5 || minSide < 1100) warnings.push("解像度が低いため、文字が潰れる可能性があります。");
   if (meanLuma < 55) warnings.push("画像が暗すぎます。明るい場所で撮り直してください。");
   if (meanLuma > 225) warnings.push("画像が明るすぎます。白飛びを避けて撮り直してください。");
   if (darkRatio > 0.22) warnings.push("黒つぶれが多く、文字認識精度が下がる可能性があります。");
@@ -88,8 +90,8 @@ export function analyzeCertificatePhotoQuality(image: ImageData): CertificatePho
   if (contrast < 22) warnings.push("コントラストが低く、文字と背景の分離が弱い可能性があります。");
   if (laplacianVariance < 110) warnings.push("ピンぼけの可能性があります。車検証にピントを合わせてください。");
 
-  // Weighted 0..100 score. Thresholds are deliberately conservative and must
-  // be calibrated with actual certificate photos before becoming a hard block.
+  // Weighted 0..100 score. Exposure/blur thresholds remain conservative.
+  // Resolution threshold is calibrated against the current real-photo corpus.
   const resolutionScore = clamp01(megapixels / 4.0);
   const exposureScore = clamp01(1 - Math.abs(meanLuma - 145) / 145);
   const contrastScore = clamp01(contrast / 55);
