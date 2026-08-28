@@ -787,7 +787,12 @@ export default function Home() {
 
   return (
     <main>
-      <header className="header"><div className="title">icb</div><div className="desc">部品伝票OCR・車両管理・印刷</div></header>
+      <header className="header"><div className="title">icb</div><div className="desc">車両・入出庫・OCR・印刷</div></header>
+      <div className="actions noPrint" style={{ marginBottom: 14 }}>
+        <button className="primary" onClick={() => location.assign("/schedule")}>📅 今日の予定</button>
+        <button onClick={() => location.assign("/customer-vehicles")}>顧客・車両管理</button>
+        <button onClick={() => location.assign("/vehicle-workflow")}>車検証・車両登録</button>
+      </div>
       <nav className="tabs">
         {([
           ["vehicle", "①車体番号"],
