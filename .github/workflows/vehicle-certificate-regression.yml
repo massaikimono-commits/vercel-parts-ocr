@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - fix/certificate-pdf-native-v1
+      - "work/**"
   pull_request:
     branches:
       - main
