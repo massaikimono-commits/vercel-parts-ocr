@@ -77,6 +77,46 @@ function cropRegion(source, x0, y0, w0, h0, mode, target) {
   }
   return canvas;
 }
+function cropPaperRegion(source, paperBounds, x0, y0, w0, h0, mode, target) {
+  const b = paperBounds && Number(paperBounds.w) > 0 && Number(paperBounds.h) > 0
+    ? paperBounds
+    : { x: 0, y: 0, w: source.width, h: source.height };
+  const sx = Math.max(0, Math.round(b.x + b.w * x0));
+  const sy = Math.max(0, Math.round(b.y + b.h * y0));
+  const sw = Math.max(1, Math.min(source.width - sx, Math.round(b.w * w0)));
+  const sh = Math.max(1, Math.min(source.height - sy, Math.round(b.h * h0)));
+  const scale = Math.max(1, Math.min(5.5, (target || 2200) / Math.max(1, sw)));
+  const pad = 36;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(sw * scale) + pad * 2;
+  canvas.height = Math.round(sh * scale) + pad * 2;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(source, sx, sy, sw, sh, pad, pad, canvas.width - pad * 2, canvas.height - pad * 2);
+  if (mode !== "color") {
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let sum = 0;
+    for (let p = 0; p < image.data.length; p += 4) {
+      const g = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+      sum += g;
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = g;
+    }
+    const avg = sum / Math.max(1, image.data.length / 4);
+    const threshold = Math.max(90, Math.min(225, avg - 8));
+    for (let p = 0; p < image.data.length; p += 4) {
+      const g = image.data[p];
+      const v = mode === "binary"
+        ? (g < threshold ? 0 : 255)
+        : Math.max(0, Math.min(255, Math.round((g - 128) * 2.05 + 150)));
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
+      image.data[p + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+  return canvas;
+}
 function qrBounds(code, width, height) {
   const loc = code && code.location;
   if (!loc) return null;
@@ -169,52 +209,83 @@ async function scanFast(file) {
   const [reader, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
   const jsQR = jsMod.default || jsMod;
   const started = performance.now();
-  const budgetMs = 3400;
+  // QRが全部拾えれば後段OCRを減らせるため、弱い写真だけ最大4.6秒までQR救済を許可する。
+  const budgetMs = 4600;
   let found = [];
 
-  const runBand = async (y, mode) => {
-    const band = cropRegion(source, .36, y, .63, .20, mode, 3200);
-    try {
-      const hits = decodeBand(jsQR, band, "y" + y + "/" + mode).map((hit) => ({ ...hit, xCenter: .36 + hit.xCenter * .63 }));
-      found.push(...hits);
-    } finally { band.width = 1; band.height = 1; }
+  const add = (items) => {
+    found.push(...(items || []));
     found = orderedUnique(found);
+  };
+  const runBand = async (y, mode) => {
+    const band = cropRegion(source, .34, y, .65, .21, mode, 3200);
+    try {
+      add(decodeBand(jsQR, band, "norm/y" + y + "/" + mode).map((hit) => ({
+        ...hit,
+        xCenter: .34 + hit.xCenter * .65,
+      })));
+    } finally { band.width = 1; band.height = 1; }
+  };
+  const runRawBand = async (y, mode) => {
+    const band = cropPaperRegion(raw, normalized.paper?.bounds, .33, y, .66, .22, mode, 3400);
+    try {
+      add(decodeBand(jsQR, band, "raw/y" + y + "/" + mode).map((hit) => ({
+        ...hit,
+        xCenter: .33 + hit.xCenter * .66,
+      })));
+    } finally { band.width = 1; band.height = 1; }
+  };
+  const scanSlots = async (useRaw, y, mode) => {
+    const centers = [.46, .545, .63, .715, .82, .91];
+    for (const center of centers) {
+      if (performance.now() - started >= budgetMs) break;
+      if (found.some((x) => Math.abs(Number(x.xCenter) - center) < .038)) continue;
+      const c = useRaw
+        ? cropPaperRegion(raw, normalized.paper?.bounds, Math.max(0, center - .06), y, .12, .15, mode, mode === "color" ? 1250 : 1500)
+        : cropRegion(source, Math.max(0, center - .06), y, .12, .15, mode, mode === "color" ? 1250 : 1500);
+      try {
+        const hit = await decodeZxing(reader, c, center, (useRaw ? "raw/" : "norm/") + "x" + center + "/y" + y + "/" + mode);
+        if (hit) add([hit]);
+      } finally { c.width = 1; c.height = 1; }
+      const expected = expectedCertificateQrCount(found);
+      if (found.length >= expected.count) break;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   };
 
   try {
-    await runBand(.775, "color");
+    await runBand(.755, "color");
     let expected = expectedCertificateQrCount(found);
-    if (found.length < expected.count && performance.now() - started < budgetMs) await runBand(.775, "contrast");
+    if (found.length < expected.count && performance.now() - started < budgetMs) await runBand(.785, "contrast");
     expected = expectedCertificateQrCount(found);
 
-    const centers = [.485, .56, .635, .71, .82, .90];
-    for (const mode of ["color", "contrast"]) {
-      if (found.length >= expected.count || performance.now() - started >= budgetMs) break;
-      for (const center of centers) {
-        if (performance.now() - started >= budgetMs) break;
-        if (found.some((x) => Math.abs(Number(x.xCenter) - center) < .038)) continue;
-        const c = cropRegion(source, Math.max(0, center - .058), .80, .116, .135, mode, mode === "color" ? 1200 : 1450);
-        try {
-          const hit = await decodeZxing(reader, c, center, "x" + center + "/" + mode);
-          if (hit) found.push(hit);
-        } finally { c.width = 1; c.height = 1; }
-        found = orderedUnique(found);
-        expected = expectedCertificateQrCount(found);
-        if (found.length >= expected.count) break;
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
-    }
-
+    if (found.length < expected.count && performance.now() - started < budgetMs) await scanSlots(false, .785, "color");
     expected = expectedCertificateQrCount(found);
-    if (found.length < expected.count && performance.now() - started < budgetMs) await runBand(.79, "binary");
+    if (found.length < expected.count && performance.now() - started < budgetMs) await scanSlots(false, .805, "contrast");
+    expected = expectedCertificateQrCount(found);
+
+    if (found.length < expected.count && performance.now() - started < budgetMs) await runRawBand(.74, "color");
+    expected = expectedCertificateQrCount(found);
+    if (found.length < expected.count && performance.now() - started < budgetMs) await scanSlots(true, .765, "contrast");
+    expected = expectedCertificateQrCount(found);
+
+    if (found.length < expected.count && performance.now() - started < budgetMs) await runRawBand(.755, "binary");
   } finally {
-    raw.width = 1; raw.height = 1;
-    source.width = 1; source.height = 1;
+    raw.width = 1;
+    raw.height = 1;
+    source.width = 1;
+    source.height = 1;
   }
 
   found = orderedUnique(found);
   const expected = expectedCertificateQrCount(found);
-  return { result: found, elapsed: Math.round(performance.now() - started), expected, normalizeMode: normalized.mode, normalizeConfidence: normalized.confidence };
+  return {
+    result: found,
+    elapsed: Math.round(performance.now() - started),
+    expected,
+    normalizeMode: normalized.mode,
+    normalizeConfidence: normalized.confidence,
+  };
 }
 export default function CertificateQrFast() {
   useEffect(() => {

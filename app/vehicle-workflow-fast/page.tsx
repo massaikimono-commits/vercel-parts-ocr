@@ -58,10 +58,10 @@ function valueNear(text:string,labels:string[],parser:(s:string)=>string,span=3)
 function freeJp(s:string){const t=norm(s).replace(/\[[0-9\s_-]+\]/g,"").replace(/^[\s|:：,，.。・/\\-]+|[\s|:：,，.。・/\\-]+$/g,"").trim();if(!t||t.length>100)return"";return /[一-龠ぁ-んァ-ヶA-Za-z0-9]/.test(t)?t:"";}
 function docNo(s:string){return (digits(s).match(/\d{10,14}/)||[])[0]||"";}
 function output(s:string){return norm(s).match(/\d+(?:\.\d+)?\s*(?:L|l|kW|KW|kw)/)?.[0]?.replace(/\s+/g,"")||norm(s).match(/\b\d+\.\d+\b/)?.[0]||"";}
-function modelCandidate(s:string){const t=compact(s).toUpperCase();const all=t.match(/(?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{3,14}/g)||[];return all.filter(x=>!/^([A-Z0-9]{3,8})-\d{4,12}$/.test(x)).sort((a,b)=>b.length-a.length)[0]||"";}
+function modelCandidate(s:string,chassis=""){const cf=(chassis.split("-")[0]||"").toUpperCase(),a=lines(s),out:{value:string;score:number}[]=[];for(let i=0;i<a.length;i++){const raw=a[i].toUpperCase().replace(/[‐‑‒–—―ー]/g,"-");for(const m of raw.matchAll(/(?:^|[\s|])((?:[0-9][A-Z]{1,3}|[A-Z]{1,4})\s*-\s*[A-Z0-9]{3,12})(?=$|[\s|])/g)){const value=m[1].replace(/\s+/g,"");if(/^([A-Z0-9]{3,8})-\d{4,12}$/.test(value))continue;const suffix=(value.split("-")[1]||"").replace(/[^A-Z0-9]/g,"");let score=1;if(cf&&suffix&&(suffix.startsWith(cf)||cf.startsWith(suffix)))score+=18;const around=`${a[i-1]||""} ${a[i]} ${a[i+1]||""}`;if(/型式/.test(around))score+=8;if(/^(?:DAA|DBA|ABA|CBA|DLA|ZAA|EBD|HBD|LDA|TDA|TKG|TPG|TRG|QKG|QPG|2RG|2PG|3BA|4BA|5BA|5AA|6AA|6BA|7BA|8BA|GF|GH|TA|UA|LA)-/.test(value))score+=5;out.push({value,score});}}return out.sort((x,y)=>y.score-x.score||x.value.length-y.value.length)[0]?.value||"";}
 function modelFamily(model:string){const t=compact(model).toUpperCase();return (t.split("-").pop()||t).replace(/[^A-Z0-9]/g,"");}
 function chassisCandidate(text:string,model=""){const fam=modelFamily(model),a=lines(text),out:{value:string;score:number}[]=[];for(let i=0;i<a.length;i++){const u=a[i].toUpperCase().replace(/[‐‑‒–—―ー]/g,"-");for(const raw of u.match(/[A-Z0-9]{3,9}\s*-\s*[A-Z0-9]{4,12}/g)||[]){const [l0,r0]=raw.replace(/\s+/g,"").split("-");const l=l0.replace(/O(?=\d)|(?<=\d)O/g,"0"),r=r0.replace(/O/g,"0");if(!l||r.length<4||r.length>10)continue;if(/^(DAA|DBA|ABA|CBA|EBD|HBD|LDA|TDA|TKG|TPG|QKG|QPG|2RG|2PG|3BA|4BA|5BA|5AA|6AA|7BA|8BA)$/.test(l))continue;let score=2;if(/^\d+$/.test(r))score+=4;if(fam&&(fam===l||fam.startsWith(l)||l.startsWith(fam)))score+=8;const around=`${a[i-1]||""} ${a[i]} ${a[i+1]||""}`;if(/車台番号/.test(around))score+=8;out.push({value:`${l}-${r}`,score});}}return out.sort((x,y)=>y.score-x.score)[0]?.value||"";}
-function engineCandidate(text:string,model="",chassis=""){const fam=modelFamily(model),cf=(chassis.split("-")[0]||"").toUpperCase(),a=lines(text),out:{value:string;score:number}[]=[];for(let i=0;i<a.length;i++){const u=a[i].toUpperCase().replace(/\s+/g,"").replace(/[‐‑‒–—―ー]/g,"-");const vals=[...(u.match(/[A-Z0-9]{2,8}-[A-Z0-9]{2,10}/g)||[]),...(u.match(/\b[A-Z][A-Z0-9]{2,6}\b/g)||[])];for(const v0 of vals){const v=v0.replace(/O(?=\d)|(?<=\d)O/g,"0");if(!/[A-Z]/.test(v)||!/\d/.test(v))continue;if(fam&&v.includes(fam))continue;if(cf&&v.includes(cf))continue;if(/^(DAA|DBA|ABA|CBA|5AA|6AA|7BA|8BA)-/.test(v))continue;let score=1;const around=`${a[i-1]||""} ${a[i]} ${a[i+1]||""}`;if(/原動機|エンジン/.test(around))score+=10;if(v.includes("-"))score+=2;if(v.length>=4&&v.length<=13)score+=2;out.push({value:v,score});}}return out.sort((x,y)=>y.score-x.score)[0]?.value||"";}
+function engineCandidate(text:string,model="",chassis=""){const fam=modelFamily(model),cf=(chassis.split("-")[0]||"").toUpperCase(),a=lines(text),out:{value:string;score:number}[]=[];for(let i=0;i<a.length;i++){const raw=a[i].toUpperCase().replace(/[‐‑‒–—―ー]/g,"-");const vals:string[]=[];for(const m of raw.matchAll(/(?:^|[\s|])([A-Z0-9]{2,6}\s*-\s*[A-Z0-9]{1,6})(?=$|[\s|])/g))vals.push(m[1].replace(/\s+/g,""));for(const m of raw.matchAll(/(?:^|[\s|])([A-Z0-9]{3,6})(?=$|[\s|])/g))vals.push(m[1].replace(/\s+/g,""));for(const v0 of vals){const v=v0.replace(/O(?=\d)|(?<=\d)O/g,"0");if(!/[A-Z]/.test(v)||!/\d/.test(v))continue;if(fam&&v.includes(fam))continue;if(cf&&v.includes(cf))continue;if(/^(DAA|DBA|ABA|CBA|5AA|6AA|7BA|8BA)-/.test(v))continue;if(!/^[A-Z0-9]{2,6}(?:-[A-Z0-9]{1,6})?$/.test(v))continue;let score=1;const around=`${a[i-1]||""} ${a[i]} ${a[i+1]||""}`;if(/原動機|エンジン/.test(around))score+=10;if(v.includes("-"))score+=2;if(v.length>=3&&v.length<=10)score+=3;if(/[0-9][A-Z]|[A-Z][0-9]/.test(v))score+=1;out.push({value:v,score});}}return out.sort((x,y)=>y.score-x.score||x.value.length-y.value.length)[0]?.value||"";}
 
 function allDates(text:string){const out:string[]=[];const re=/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/g;for(const m of norm(text).matchAll(re)){const mo=Number(m[3]),d=Number(m[4]);if(mo>=1&&mo<=12&&d>=1&&d<=31)out.push(`${m[1]}${m[2]==="元"?"元":Number(m[2])}年${mo}月${d}日`);}return out;}
 function dateOrdinal(s:string){const m=compact(s).match(/(令和|平成|昭和)(元|\d{1,2})年(\d{1,2})月(\d{1,2})日/);if(!m)return 0;return eraYear(m[1],m[2])*10000+Number(m[3])*100+Number(m[4]);}
@@ -69,6 +69,10 @@ function monthOrdinal(s:string){const m=compact(s).match(/(令和|平成|昭和)
 function chooseRegistrationDate(text:string,first:string,expiry:string){const direct=valueNear(text,["登録年月日/交付年月日","登録年月日／交付年月日","登録年月日","交付年月日"],jpDate,2);if(direct)return direct;const f=monthOrdinal(first),e=dateOrdinal(expiry);const c=allDates(text).filter(v=>{const r=dateOrdinal(v),y=Math.floor(r/10000),m=Math.floor((r%10000)/100);return r&&(!f||y*12+m>=f)&&(!e||r<=e)&&compact(v)!==compact(expiry);});return c[0]||"";}
 
 function boundedInt(v:string,min:number,max:number){const n=Number(String(v||"").replace(/\D/g,""));return Number.isFinite(n)&&n>=min&&n<=max?String(n):"";}
+function firstBoundedNumber(s:string,min:number,max:number){for(const raw of norm(s).match(/\d{1,5}/g)||[]){const n=Number(raw);if(Number.isFinite(n)&&n>=min&&n<=max)return String(n);}return"";}
+function axleValue(s:string){return firstBoundedNumber(s,1,30000);}
+function seatValue(s:string){return firstBoundedNumber(s,1,99);}
+function payloadValue(s:string){const t=norm(s);if(/(?:^|\s)[-―ー]\s*(?:kg)?(?:\s|$)/i.test(t))return"-";return firstBoundedNumber(t,1,30000);}
 function numericTuple(text:string,qr:Patch){
   const t=norm(text).replace(/,/g,"");
   const kei=/軽自動車/.test(String(qr.vehicleClass||""));
@@ -110,7 +114,8 @@ function safePhotoPatch(patch:Patch){
   if(p.registrationNumber){const r=parseRegistrationNumber(String(p.registrationNumber));if(r)p.registrationNumber=r.canonical;else drop("registrationNumber");}
   if(p.chassisNumber&&!/^[A-Z0-9]{2,10}-[A-Z0-9]{4,12}$/i.test(compact(String(p.chassisNumber))))drop("chassisNumber");
   if(p.model&&!/^(?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{3,14}$/i.test(compact(String(p.model))))drop("model");
-  if(p.engineModel&&!/^[A-Z0-9]{2,8}(?:-[A-Z0-9]{1,10})?$/i.test(compact(String(p.engineModel))))drop("engineModel");
+  if(p.model&&p.chassisNumber){const cf=(compact(String(p.chassisNumber)).split("-")[0]||"").toUpperCase(),mf=modelFamily(String(p.model));if(cf.length>=3&&mf.length>=3&&!(mf.startsWith(cf)||cf.startsWith(mf)))drop("model");}
+  if(p.engineModel&&!/^[A-Z0-9]{2,6}(?:-[A-Z0-9]{1,6})?$/i.test(compact(String(p.engineModel))))drop("engineModel");
   if(p.vehicleName&&!["日野","トヨタ","レクサス","日産","ニッサン","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","UDトラックス","BMW","アウディ","ボルボ"].includes(String(p.vehicleName)))drop("vehicleName");
   if(p.vehicleClass&&!["普通","小型","軽自動車","大型特殊"].includes(String(p.vehicleClass)))drop("vehicleClass");
   if(p.purpose&&!["貨物","乗用","乗合","特種"].includes(String(p.purpose)))drop("purpose");
@@ -182,8 +187,9 @@ export default function VehicleWorkflowFast(){
       qr=readQr();
       const patch:Patch={};
       const reg=parseRegistrationNumber(top)?.canonical||"";
-      const modelNow=String(qr.model||modelCandidate(core)||"");
-      const ch=String(qr.chassisNumber||chassisCandidate(top,modelNow)||"");
+      const chassisHint=String(qr.chassisNumber||chassisCandidate(top,"")||"");
+      const modelNow=String(qr.model||modelCandidate(core,chassisHint)||"");
+      const ch=String(qr.chassisNumber||chassisHint||chassisCandidate(top,modelNow)||"");
       const engine=String(qr.engineModel||engineCandidate(core,modelNow,ch)||"");
       if(reg)patch.registrationNumber=reg;
       if(ch)patch.chassisNumber=ch;
@@ -202,13 +208,14 @@ export default function VehicleWorkflowFast(){
       patch.purpose=String(qr.purpose||purpose(core)||"");
       patch.privateBusiness=String(qr.privateBusiness||privateBiz(core)||"");
       patch.bodyShape=String(qr.bodyShape||body(core)||"");
-      patch.seatingCapacity=String(qr.seatingCapacity||(core.match(/(\d{1,2})\s*人/)?.[1]||""));
-      patch.maxPayloadKg=String(qr.maxPayloadKg||(/最大積載量[\s\S]{0,40}-\s*(?:kg)?/i.test(`${core}\n${spec}`)?"-":""));
+      patch.seatingCapacity=String(qr.seatingCapacity||valueNear(`${core}\n${spec}`,["乗車定員"],seatValue,1)||(core.match(/(\d{1,2})\s*人/)?.[1]||""));
+      patch.maxPayloadKg=String(qr.maxPayloadKg||valueNear(`${core}\n${spec}`,["最大積載量"],payloadValue,2)||"");
+      // 軸重を先に拾い、軸重合計と矛盾する重量タプルを落とす。QR未読時のトラック系で特に有効。
+      patch.frontFrontAxleWeightKg=String(qr.frontFrontAxleWeightKg||valueNear(spec,["前前軸重","前軸重"],axleValue,2)||"");
+      patch.frontRearAxleWeightKg=String(qr.frontRearAxleWeightKg||valueNear(spec,["前後軸重"],axleValue,2)||"");
+      patch.rearFrontAxleWeightKg=String(qr.rearFrontAxleWeightKg||valueNear(spec,["後前軸重"],axleValue,2)||"");
+      patch.rearRearAxleWeightKg=String(qr.rearRearAxleWeightKg||valueNear(spec,["後後軸重","後軸重"],axleValue,2)||"");
       Object.assign(patch,numericTuple(spec,{...patch,...qr}));
-      patch.frontFrontAxleWeightKg=String(qr.frontFrontAxleWeightKg||"");
-      patch.frontRearAxleWeightKg=String(qr.frontRearAxleWeightKg||"");
-      patch.rearFrontAxleWeightKg=String(qr.rearFrontAxleWeightKg||"");
-      patch.rearRearAxleWeightKg=String(qr.rearRearAxleWeightKg||"");
       patch.displacementOrRatedOutput=String(qr.displacementOrRatedOutput||output(spec)||"");
       patch.fuel=String(qr.fuel||fuelText(spec)||"");
       patch.modelDesignationNumber=String(qr.modelDesignationNumber||"");
