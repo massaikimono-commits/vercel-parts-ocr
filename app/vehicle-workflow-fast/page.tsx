@@ -229,7 +229,9 @@ export default function VehicleWorkflowFast(){
       const fam=modelFamily(String(finalPatch.model||""));
       if(finalPatch.engineModel&&fam&&compact(finalPatch.engineModel).toUpperCase().includes(fam))delete finalPatch.engineModel;
       mergePatch(finalPatch);window.dispatchEvent(new CustomEvent(AUTH_EVENT,{detail:finalPatch}));
-      const elapsed=Math.round(performance.now()-started),qrItems=Array.isArray((window as any).__vehicleCertificateQr)?(window as any).__vehicleCertificateQr:[],qrCount=qrItems.length,qrExpected=expectedCertificateQrCount(qrItems,String(finalPatch.recordDate||""));\n      setDebug([`写真高速OCR v2`, `所要: ${elapsed}ms`, `OCR: ${passes}pass`, `QR: ${qrCount}/${qrExpected.count} (${qrExpected.label})`, `用紙補正: ${normalized.mode} / ${Math.round(normalized.confidence*100)}%`,"","--- 上段 ---",top,"","--- 使用者 ---",user,"","--- 車両 ---",core,"","--- 数値 ---",spec].join("\\n"));\n      src.width=1;src.height=1;setProgress(100);setMessage(`写真高速OCR完了: ${elapsed}ms / OCR ${passes}pass / QR ${qrCount}/${qrExpected.count}。内容を確認してください。`);
+      const elapsed=Math.round(performance.now()-started),qrItems=Array.isArray((window as any).__vehicleCertificateQr)?(window as any).__vehicleCertificateQr:[],qrCount=qrItems.length,qrExpected=expectedCertificateQrCount(qrItems,String(finalPatch.recordDate||""));
+      setDebug([`写真高速OCR v2`, `所要: ${elapsed}ms`, `OCR: ${passes}pass`, `QR: ${qrCount}/${qrExpected.count} (${qrExpected.label})`, `用紙補正: ${normalized.mode} / ${Math.round(normalized.confidence*100)}%`,"","--- 上段 ---",top,"","--- 使用者 ---",user,"","--- 車両 ---",core,"","--- 数値 ---",spec].join("\n"));
+      src.width=1;src.height=1;setProgress(100);setMessage(`写真高速OCR完了: ${elapsed}ms / OCR ${passes}pass / QR ${qrCount}/${qrExpected.count}。内容を確認してください。`);
     }catch(e:any){console.error(e);setMessage(`写真OCRエラー: ${e?.message||"読み取りに失敗しました"}`);}finally{if(worker)await worker.terminate().catch(()=>{});setDocBusy(false);}
   }
 
