@@ -66,14 +66,17 @@ export function detectCertificateQrDensityCenters(rgba, width, height, options =
     }
   }
 
-  const smoothWindow = Math.max(5, Math.round((w * 0.045) / step));
+  // Centered smoothing avoids shifting every candidate to the right.
+  // A ~3% page-width window keeps adjacent QR symbols separated on 5QR layouts.
+  const smoothWindow = Math.max(5, Math.round((w * 0.03) / step));
+  const halfWindow = Math.floor(smoothWindow / 2);
+  const prefix = new Float64Array(sxCount + 1);
+  for (let sx = 0; sx < sxCount; sx += 1) prefix[sx + 1] = prefix[sx] + profile[sx];
   const smoothed = new Float32Array(sxCount);
-  let rolling = 0;
   for (let sx = 0; sx < sxCount; sx += 1) {
-    rolling += profile[sx];
-    if (sx >= smoothWindow) rolling -= profile[sx - smoothWindow];
-    const count = Math.min(sx + 1, smoothWindow);
-    smoothed[sx] = rolling / Math.max(1, count);
+    const left = Math.max(0, sx - halfWindow);
+    const right = Math.min(sxCount, sx + halfWindow + 1);
+    smoothed[sx] = (prefix[right] - prefix[left]) / Math.max(1, right - left);
   }
 
   const leftLimit = Math.floor(sxCount * 0.40);
@@ -92,7 +95,7 @@ export function detectCertificateQrDensityCenters(rgba, width, height, options =
   }
   local.sort((a, b) => b.score - a.score);
 
-  const minDistance = Math.max(4, Math.round((w * 0.045) / step));
+  const minDistance = Math.max(4, Math.round((w * 0.035) / step));
   const maxCenters = maxScore < 0.05 ? 3 : 8;
   const selected = [];
   for (const item of local) {
