@@ -351,17 +351,17 @@ export default function SchedulePage() {
             <b>{timeLabel(entry)}　{ENTRY_LABEL[entry.entry_type]}</b>
             <div className="customerRow">
               <div className="customer">{customerLabel(customer)}</div>
-              {isDelivery && completionPosition === "name" && work && (
+              {completionPosition === "name" && work && (
                 <button className={work.work_completed ? "workCircle active noPrint" : "workCircle noPrint"} onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了切替">
                   {work.work_completed ? "○" : "未"}
                 </button>
               )}
-              {isDelivery && completionPosition === "name" && work?.work_completed && <span className="printWorkCircle">○</span>}
+              {completionPosition === "name" && work?.work_completed && <span className="printWorkCircle">○</span>}
               {workFlags(work)}
             </div>
           </div>
           {!isDelivery && (
-            <button className={entry.completed ? "complete active noPrint" : "complete noPrint"} onClick={() => void toggleCompleted(entry)}>
+            <button className={entry.completed ? "complete active noPrint" : "complete noPrint"} onClick={() => void toggleCompleted(entry)} aria-label="入出庫予定完了切替">
               {entry.completed ? "✓ 完了" : "完了"}
             </button>
           )}
@@ -371,12 +371,12 @@ export default function SchedulePage() {
           <span>{work?.reason || "入庫要因未設定"}</span>
           {work?.worker_name && <span>担当 {work.worker_name}</span>}
           {work?.expected_completion_date && <span>完成予定 {work.expected_completion_date}</span>}
-          {isDelivery && completionPosition === "meta" && work && (
+          {completionPosition === "meta" && work && (
             <button className={work.work_completed ? "workCircle active noPrint" : "workCircle noPrint"} onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了切替">
               {work.work_completed ? "○" : "未"}
             </button>
           )}
-          {isDelivery && completionPosition === "meta" && work?.work_completed && <span className="printWorkCircle">○</span>}
+          {completionPosition === "meta" && work?.work_completed && <span className="printWorkCircle">○</span>}
         </div>
         {(vehicle?.maker || vehicle?.model) && <div className="sub">{[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>}
         {entry.notes && <div className="note">{entry.notes}</div>}
