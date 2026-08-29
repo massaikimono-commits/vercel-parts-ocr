@@ -30,6 +30,8 @@ type WorkOrder = {
   checked_in_at: string | null;
   checked_out_at: string | null;
   planned_delivery_at: string | null;
+  is_urgent: boolean;
+  needs_loaner: boolean;
 };
 
 type Vehicle = {
@@ -51,12 +53,16 @@ type Customer = {
   schedule_display_name: string | null;
 };
 
+type ColumnLayout = "delivery-left" | "delivery-right";
+
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   delivery: "納車",
   pickup: "引き取り",
   customer_visit: "来社",
   onsite_repair: "出張整備",
 };
+
+const LAYOUT_KEY = "icb-schedule-column-layout";
 
 function localDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -118,8 +124,16 @@ export default function SchedulePage() {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [columnLayout, setColumnLayout] = useState<ColumnLayout>("delivery-left");
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("当日の入出庫予定を読み込みます。");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LAYOUT_KEY);
+      if (saved === "delivery-left" || saved === "delivery-right") setColumnLayout(saved);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("day");
@@ -143,7 +157,7 @@ export default function SchedulePage() {
           .order("starts_at", { ascending: true }),
         supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,worker_name,expected_completion_date,delivery_completed,work_completed,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at")
+          .select("id,vehicle_id,reason,status,worker_name,expected_completion_date,delivery_completed,work_completed,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,is_urgent,needs_loaner")
           .neq("status", "cancelled"),
         supabase
           .from("vehicles")
@@ -187,7 +201,7 @@ export default function SchedulePage() {
     const endOfDay = new Date(`${day}T23:59:59+09:00`).getTime();
     return workOrders
       .filter((work) => {
-        if (work.work_completed || work.delivery_completed || work.checked_out_at || work.status === "completed") return false;
+        if (work.work_completed || work.checked_out_at || work.status === "completed") return false;
         const activelyCheckedIn = Boolean(work.checked_in_at);
         const inProgress = work.status === "in_progress";
         if (!activelyCheckedIn && !inProgress) return false;
@@ -200,6 +214,7 @@ export default function SchedulePage() {
         return { work, vehicle, customer };
       })
       .sort((a, b) => {
+        if (a.work.is_urgent !== b.work.is_urgent) return a.work.is_urgent ? -1 : 1;
         const ad = a.work.expected_completion_date || "9999-12-31";
         const bd = b.work.expected_completion_date || "9999-12-31";
         return ad.localeCompare(bd);
@@ -222,50 +237,61 @@ export default function SchedulePage() {
     const next = !work.work_completed;
     try {
       const rpc = next ? "complete_work_order_one_tap" : "reopen_work_order";
-      const args = next
-        ? { p_work_order_id: work.id, p_actor: "app" }
-        : { p_work_order_id: work.id, p_actor: "app" };
-      const { error } = await supabase.rpc(rpc, args);
+      const { error } = await supabase.rpc(rpc, { p_work_order_id: work.id, p_actor: "schedule" });
       if (error) throw error;
       setWorkOrders((old) => old.map((x) => x.id === work.id ? {
         ...x,
         work_completed: next,
         status: next ? "completed" : "in_progress",
       } : x));
-      setMessage(next ? "作業完了にしました。" : "作業中へ戻しました。");
+      setMessage(next ? "作業完了を○で表示しました。" : "作業未実施へ戻しました。");
     } catch (error: any) {
       setMessage(`作業状態の保存エラー: ${error?.message || error}`);
     }
   }
 
+  function changeColumnLayout(next: ColumnLayout) {
+    setColumnLayout(next);
+    try { localStorage.setItem(LAYOUT_KEY, next); } catch {}
+  }
+
+  function customerLabel(customer: Customer | null) {
+    return customer?.schedule_display_name || customer?.company_name || customer?.name || "お客様未登録";
+  }
+
+  function last4Label(vehicle: Vehicle | null) {
+    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
+  }
+
+  function workFlags(work: WorkOrder | null) {
+    if (!work) return null;
+    return (
+      <div className="flags">
+        {work.is_urgent && <span className="flag urgent">急ぎ</span>}
+        {work.needs_loaner && <span className="flag loaner">代車あり</span>}
+      </div>
+    );
+  }
+
   function renderStayingVehicle(item: typeof stayingVehicles[number]) {
     const { work, vehicle, customer } = item;
-    const customerName =
-      customer?.schedule_display_name ||
-      customer?.company_name ||
-      customer?.name ||
-      "お客様未登録";
-    const last4 =
-      vehicle?.registration_number_last4 ||
-      vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] ||
-      "----";
     return (
-      <article key={work.id} className="stayItem">
+      <article key={work.id} className={`stayItem ${work.is_urgent ? "urgentItem" : ""}`}>
         <div className="itemTop">
           <div>
-            <b>{customerName}</b>
-            <div className="sub">下4桁 {last4}　{work.reason}</div>
+            <div className="customerRow"><b>{customerLabel(customer)}</b>{workFlags(work)}</div>
+            <div className="sub">下4桁 {last4Label(vehicle)}　{work.reason}</div>
           </div>
-          <button className="complete noPrint" onClick={() => void toggleWorkCompleted(work)}>作業完了</button>
+          <button className={work.work_completed ? "workCircle active noPrint" : "workCircle noPrint"} onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了切替">
+            {work.work_completed ? "○" : "未"}
+          </button>
         </div>
         <div className="meta">
           {work.worker_name && <span>担当 {work.worker_name}</span>}
           <span>完成予定 {work.expected_completion_date || "未定"}</span>
           {work.planned_delivery_at && <span>納車予定あり</span>}
         </div>
-        {(vehicle?.maker || vehicle?.model) && (
-          <div className="sub">{[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>
-        )}
+        {(vehicle?.maker || vehicle?.model) && <div className="sub">{[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>}
         {vehicle && <button className="open noPrint" onClick={() => setActiveVehicle(vehicle)}>車両を開く →</button>}
       </article>
     );
@@ -286,37 +312,38 @@ export default function SchedulePage() {
 
   function renderCard(item: typeof enriched[number]) {
     const { entry, work, vehicle, customer } = item;
-    const customerName =
-      customer?.schedule_display_name ||
-      customer?.company_name ||
-      customer?.name ||
-      "お客様未登録";
-    const last4 =
-      vehicle?.registration_number_last4 ||
-      vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] ||
-      "----";
+    const isDelivery = entry.entry_type === "delivery";
     return (
-      <article key={entry.id} className={`scheduleItem ${entry.completed ? "done" : ""}`}>
+      <article key={entry.id} className={`scheduleItem ${!isDelivery && entry.completed ? "done" : ""} ${work?.is_urgent ? "urgentItem" : ""}`}>
         <div className="itemTop">
-          <div>
+          <div className="itemMain">
             <b>{timeLabel(entry)}　{ENTRY_LABEL[entry.entry_type]}</b>
-            <div className="customer">{customerName}</div>
+            <div className="customerRow">
+              <div className="customer">{customerLabel(customer)}</div>
+              {isDelivery && work && (
+                <button className={work.work_completed ? "workCircle active noPrint" : "workCircle noPrint"} onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了切替">
+                  {work.work_completed ? "○" : "未"}
+                </button>
+              )}
+              {isDelivery && work?.work_completed && <span className="printWorkCircle">○</span>}
+              {workFlags(work)}
+            </div>
           </div>
-          <button className={entry.completed ? "complete active" : "complete"} onClick={() => void toggleCompleted(entry)}>
-            {entry.completed ? "✓ 完了" : "完了"}
-          </button>
+          {!isDelivery && (
+            <button className={entry.completed ? "complete active noPrint" : "complete noPrint"} onClick={() => void toggleCompleted(entry)}>
+              {entry.completed ? "✓ 完了" : "完了"}
+            </button>
+          )}
         </div>
         <div className="meta">
-          <span>下4桁 <b>{last4}</b></span>
+          <span>下4桁 <b>{last4Label(vehicle)}</b></span>
           <span>{work?.reason || "入庫要因未設定"}</span>
           {work?.worker_name && <span>担当 {work.worker_name}</span>}
           {work?.expected_completion_date && <span>完成予定 {work.expected_completion_date}</span>}
         </div>
-        {(vehicle?.maker || vehicle?.model) && (
-          <div className="sub">{[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>
-        )}
+        {(vehicle?.maker || vehicle?.model) && <div className="sub">{[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>}
         {entry.notes && <div className="note">{entry.notes}</div>}
-        {vehicle && <button className="open" onClick={() => setActiveVehicle(vehicle)}>車両を開く →</button>}
+        {vehicle && <button className="open noPrint" onClick={() => setActiveVehicle(vehicle)}>車両を開く →</button>}
       </article>
     );
   }
@@ -324,24 +351,13 @@ export default function SchedulePage() {
   function section(title: string, items: typeof enriched, period: "morning" | "afternoon") {
     const deliveries = items.filter(({ entry }) => entry.entry_type === "delivery");
     const arrivals = items.filter(({ entry }) => entry.entry_type !== "delivery");
+    const deliveryColumn = <div key="delivery"><h3>納車予定</h3>{!deliveries.length && <div className="empty">予定なし</div>}{deliveries.map(renderCard)}</div>;
+    const arrivalColumn = <div key="arrivals"><h3>引き取り・来社・出張</h3>{!arrivals.length && <div className="empty">予定なし</div>}{arrivals.map(renderCard)}</div>;
+    const columns = columnLayout === "delivery-left" ? [deliveryColumn, arrivalColumn] : [arrivalColumn, deliveryColumn];
     return (
       <section className="card">
-        <div className="sectionTitle">
-          <h2>{title}</h2>
-          <span>{items.length}件</span>
-        </div>
-        <div className="columns">
-          <div>
-            <h3>納車予定</h3>
-            {!deliveries.length && <div className="empty">予定なし</div>}
-            {deliveries.map(renderCard)}
-          </div>
-          <div>
-            <h3>引き取り・来社・出張</h3>
-            {!arrivals.length && <div className="empty">予定なし</div>}
-            {arrivals.map(renderCard)}
-          </div>
-        </div>
+        <div className="sectionTitle"><h2>{title}</h2><span>{items.length}件</span></div>
+        <div className="columns">{columns}</div>
         <div className="printPeriod">{period === "morning" ? "午前" : "午後"}</div>
       </section>
     );
@@ -353,17 +369,10 @@ export default function SchedulePage() {
 
   return (
     <main className="page">
-      <header className="top noPrint">
-        <button onClick={() => location.assign("/")}>← メインへ</button>
-        <strong>icb</strong>
-      </header>
+      <header className="top noPrint"><button onClick={() => location.assign("/")}>← メインへ</button><strong>icb</strong></header>
 
       <section className="card hero">
-        <div>
-          <div className="eyebrow">1日のスケジュール</div>
-          <h1>{dateLabel(day)}</h1>
-          <div className="notice">{busy ? "予定を読み込み中…" : message}</div>
-        </div>
+        <div><div className="eyebrow">1日のスケジュール</div><h1>{dateLabel(day)}</h1><div className="notice">{busy ? "予定を読み込み中…" : message}</div></div>
         <div className="summary">
           <div><small>午前</small><b>{morningCount}</b></div>
           <div><small>午後</small><b>{afternoonCount}</b></div>
@@ -377,6 +386,7 @@ export default function SchedulePage() {
         <button onClick={() => setDay(localDateString())}>今日</button>
         <button onClick={() => setDay(addDay(day, 1))}>翌日 →</button>
         <button className="newEntry" onClick={() => location.assign(`/schedule/new?day=${day}`)}>＋ 予定を登録</button>
+        <label className="layoutControl">配置<select value={columnLayout} onChange={(e) => changeColumnLayout(e.target.value as ColumnLayout)}><option value="delivery-left">納車を左</option><option value="delivery-right">納車を右</option></select></label>
         <button className="print" onClick={() => window.print()}>🖨 1日予定を印刷</button>
       </div>
 
@@ -384,10 +394,7 @@ export default function SchedulePage() {
       {section("午後", afternoon, "afternoon")}
 
       <section className="card staySection">
-        <div className="sectionTitle">
-          <h2>滞留車両</h2>
-          <span>{stayingVehicles.length}台</span>
-        </div>
+        <div className="sectionTitle"><h2>滞留車両</h2><span>{stayingVehicles.length}台</span></div>
         {!stayingVehicles.length && <div className="empty">現在の滞留車両はありません。</div>}
         <div className="stayGrid">{stayingVehicles.map(renderStayingVehicle)}</div>
       </section>
@@ -399,65 +406,12 @@ export default function SchedulePage() {
           <button onClick={() => location.assign("/vehicle-workflow")}>車検証・車両登録</button>
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票OCR</button>
           <button onClick={() => location.assign("/parts-data")}>部品データ</button>
+          <button onClick={() => location.assign("/settings/staff")}>社員名管理</button>
         </div>
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}
-        body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-        button,input{font:inherit}
-        button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}
-        .page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}
-        .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-        .card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}
-        .hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
-        .eyebrow{font-weight:800;color:#2674e8}
-        h1{font-size:32px;margin:5px 0 8px}
-        h2{margin:0}
-        h3{margin:0 0 10px;color:#5d6878;font-size:16px}
-        .notice{color:#5d6878}
-        .summary{display:flex;gap:9px;flex-wrap:wrap}
-        .summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}
-        .summary b{font-size:25px}
-        .summary small{color:#718096}
-        .dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
-        .dateNav input{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}
-        .dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}
-        .sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}
-        .columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-        .scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}
-        .scheduleItem.done{opacity:.62;background:#f5f7f9}
-        .itemTop{display:flex;justify-content:space-between;gap:10px}
-        .customer{font-size:19px;font-weight:800;margin-top:4px}
-        .complete{min-width:70px}
-        .complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}
-        .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-        .meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}
-        .sub,.note{margin-top:9px;color:#5d6878}
-        .note{background:#fff9e8;padding:8px 10px;border-radius:9px}
-        .open{margin-top:10px}
-        .empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}
-        .quick{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:14px}
-        .stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-        .stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}
-        .printPeriod{display:none}
-        @media(max-width:720px){
-          .hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}
-          .quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}
-        }
-        @media print{
-          body{background:#fff}
-          .page{max-width:none;padding:0}
-          .noPrint{display:none!important}
-          .card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}
-          .hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}
-          .hero .summary{display:none}
-          .columns{grid-template-columns:1fr 1fr;gap:8mm}
-          .scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}
-          .complete,.open{display:none}
-          .printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}
-          h1{font-size:20pt}
-        }
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.dateNav input,.layoutControl select{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.layoutControl{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;color:#5d6878}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}.scheduleItem.done{opacity:.62;background:#f5f7f9}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.complete{min-width:70px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workCircle{width:34px;height:34px;padding:0;border-radius:50%;font-size:13px;flex:0 0 auto}.workCircle.active{background:#e9f7ef;border-color:#78bc8e;color:#176b37;font-size:23px}.printWorkCircle{display:none;font-size:22px;font-weight:900}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.open{margin-top:10px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}.printPeriod{display:none}@media(max-width:720px){.hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}.quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkCircle{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}h1{font-size:20pt}}
       `}</style>
     </main>
   );
