@@ -134,21 +134,37 @@ export default function InspectionRecordSelectPage() {
   const chosen = chosenKey ? WORKSHOP_RECORD_TEMPLATES[chosenKey] : null;
   const needsReview = manualTemplate ? false : (automaticDecision?.needsReview ?? true);
 
-  function continueToRecord() {
-    if (!chosenKey) {
-      setMessage("記録簿を選択してから進んでください。");
-      return;
-    }
+  function persistChoice() {
+    if (!chosenKey) return false;
     localStorage.setItem(RECORD_TEMPLATE_KEY, JSON.stringify({
       key: chosenKey,
       workOrderId: workOrderId || null,
       selectedAt: new Date().toISOString(),
       source: manualTemplate ? "manual" : "automatic",
     }));
+    return true;
+  }
+
+  function continueToRecord() {
+    if (!persistChoice()) {
+      setMessage("記録簿を選択してから進んでください。");
+      return;
+    }
     const params = new URLSearchParams();
     params.set("template", chosenKey);
     if (workOrderId) params.set("workOrderId", workOrderId);
     location.assign(`/inspection?${params.toString()}`);
+  }
+
+  function openSavedPrintPreview() {
+    if (!persistChoice()) {
+      setMessage("記録簿を選択してから印刷プレビューへ進んでください。");
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("template", chosenKey);
+    if (workOrderId) params.set("workOrderId", workOrderId);
+    location.assign(`/inspection/print?${params.toString()}`);
   }
 
   return (
@@ -205,13 +221,19 @@ export default function InspectionRecordSelectPage() {
         )}
       </section>
 
+      <section className="card printGuide">
+        <b>印刷導線</b>
+        <p>入力画面で下書きまたは確認済み保存をした後、この対象作業の保存済み内容を専用のA4印刷プレビューで確認できます。元の記録簿PDFそのものは公開GitHubへ保存しません。</p>
+      </section>
+
       <section className="card actions">
         <button onClick={() => location.assign("/inspection")}>記録簿画面を直接開く</button>
+        <button disabled={!chosenKey || busy} onClick={openSavedPrintPreview}>保存済み内容を印刷プレビュー</button>
         <button className="primary" disabled={!chosenKey || busy} onClick={continueToRecord}>この記録簿で入力へ →</button>
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:900px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:11px 14px;font-weight:800}button:disabled{opacity:.45}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero h1{font-size:31px;margin:5px 0}.hero p{color:#647184}.eyebrow{font-weight:800;color:#2674e8}.notice{margin-top:12px;background:#edf7ef;border:1px solid #c5e5ce;border-radius:12px;padding:11px 13px}.notice.warn{background:#fff8df;border-color:#ead88f}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid label{display:grid;gap:6px;color:#5f6b7a;font-weight:700}select{width:100%;border:1px solid #cbd6e3;border-radius:10px;padding:11px;background:#fff}.decision{border-width:2px}.decision.ready{border-color:#acd7b7}.decision.review{border-color:#ead88f}.decisionHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.decision h2{margin:5px 0 8px}.badge{background:#eef4ff;border-radius:999px;padding:6px 10px;font-size:13px;font-weight:800;white-space:nowrap}.info,.warning{border-radius:12px;padding:12px 14px;margin-top:12px;line-height:1.6}.info{background:#eef5ff}.warning{background:#fff8df;border:1px solid #ead88f}.actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}@media(max-width:680px){.grid{grid-template-columns:1fr}.decisionHead{display:block}.badge{display:inline-block;margin-top:6px}.actions button{width:100%}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:900px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:11px 14px;font-weight:800}button:disabled{opacity:.45}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero h1{font-size:31px;margin:5px 0}.hero p{color:#647184}.eyebrow{font-weight:800;color:#2674e8}.notice{margin-top:12px;background:#edf7ef;border:1px solid #c5e5ce;border-radius:12px;padding:11px 13px}.notice.warn{background:#fff8df;border-color:#ead88f}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid label{display:grid;gap:6px;color:#5f6b7a;font-weight:700}select{width:100%;border:1px solid #cbd6e3;border-radius:10px;padding:11px;background:#fff}.decision{border-width:2px}.decision.ready{border-color:#acd7b7}.decision.review{border-color:#ead88f}.decisionHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.decision h2{margin:5px 0 8px}.badge{background:#eef4ff;border-radius:999px;padding:6px 10px;font-size:13px;font-weight:800;white-space:nowrap}.info,.warning{border-radius:12px;padding:12px 14px;margin-top:12px;line-height:1.6}.info{background:#eef5ff}.warning{background:#fff8df;border:1px solid #ead88f}.printGuide{background:#f8fbff}.printGuide p{margin:8px 0 0;color:#637085;line-height:1.7}.actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}@media(max-width:680px){.grid{grid-template-columns:1fr}.decisionHead{display:block}.badge{display:inline-block;margin-top:6px}.actions button{width:100%}}
       `}</style>
     </main>
   );
