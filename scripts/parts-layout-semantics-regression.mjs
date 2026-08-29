@@ -15,9 +15,18 @@ function extractAutoHeaders(key) {
   return m[1];
 }
 
+function parseQuotedItems(source) {
+  return [...source.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+}
+
+function normalize(text) {
+  return text.normalize("NFKC").replace(/\s+/g, "").toUpperCase();
+}
+
 const retail = extractLabels("retail");
 const cost = extractLabels("cost");
 const genericHeaders = extractAutoHeaders("genericHeaders");
+const dedicatedFormatHeaders = extractAutoHeaders("dedicatedFormatHeaders");
 
 if (!retail.includes('"単価"')) {
   throw new Error("White/general parts list regression: 単価 must map to retail/定価");
@@ -41,9 +50,41 @@ if (dedicatedIndex < 0 || genericIndex < 0 || dedicatedIndex >= genericIndex) {
 }
 
 for (const marker of ["受注数", "出庫数", "標準価格", "倉庫", "棚番", "受注残"]) {
-  if (!auto.includes(`"${marker}"`)) {
+  if (!dedicatedFormatHeaders.includes(`"${marker}"`)) {
     throw new Error(`Yellow dedicated slip regression: missing classifier marker ${marker}`);
   }
 }
 
-console.log("PASS parts layout semantics: white 部品名+数量+単価 routes generic and 単価=>定価; yellow dedicated markers stay higher priority");
+// Uploaded yellow-slip photos include rotation, wrinkles, background notes and cases where
+// multiple slips/other text are visible. Do not store those real images in this public repo.
+// Instead, pin the classifier semantics with anonymized OCR-like strings whose reading order
+// is intentionally scrambled and whose background contains generic white-list headers.
+const dedicatedMarkers = parseQuotedItems(dedicatedFormatHeaders);
+const genericMarkers = parseQuotedItems(genericHeaders);
+
+function semanticClassify(text) {
+  const t = normalize(text);
+  const dedicatedHits = dedicatedMarkers.filter((x) => t.includes(normalize(x)));
+  if (dedicatedHits.length >= 3) return "dedicated";
+  const genericHits = genericMarkers.filter((x) => t.includes(normalize(x)));
+  if (genericHits.length >= 3) return "general";
+  return "unknown";
+}
+
+const yellowStressCases = [
+  // Rotated/reading-order-scrambled OCR: rows may arrive before the table header.
+  "品番A 1 900 405\n倉庫 0001\n標準価格\n出庫数\n棚番 X1\n受注残 0",
+  // Background notes/A4 text must not steal priority from a dedicated yellow slip.
+  "部品名 数量 単価 定価 仕入れ\n背景メモ\n受注数 出庫数 標準価格 倉庫 棚番",
+  // Wrinkles/partial OCR can lose some columns; three dedicated markers are enough by design.
+  "雑音 1234\n標準価格 2,100\n出庫数 1\n倉庫 0001\n手書きメモ",
+];
+
+for (const [index, sample] of yellowStressCases.entries()) {
+  const mode = semanticClassify(sample);
+  if (mode !== "dedicated") {
+    throw new Error(`Yellow stress regression ${index + 1}: expected dedicated, got ${mode}`);
+  }
+}
+
+console.log("PASS parts layout semantics: white 部品名+数量+単価 routes generic and 単価=>定価; yellow dedicated markers keep priority under anonymized rotation/background/noise stress");
