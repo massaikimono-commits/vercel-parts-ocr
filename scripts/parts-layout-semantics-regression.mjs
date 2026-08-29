@@ -82,12 +82,57 @@ const whiteStressCases = [
   "1,260 単価\n2 数量\nフィルター 部品名称",
   // One incidental yellow-table word must not steal a normal white list.
   "倉庫 メモ\n商品名 個数 希望小売価格\n備考",
+  // Same white list photographed farther away can split all three headers onto separate rows.
+  "作業票\n部 品 名\n数 量\n単 価\n交換部品一覧",
+  // Full-width characters from Japanese OCR must normalize to the same routing result.
+  "部品名\n数量\n単価\nフィルター ２ １，８００",
 ];
 
 for (const [index, sample] of whiteStressCases.entries()) {
   const mode = semanticClassify(sample);
   if (mode !== "general") {
     throw new Error(`White stress regression ${index + 1}: expected general, got ${mode}`);
+  }
+}
+
+// Proxy the important extraction contract of a white parts list: a single price column is
+// retail/定価, never cost/仕入れ. These are anonymous OCR-like rows derived from the photographed
+// layout, not real parts, prices, customers or vehicles.
+function whiteSinglePriceRows(text) {
+  const normalized = String(text || "")
+    .normalize("NFKC")
+    .replace(/[，、]/g, ",")
+    .replace(/\r/g, "");
+  const rows = [];
+  for (const raw of normalized.split(/\n+/)) {
+    const line = raw.trim();
+    if (!line || /部\s*品\s*名|数\s*量|単\s*価/.test(line) && !/\d/.test(line)) continue;
+    const priceMatch = line.match(/(?:^|\s)(\d{1,3}(?:,\d{3})+|\d{3,7})(?=\s|$)/);
+    if (!priceMatch) continue;
+    const before = line.slice(0, priceMatch.index ?? 0).trim();
+    const qtyMatch = before.match(/(?:^|\s)(\d{1,3})(?=\s*$)/);
+    const qty = qtyMatch ? String(Number(qtyMatch[1])) : "1";
+    const name = before.replace(/(?:^|\s)\d{1,3}(?=\s*$)/, "").trim();
+    rows.push({ name, qty, retail: priceMatch[1].replace(/,/g, ""), cost: "" });
+  }
+  return rows;
+}
+
+const whiteCaptureVariants = [
+  "部品名 数量 単価\nエアフィルター 1 1,800\nワイパーゴム 2 950",
+  "部 品 名\n数 量\n単 価\nエアフィルター １ １，８００\nワイパーゴム ２ ９５０",
+  "背景メモ\n部品名 数量 単価\nエアフィルター    1    1800\nワイパーゴム 2 950\n作業指示",
+];
+
+const expectedWhiteRows = [
+  { name: "エアフィルター", qty: "1", retail: "1800", cost: "" },
+  { name: "ワイパーゴム", qty: "2", retail: "950", cost: "" },
+];
+
+for (const [index, sample] of whiteCaptureVariants.entries()) {
+  const actual = whiteSinglePriceRows(sample);
+  if (JSON.stringify(actual) !== JSON.stringify(expectedWhiteRows)) {
+    throw new Error(`White extraction proxy ${index + 1}: expected ${JSON.stringify(expectedWhiteRows)}, got ${JSON.stringify(actual)}`);
   }
 }
 
@@ -103,6 +148,10 @@ const yellowStressCases = [
   // OCR may split a header across lines because of folds or perspective; surviving dedicated
   // markers still need to dominate generic-looking background words.
   "部品名 数量 単価\n受注数\n出庫数\n標準価格\n背景の定価 仕入れ\n棚番 B2",
+  // Repeated captures of the same yellow layout can move headers and row text around vertically.
+  "棚番 C3\n匿名部品 2 1,500 900\n受注数\n背景メモ\n標準価格\n出庫数\n受注残 0",
+  // A farther/tilted capture may preserve only the strongest dedicated headers plus generic words.
+  "部品名 数量 単価\n受注数 出庫数\n標準価格\n別紙メモ",
 ];
 
 for (const [index, sample] of yellowStressCases.entries()) {
@@ -112,4 +161,4 @@ for (const [index, sample] of yellowStressCases.entries()) {
   }
 }
 
-console.log("PASS parts layout semantics: white generic routing survives spacing/order/background noise with 単価=>定価; yellow dedicated markers keep priority under anonymized rotation/background/noise/multi-slip stress");
+console.log("PASS parts layout semantics: white generic routing and single-price=>定価 extraction proxies survive repeated-photo spacing/full-width/background noise; yellow dedicated markers keep priority under anonymized rotation/background/noise/multi-slip/repeated-capture stress");
