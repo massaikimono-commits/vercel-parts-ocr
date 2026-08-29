@@ -30,5 +30,11 @@ jobs:
       - name: Run vehicle-certificate regression
         run: npm run test:certificate
 
+      - name: Run QR speed regression
+        run: npm run test:qr-speed
+
       - name: Run parts-slip regression
         run: npm run test:parts
+
+      - name: Run yellow/white parts layout semantics
+        run: npm run test:parts-layout
