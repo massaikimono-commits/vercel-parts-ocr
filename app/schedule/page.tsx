@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
+import { dailyReportTimeLabel, prepareDailyReportSection } from "./print-rules";
 
 type ScheduleEntry = {
   id: string;
@@ -84,15 +85,7 @@ function jstBounds(day: string) {
 }
 
 function timeLabel(entry: ScheduleEntry) {
-  if (entry.print_time_label_override) return entry.print_time_label_override;
-  if (entry.print_time_mode === "morning") return "午前";
-  if (entry.print_time_mode === "unspecified") return "時間未定";
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(entry.starts_at));
+  return dailyReportTimeLabel(entry);
 }
 
 function hourInJst(value: string) {
@@ -393,13 +386,15 @@ export default function SchedulePage() {
   }
 
   function section(title: string, items: typeof enriched, period: "morning" | "afternoon") {
-    const deliveries = items.filter(({ entry }) => entry.entry_type === "delivery");
-    const arrivals = items.filter(({ entry }) => entry.entry_type !== "delivery");
+    const itemMap = new Map(items.map((item) => [item.entry.id, item]));
+    const prepared = prepareDailyReportSection(items.map(({ entry }) => entry), period);
+    const deliveries = prepared.deliveries.map((entry) => itemMap.get(entry.id)).filter(Boolean) as typeof enriched;
+    const arrivals = prepared.inbound.map((entry) => itemMap.get(entry.id)).filter(Boolean) as typeof enriched;
     const deliveryColumn = <div key="delivery"><h3>納車予定</h3>{!deliveries.length && <div className="empty">予定なし</div>}{deliveries.map(renderCard)}</div>;
     const arrivalColumn = <div key="arrivals"><h3>引き取り・来社・出張</h3>{!arrivals.length && <div className="empty">予定なし</div>}{arrivals.map(renderCard)}</div>;
     const columns = columnLayout === "delivery-left" ? [deliveryColumn, arrivalColumn] : [arrivalColumn, deliveryColumn];
     return (
-      <section className="card">
+      <section className={`card periodSection ${period === "afternoon" ? "afternoonSection" : "morningSection"}`}>
         <div className="sectionTitle"><h2>{title}</h2><span>{items.length}件</span></div>
         <div className="columns">{columns}</div>
         <div className="printPeriod">{period === "morning" ? "午前" : "午後"}</div>
@@ -456,7 +451,7 @@ export default function SchedulePage() {
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.dateNav input,.layoutControl select{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.layoutControl{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;color:#5d6878}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}.scheduleItem.done{opacity:.62;background:#f5f7f9}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.complete{min-width:70px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workCircle{width:34px;height:34px;padding:0;border-radius:50%;font-size:13px;flex:0 0 auto}.workCircle.active{background:#e9f7ef;border-color:#78bc8e;color:#176b37;font-size:23px}.printWorkCircle{display:none;font-size:22px;font-weight:900}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.open{margin-top:10px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}.printPeriod{display:none}@media(max-width:720px){.hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}.quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkCircle{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}h1{font-size:20pt}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.dateNav input,.layoutControl select{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.layoutControl{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;color:#5d6878}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}.scheduleItem.done{opacity:.62;background:#f5f7f9}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.complete{min-width:70px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workCircle{width:34px;height:34px;padding:0;border-radius:50%;font-size:13px;flex:0 0 auto}.workCircle.active{background:#e9f7ef;border-color:#78bc8e;color:#176b37;font-size:23px}.printWorkCircle{display:none;font-size:22px;font-weight:900}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.open{margin-top:10px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}.printPeriod{display:none}@media(max-width:720px){.hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}.quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkCircle{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}.afternoonSection .columns>div{display:flex;flex-direction:column;justify-content:flex-end}.afternoonSection .scheduleItem{flex:0 0 auto}h1{font-size:20pt}}
       `}</style>
     </main>
   );
