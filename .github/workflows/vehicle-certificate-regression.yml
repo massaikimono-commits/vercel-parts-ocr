@@ -30,5 +30,11 @@ jobs:
       - name: Run vehicle-certificate regression
         run: npm run test:certificate
 
+      - name: Check QR density performance budget
+        run: node scripts/qr-density-performance.mjs
+
       - name: Run parts-slip regression
         run: npm run test:parts
+
+      - name: Validate yellow and white parts-photo ground truth
+        run: node scripts/parts-photo-fixture-regression.mjs
