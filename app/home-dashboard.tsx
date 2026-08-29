@@ -97,7 +97,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   }
 
   function last4(vehicle: Vehicle | null) {
-    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\\d{4})(?!.*\\d)/)?.[1] || "----";
+    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
   }
 
   function openDay(day: string) { location.assign("/schedule?day=" + day); }
