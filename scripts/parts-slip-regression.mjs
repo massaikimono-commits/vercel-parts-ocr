@@ -26,7 +26,7 @@ function money(s) {
 }
 
 function amountValues(line) {
-  const matches = String(line || "").match(/\d{1,3}(?:[, ]\d{3})+|\d{4,7}/g) || [];
+  const matches = String(line || "").match(/\d{1,3}(?:[, ]\d{3})+|\d{3,7}/g) || [];
   return matches
     .map((raw) => ({ raw, value: Number(raw.replace(/[, ]/g, "")) }))
     .filter((x) => Number.isFinite(x.value) && x.value >= 100 && x.value <= 2000000);
