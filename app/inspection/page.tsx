@@ -3,6 +3,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
+import {
+  WORKSHOP_RECORD_TEMPLATES,
+  type WorkshopRecordTemplateKey,
+} from "./workshop-record-types";
 
 type Vehicle = {
   id: string;
@@ -60,6 +64,7 @@ type DesignatedValues = {
 };
 
 const ACTIVE_KEY = "parts-active-vehicle";
+const RECORD_TEMPLATE_KEY = "inspection-record-template";
 const DEFAULT_ITEMS: InspectionItem[] = [
   { id: "brake-pad", label: "ブレーキ・パッドの摩耗", mark: "", note: "", source: "blank" },
   { id: "brake-drum", label: "ブレーキ・ドラム／ディスク", mark: "", note: "", source: "blank" },
@@ -168,6 +173,10 @@ function vehicleLabel(v: Vehicle | null) {
   return v.registration_number || v.vehicle_number || v.chassis_number || "車両";
 }
 
+function validTemplateKey(value: string | null): value is WorkshopRecordTemplateKey {
+  return Boolean(value && Object.prototype.hasOwnProperty.call(WORKSHOP_RECORD_TEMPLATES, value));
+}
+
 export default function InspectionPage() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [customerName, setCustomerName] = useState("");
@@ -178,6 +187,7 @@ export default function InspectionPage() {
   const [recordHistory, setRecordHistory] = useState<any[]>([]);
   const [reviewMode, setReviewMode] = useState<"all" | "auto">("all");
   const [mode, setMode] = useState<"inspection" | "designated">("inspection");
+  const [selectedTemplate, setSelectedTemplate] = useState<WorkshopRecordTemplateKey | null>(null);
   const [inspectionDate, setInspectionDate] = useState(todayJst());
   const [intervalMonths, setIntervalMonths] = useState("12");
   const [items, setItems] = useState<InspectionItem[]>(DEFAULT_ITEMS);
@@ -193,6 +203,16 @@ export default function InspectionPage() {
     try {
       const saved = localStorage.getItem("inspection-review-mode");
       if (saved === "auto" || saved === "all") setReviewMode(saved);
+
+      const params = new URLSearchParams(location.search);
+      if (params.get("mode") === "designated") setMode("designated");
+      const fromQuery = params.get("template");
+      if (validTemplateKey(fromQuery)) {
+        setSelectedTemplate(fromQuery);
+      } else {
+        const stored = JSON.parse(localStorage.getItem(RECORD_TEMPLATE_KEY) || "null");
+        if (validTemplateKey(stored?.key)) setSelectedTemplate(stored.key);
+      }
     } catch {}
     void load();
   }, []);
@@ -221,17 +241,26 @@ export default function InspectionPage() {
       const works = (workRes.data || []) as WorkOrder[];
       const pool = (partsRes.data || []) as Part[];
       const history = (recordRes.data || []) as any[];
-      const initialWorkId = works[0]?.id || "";
+      const requestedWorkId = new URLSearchParams(location.search).get("workOrderId") || "";
+      const initialWorkId = works.some((work) => work.id === requestedWorkId) ? requestedWorkId : (works[0]?.id || "");
 
       setVehicle(v);
       setWorkOrders(works);
       setPartPool(pool);
       setRecordHistory(history);
       setWorkOrderId(initialWorkId);
+
+      const previousDesignated = history.find((x: any) =>
+        x.record_type === "指定整備記録簿" &&
+        (initialWorkId ? x.work_order_id === initialWorkId : x.work_order_id == null) &&
+        Array.isArray(x.items) && x.items[0]?.values
+      );
+      const savedDesignated = previousDesignated?.items?.[0]?.values || {};
       setDesignated((old) => ({
         ...old,
-        rearAxleWeight: String(v.rear_rear_axle_weight_kg || v.rear_front_axle_weight_kg || ""),
-        vehicleWeight: String(v.vehicle_weight || v.curb_weight_kg || ""),
+        ...savedDesignated,
+        rearAxleWeight: String(savedDesignated.rearAxleWeight || v.rear_rear_axle_weight_kg || v.rear_front_axle_weight_kg || ""),
+        vehicleWeight: String(savedDesignated.vehicleWeight || v.vehicle_weight || v.curb_weight_kg || ""),
       }));
 
       if (v.customer_id) {
@@ -240,7 +269,7 @@ export default function InspectionPage() {
       }
 
       await prepareInspection(v, initialWorkId, pool, history);
-      setMessage("車両情報・今回の部品・過去の印刷結果を読み込みました。");
+      setMessage("車両情報・対象作業・今回の部品・過去の印刷結果を読み込みました。");
     } catch (error: any) {
       setMessage(`読み込みエラー: ${error?.message || error}`);
     } finally {
@@ -310,7 +339,15 @@ export default function InspectionPage() {
     setBusy(true);
     try {
       await prepareInspection(vehicle, nextId, partPool, recordHistory);
-      setMessage("対象作業に合わせて、前回印刷結果と今回の部品伝票を再判定しました。");
+      const savedDesignated = recordHistory.find((x: any) =>
+        x.record_type === "指定整備記録簿" &&
+        x.work_order_id === (nextId || null) &&
+        Array.isArray(x.items) && x.items[0]?.values
+      )?.items?.[0]?.values;
+      if (savedDesignated) {
+        setDesignated((old) => ({ ...old, ...savedDesignated }));
+      }
+      setMessage("対象作業に合わせて、記録簿・前回印刷結果・今回の部品伝票を再判定しました。");
     } catch (error: any) {
       setMessage(`自動入力エラー: ${error?.message || error}`);
     } finally {
@@ -341,6 +378,8 @@ export default function InspectionPage() {
       parkingRatio: ratio(parking, numberOrNull(designated.vehicleWeight)),
     };
   }, [designated]);
+
+  const selectedTemplateLabel = selectedTemplate ? WORKSHOP_RECORD_TEMPLATES[selectedTemplate].label : "記録簿未選択";
 
   function updateItem(id: string, patch: Partial<InspectionItem>) {
     setItems((old) => old.map((x) => x.id === id ? { ...x, ...patch, source: "manual" } : x));
@@ -392,7 +431,7 @@ export default function InspectionPage() {
     }
   }
 
-  async function saveDesignated(nextStatus: "draft" | "confirmed" = "draft") {
+  async function saveDesignated(nextStatus: "draft" | "confirmed" | "printed" = "draft") {
     if (!vehicle) return;
     setBusy(true);
     try {
@@ -402,7 +441,15 @@ export default function InspectionPage() {
         values: designated,
         calculated: designatedCalc,
       }];
-      const { data: existing } = await supabase.from("inspection_records").select("id").eq("vehicle_id", vehicle.id).eq("record_type", "指定整備記録簿").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      let existingQuery = supabase
+        .from("inspection_records")
+        .select("id")
+        .eq("vehicle_id", vehicle.id)
+        .eq("record_type", "指定整備記録簿");
+      existingQuery = workOrderId
+        ? existingQuery.eq("work_order_id", workOrderId)
+        : existingQuery.is("work_order_id", null);
+      const { data: existing } = await existingQuery.order("updated_at", { ascending: false }).limit(1).maybeSingle();
       const payload = {
         vehicle_id: vehicle.id,
         work_order_id: workOrderId || null,
@@ -417,7 +464,7 @@ export default function InspectionPage() {
         ? await supabase.from("inspection_records").update(payload).eq("id", existing.id)
         : await supabase.from("inspection_records").insert(payload);
       if (error) throw error;
-      setMessage(nextStatus === "confirmed" ? "指定整備記録簿を確認済みにしました。" : "指定整備記録簿の下書きを保存しました。");
+      setMessage(nextStatus === "printed" ? "指定整備記録簿を印刷済みとして保存しました。" : nextStatus === "confirmed" ? "指定整備記録簿を確認済みにしました。" : "指定整備記録簿の下書きを保存しました。");
     } catch (error: any) {
       setMessage(`保存エラー: ${error?.message || error}`);
     } finally {
@@ -427,17 +474,21 @@ export default function InspectionPage() {
 
   async function printCurrent() {
     if (mode === "inspection") await saveInspection("printed");
-    else await saveDesignated("draft");
+    else await saveDesignated("printed");
     window.print();
   }
 
   return (
     <main className="page">
-      <header className="top noPrint"><button onClick={() => location.assign("/customer-vehicles")}>← 車両管理へ</button><strong>icb</strong></header>
+      <header className="top noPrint">
+        <button onClick={() => location.assign("/customer-vehicles")}>← 車両管理へ</button>
+        <button onClick={() => location.assign("/inspection/select")}>記録簿を選び直す</button>
+        <strong>icb</strong>
+      </header>
 
       <section className="card hero">
         <div><div className="eyebrow">記録簿ワークスペース</div><h1>{vehicleLabel(vehicle)}</h1><p>{customerName || "顧客未割り当て"}　{[vehicle?.maker, vehicle?.model || vehicle?.model_code].filter(Boolean).join(" / ")}</p></div>
-        <div className="vehicleMeta"><span>車台番号 {vehicle?.chassis_number || "-"}</span><span>燃料 {vehicle?.fuel_type || vehicle?.vehicle_type || "-"}</span></div>
+        <div className="vehicleMeta"><span>選択用紙 {selectedTemplateLabel}</span><span>車台番号 {vehicle?.chassis_number || "-"}</span><span>燃料 {vehicle?.fuel_type || vehicle?.vehicle_type || "-"}</span></div>
         <div className="notice">{busy ? "処理中…" : message}</div>
       </section>
 
@@ -456,7 +507,7 @@ export default function InspectionPage() {
       {mode === "inspection" ? (
         <>
           <section className="card">
-            <div className="sectionHead"><h2>点検整備記録簿</h2><span className="badge">{status === "printed" ? "印刷済み" : status === "confirmed" ? "確認済み" : "下書き"}</span></div>
+            <div className="sectionHead"><h2>{selectedTemplate ? selectedTemplateLabel : "点検整備記録簿"}</h2><span className="badge">{status === "printed" ? "印刷済み" : status === "confirmed" ? "確認済み" : "下書き"}</span></div>
             <div className="grid noPrint">
               <label>点検周期<select value={intervalMonths} onChange={(e) => setIntervalMonths(e.target.value)}><option value="3">3ヶ月</option><option value="6">6ヶ月</option><option value="12">12ヶ月</option><option value="24">24ヶ月</option></select></label>
               <label>確認モード<select value={reviewMode} onChange={(e) => {
@@ -482,7 +533,7 @@ export default function InspectionPage() {
         <>
           <section className="card">
             <h2>指定整備記録簿・制動力計算</h2>
-            <p className="help noPrint">左右の検査値を入力すると、後軸・総和・駐車ブレーキの比率を自動計算します。</p>
+            <p className="help noPrint">左右の検査値を入力すると、後軸・総和・駐車ブレーキの比率を自動計算します。作業ごとに下書きを分けて保存できます。</p>
             <div className="calcGrid">
               <label>後ブレーキ 左<input inputMode="decimal" value={designated.rearLeft} onChange={(e) => setDesignated({ ...designated, rearLeft: e.target.value })} /></label>
               <label>後ブレーキ 右<input inputMode="decimal" value={designated.rearRight} onChange={(e) => setDesignated({ ...designated, rearRight: e.target.value })} /></label>
@@ -501,7 +552,7 @@ export default function InspectionPage() {
       )}
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:980px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero h1{font-size:31px;margin:5px 0}.hero p{color:#647184}.eyebrow{font-weight:800;color:#2674e8}.vehicleMeta{display:flex;gap:8px;flex-wrap:wrap}.vehicleMeta span,.badge{background:#eef4ff;border-radius:999px;padding:5px 9px;font-size:13px}.notice{margin-top:12px;background:#edf7ef;border:1px solid #c5e5ce;border-radius:12px;padding:11px 13px}.modeTabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.modeTabs .active,.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label,.calcGrid label{display:grid;gap:6px;color:#5f6b7a;font-weight:700}input,select{width:100%;border:1px solid #cbd6e3;border-radius:10px;padding:11px;background:#fff}.sectionHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.suggest{background:#fff8df;border:1px solid #ead88f;border-radius:12px;padding:12px 14px;margin:14px 0;line-height:1.7}.suggest small{display:block;color:#71662f;margin-top:4px}.policy{background:#eef5ff;border:1px solid #c8daf5;border-radius:12px;padding:12px 14px;margin:14px 0;line-height:1.7}.itemList{display:grid;gap:8px}.inspectionItem{display:grid;grid-template-columns:minmax(220px,1.4fr) 110px 1fr;gap:8px;align-items:center;border-bottom:1px solid #edf0f4;padding:8px 0}.itemLabel{font-weight:800;display:flex;align-items:center;gap:7px;flex-wrap:wrap}.source{font-size:11px;font-weight:800;border-radius:999px;padding:3px 7px;background:#f1f4f8;color:#617086}.source-current-parts{background:#fff1d6;color:#805f10}.source-previous{background:#edf7ef;color:#337246}.source-vehicle-rule{background:#eef4ff;color:#2f64b2}.source-manual{background:#f3edff;color:#6a46a5}.actions{display:flex;gap:8px;flex-wrap:wrap}.calcGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.result{grid-column:1/-1;background:#f4f7fb;border-radius:12px;padding:13px;display:grid}.result b{font-size:19px}.result small,.help{color:#6a7788}.help{line-height:1.7}@media(max-width:680px){.grid,.calcGrid{grid-template-columns:1fr}.inspectionItem{grid-template-columns:1fr 90px}.inspectionItem input{grid-column:1/-1}.modeTabs{grid-template-columns:1fr}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:980px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero h1{font-size:31px;margin:5px 0}.hero p{color:#647184}.eyebrow{font-weight:800;color:#2674e8}.vehicleMeta{display:flex;gap:8px;flex-wrap:wrap}.vehicleMeta span,.badge{background:#eef4ff;border-radius:999px;padding:5px 9px;font-size:13px}.notice{margin-top:12px;background:#edf7ef;border:1px solid #c5e5ce;border-radius:12px;padding:11px 13px}.modeTabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.modeTabs .active,.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label,.calcGrid label{display:grid;gap:6px;color:#5f6b7a;font-weight:700}input,select{width:100%;border:1px solid #cbd6e3;border-radius:10px;padding:11px;background:#fff}.sectionHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px}.suggest{background:#fff8df;border:1px solid #ead88f;border-radius:12px;padding:12px 14px;margin:14px 0;line-height:1.7}.suggest small{display:block;color:#71662f;margin-top:4px}.policy{background:#eef5ff;border:1px solid #c8daf5;border-radius:12px;padding:12px 14px;margin:14px 0;line-height:1.7}.itemList{display:grid;gap:8px}.inspectionItem{display:grid;grid-template-columns:minmax(220px,1.4fr) 110px 1fr;gap:8px;align-items:center;border-bottom:1px solid #edf0f4;padding:8px 0}.itemLabel{font-weight:800;display:flex;align-items:center;gap:7px;flex-wrap:wrap}.source{font-size:11px;font-weight:800;border-radius:999px;padding:3px 7px;background:#f1f4f8;color:#617086}.source-current-parts{background:#fff1d6;color:#805f10}.source-previous{background:#edf7ef;color:#337246}.source-vehicle-rule{background:#eef4ff;color:#2f64b2}.source-manual{background:#f3edff;color:#6a46a5}.actions{display:flex;gap:8px;flex-wrap:wrap}.calcGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.result{grid-column:1/-1;background:#f4f7fb;border-radius:12px;padding:13px;display:grid}.result b{font-size:19px}.result small,.help{color:#6a7788}.help{line-height:1.7}@media(max-width:680px){.grid,.calcGrid{grid-template-columns:1fr}.inspectionItem{grid-template-columns:1fr 90px}.inspectionItem input{grid-column:1/-1}.modeTabs{grid-template-columns:1fr}.top{flex-wrap:wrap}}
         @media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:7mm;margin:0}.inspectionItem{grid-template-columns:1fr 20mm 1fr}.inspectionItem select,.inspectionItem input,.calcGrid input{border:0;padding:2px}.result{border:1px solid #aaa;background:#fff}}
       `}</style>
     </main>
