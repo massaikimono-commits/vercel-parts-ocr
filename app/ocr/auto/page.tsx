@@ -189,7 +189,7 @@ function classify(text: string): { mode: Mode; reason: string; auto: boolean } {
 
   const genericHeaders = [
     "部品名称", "部品名", "品名", "商品名", "名称",
-    "個数", "数量", "定価", "希望小売価格", "売価",
+    "個数", "数量", "定価", "単価", "希望小売価格", "売価",
     "仕入れ", "仕入", "原価", "仕切", "仕切価格",
   ];
   const headerHits = genericHeaders.filter((x) => t.includes(normalize(x)));
