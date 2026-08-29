@@ -7,6 +7,12 @@ import { supabase } from "../../supabase";
 type EntryType = "delivery" | "pickup" | "customer_visit" | "onsite_repair";
 type Reason = "点検" | "車検" | "一般整備" | "板金塗装";
 
+type StaffMember = {
+  id: string;
+  display_name: string;
+  short_name: string | null;
+};
+
 type TimeOption = {
   key: string;
   label: string;
@@ -75,7 +81,10 @@ export default function ScheduleNewPage() {
   const [registrationLast4, setRegistrationLast4] = useState("");
   const [maker, setMaker] = useState("");
   const [model, setModel] = useState("");
-  const [workerName, setWorkerName] = useState("");
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [staffId, setStaffId] = useState("");
+  const [isUrgent, setIsUrgent] = useState(false);
+  const [needsLoaner, setNeedsLoaner] = useState(false);
   const [notes, setNotes] = useState("");
   const [inspectionScheduleType, setInspectionScheduleType] = useState("");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
@@ -117,6 +126,24 @@ export default function ScheduleNewPage() {
     }
     void loadDeliveryOptions();
   }, [deliveryDay, entryType]);
+
+  useEffect(() => {
+    void loadStaff();
+  }, []);
+
+  async function loadStaff() {
+    const { data, error } = await supabase
+      .from("staff_members")
+      .select("id,display_name,short_name")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .order("display_name", { ascending: true });
+    if (error) {
+      setMessage(`社員一覧の読み込みエラー: ${error.message}`);
+      return;
+    }
+    setStaffMembers((data || []) as StaffMember[]);
+  }
 
   async function loadCapacity() {
     const { data, error } = await supabase.rpc("schedule_capacity", { p_day: day });
@@ -273,7 +300,7 @@ export default function ScheduleNewPage() {
         p_registration_last4: (registrationLast4.trim() || registrationNumber.match(/(\d{4})(?!.*\d)/)?.[1] || "").slice(-4) || null,
         p_maker: maker.trim() || null,
         p_model: model.trim() || null,
-        p_worker_name: workerName.trim() || null,
+        p_worker_name: null,
         p_notes: notes.trim() || null,
         p_inspection_schedule_type: inspectionScheduleType || null,
         p_print_time_mode: check.main.printMode,
@@ -283,6 +310,27 @@ export default function ScheduleNewPage() {
 
       const workOrderId = data?.workOrderId;
       const vehicleId = data?.vehicleId;
+
+      if (workOrderId) {
+        const { error: flagError } = await supabase
+          .from("work_orders")
+          .update({
+            is_urgent: isUrgent,
+            needs_loaner: needsLoaner,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", workOrderId);
+        if (flagError) throw flagError;
+
+        if (staffId) {
+          const { error: staffError } = await supabase.rpc("set_work_order_worker", {
+            p_work_order_id: workOrderId,
+            p_staff_id: staffId,
+            p_actor: "schedule-registration",
+          });
+          if (staffError) throw staffError;
+        }
+      }
 
       if (addDelivery && entryType !== "delivery" && selectedDelivery && workOrderId && vehicleId) {
         const { error: workError } = await supabase
@@ -422,7 +470,19 @@ export default function ScheduleNewPage() {
           <label>ナンバー下4桁<input inputMode="numeric" maxLength={4} value={registrationLast4} onChange={(e) => setRegistrationLast4(e.target.value.replace(/\D/g, "").slice(-4))} /></label>
           <label>メーカー<input value={maker} onChange={(e) => setMaker(e.target.value)} /></label>
           <label>型式<input value={model} onChange={(e) => setModel(e.target.value)} /></label>
-          <label>作業担当<input value={workerName} onChange={(e) => setWorkerName(e.target.value)} /></label>
+          <label>作業担当
+            <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
+              <option value="">未選択</option>
+              {staffMembers.map((staff) => (
+                <option key={staff.id} value={staff.id}>{staff.short_name || staff.display_name}</option>
+              ))}
+            </select>
+          </label>
+          <div className="flagBox">
+            <label className="switch"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />急ぎ</label>
+            <label className="switch"><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} />代車あり</label>
+            <button type="button" onClick={() => location.assign("/settings/staff")}>社員名を管理</button>
+          </div>
           <label className="wide">備考<textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>
       </section>
@@ -466,7 +526,7 @@ export default function ScheduleNewPage() {
         .capacity{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.capacity>div{background:#f6f8fb;border-radius:12px;padding:12px;display:grid}.capacity b{font-size:24px}.capacity small{color:#78869a}
         .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
         input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
-        .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.deliveryGrid{margin-top:12px}
+        .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.deliveryGrid{margin-top:12px}
         .primary{width:100%;background:#2f6fe4;border-color:#2f6fe4;color:#fff;font-size:18px;padding:16px}
         .errors,.warnings{margin-top:12px;border-radius:12px;padding:13px 14px;line-height:1.7}.errors{background:#fff0f0;border:1px solid #efbcbc;color:#8f2f2f}.warnings{background:#fff8df;border:1px solid #ecd98d;color:#6d5912}.warnings button{margin-top:8px;background:#fff}
         .footnote{color:#6f7c8e;line-height:1.6;margin-bottom:0}
