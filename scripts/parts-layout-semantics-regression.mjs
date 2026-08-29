@@ -71,6 +71,26 @@ function semanticClassify(text) {
   return "unknown";
 }
 
+// White lists also arrive photographed rather than scanned. Pin routing under harmless OCR
+// spacing/order noise and background words, without committing any customer or vehicle data.
+const whiteStressCases = [
+  // Canonical three-column list, with unrelated background text around it.
+  "背景メモ\n部品名 数量 単価\n交換予定 作業指示",
+  // OCR can insert spaces inside Japanese headers after perspective correction.
+  "部 品 名\n数 量\n単 価\n品番 ABC",
+  // Reading order can be right-to-left or row-first on a rotated/tilted photo.
+  "1,260 単価\n2 数量\nフィルター 部品名称",
+  // One incidental yellow-table word must not steal a normal white list.
+  "倉庫 メモ\n商品名 個数 希望小売価格\n備考",
+];
+
+for (const [index, sample] of whiteStressCases.entries()) {
+  const mode = semanticClassify(sample);
+  if (mode !== "general") {
+    throw new Error(`White stress regression ${index + 1}: expected general, got ${mode}`);
+  }
+}
+
 const yellowStressCases = [
   // Rotated/reading-order-scrambled OCR: rows may arrive before the table header.
   "品番A 1 900 405\n倉庫 0001\n標準価格\n出庫数\n棚番 X1\n受注残 0",
@@ -92,4 +112,4 @@ for (const [index, sample] of yellowStressCases.entries()) {
   }
 }
 
-console.log("PASS parts layout semantics: white 部品名+数量+単価 routes generic and 単価=>定価; yellow dedicated markers keep priority under anonymized rotation/background/noise/multi-slip stress");
+console.log("PASS parts layout semantics: white generic routing survives spacing/order/background noise with 単価=>定価; yellow dedicated markers keep priority under anonymized rotation/background/noise/multi-slip stress");
