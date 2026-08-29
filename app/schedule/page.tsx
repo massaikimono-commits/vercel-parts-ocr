@@ -54,6 +54,7 @@ type Customer = {
 };
 
 type ColumnLayout = "delivery-left" | "delivery-right";
+type CompletionPosition = "name" | "meta";
 
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   delivery: "納車",
@@ -63,6 +64,7 @@ const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
 };
 
 const LAYOUT_KEY = "icb-schedule-column-layout";
+const LAYOUT_SETTING_KEY = "schedule_layout";
 
 function localDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -125,15 +127,48 @@ export default function SchedulePage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [columnLayout, setColumnLayout] = useState<ColumnLayout>("delivery-left");
+  const [completionPosition, setCompletionPosition] = useState<CompletionPosition>("name");
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("当日の入出庫予定を読み込みます。");
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(LAYOUT_KEY);
-      if (saved === "delivery-left" || saved === "delivery-right") setColumnLayout(saved);
-    } catch {}
+    void loadLayout();
   }, []);
+
+  async function loadLayout() {
+    try {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("setting_value")
+        .eq("setting_key", LAYOUT_SETTING_KEY)
+        .maybeSingle();
+      const value = data?.setting_value || {};
+      if (value.columnLayout === "delivery-left" || value.columnLayout === "delivery-right") {
+        setColumnLayout(value.columnLayout);
+      } else {
+        const saved = localStorage.getItem(LAYOUT_KEY);
+        if (saved === "delivery-left" || saved === "delivery-right") setColumnLayout(saved);
+      }
+      if (value.completionPosition === "name" || value.completionPosition === "meta") {
+        setCompletionPosition(value.completionPosition);
+      }
+    } catch {}
+  }
+
+  async function saveLayout(nextColumn: ColumnLayout, nextCompletion: CompletionPosition) {
+    setColumnLayout(nextColumn);
+    setCompletionPosition(nextCompletion);
+    try { localStorage.setItem(LAYOUT_KEY, nextColumn); } catch {}
+    const { error } = await supabase.from("app_settings").upsert({
+      setting_key: LAYOUT_SETTING_KEY,
+      setting_value: {
+        columnLayout: nextColumn,
+        completionPosition: nextCompletion,
+      },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "setting_key" });
+    if (error) setMessage("表示設定の保存エラー: " + error.message);
+  }
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("day");
@@ -251,8 +286,11 @@ export default function SchedulePage() {
   }
 
   function changeColumnLayout(next: ColumnLayout) {
-    setColumnLayout(next);
-    try { localStorage.setItem(LAYOUT_KEY, next); } catch {}
+    void saveLayout(next, completionPosition);
+  }
+
+  function changeCompletionPosition(next: CompletionPosition) {
+    void saveLayout(columnLayout, next);
   }
 
   function customerLabel(customer: Customer | null) {
@@ -320,12 +358,12 @@ export default function SchedulePage() {
             <b>{timeLabel(entry)}　{ENTRY_LABEL[entry.entry_type]}</b>
             <div className="customerRow">
               <div className="customer">{customerLabel(customer)}</div>
-              {isDelivery && work && (
+              {isDelivery && completionPosition === "name" && work && (
                 <button className={work.work_completed ? "workCircle active noPrint" : "workCircle noPrint"} onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了切替">
                   {work.work_completed ? "○" : "未"}
                 </button>
               )}
-              {isDelivery && work?.work_completed && <span className="printWorkCircle">○</span>}
+              {isDelivery && completionPosition === "name" && work?.work_completed && <span className="printWorkCircle">○</span>}
               {workFlags(work)}
             </div>
           </div>
@@ -340,6 +378,12 @@ export default function SchedulePage() {
           <span>{work?.reason || "入庫要因未設定"}</span>
           {work?.worker_name && <span>担当 {work.worker_name}</span>}
           {work?.expected_completion_date && <span>完成予定 {work.expected_completion_date}</span>}
+          {isDelivery && completionPosition === "meta" && work && (
+            <button className={work.work_completed ? "workCircle active noPrint" : "workCircle noPrint"} onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了切替">
+              {work.work_completed ? "○" : "未"}
+            </button>
+          )}
+          {isDelivery && completionPosition === "meta" && work?.work_completed && <span className="printWorkCircle">○</span>}
         </div>
         {(vehicle?.maker || vehicle?.model) && <div className="sub">{[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>}
         {entry.notes && <div className="note">{entry.notes}</div>}
@@ -387,6 +431,7 @@ export default function SchedulePage() {
         <button onClick={() => setDay(addDay(day, 1))}>翌日 →</button>
         <button className="newEntry" onClick={() => location.assign(`/schedule/new?day=${day}`)}>＋ 予定を登録</button>
         <label className="layoutControl">配置<select value={columnLayout} onChange={(e) => changeColumnLayout(e.target.value as ColumnLayout)}><option value="delivery-left">納車を左</option><option value="delivery-right">納車を右</option></select></label>
+        <label className="layoutControl">作業○<select value={completionPosition} onChange={(e) => changeCompletionPosition(e.target.value as CompletionPosition)}><option value="name">名前の横</option><option value="meta">詳細欄</option></select></label>
         <button className="print" onClick={() => window.print()}>🖨 1日予定を印刷</button>
       </div>
 
