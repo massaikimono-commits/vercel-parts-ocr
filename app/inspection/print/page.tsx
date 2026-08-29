@@ -157,6 +157,27 @@ export default function InspectionPrintPage() {
     }
   }
 
+  async function printAndMark() {
+    if (!record || busy) return;
+    setBusy(true);
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("inspection_records")
+      .update({ status: "printed", updated_at: updatedAt })
+      .eq("id", record.id);
+
+    if (error) {
+      setMessage(`印刷状態の保存エラー: ${error.message}`);
+      setBusy(false);
+      return;
+    }
+
+    setRecord((current) => current ? { ...current, status: "printed", updated_at: updatedAt } : current);
+    setMessage("印刷済みとして保存しました。印刷ダイアログを開きます。");
+    setBusy(false);
+    window.setTimeout(() => window.print(), 0);
+  }
+
   const items = useMemo(() => {
     if (!record || !Array.isArray(record.items)) return [] as InspectionItem[];
     if (mode === "designated") return [] as InspectionItem[];
@@ -174,6 +195,11 @@ export default function InspectionPrintPage() {
     : mode === "designated" ? "指定整備記録簿" : "点検整備記録簿";
 
   const canPrint = Boolean(record && !busy);
+  const inputParams = new URLSearchParams();
+  if (templateKey) inputParams.set("template", templateKey);
+  if (mode === "designated") inputParams.set("mode", "designated");
+  if (workOrder?.id) inputParams.set("workOrderId", workOrder.id);
+  const inputUrl = `/inspection${inputParams.toString() ? `?${inputParams.toString()}` : ""}`;
 
   return (
     <main className="page">
@@ -189,8 +215,8 @@ export default function InspectionPrintPage() {
           <p>{message}</p>
         </div>
         <div className="actions">
-          <button onClick={() => location.assign(`/inspection${templateKey ? `?template=${templateKey}` : mode === "designated" ? "?mode=designated" : ""}`)}>入力へ戻る</button>
-          <button className="primary" disabled={!canPrint} onClick={() => window.print()}>🖨 この内容を印刷</button>
+          <button onClick={() => location.assign(inputUrl)}>入力へ戻る</button>
+          <button className="primary" disabled={!canPrint} onClick={() => void printAndMark()}>🖨 この内容を印刷</button>
         </div>
       </section>
 
