@@ -60,7 +60,7 @@ export function selectDailyReportSecondaryWorks(works: DailyReportSecondaryWork[
 
   const plannedDeliveries = works
     .filter((work) => {
-      if (!work.planned_delivery_at || work.status === "cancelled") return false;
+      if (!work.planned_delivery_at || work.checked_out_at || work.status === "cancelled") return false;
       const value = new Date(work.planned_delivery_at).getTime();
       return value >= start && value < end;
     })
