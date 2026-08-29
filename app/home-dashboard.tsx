@@ -90,7 +90,14 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     return { entry, work, vehicle, customer };
   }), [entries, workMap, vehicleMap, customerMap]);
 
-  const unfinished = todayRows.filter(({ entry, work }) => entry.entry_type === "delivery" && work && !work.work_completed);
+  const unfinished = useMemo(() => {
+    const seenWorkIds = new Set<string>();
+    return todayRows.filter(({ work }) => {
+      if (!work || work.work_completed || seenWorkIds.has(work.id)) return false;
+      seenWorkIds.add(work.id);
+      return true;
+    });
+  }, [todayRows]);
 
   function customerName(customer: Customer | null) {
     return customer?.schedule_display_name || customer?.company_name || customer?.name || "お客様未登録";
@@ -120,7 +127,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <div className="unfinishedBox">
             <div className="unfinishedTitle">作業未実施</div>
             {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => (
-              <button key={entry.id} className="unfinishedRow" onClick={() => openDay(todayJst())}>
+              <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openDay(todayJst())}>
                 <span className="statusDot">未</span>
                 <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b><small>下4桁 {last4(vehicle)}　{work?.reason || ""}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
