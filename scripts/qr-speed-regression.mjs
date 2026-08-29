@@ -1,12 +1,12 @@
 import { performance } from "node:perf_hooks";
 import { detectCertificateQrDensityCenters } from "../app/lib/certificate-qr-density.mjs";
 
-function syntheticQrImage(width, height, centers) {
+function syntheticQrImage(width, height, centers, yCenter = 0.90) {
   const rgba = new Uint8ClampedArray(width * height * 4);
   rgba.fill(255);
   const size = Math.max(42, Math.round(width * 0.052));
   const cell = Math.max(3, Math.floor(size / 13));
-  const cy = Math.floor(height * 0.90);
+  const cy = Math.floor(height * yCenter);
   for (const center of centers) {
     const cx = Math.round(width * center);
     const left = Math.max(0, cx - Math.floor(size / 2));
@@ -32,10 +32,14 @@ function syntheticQrImage(width, height, centers) {
 const width = 1200;
 const height = 1697;
 const cases = [
-  { name: "kei-six", expected: 6, centers: [0.485, 0.574, 0.658, 0.744, 0.829, 0.911] },
-  { name: "registered-five-left", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789] },
-  { name: "registered-five-right", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853] },
-  { name: "legacy-two", expected: 2, centers: [0.703, 0.928] },
+  { name: "kei-six", expected: 6, centers: [0.485, 0.574, 0.658, 0.744, 0.829, 0.911], yCenter: 0.90 },
+  { name: "registered-five-left", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.90 },
+  { name: "registered-five-right", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.90 },
+  { name: "legacy-two", expected: 2, centers: [0.703, 0.928], yCenter: 0.90 },
+  // Photo captures can shift the normalized certificate vertically. Keep the
+  // density detector effective near both ends of its lower-page scan band.
+  { name: "photo-shift-up", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.84 },
+  { name: "photo-shift-down", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.955 },
 ];
 
 const runs = 4;
@@ -44,7 +48,7 @@ const maxAverageMs = 750;
 const results = [];
 
 for (const test of cases) {
-  const rgba = syntheticQrImage(width, height, test.centers);
+  const rgba = syntheticQrImage(width, height, test.centers, test.yCenter);
 
   // Warm-up keeps the budget focused on steady-state detector cost, not Node startup/JIT.
   detectCertificateQrDensityCenters(rgba, width, height);
