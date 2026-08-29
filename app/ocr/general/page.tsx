@@ -40,8 +40,8 @@ const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const LABELS: Record<ColumnKey, string[]> = {
   name: ["部品名称", "部品名", "品名", "商品名", "名称", "摘要", "品目"],
   qty: ["個数", "数量", "数", "受注数", "出庫数", "入数"],
-  retail: ["定価", "標準価格", "希望小売価格", "売価", "販売価格"],
-  cost: ["仕入れ", "仕入", "原価", "仕切", "仕切価格", "単価"],
+  retail: ["定価", "標準価格", "希望小売価格", "売価", "販売価格", "単価"],
+  cost: ["仕入れ", "仕入", "原価", "仕切", "仕切価格"],
 };
 
 const STOP_WORDS = ["合計", "小計", "総合計", "消費税", "税額", "請求額", "今回御買上額"];
@@ -359,74 +359,53 @@ export default function GeneralOCRPage() {
       await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: tesseract.PSM?.AUTO ?? "3", user_defined_dpi: "300" });
       const result = await worker.recognize(enhanced, {}, { text: true, tsv: true });
       const text = result.data.text || "";
-      const tsv = result.data.tsv || "";
+      const tsv = (result.data as any).tsv || "";
       setRawText(text);
       const lines = parseTSV(tsv);
       const header = detectHeader(lines);
-      let extracted: Part[] = [];
-      if (header && header.matches.length >= 3) extracted = parseByColumns(lines, header);
-      if (!extracted.length) extracted = fallbackParse(text);
-      extracted = dedupe(extracted);
-      setParts(extracted);
-      const headerDebug = header ? `見出し行: ${header.index + 1}\n検出列: ${header.matches.map((x) => `${x.key}=${x.label}`).join(" / ")}` : "見出し行: 自動検出できず（全文フォールバック使用）";
-      const lineDebug = lines.slice(0, 80).map((x, i) => `${i + 1}: ${x.text}`).join("\n");
-      setDebug(`${headerDebug}\n\nOCR行データ\n${lineDebug}`);
+      const columnParts = header ? parseByColumns(lines, header) : [];
+      const fallback = fallbackParse(text);
+      const best = dedupe(columnParts.length ? columnParts : fallback);
+      setParts(best);
+      setDebug(JSON.stringify({ paper, header, columnParts, fallbackCount: fallback.length, finalCount: best.length }, null, 2));
+      setMessage(best.length ? `${best.length}件の部品候補を読み取りました。必ず内容を確認してください。` : "部品行を確定できませんでした。下のOCR原文を確認して手入力してください。");
       setProgress(100);
-      setMessage(extracted.length ? `${extracted.length}件を候補抽出しました。内容を確認して保存してください。` : "候補を自動抽出できませんでした。OCR全文は残してあるので、実物に合わせて調整できます。");
-    } catch (error) {
-      console.error(error);
-      setMessage("汎用OCR処理でエラーが出ました。画像を変えずにもう一度試してください。");
+    } catch (error: any) {
+      setMessage(`OCRエラー: ${error?.message || error}`);
     } finally {
-      if (worker) await worker.terminate().catch(() => {});
+      if (worker) { try { await worker.terminate(); } catch {} }
       setBusy(false);
     }
   }
 
-  function updatePart(index: number, key: keyof Part, value: string) { setParts((old) => old.map((p, i) => i === index ? { ...p, [key]: value } : p)); }
-  function addManual() { setParts((old) => [...old, { id: uid(), name: "", qty: "1", retail: "", cost: "" }]); }
-  function saveParts() {
-    if (!parts.length) return;
-    let current: Part[] = [];
-    try { current = JSON.parse(localStorage.getItem("parts-data") || "[]"); if (!Array.isArray(current)) current = []; } catch { current = []; }
-    localStorage.setItem("parts-data", JSON.stringify([...parts, ...current]));
-    setMessage(`${parts.length}件を部品データへ保存しました。`);
-  }
-  async function copyTSV() {
-    const text = ["部品名称\t個数\t定価\t仕入れ", ...parts.map((p) => `${p.name}\t${p.qty}\t${p.retail}\t${p.cost}`)].join("\n");
-    await navigator.clipboard?.writeText(text);
-    setMessage("Excel貼り付け用データをコピーしました。");
-  }
-  function saveCSV() {
-    const text = [["部品名称", "個数", "定価", "仕入れ"], ...parts.map((p) => [p.name, p.qty, p.retail, p.cost])].map((row) => row.map((x) => `"${String(x).replaceAll('"', '""')}"`).join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(["\ufeff" + text], { type: "text/csv;charset=utf-8" }));
-    a.download = "parts-general-ocr.csv";
-    a.click();
-  }
-
   return (
     <main style={styles.page}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <button onClick={() => location.assign("/")} style={{ border: "1px solid #ccd5e2", background: "#fff", borderRadius: 12, padding: "10px 14px", color: "#2674e8", fontWeight: 700 }}>← メインへ</button>
-        <div style={{ fontWeight: 800 }}>icb</div>
-      </div>
       <section style={styles.card}>
-        <h1 style={styles.title}>汎用A4・他社伝票OCR</h1>
-        <p style={styles.text}>A4いっぱいに部品が並ぶ用紙や、まだ登録していない他社伝票向けです。用紙全体をOCRして「部品名称・数量・定価・仕入れ」に近い見出しを探し、表の列位置から複数行をまとめて抽出します。</p>
-        {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
-        <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
-        <input ref={libraryRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
-        <button disabled={busy} style={styles.primary} onClick={() => cameraRef.current?.click()}>📷 今撮影して汎用OCR</button>
-        <button disabled={busy} style={styles.secondary} onClick={() => libraryRef.current?.click()}>🖼 写真ライブラリから汎用OCR</button>
-        {preview && <img src={preview} alt="読み取り画像" style={{ width: "100%", maxHeight: 460, objectFit: "contain", borderRadius: 14, marginTop: 16, background: "#eef2f7" }} />}
+        <h1 style={styles.title}>汎用部品伝票OCR</h1>
+        <p style={styles.text}>白い部品一覧など、専用黄色伝票以外の表形式伝票を読み取ります。列見出しを使って、部品名称・個数・定価・仕入れを分けます。</p>
+        <div style={styles.notice}>{busy ? `処理中 ${progress}% — ${message}` : message}</div>
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) runOCR(f); e.currentTarget.value = ""; }} />
+        <input ref={libraryRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) runOCR(f); e.currentTarget.value = ""; }} />
+        <button style={styles.primary} disabled={busy} onClick={() => cameraRef.current?.click()}>📷 写真を撮る</button>
+        <button style={styles.secondary} disabled={busy} onClick={() => libraryRef.current?.click()}>🖼 写真を選ぶ</button>
+        {preview && <img src={preview} alt="preview" style={{ width: "100%", maxHeight: 380, objectFit: "contain", marginTop: 16, borderRadius: 12, background: "#f5f6f8" }} />}
       </section>
+
       <section style={styles.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}><h2 style={{ marginTop: 0 }}>抽出データ</h2><button style={{ border: "1px solid #ccd5e2", borderRadius: 10, padding: "9px 12px", background: "#fff" }} onClick={addManual}>＋1行追加</button></div>
-        {!parts.length && <p style={styles.text}>まだ抽出データはありません。</p>}
-        {parts.length > 0 && <><div style={{ overflowX: "auto" }}><div style={{ minWidth: 600 }}><div style={{ ...styles.row, fontWeight: 800 }}><div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div></div>{parts.map((p, i) => <div style={styles.row} key={p.id}><input style={styles.input} value={p.name} onChange={(e) => updatePart(i, "name", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.qty} onChange={(e) => updatePart(i, "qty", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.retail} onChange={(e) => updatePart(i, "retail", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.cost} onChange={(e) => updatePart(i, "cost", e.target.value)} /></div>)}</div></div><button style={styles.primary} onClick={saveParts}>✓ この内容を部品データへ保存</button><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><button style={styles.secondary} onClick={copyTSV}>📋 Excelへコピー</button><button style={styles.secondary} onClick={saveCSV}>CSV保存</button></div></>}
+        <h2>読取結果</h2>
+        <div style={{ ...styles.row, fontWeight: 800, color: "#657187" }}><div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div></div>
+        {parts.map((part) => <div key={part.id} style={styles.row}>
+          <input style={styles.input} value={part.name} onChange={(e) => setParts((old) => old.map((x) => x.id === part.id ? { ...x, name: e.target.value } : x))} />
+          <input style={styles.input} value={part.qty} onChange={(e) => setParts((old) => old.map((x) => x.id === part.id ? { ...x, qty: e.target.value } : x))} />
+          <input style={styles.input} value={part.retail} onChange={(e) => setParts((old) => old.map((x) => x.id === part.id ? { ...x, retail: e.target.value } : x))} />
+          <input style={styles.input} value={part.cost} onChange={(e) => setParts((old) => old.map((x) => x.id === part.id ? { ...x, cost: e.target.value } : x))} />
+        </div>)}
+        {!parts.length && <div style={styles.text}>まだ結果はありません。</div>}
       </section>
-      <section style={styles.card}><details><summary style={{ fontWeight: 800, cursor: "pointer" }}>OCR詳細（調整用）</summary><p style={styles.text}>実物のA4伝票が手に入った時は、ここに出る「検出列」とOCR行データを見ながら精度を合わせられます。</p><textarea readOnly value={debug} style={styles.debug} /></details></section>
-      <section style={styles.card}><details><summary style={{ fontWeight: 800, cursor: "pointer" }}>OCR全文</summary><textarea readOnly value={rawText} style={styles.debug} /></details></section>
+
+      <section style={styles.card}>
+        <details><summary style={{ fontWeight: 800 }}>OCR原文・解析情報</summary><textarea readOnly value={rawText} style={{ ...styles.debug, marginTop: 12 }} /><textarea readOnly value={debug} style={{ ...styles.debug, minHeight: 180, marginTop: 10 }} /></details>
+      </section>
     </main>
   );
 }
