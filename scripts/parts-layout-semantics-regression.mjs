@@ -78,6 +78,11 @@ const yellowStressCases = [
   "部品名 数量 単価 定価 仕入れ\n背景メモ\n受注数 出庫数 標準価格 倉庫 棚番",
   // Wrinkles/partial OCR can lose some columns; three dedicated markers are enough by design.
   "雑音 1234\n標準価格 2,100\n出庫数 1\n倉庫 0001\n手書きメモ",
+  // Two yellow slips can appear in one photo. Duplicate/scrambled headers must stay dedicated.
+  "受注残 0 棚番 A1\n標準価格 900 出庫数 1\n別伝票\n倉庫 0002 受注数 2 標準価格 1,200",
+  // OCR may split a header across lines because of folds or perspective; surviving dedicated
+  // markers still need to dominate generic-looking background words.
+  "部品名 数量 単価\n受注数\n出庫数\n標準価格\n背景の定価 仕入れ\n棚番 B2",
 ];
 
 for (const [index, sample] of yellowStressCases.entries()) {
@@ -87,4 +92,4 @@ for (const [index, sample] of yellowStressCases.entries()) {
   }
 }
 
-console.log("PASS parts layout semantics: white 部品名+数量+単価 routes generic and 単価=>定価; yellow dedicated markers keep priority under anonymized rotation/background/noise stress");
+console.log("PASS parts layout semantics: white 部品名+数量+単価 routes generic and 単価=>定価; yellow dedicated markers keep priority under anonymized rotation/background/noise/multi-slip stress");
