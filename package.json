@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:certificate && npm run test:parts && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:qr-speed && npm run test:parts-layout && next build",
+    "build": "npm run test:certificate && npm run test:parts && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:qr-speed && npm run test:parts-layout && next build",
     "start": "next start",
     "test:certificate": "node scripts/vehicle-certificate-regression.mjs",
     "test:parts": "node scripts/parts-slip-regression.mjs",
@@ -15,6 +15,7 @@
     "test:schedule-print-layout": "node scripts/schedule-print-layout-regression.mjs",
     "test:daily-report-template": "node scripts/daily-report-template-regression.mjs",
     "test:daily-report-allocation": "node scripts/daily-report-allocation-regression.mjs",
+    "test:daily-report-print-model": "node scripts/daily-report-print-model-regression.mjs",
     "test:qr-speed": "node scripts/qr-speed-regression.mjs",
     "test:parts-layout": "node scripts/parts-layout-semantics-regression.mjs"
   },
