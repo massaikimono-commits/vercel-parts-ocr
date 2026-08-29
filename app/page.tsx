@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
+import HomeDashboard from "./home-dashboard";
 
 type Part = {
   id: string;
@@ -785,6 +786,9 @@ export default function Home() {
     );
   }
 
+  return <HomeDashboard onLogout={() => supabase.auth.signOut()} />;
+
+  /* Legacy in-page tools kept below temporarily for regression safety. */
   return (
     <main>
       <header className="header"><div className="title">icb</div><div className="desc">車両・入出庫・OCR・印刷</div></header>
