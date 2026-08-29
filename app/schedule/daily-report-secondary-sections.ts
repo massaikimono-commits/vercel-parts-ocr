@@ -29,6 +29,11 @@ function isActiveWorkshopWork(work: DailyReportSecondaryWork, endOfDay: number) 
   return !work.checked_in_at || new Date(work.checked_in_at).getTime() < endOfDay;
 }
 
+function isBodyShopReason(reason: string) {
+  const normalized = reason.trim();
+  return normalized.includes("板金") || normalized.includes("鈑金");
+}
+
 export function collectDailyReportMessages(entries: DailyReportSecondaryEntry[]) {
   const seen = new Set<string>();
   const messages: string[] = [];
@@ -46,11 +51,11 @@ export function selectDailyReportSecondaryWorks(works: DailyReportSecondaryWork[
   const active = works.filter((work) => isActiveWorkshopWork(work, end));
 
   const bodyShopVehicles = active
-    .filter((work) => work.reason === "板金塗装")
+    .filter((work) => isBodyShopReason(work.reason))
     .sort((a, b) => (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31"));
 
   const stayingVehicles = active
-    .filter((work) => work.reason !== "板金塗装")
+    .filter((work) => !isBodyShopReason(work.reason))
     .sort((a, b) => (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31"));
 
   const plannedDeliveries = works
