@@ -40,6 +40,9 @@ const cases = [
   // density detector effective near both ends of its lower-page scan band.
   { name: "photo-shift-up", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.84 },
   { name: "photo-shift-down", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.955 },
+  // A QR-like patch elsewhere on a photographed page must not expand the scan
+  // area or create a false candidate. This pins the lower-page-only fast path.
+  { name: "upper-page-decoy", expected: 0, centers: [0.72], yCenter: 0.50 },
 ];
 
 const runs = 4;
@@ -61,12 +64,18 @@ for (const test of cases) {
   const elapsed = performance.now() - started;
   const average = elapsed / runs;
 
-  if (centers.length < test.expected) {
-    throw new Error(`QR speed fixture ${test.name} lost targets: expected >=${test.expected}, got ${centers.length}`);
-  }
-  for (const expectedX of test.centers) {
-    if (!centers.some((item) => Math.abs(item.x - expectedX) <= 0.025)) {
-      throw new Error(`QR speed fixture ${test.name} missed center ${expectedX}; actual=${centers.map((x) => x.x).join(",")}`);
+  if (test.expected === 0) {
+    if (centers.length !== 0) {
+      throw new Error(`QR speed fixture ${test.name} produced false targets: expected 0, got ${centers.length}`);
+    }
+  } else {
+    if (centers.length < test.expected) {
+      throw new Error(`QR speed fixture ${test.name} lost targets: expected >=${test.expected}, got ${centers.length}`);
+    }
+    for (const expectedX of test.centers) {
+      if (!centers.some((item) => Math.abs(item.x - expectedX) <= 0.025)) {
+        throw new Error(`QR speed fixture ${test.name} missed center ${expectedX}; actual=${centers.map((x) => x.x).join(",")}`);
+      }
     }
   }
   if (average > maxAverageMs) {
