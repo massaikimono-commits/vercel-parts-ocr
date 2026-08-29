@@ -1,0 +1,65 @@
+export type DailyReportSecondaryEntry = {
+  notes?: string | null;
+};
+
+export type DailyReportSecondaryWork = {
+  id: string;
+  vehicle_id: string;
+  reason: string;
+  status: string;
+  work_completed: boolean;
+  checked_in_at?: string | null;
+  checked_out_at?: string | null;
+  planned_delivery_at?: string | null;
+  expected_completion_date?: string | null;
+};
+
+function dayBoundsJst(day: string) {
+  const start = new Date(`${day}T00:00:00+09:00`);
+  return {
+    start: start.getTime(),
+    end: start.getTime() + 24 * 60 * 60 * 1000,
+  };
+}
+
+function isActiveWorkshopWork(work: DailyReportSecondaryWork, endOfDay: number) {
+  if (work.work_completed || work.checked_out_at || work.status === "completed" || work.status === "cancelled") return false;
+  const active = Boolean(work.checked_in_at) || work.status === "in_progress";
+  if (!active) return false;
+  return !work.checked_in_at || new Date(work.checked_in_at).getTime() < endOfDay;
+}
+
+export function collectDailyReportMessages(entries: DailyReportSecondaryEntry[]) {
+  const seen = new Set<string>();
+  const messages: string[] = [];
+  for (const entry of entries) {
+    const note = entry.notes?.trim();
+    if (!note || seen.has(note)) continue;
+    seen.add(note);
+    messages.push(note);
+  }
+  return messages;
+}
+
+export function selectDailyReportSecondaryWorks(works: DailyReportSecondaryWork[], day: string) {
+  const { start, end } = dayBoundsJst(day);
+  const active = works.filter((work) => isActiveWorkshopWork(work, end));
+
+  const bodyShopVehicles = active
+    .filter((work) => work.reason === "板金塗装")
+    .sort((a, b) => (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31"));
+
+  const stayingVehicles = active
+    .filter((work) => work.reason !== "板金塗装")
+    .sort((a, b) => (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31"));
+
+  const plannedDeliveries = works
+    .filter((work) => {
+      if (!work.planned_delivery_at || work.status === "cancelled") return false;
+      const value = new Date(work.planned_delivery_at).getTime();
+      return value >= start && value < end;
+    })
+    .sort((a, b) => new Date(a.planned_delivery_at || 0).getTime() - new Date(b.planned_delivery_at || 0).getTime());
+
+  return { stayingVehicles, bodyShopVehicles, plannedDeliveries };
+}
