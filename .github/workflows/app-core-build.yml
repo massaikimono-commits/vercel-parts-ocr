@@ -6,6 +6,7 @@ on:
       - work/app-core-v1
     paths:
       - "app/**"
+      - "scripts/**"
       - "package.json"
       - "next.config.mjs"
       - "tsconfig.json"
@@ -28,11 +29,23 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Run regression checks
+      - name: Run OCR regression checks
         run: |
           npm run test:certificate
           npm run test:parts
+
+      - name: Run record regression checks
+        run: |
           npm run test:inspection
+          npm run test:record-types
+          npm run test:workshop-record-types
+
+      - name: Run schedule and daily report regression checks
+        run: |
+          npm run test:schedule-print
+          npm run test:schedule-print-layout
+          npm run test:daily-report-template
+          npm run test:daily-report-allocation
 
       - name: Build Next.js app
         env:
