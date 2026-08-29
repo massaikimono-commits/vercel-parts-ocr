@@ -53,7 +53,7 @@ function timeLabel(value: string) {
   }).format(new Date(value));
 }
 
-export default function HomeDashboard({ onLogout }: { onLogout: () => void | Promise<void> }) {
+export default function HomeDashboard({ onLogout }: { onLogout: () => void | Promise<unknown> }) {
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [works, setWorks] = useState<WorkOrder[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
