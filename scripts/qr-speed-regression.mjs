@@ -31,28 +31,44 @@ function syntheticQrImage(width, height, centers) {
 
 const width = 1200;
 const height = 1697;
-const rgba = syntheticQrImage(width, height, [0.485, 0.574, 0.658, 0.744, 0.829, 0.911]);
-
-// Warm-up keeps the budget focused on steady-state detector cost, not Node startup/JIT.
-detectCertificateQrDensityCenters(rgba, width, height);
+const cases = [
+  { name: "kei-six", expected: 6, centers: [0.485, 0.574, 0.658, 0.744, 0.829, 0.911] },
+  { name: "registered-five-left", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789] },
+  { name: "registered-five-right", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853] },
+  { name: "legacy-two", expected: 2, centers: [0.703, 0.928] },
+];
 
 const runs = 4;
-const started = performance.now();
-let centers = [];
-for (let i = 0; i < runs; i += 1) {
-  centers = detectCertificateQrDensityCenters(rgba, width, height);
-}
-const elapsed = performance.now() - started;
-const average = elapsed / runs;
-
-if (centers.length < 6) {
-  throw new Error(`QR speed fixture lost targets: expected >=6, got ${centers.length}`);
-}
-
-// This is deliberately generous to avoid flaky CI while catching accidental multi-second regressions.
+// Deliberately generous to avoid flaky CI while catching accidental multi-second regressions.
 const maxAverageMs = 750;
-if (average > maxAverageMs) {
-  throw new Error(`QR density detector too slow: ${average.toFixed(1)}ms average > ${maxAverageMs}ms budget`);
+const results = [];
+
+for (const test of cases) {
+  const rgba = syntheticQrImage(width, height, test.centers);
+
+  // Warm-up keeps the budget focused on steady-state detector cost, not Node startup/JIT.
+  detectCertificateQrDensityCenters(rgba, width, height);
+
+  const started = performance.now();
+  let centers = [];
+  for (let i = 0; i < runs; i += 1) {
+    centers = detectCertificateQrDensityCenters(rgba, width, height);
+  }
+  const elapsed = performance.now() - started;
+  const average = elapsed / runs;
+
+  if (centers.length < test.expected) {
+    throw new Error(`QR speed fixture ${test.name} lost targets: expected >=${test.expected}, got ${centers.length}`);
+  }
+  for (const expectedX of test.centers) {
+    if (!centers.some((item) => Math.abs(item.x - expectedX) <= 0.025)) {
+      throw new Error(`QR speed fixture ${test.name} missed center ${expectedX}; actual=${centers.map((x) => x.x).join(",")}`);
+    }
+  }
+  if (average > maxAverageMs) {
+    throw new Error(`QR density detector ${test.name} too slow: ${average.toFixed(1)}ms average > ${maxAverageMs}ms budget`);
+  }
+  results.push(`${test.name}=${average.toFixed(1)}ms/${centers.length}`);
 }
 
-console.log(`PASS QR density speed: ${average.toFixed(1)}ms average across ${runs} runs (${centers.length} targets)`);
+console.log(`PASS QR density speed/layout coverage: ${results.join(" | ")}`);
