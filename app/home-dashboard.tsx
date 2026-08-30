@@ -108,8 +108,14 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
   }
 
-  function openDay(day: string) { location.assign("/schedule?day=" + day); }
-  function registerDay(day: string) { location.assign("/schedule/new?day=" + day); }
+  function openDay(day: string) {
+    if (!day) return;
+    location.assign("/schedule?day=" + day);
+  }
+  function registerDay(day: string) {
+    if (!day) return;
+    location.assign("/schedule/new?day=" + day);
+  }
 
   return (
     <main className="homeDash">
@@ -162,8 +168,8 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         <div className="dateSearch">
           <div><b>予定の日付検索</b><small>見たい日を選んで1日のスケジュールを開く</small></div>
           <input type="date" value={searchDay} onChange={(e) => setSearchDay(e.target.value)} />
-          <button onClick={() => openDay(searchDay)}>この日の予定を見る</button>
-          <button onClick={() => registerDay(searchDay)}>＋ この日に予定登録</button>
+          <button disabled={!searchDay} onClick={() => openDay(searchDay)}>この日の予定を見る</button>
+          <button disabled={!searchDay} onClick={() => registerDay(searchDay)}>＋ この日に予定登録</button>
         </div>
 
         <div className="desktopTools">
