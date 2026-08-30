@@ -61,11 +61,13 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchDay, setSearchDay] = useState(todayJst());
   const [busy, setBusy] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => { void loadToday(); }, []);
 
   async function loadToday() {
     setBusy(true);
+    setLoadError("");
     const bounds = jstBounds(todayJst());
     const [entryRes, workRes, vehicleRes, customerRes] = await Promise.all([
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
@@ -73,6 +75,8 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
     ]);
+    const firstError = [entryRes.error, workRes.error, vehicleRes.error, customerRes.error].find(Boolean);
+    if (firstError) setLoadError("今日の予定を取得できません。1日のスケジュールで再確認してください。");
     if (!entryRes.error) setEntries((entryRes.data || []) as ScheduleEntry[]);
     if (!workRes.error) setWorks((workRes.data || []) as WorkOrder[]);
     if (!vehicleRes.error) setVehicles((vehicleRes.data || []) as Vehicle[]);
@@ -117,6 +121,11 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     location.assign("/schedule/new?day=" + day);
   }
 
+  const todayCountLabel = busy ? "…" : loadError ? "確認要" : todayRows.length + "件";
+  const todayStatusLabel = busy
+    ? "読み込み中"
+    : loadError || (unfinished.length ? "作業未実施 " + unfinished.length + "件" : "作業未実施なし");
+
   return (
     <main className="homeDash">
       <header className="homeHead">
@@ -127,11 +136,11 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       <section className="mobileToday">
         <button className="heroToday" onClick={() => openDay(todayJst())}>
           <span>今日の予定</span>
-          <strong>{busy ? "…" : todayRows.length + "件"}</strong>
-          <small>{busy ? "読み込み中" : unfinished.length ? "作業未実施 " + unfinished.length + "件" : "作業未実施なし"}</small>
+          <strong>{todayCountLabel}</strong>
+          <small>{todayStatusLabel}</small>
         </button>
 
-        {!busy && unfinished.length > 0 && (
+        {!busy && !loadError && unfinished.length > 0 && (
           <div className="unfinishedBox">
             <div className="unfinishedTitle">作業未実施 <strong>{unfinished.length}件</strong></div>
             {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => (
@@ -162,7 +171,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       <section className="desktopMain">
         <div className="desktopHeroGrid">
           <button className="desktopHero primaryHero" onClick={() => registerDay(todayJst())}><span>予定登録</span><strong>＋ 新しい予定を登録</strong><small>いちばん使う機能</small></button>
-          <button className="desktopHero" onClick={() => openDay(todayJst())}><span>今日の予定</span><strong>{busy ? "…" : todayRows.length + "件"}</strong><small>{busy ? "読み込み中" : "作業未実施 " + unfinished.length + "件"}</small></button>
+          <button className="desktopHero" onClick={() => openDay(todayJst())}><span>今日の予定</span><strong>{todayCountLabel}</strong><small>{todayStatusLabel}</small></button>
         </div>
 
         <div className="dateSearch">
