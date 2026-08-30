@@ -10,7 +10,8 @@ assert.match(source, /bodyShopVehicleIds/, "同一車両に一般整備と鈑金
 assert.match(source, /uniqueByVehicle/, "滞留・鈑金・納車予定は車両単位で重複表示しない");
 assert.match(source, /!bodyShopVehicleIds\.has\(work\.vehicle_id\)/, "鈑金車両を一般の滞留車両欄へ重複表示しない");
 assert.match(source, /planned_delivery_at/, "納車予定車両は既存planned_delivery_atを再利用する");
-assert.match(source, /!work\.planned_delivery_at \|\| work\.checked_out_at \|\| work\.status === "cancelled"/, "出庫済み・キャンセル済み車両を納車予定欄へ残さない");
+assert.match(source, /checkedOutAt !== null && checkedOutAt < end/, "選択日中までに出庫済みの車両を納車予定欄へ残さない");
+assert.match(source, /const checkedOutAt = work\.checked_out_at \? new Date\(work\.checked_out_at\)\.getTime\(\) : null/, "後日出庫は時刻比較で判定する");
 assert.match(source, /work\.status === "cancelled"/, "キャンセル済みデータを帳票欄へ出さない");
 assert.match(source, /scheduled_at\?: string \| null/, "滞留判定は既存scheduled_atを再利用できる");
 assert.match(source, /const activeFrom = work\.checked_in_at \|\| work\.scheduled_at/, "未入庫の将来予定を過去日の日報へ滞留表示しない");
