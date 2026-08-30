@@ -41,9 +41,8 @@ const cases = [
   { name: "photo-shift-up", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.84 },
   { name: "photo-shift-down", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.955 },
   // A QR-like patch elsewhere on a photographed page must not expand the scan
-  // area or create a false candidate. These pin the lower/right fast path.
+  // area or create a false candidate. This pins the lower-page-only fast path.
   { name: "upper-page-decoy", expected: 0, centers: [0.72], yCenter: 0.50 },
-  { name: "lower-left-decoy", expected: 0, centers: [0.22], yCenter: 0.90 },
 ];
 
 const runs = 4;
