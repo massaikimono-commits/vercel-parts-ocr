@@ -19,6 +19,15 @@ function timeValue(row: Pick<DailyReportEntryLike, "starts_at">) {
   return new Date(row.starts_at).getTime();
 }
 
+function isMorningJst(value: string) {
+  const hour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    hour12: false,
+  }).format(new Date(value)));
+  return Number.isFinite(hour) && hour < 12;
+}
+
 export function dailyReportTimeLabel(row: DailyReportEntryLike) {
   if (row.print_time_label_override) return row.print_time_label_override;
   if (row.print_time_mode === "exact") {
@@ -29,7 +38,10 @@ export function dailyReportTimeLabel(row: DailyReportEntryLike) {
       hour12: false,
     }).format(new Date(row.starts_at));
   }
-  if (row.entry_type === "pickup" && row.print_time_mode === "morning") return "A中";
+  if (
+    row.entry_type === "pickup"
+    && (row.print_time_mode === "morning" || (row.print_time_mode === "unspecified" && isMorningJst(row.starts_at)))
+  ) return "A中";
   if (row.entry_type === "delivery" && row.print_time_mode === "unspecified") return "中";
   return row.print_time_mode === "morning" ? "午前" : "時間未定";
 }
