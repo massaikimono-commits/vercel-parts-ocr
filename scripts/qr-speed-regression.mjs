@@ -44,9 +44,10 @@ const cases = [
   // area or create a false candidate. These pin the lower/right fast path.
   { name: "upper-page-decoy", expected: 0, centers: [0.72], yCenter: 0.50 },
   { name: "lower-left-decoy", expected: 0, centers: [0.22], yCenter: 0.90 },
-  // Pin the left edge of the lower/right scan window: a dense patch immediately
-  // before the 40% boundary must remain excluded rather than becoming a target.
-  { name: "lower-left-boundary-decoy", expected: 0, centers: [0.39], yCenter: 0.90 },
+  // Pin the left edge of the lower/right scan window. Keep the synthetic patch
+  // fully before the 40% boundary so the regression tests the window itself,
+  // rather than a patch whose pixels physically extend into the scan region.
+  { name: "lower-left-boundary-decoy", expected: 0, centers: [0.37], yCenter: 0.90 },
 ];
 
 const runs = 4;
