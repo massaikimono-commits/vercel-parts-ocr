@@ -1,7 +1,10 @@
 import type { WorkshopRecordTemplateKey } from "./workshop-record-types";
 
 export type RecordTemplateSourceStatus = "RECEIVED" | "WAITING_FOR_PDF";
-export type RecordTemplateCoordinateStatus = "UNCONFIRMED" | "BLOCKED_BY_SOURCE";
+export type RecordTemplateCoordinateStatus =
+  | "UNCONFIRMED"
+  | "CONFIRMED"
+  | "BLOCKED_BY_SOURCE";
 
 export type RecordTemplateRegistryEntry = {
   key: WorkshopRecordTemplateKey | "DESIGNATED_MAINTENANCE_RECORD";
@@ -17,6 +20,7 @@ export type RecordTemplateRegistryEntry = {
  *
  * Important safety rule:
  * - Receiving a form does not mean its print coordinates are finalized.
+ * - Final print is allowed only after coordinates are explicitly confirmed.
  * - The designated maintenance record stays blocked until the actual PDF is received.
  * - No customer data, document images, or form PDFs belong in this public registry.
  */
@@ -76,7 +80,7 @@ export function canFinalizeRecordTemplatePrint(
   return Boolean(
     entry &&
       entry.sourceStatus === "RECEIVED" &&
-      entry.coordinateStatus === "UNCONFIRMED" &&
+      entry.coordinateStatus === "CONFIRMED" &&
       entry.finalPrintEnabled,
   );
 }
