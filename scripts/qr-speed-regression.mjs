@@ -40,9 +40,10 @@ const cases = [
   // density detector effective near both ends of its lower-page scan band.
   { name: "photo-shift-up", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.84 },
   { name: "photo-shift-down", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.955 },
-  // A QR-like patch elsewhere on a photographed page must not expand the scan
-  // area or create a false candidate. These pin the lower/right fast path.
+  // QR-like patches outside the lower/right scan window must not expand the
+  // search area or create false candidates. These pin both scan boundaries.
   { name: "upper-page-decoy", expected: 0, centers: [0.72], yCenter: 0.50 },
+  { name: "upper-boundary-decoy", expected: 0, centers: [0.72], yCenter: 0.77 },
   { name: "lower-left-decoy", expected: 0, centers: [0.22], yCenter: 0.90 },
   // Pin the left edge of the lower/right scan window. Keep the synthetic patch
   // fully before the 40% boundary so the regression tests the window itself,
