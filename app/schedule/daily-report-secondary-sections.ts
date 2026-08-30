@@ -24,11 +24,21 @@ function dayBoundsJst(day: string) {
 }
 
 function isActiveWorkshopWork(work: DailyReportSecondaryWork, endOfDay: number) {
-  if (work.work_completed || work.checked_out_at || work.status === "completed" || work.status === "cancelled") return false;
-  const active = Boolean(work.checked_in_at) || work.status === "in_progress";
-  if (!active) return false;
+  if (work.status === "cancelled") return false;
+
   const activeFrom = work.checked_in_at || work.scheduled_at;
-  return !activeFrom || new Date(activeFrom).getTime() < endOfDay;
+  const active = Boolean(work.checked_in_at) || work.status === "in_progress";
+  if (!active || (activeFrom && new Date(activeFrom).getTime() >= endOfDay)) return false;
+
+  // Historical daily reports must be evaluated as of the selected day's end,
+  // not from the work order's current state. A vehicle checked out on a later
+  // day was still a staying vehicle on the earlier report.
+  if (work.checked_out_at) {
+    return new Date(work.checked_out_at).getTime() >= endOfDay;
+  }
+
+  if (work.work_completed || work.status === "completed") return false;
+  return true;
 }
 
 function isBodyShopReason(reason: string) {
