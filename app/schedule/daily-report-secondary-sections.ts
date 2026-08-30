@@ -87,7 +87,9 @@ export function selectDailyReportSecondaryWorks<T extends DailyReportSecondaryWo
   const plannedDeliveries = uniqueByVehicle(
     works
       .filter((work) => {
-        if (!work.planned_delivery_at || work.checked_out_at || work.status === "cancelled") return false;
+        if (!work.planned_delivery_at || work.status === "cancelled") return false;
+        const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
+        if (checkedOutAt !== null && checkedOutAt < end) return false;
         const value = new Date(work.planned_delivery_at).getTime();
         return value >= start && value < end;
       })
