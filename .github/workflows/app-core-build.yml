@@ -20,6 +20,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Keep OCR tuning out of app core
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+          if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="${after}^"
+          fi
+          changed="$(git diff --name-only "$before" "$after")"
+          forbidden="$(printf '%s\n' "$changed" | grep -E '^(app/certificate-|app/lib/certificate-|scripts/(qr-|.*certificate)|\.github/workflows/vehicle-certificate-regression\.yml$)' || true)"
+          if [[ -n "$forbidden" ]]; then
+            echo "OCR tuning files must be changed on the dedicated OCR branch, not work/app-core-v1:"
+            printf '%s\n' "$forbidden"
+            exit 1
+          fi
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
