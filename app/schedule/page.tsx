@@ -265,14 +265,34 @@ export default function SchedulePage() {
     const next = !work.work_completed;
     try {
       const rpc = next ? "complete_work_order_one_tap" : "reopen_work_order";
-      const { error } = await supabase.rpc(rpc, { p_work_order_id: work.id, p_actor: "schedule" });
+      const { data, error } = await supabase.rpc(rpc, { p_work_order_id: work.id, p_actor: "schedule" });
       if (error) throw error;
       setWorkOrders((old) => old.map((x) => x.id === work.id ? {
         ...x,
         work_completed: next,
-        status: next ? "completed" : "in_progress",
+        status: data?.status || (next ? "completed" : "scheduled"),
       } : x));
-      setMessage(next ? "作業完了を○で表示しました。" : "作業未実施へ戻しました。");
+      setMessage(next ? "作業完了を○で表示しました。" : "作業完了を解除しました。");
+    } catch (error: any) {
+      setMessage(`作業状態の保存エラー: ${error?.message || error}`);
+    }
+  }
+
+  async function toggleWorkProgress(work: WorkOrder) {
+    if (work.work_completed || work.status === "completed") return;
+    const nextStatus = work.status === "in_progress" ? "scheduled" : "in_progress";
+    try {
+      const { data, error } = await supabase.rpc("set_work_order_progress_state", {
+        p_work_order_id: work.id,
+        p_state: nextStatus,
+        p_actor: "schedule",
+      });
+      if (error) throw error;
+      setWorkOrders((old) => old.map((x) => x.id === work.id ? {
+        ...x,
+        status: data?.status || nextStatus,
+      } : x));
+      setMessage(nextStatus === "in_progress" ? "作業中にしました。" : "作業未実施へ戻しました。");
     } catch (error: any) {
       setMessage(`作業状態の保存エラー: ${error?.message || error}`);
     }
@@ -304,6 +324,33 @@ export default function SchedulePage() {
     );
   }
 
+  function workStateControl(work: WorkOrder | null) {
+    if (!work) return null;
+    if (work.work_completed || work.status === "completed") {
+      return (
+        <>
+          <button className="workCircle active noPrint" onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了を解除">○</button>
+          <span className="printWorkCircle">○</span>
+        </>
+      );
+    }
+    const running = work.status === "in_progress";
+    return (
+      <>
+        <button
+          className={running ? "workState running noPrint" : "workState pending noPrint"}
+          onClick={() => void toggleWorkProgress(work)}
+          aria-label={running ? "作業未実施へ戻す" : "作業中にする"}
+        >
+          {running ? "作業中" : "作業未実施"}
+        </button>
+        <span className={running ? "printWorkState running" : "printWorkState pending"}>
+          {running ? "作業中" : "作業未実施"}
+        </span>
+      </>
+    );
+  }
+
   function renderStayingVehicle(item: typeof stayingVehicles[number]) {
     const { work, vehicle, customer } = item;
     return (
@@ -313,9 +360,7 @@ export default function SchedulePage() {
             <div className="customerRow"><b>{customerLabel(customer)}</b>{workFlags(work)}</div>
             <div className="sub">下4桁 {last4Label(vehicle)}　{work.reason}</div>
           </div>
-          <button className={work.work_completed ? "workCircle active noPrint" : "workCircle noPrint"} onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了切替">
-            {work.work_completed ? "○" : "未"}
-          </button>
+          <div className="workStateSlot">{workStateControl(work)}</div>
         </div>
         <div className="meta">
           {work.worker_name && <span>担当 {work.worker_name}</span>}
@@ -351,12 +396,7 @@ export default function SchedulePage() {
             <b>{timeLabel(entry)}　{ENTRY_LABEL[entry.entry_type]}</b>
             <div className="customerRow">
               <div className="customer">{customerLabel(customer)}</div>
-              {completionPosition === "name" && work && (
-                <button className={work.work_completed ? "workCircle active noPrint" : "workCircle noPrint"} onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了切替">
-                  {work.work_completed ? "○" : "未"}
-                </button>
-              )}
-              {completionPosition === "name" && work?.work_completed && <span className="printWorkCircle">○</span>}
+              {completionPosition === "name" && <div className="workStateSlot">{workStateControl(work)}</div>}
               {workFlags(work)}
             </div>
           </div>
@@ -371,12 +411,7 @@ export default function SchedulePage() {
           <span>{work?.reason || "入庫要因未設定"}</span>
           {work?.worker_name && <span>担当 {work.worker_name}</span>}
           {work?.expected_completion_date && <span>完成予定 {work.expected_completion_date}</span>}
-          {completionPosition === "meta" && work && (
-            <button className={work.work_completed ? "workCircle active noPrint" : "workCircle noPrint"} onClick={() => void toggleWorkCompleted(work)} aria-label="作業完了切替">
-              {work.work_completed ? "○" : "未"}
-            </button>
-          )}
-          {completionPosition === "meta" && work?.work_completed && <span className="printWorkCircle">○</span>}
+          {completionPosition === "meta" && <div className="workStateSlot">{workStateControl(work)}</div>}
         </div>
         {(vehicle?.maker || vehicle?.model) && <div className="sub">{[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>}
         {entry.notes && <div className="note">{entry.notes}</div>}
@@ -451,7 +486,7 @@ export default function SchedulePage() {
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.dateNav input,.layoutControl select{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.layoutControl{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;color:#5d6878}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}.scheduleItem.done{opacity:.62;background:#f5f7f9}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.complete{min-width:70px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workCircle{width:34px;height:34px;padding:0;border-radius:50%;font-size:13px;flex:0 0 auto}.workCircle.active{background:#e9f7ef;border-color:#78bc8e;color:#176b37;font-size:23px}.printWorkCircle{display:none;font-size:22px;font-weight:900}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.open{margin-top:10px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}.printPeriod{display:none}@media(max-width:720px){.hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}.quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkCircle{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}.afternoonSection .columns>div{display:flex;flex-direction:column;justify-content:flex-end}.afternoonSection .scheduleItem{flex:0 0 auto}h1{font-size:20pt}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.dateNav input,.layoutControl select{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.layoutControl{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;color:#5d6878}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}.scheduleItem.done{opacity:.62;background:#f5f7f9}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.complete{min-width:70px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workStateSlot{display:inline-flex;align-items:center;gap:6px}.workState{border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;white-space:nowrap}.workState.pending{background:#f0f2f5;border-color:#cdd4dd;color:#657180}.workState.running{background:#fff0d8;border-color:#e7b465;color:#9a5d00}.workCircle{width:34px;height:34px;padding:0;border-radius:50%;font-size:13px;flex:0 0 auto}.workCircle.active{background:#e9f7ef;border-color:#78bc8e;color:#176b37;font-size:23px}.printWorkCircle,.printWorkState{display:none;font-weight:900}.printWorkCircle{font-size:22px}.printWorkState{font-size:11px}.printWorkState.running{color:#7c4d00}.printWorkState.pending{color:#667180}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.open{margin-top:10px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}.printPeriod{display:none}@media(max-width:720px){.hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}.quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkCircle,.printWorkState{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}.afternoonSection .columns>div{display:flex;flex-direction:column;justify-content:flex-end}.afternoonSection .scheduleItem{flex:0 0 auto}h1{font-size:20pt}}
       `}</style>
     </main>
   );
