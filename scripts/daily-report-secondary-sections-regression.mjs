@@ -6,7 +6,9 @@ const source = fs.readFileSync(new URL("../app/schedule/daily-report-secondary-s
 assert.match(source, /collectDailyReportMessages/, "伝達事項は既存予定メモから重複を除いて収集する");
 assert.match(source, /normalized\.includes\("板金"\)/, "板金表記の車両を鈑金車両欄へ分類する");
 assert.match(source, /normalized\.includes\("鈑金"\)/, "鈑金表記の車両も鈑金車両欄へ分類する");
-assert.match(source, /!isBodyShopReason\(work\.reason\)/, "一般の滞留車両と鈑金車両を重複させない");
+assert.match(source, /bodyShopVehicleIds/, "同一車両に一般整備と鈑金作業があっても鈑金車両欄を優先する");
+assert.match(source, /uniqueByVehicle/, "滞留・鈑金・納車予定は車両単位で重複表示しない");
+assert.match(source, /!bodyShopVehicleIds\.has\(work\.vehicle_id\)/, "鈑金車両を一般の滞留車両欄へ重複表示しない");
 assert.match(source, /planned_delivery_at/, "納車予定車両は既存planned_delivery_atを再利用する");
 assert.match(source, /!work\.planned_delivery_at \|\| work\.checked_out_at \|\| work\.status === "cancelled"/, "出庫済み・キャンセル済み車両を納車予定欄へ残さない");
 assert.match(source, /work\.work_completed \|\| work\.checked_out_at/, "完了・出庫済み車両を滞留欄へ残さない");
