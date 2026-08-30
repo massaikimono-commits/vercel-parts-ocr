@@ -21,6 +21,10 @@ type TimeOption = {
   startsAt: string;
   endsAt: string;
   durationMinutes?: number;
+  availability?: "open" | "warning" | "blocked";
+  warnings?: string[];
+  hardErrors?: string[];
+  conflicts?: number;
 };
 
 type Capacity = {
@@ -117,7 +121,7 @@ export default function ScheduleNewPage() {
   useEffect(() => {
     void loadCapacity();
     void loadMainOptions();
-  }, [day, entryType]);
+  }, [day, entryType, reason]);
 
   useEffect(() => {
     if (entryType === "delivery") {
@@ -125,7 +129,7 @@ export default function ScheduleNewPage() {
       return;
     }
     void loadDeliveryOptions();
-  }, [deliveryDay, entryType]);
+  }, [deliveryDay, entryType, reason]);
 
   useEffect(() => {
     void loadStaff();
@@ -163,14 +167,21 @@ export default function ScheduleNewPage() {
         setSelectedTimeKey("");
         return;
       }
-      const { data, error } = await supabase.rpc("schedule_time_options", {
+      const { data, error } = await supabase.rpc("schedule_time_availability", {
         p_day: day,
         p_entry_type: entryType,
+        p_reason: reason,
       });
       if (error) throw error;
       const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
       setTimeOptions(options);
-      setSelectedTimeKey((old) => options.some((x) => x.key === old) ? old : options[0]?.key || "");
+      setSelectedTimeKey((old) => {
+        const oldOption = options.find((x) => x.key === old);
+        if (oldOption && oldOption.availability !== "blocked") return old;
+        return options.find((x) => x.availability === "open")?.key
+          || options.find((x) => x.availability === "warning")?.key
+          || "";
+      });
     } catch (error: any) {
       setMessage(`時間候補の読み込みエラー: ${error?.message || error}`);
       setTimeOptions([]);
@@ -182,9 +193,10 @@ export default function ScheduleNewPage() {
 
   async function loadDeliveryOptions() {
     if (entryType === "delivery") return;
-    const { data, error } = await supabase.rpc("schedule_time_options", {
+    const { data, error } = await supabase.rpc("schedule_time_availability", {
       p_day: deliveryDay,
       p_entry_type: "delivery",
+      p_reason: reason,
     });
     if (error) {
       setMessage(`納車時間候補の読み込みエラー: ${error.message}`);
@@ -192,7 +204,13 @@ export default function ScheduleNewPage() {
     }
     const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
     setDeliveryOptions(options);
-    setDeliveryTimeKey((old) => options.some((x) => x.key === old) ? old : options[0]?.key || "");
+    setDeliveryTimeKey((old) => {
+      const oldOption = options.find((x) => x.key === old);
+      if (oldOption && oldOption.availability !== "blocked") return old;
+      return options.find((x) => x.availability === "open")?.key
+        || options.find((x) => x.availability === "warning")?.key
+        || "";
+    });
   }
 
   const selectedTime = useMemo(
@@ -419,12 +437,37 @@ export default function ScheduleNewPage() {
           </label>
 
           {entryType !== "onsite_repair" ? (
-            <label className="wide">時間
-              <select disabled={loadingOptions} value={selectedTimeKey} onChange={(e) => setSelectedTimeKey(e.target.value)}>
-                {!timeOptions.length && <option value="">候補なし</option>}
-                {timeOptions.map((x) => <option value={x.key} key={x.key}>{x.label}</option>)}
-              </select>
-            </label>
+            <div className="wide availabilityBlock">
+              <div className="availabilityTitle">
+                <b>時間・空き状況</b>
+                <span className="legend"><i className="dot openDot" />○ 空き　<i className="dot warnDot" />△ 要確認　<i className="dot blockedDot" />× 不可</span>
+              </div>
+              {loadingOptions ? (
+                <div className="availabilityLoading">空き時間を確認中…</div>
+              ) : !timeOptions.length ? (
+                <div className="availabilityLoading">時間候補がありません。</div>
+              ) : (
+                <div className="timeGrid">
+                  {timeOptions.map((x) => {
+                    const state = x.availability || "open";
+                    const mark = state === "open" ? "○" : state === "warning" ? "△" : "×";
+                    const detail = [...(x.hardErrors || []), ...(x.warnings || [])].join(" / ");
+                    return (
+                      <button
+                        type="button"
+                        key={x.key}
+                        className={`timeSlot ${state} ${selectedTimeKey === x.key ? "selected" : ""}`}
+                        disabled={state === "blocked"}
+                        onClick={() => setSelectedTimeKey(x.key)}
+                        title={detail || (state === "open" ? "空いています" : "確認が必要です")}
+                      >
+                        <span>{mark}</span><b>{x.label}</b>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ) : (
             <>
               <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
@@ -500,7 +543,10 @@ export default function ScheduleNewPage() {
               <label>納車時間
                 <select value={deliveryTimeKey} onChange={(e) => setDeliveryTimeKey(e.target.value)}>
                   {!deliveryOptions.length && <option value="">候補なし</option>}
-                  {deliveryOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+                  {deliveryOptions.map((x) => {
+                    const mark = x.availability === "blocked" ? "×" : x.availability === "warning" ? "△" : "○";
+                    return <option key={x.key} value={x.key} disabled={x.availability === "blocked"}>{mark} {x.label}</option>;
+                  })}
                 </select>
               </label>
             </div>
@@ -525,6 +571,7 @@ export default function ScheduleNewPage() {
         .notice{background:#edf7ef;border:1px solid #c2e5cb;border-radius:12px;padding:12px 14px;color:#3c5944}
         .capacity{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.capacity>div{background:#f6f8fb;border-radius:12px;padding:12px;display:grid}.capacity b{font-size:24px}.capacity small{color:#78869a}
         .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
+        .availabilityBlock{display:grid;gap:10px}.availabilityTitle{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;color:#5c6878}.legend{font-size:12px;font-weight:800}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.openDot{background:#4f9c68}.warnDot{background:#d69a36}.blockedDot{background:#9aa5b3}.availabilityLoading{background:#f7f9fc;border-radius:12px;padding:14px;color:#78869a}.timeGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.timeSlot{display:flex;gap:5px;justify-content:center;align-items:center;padding:10px 7px;border-radius:12px}.timeSlot.open{background:#f2fbf5;border-color:#9bceb0;color:#236c3b}.timeSlot.warning{background:#fff8ea;border-color:#e5bd73;color:#8a5a08}.timeSlot.blocked{background:#f1f3f6;border-color:#d5dbe3;color:#8a95a3;opacity:.7}.timeSlot.selected{outline:3px solid #2674e8;outline-offset:1px}.timeSlot:disabled{cursor:not-allowed}
         input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
         .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.deliveryGrid{margin-top:12px}
         .primary{width:100%;background:#2f6fe4;border-color:#2f6fe4;color:#fff;font-size:18px;padding:16px}
