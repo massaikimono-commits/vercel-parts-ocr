@@ -126,7 +126,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
 
         {!busy && unfinished.length > 0 && (
           <div className="unfinishedBox">
-            <div className="unfinishedTitle">作業未実施</div>
+            <div className="unfinishedTitle">作業未実施 <strong>{unfinished.length}件</strong></div>
             {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openDay(todayJst())}>
                 <span className="statusDot">未</span>
@@ -135,6 +135,11 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
                 {work?.needs_loaner && <em>代車</em>}
               </button>
             ))}
+            {unfinished.length > 5 && (
+              <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
+                ほか {unfinished.length - 5}件も未実施　→ 1日のスケジュールで確認
+              </button>
+            )}
           </div>
         )}
 
