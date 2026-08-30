@@ -21,6 +21,11 @@
 .desktopTools{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}
 .desktopTools button{min-height:105px;text-align:left;display:grid;gap:6px;align-content:center}
 .desktopTools b{font-size:17px}.desktopTools small{color:#748093}
+@media(min-width:761px) and (max-width:980px){
+  .dateSearch{grid-template-columns:1fr 1fr}
+  .dateSearch>div:first-child{grid-column:1/-1}
+  .desktopTools{grid-template-columns:repeat(2,1fr)}
+}
 @media(max-width:760px){
   .homeDash{padding:14px 10px 40px}
   .homeHead{margin-bottom:10px}.homeLogo{font-size:30px}.homeSub{display:none}
