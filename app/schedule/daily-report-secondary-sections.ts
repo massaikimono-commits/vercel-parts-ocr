@@ -34,7 +34,7 @@ function isBodyShopReason(reason: string) {
   return normalized.includes("板金") || normalized.includes("鈑金");
 }
 
-function uniqueByVehicle(works: DailyReportSecondaryWork[]) {
+function uniqueByVehicle<T extends DailyReportSecondaryWork>(works: T[]) {
   const seen = new Set<string>();
   return works.filter((work) => {
     if (seen.has(work.vehicle_id)) return false;
@@ -55,7 +55,7 @@ export function collectDailyReportMessages(entries: DailyReportSecondaryEntry[])
   return messages;
 }
 
-export function selectDailyReportSecondaryWorks(works: DailyReportSecondaryWork[], day: string) {
+export function selectDailyReportSecondaryWorks<T extends DailyReportSecondaryWork>(works: T[], day: string) {
   const { start, end } = dayBoundsJst(day);
   const active = works.filter((work) => isActiveWorkshopWork(work, end));
   const bodyShopVehicleIds = new Set(active.filter((work) => isBodyShopReason(work.reason)).map((work) => work.vehicle_id));
