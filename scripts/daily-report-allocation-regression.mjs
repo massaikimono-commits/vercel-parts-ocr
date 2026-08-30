@@ -12,6 +12,7 @@ assert.match(allocator, /inbound:\s*inbound\.placed/, "引取系欄を独立し�
 assert.match(allocator, /overflow:/, "日報欄を超える予定を黙って欠落させない");
 assert.match(template, /count:\s*23/, "既存日報の23行構成を維持する");
 assert.match(template, /\.reverse\(\)/, "午後は下側スロットから使用する");
+assert.match(rules, /stackDailyReportRows<T>\(rows: T\[], period: DailyReportPeriod\)[\s\S]*return \[\.\.\.rows\];/, "午後も予定の時間順を反転せず、下側スロットへ順番に詰める");
 assert.match(rules, /customer_visit:\s*0[\s\S]*pickup:\s*1[\s\S]*onsite_repair:\s*2/, "引取系は来社→引取→出張の順を維持する");
 assert.match(rules, /return "A中"/, "午前中の引取で時間指定なしはA中");
 assert.match(rules, /return "中"/, "納車の時間指定なしは中");

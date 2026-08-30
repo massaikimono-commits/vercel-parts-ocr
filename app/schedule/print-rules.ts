@@ -61,8 +61,10 @@ export function sortDailyReportDeliveries<T extends DailyReportEntryLike>(rows: 
 }
 
 export function stackDailyReportRows<T>(rows: T[], period: DailyReportPeriod) {
-  if (period === "morning") return [...rows];
-  return [...rows].reverse();
+  // Slot allocation owns the physical direction. Afternoon slot indexes are
+  // already bottom-up, so keep rows in chronological/type order here instead
+  // of reversing them a second time.
+  return [...rows];
 }
 
 export function prepareDailyReportSection<T extends DailyReportEntryLike>(rows: T[], period: DailyReportPeriod) {
