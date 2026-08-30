@@ -43,6 +43,9 @@ const cases = [
   // Stronger downward framing still occurs in handheld photos. Pin useful QR
   // targeting close to the lower scan edge without widening the production band.
   { name: "photo-shift-down-edge", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.97 },
+  // Horizontal framing can also push the rightmost symbol close to the page edge.
+  // Keep this fully synthetic so no certificate content or personal data is stored.
+  { name: "photo-shift-right-edge", expected: 1, centers: [0.965], yCenter: 0.90 },
   // QR-like patches outside the lower/right scan window must not expand the
   // search area or create false candidates. These pin both scan boundaries.
   { name: "upper-page-decoy", expected: 0, centers: [0.72], yCenter: 0.50 },
