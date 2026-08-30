@@ -15,6 +15,7 @@ type ScheduleEntry = {
 type WorkOrder = {
   id: string;
   reason: string;
+  status: string;
   work_completed: boolean;
   is_urgent: boolean;
   needs_loaner: boolean;
@@ -68,7 +69,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     const bounds = jstBounds(todayJst());
     const [entryRes, workRes, vehicleRes, customerRes] = await Promise.all([
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
-      supabase.from("work_orders").select("id,reason,work_completed,is_urgent,needs_loaner,worker_name").neq("status", "cancelled"),
+      supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
     ]);
@@ -93,7 +94,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   const unfinished = useMemo(() => {
     const seenWorkIds = new Set<string>();
     return todayRows.filter(({ work }) => {
-      if (!work || work.work_completed || seenWorkIds.has(work.id)) return false;
+      if (!work || work.work_completed || work.status === "completed" || seenWorkIds.has(work.id)) return false;
       seenWorkIds.add(work.id);
       return true;
     });
