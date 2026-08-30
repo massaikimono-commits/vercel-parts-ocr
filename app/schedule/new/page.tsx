@@ -388,7 +388,7 @@ export default function ScheduleNewPage() {
   return (
     <main className="page">
       <header className="top">
-        <button onClick={() => location.assign("/schedule")}>← 予定一覧へ</button>
+        <button onClick={() => location.assign(`/schedule?day=${day}`)}>← 予定一覧へ</button>
         <strong>icb</strong>
       </header>
 
