@@ -13,5 +13,8 @@ assert.match(source, /planned_delivery_at/, "納車予定車両は既存planned_
 assert.match(source, /!work\.planned_delivery_at \|\| work\.checked_out_at \|\| work\.status === "cancelled"/, "出庫済み・キャンセル済み車両を納車予定欄へ残さない");
 assert.match(source, /work\.work_completed \|\| work\.checked_out_at/, "完了・出庫済み車両を滞留欄へ残さない");
 assert.match(source, /work\.status === "cancelled"/, "キャンセル済みデータを帳票欄へ出さない");
+assert.match(source, /scheduled_at\?: string \| null/, "滞留判定は既存scheduled_atを再利用できる");
+assert.match(source, /const activeFrom = work\.checked_in_at \|\| work\.scheduled_at/, "未入庫の将来予定を過去日の日報へ滞留表示しない");
+assert.match(source, /new Date\(activeFrom\)\.getTime\(\) < endOfDay/, "滞留車両は選択日の終了時点までに開始した作業だけを対象にする");
 
 console.log("daily report secondary sections regression: ok");

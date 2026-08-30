@@ -8,6 +8,7 @@ export type DailyReportSecondaryWork = {
   reason: string;
   status: string;
   work_completed: boolean;
+  scheduled_at?: string | null;
   checked_in_at?: string | null;
   checked_out_at?: string | null;
   planned_delivery_at?: string | null;
@@ -26,7 +27,8 @@ function isActiveWorkshopWork(work: DailyReportSecondaryWork, endOfDay: number) 
   if (work.work_completed || work.checked_out_at || work.status === "completed" || work.status === "cancelled") return false;
   const active = Boolean(work.checked_in_at) || work.status === "in_progress";
   if (!active) return false;
-  return !work.checked_in_at || new Date(work.checked_in_at).getTime() < endOfDay;
+  const activeFrom = work.checked_in_at || work.scheduled_at;
+  return !activeFrom || new Date(activeFrom).getTime() < endOfDay;
 }
 
 function isBodyShopReason(reason: string) {
