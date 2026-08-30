@@ -109,6 +109,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   }
 
   function openDay(day: string) { location.assign("/schedule?day=" + day); }
+  function registerDay(day: string) { location.assign("/schedule/new?day=" + day); }
 
   return (
     <main className="homeDash">
@@ -144,7 +145,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         )}
 
         <div className="mobileActions">
-          <button className="primaryAction" onClick={() => location.assign("/schedule/new")}>＋ 予定登録</button>
+          <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
           <button className="scheduleAction" onClick={() => openDay(todayJst())}>1日のスケジュール</button>
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票読取</button>
           <button onClick={() => location.assign("/inspection/select")}>記録簿作成</button>
@@ -154,7 +155,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
 
       <section className="desktopMain">
         <div className="desktopHeroGrid">
-          <button className="desktopHero primaryHero" onClick={() => location.assign("/schedule/new")}><span>予定登録</span><strong>＋ 新しい予定を登録</strong><small>いちばん使う機能</small></button>
+          <button className="desktopHero primaryHero" onClick={() => registerDay(todayJst())}><span>予定登録</span><strong>＋ 新しい予定を登録</strong><small>いちばん使う機能</small></button>
           <button className="desktopHero" onClick={() => openDay(todayJst())}><span>今日の予定</span><strong>{busy ? "…" : todayRows.length + "件"}</strong><small>{busy ? "読み込み中" : "作業未実施 " + unfinished.length + "件"}</small></button>
         </div>
 
@@ -162,6 +163,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <div><b>予定の日付検索</b><small>見たい日を選んで1日のスケジュールを開く</small></div>
           <input type="date" value={searchDay} onChange={(e) => setSearchDay(e.target.value)} />
           <button onClick={() => openDay(searchDay)}>この日の予定を見る</button>
+          <button onClick={() => registerDay(searchDay)}>＋ この日に予定登録</button>
         </div>
 
         <div className="desktopTools">
