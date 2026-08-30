@@ -64,6 +64,11 @@ const rows = [
 ];
 
 assert.deepEqual(sortInbound(rows).map((x) => x.id), ["v1", "v2", "p1", "p2", "o1"], "引取系は来社→引取→出張、各種類内は時間順");
+assert.deepEqual(
+  stackForPrint(sortInbound(rows), "afternoon").map((x) => x.id),
+  ["o1", "p2", "p1", "v2", "v1"],
+  "午後はDOM順を反転し、用紙を下から読むと来社→引取→出張・各種類内時間順を維持",
+);
 
 const deliveries = [
   { id: "d2", entry_type: "delivery", starts_at: "2026-08-29T05:00:00.000Z", print_time_mode: "exact", print_time_label_override: null },
