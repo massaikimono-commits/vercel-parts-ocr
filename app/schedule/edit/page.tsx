@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
+import { safeActionError } from "../../lib/client-security";
 
 type TimeOption = {
   key:string;
@@ -94,7 +95,7 @@ export default function ScheduleEditPage(){
     const {data,error}=await supabase.from("schedule_entries")
       .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
       .eq("id",entryId).single();
-    if(error){setMessage("予定の読み込みエラー: "+error.message);setBusy(false);return;}
+    if(error){setMessage(safeActionError("予定の読み込み", error));setBusy(false);return;}
     const e=data as Entry;
     setEntry(e);
     if(e.work_order_id){
@@ -124,7 +125,7 @@ export default function ScheduleEditPage(){
       return;
     }
     const {data,error}=await supabase.rpc("schedule_time_options",{p_day:targetDay,p_entry_type:base.entry_type});
-    if(error){setMessage("時間候補の読み込みエラー: "+error.message);return;}
+    if(error){setMessage(safeActionError("時間候補の読み込み", error));return;}
     const opts=(Array.isArray(data?.options)?data.options:[]) as TimeOption[];
     setOptions(opts);
     const current=timeKey(base.starts_at);
@@ -201,7 +202,7 @@ export default function ScheduleEditPage(){
         window.setTimeout(()=>location.assign("/schedule?day="+day),350);
       }
     }catch(error:any){
-      setMessage("予約変更エラー: "+(error?.message||error));
+      setMessage(safeActionError("予約変更", error));
     }finally{
       setBusy(false);
     }
