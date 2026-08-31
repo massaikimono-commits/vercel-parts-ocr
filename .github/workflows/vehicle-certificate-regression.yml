@@ -33,6 +33,9 @@ jobs:
       - name: Run QR speed regression
         run: npm run test:qr-speed
 
+      - name: Run QR photo contrast regression
+        run: node scripts/qr-photo-contrast-regression.mjs
+
       - name: Run parts-slip regression
         run: npm run test:parts
 
