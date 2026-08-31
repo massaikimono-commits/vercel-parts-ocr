@@ -3,6 +3,7 @@
 
 import { useMemo, useState } from "react";
 import { supabase } from "../../supabase";
+import { safeActionError } from "../../lib/client-security";
 
 type Customer = {
   id: string;
@@ -233,7 +234,7 @@ export default function ScheduleSearchPage() {
       setMessage(`${resultRows.length}件の予定が見つかりました。`);
     } catch (error: any) {
       setRows([]);
-      setMessage("検索エラー: " + (error?.message || error));
+      setMessage(safeActionError("予定検索", error));
     } finally {
       setBusy(false);
     }
