@@ -162,6 +162,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         <div className="mobileActions">
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
           <button className="scheduleAction" onClick={() => openDay(todayJst())}>1日のスケジュール</button>
+          <button onClick={() => location.assign("/schedule/week")}>1週間の予定検索</button>
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票読取</button>
           <button onClick={() => location.assign("/inspection/select")}>記録簿作成</button>
           <button onClick={() => location.assign("/vehicle-workflow")}>車検証読取</button>
@@ -178,6 +179,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <div><b>予定の日付検索</b><small>見たい日を選んで1日のスケジュールを開く</small></div>
           <input type="date" value={searchDay} onChange={(e) => setSearchDay(e.target.value)} />
           <button disabled={!searchDay} onClick={() => openDay(searchDay)}>この日の予定を見る</button>
+          <button disabled={!searchDay} onClick={() => location.assign("/schedule/week?day=" + searchDay)}>この週の予定を見る</button>
           <button disabled={!searchDay} onClick={() => registerDay(searchDay)}>＋ この日に予定登録</button>
         </div>
 
