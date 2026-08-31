@@ -96,6 +96,14 @@ function hourInJst(value: string) {
   }).format(new Date(value)));
 }
 
+function stayDayCount(start: string | null, day: string) {
+  if (!start) return null;
+  const s = new Date(start);
+  const e = new Date(`${day}T23:59:59+09:00`);
+  const diff = Math.floor((e.getTime() - s.getTime()) / 86400000);
+  return Math.max(1, diff + 1);
+}
+
 function dateLabel(day: string) {
   const d = new Date(`${day}T00:00:00+09:00`);
   return new Intl.DateTimeFormat("ja-JP", {
@@ -224,6 +232,24 @@ export default function SchedulePage() {
 
   const morning = enriched.filter(({ entry }) => hourInJst(entry.starts_at) < 12);
   const afternoon = enriched.filter(({ entry }) => hourInJst(entry.starts_at) >= 12);
+
+  const workload = useMemo(() => {
+    const map = new Map<string, { name: string; unfinished: number; running: number; urgent: number }>();
+    for (const work of workOrders) {
+      if (work.work_completed || work.status === "completed" || work.status === "cancelled") continue;
+      const name = work.worker_name || "担当未設定";
+      const row = map.get(name) || { name, unfinished: 0, running: 0, urgent: 0 };
+      row.unfinished += 1;
+      if (work.status === "in_progress") row.running += 1;
+      if (work.is_urgent) row.urgent += 1;
+      map.set(name, row);
+    }
+    return [...map.values()].sort((a,b) => {
+      if (a.name === "担当未設定") return 1;
+      if (b.name === "担当未設定") return -1;
+      return b.unfinished - a.unfinished || a.name.localeCompare(b.name, "ja");
+    });
+  }, [workOrders]);
 
   const stayingVehicles = useMemo(() => {
     const endOfDay = new Date(`${day}T23:59:59+09:00`).getTime();
@@ -372,6 +398,9 @@ export default function SchedulePage() {
         </div>
         <div className="meta">
           {work.worker_name && <span>担当 {work.worker_name}</span>}
+          <span className={stayDayCount(work.checked_in_at || work.scheduled_at, day) && (stayDayCount(work.checked_in_at || work.scheduled_at, day) || 0) >= 3 ? "stayAge alert" : "stayAge"}>
+            入庫 {stayDayCount(work.checked_in_at || work.scheduled_at, day) || 1}日目
+          </span>
           <span>完成予定 {work.expected_completion_date || "未定"}</span>
           {work.planned_delivery_at && <span>納車予定あり</span>}
         </div>
@@ -483,6 +512,21 @@ export default function SchedulePage() {
         <div className="stayGrid">{stayingVehicles.map(renderStayingVehicle)}</div>
       </section>
 
+      <section className="card workloadSection noPrint">
+        <div className="sectionTitle"><h2>作業担当の負荷</h2><span>{workload.reduce((sum,x)=>sum+x.unfinished,0)}台</span></div>
+        {!workload.length && <div className="empty">未完了の担当車両はありません。</div>}
+        <div className="workloadGrid">
+          {workload.map((row) => (
+            <div className={`workloadCard ${row.name === "担当未設定" ? "unassigned" : ""}`} key={row.name}>
+              <b>{row.name}</b>
+              <span>未完了 <strong>{row.unfinished}</strong>台</span>
+              <span>作業中 <strong>{row.running}</strong>台</span>
+              {row.urgent > 0 && <em>急ぎ {row.urgent}台</em>}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="card noPrint">
         <h2>次の機能へ</h2>
         <div className="quick">
@@ -491,11 +535,13 @@ export default function SchedulePage() {
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票OCR</button>
           <button onClick={() => location.assign("/parts-data")}>部品データ</button>
           <button onClick={() => location.assign("/settings/staff")}>社員名管理</button>
+          <button onClick={() => location.assign("/schedule/search")}>予定検索</button>
+          <button onClick={() => location.assign("/loaners")}>代車管理</button>
         </div>
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.dateNav input,.layoutControl select{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.layoutControl{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;color:#5d6878}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}.scheduleItem.done{opacity:.62;background:#f5f7f9}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.complete{min-width:70px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workStateSlot{display:inline-flex;align-items:center;gap:6px}.workState{border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;white-space:nowrap}.workState.pending{background:#f0f2f5;border-color:#cdd4dd;color:#657180}.workState.running{background:#fff0d8;border-color:#e7b465;color:#9a5d00}.workState.completed{background:#e9f7ef;border-color:#78bc8e;color:#176b37}.completeWorkNow{padding:5px 9px;border-radius:999px;font-size:12px;font-weight:900;line-height:1;color:#176b37;border-color:#78bc8e;background:#f5fbf7}.printWorkState{display:none;font-weight:900;font-size:11px}.printWorkState.running{color:#7c4d00}.printWorkState.pending{color:#667180}.printWorkState.completed{color:#176b37}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.open{margin-top:10px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}.printPeriod{display:none}@media(max-width:720px){.hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}.quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkState{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}.afternoonSection .columns>div{display:flex;flex-direction:column;justify-content:flex-end}.afternoonSection .scheduleItem{flex:0 0 auto}h1{font-size:20pt}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.dateNav input,.layoutControl select{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.layoutControl{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;color:#5d6878}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}.scheduleItem.done{opacity:.62;background:#f5f7f9}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.complete{min-width:70px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workStateSlot{display:inline-flex;align-items:center;gap:6px}.workState{border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;white-space:nowrap}.workState.pending{background:#f0f2f5;border-color:#cdd4dd;color:#657180}.workState.running{background:#fff0d8;border-color:#e7b465;color:#9a5d00}.workState.completed{background:#e9f7ef;border-color:#78bc8e;color:#176b37}.completeWorkNow{padding:5px 9px;border-radius:999px;font-size:12px;font-weight:900;line-height:1;color:#176b37;border-color:#78bc8e;background:#f5fbf7}.printWorkState{display:none;font-weight:900;font-size:11px}.printWorkState.running{color:#7c4d00}.printWorkState.pending{color:#667180}.printWorkState.completed{color:#176b37}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.meta .stayAge{background:#eef5ff;color:#315f98;font-weight:800}.meta .stayAge.alert{background:#fff0db;color:#995b00}.workloadGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.workloadCard{border:1px solid #dbe3ee;border-radius:13px;padding:12px;display:grid;gap:4px;background:#fff}.workloadCard>b{font-size:16px}.workloadCard span{font-size:12px;color:#5d6878}.workloadCard strong{font-size:18px;color:#172033}.workloadCard em{font-size:11px;font-style:normal;font-weight:900;color:#995b00;background:#fff0db;border-radius:999px;padding:3px 7px;justify-self:start}.workloadCard.unassigned{border-color:#e6aa5a}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.open{margin-top:10px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}.printPeriod{display:none}@media(max-width:720px){.hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}.workloadGrid{grid-template-columns:1fr 1fr}.quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkState{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}.afternoonSection .columns>div{display:flex;flex-direction:column;justify-content:flex-end}.afternoonSection .scheduleItem{flex:0 0 auto}h1{font-size:20pt}}
       `}</style>
     </main>
   );
