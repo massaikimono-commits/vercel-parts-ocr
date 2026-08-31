@@ -15,7 +15,14 @@ export type DailyReportRowSlot = {
 // The source PDF itself is intentionally not committed to the public repository.
 export const DAILY_REPORT_TEMPLATE = {
   id: "existing-daily-report-v1",
-  page: { width: 1, height: 1 },
+  page: {
+    width: 1,
+    height: 1,
+    paperSize: "A3" as const,
+    orientation: "landscape" as const,
+    widthMm: 420,
+    heightMm: 297,
+  },
   background: {
     source: "user-supplied-existing-form" as const,
     publicAssetPath: null as string | null,
