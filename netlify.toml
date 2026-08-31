@@ -14,3 +14,51 @@
     Cross-Origin-Opener-Policy = "same-origin"
     X-Permitted-Cross-Domain-Policies = "none"
     Content-Security-Policy = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+
+[[headers]]
+  for = "/schedule/*"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
+
+[[headers]]
+  for = "/customer-vehicles/*"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
+
+[[headers]]
+  for = "/vehicle-workflow*"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
+
+[[headers]]
+  for = "/inspection/*"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
+
+[[headers]]
+  for = "/parts-data/*"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
+
+[[headers]]
+  for = "/loaners/*"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
+
+[[headers]]
+  for = "/settings/*"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
+
+[[headers]]
+  for = "/ocr/*"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
