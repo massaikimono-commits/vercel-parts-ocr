@@ -2,6 +2,9 @@
 
 import { useLayoutEffect } from "react";
 
+const MAX_PDF_PAGES = 20;
+const MAX_PDF_RENDER_PIXELS = 50_000_000;
+
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
 const QR_PRIORITY_KEY = "__vehicleCertificateQrPriority";
@@ -233,7 +236,7 @@ function anchored(lines, labels, parser, options = {}) {
 
 function parseNative(tokens) {
   const lines = buildLines(tokens);
-  const allText = lines.map((line) => line.text).join("\const MAX_PDF_PAGES = 20;\nconst MAX_PDF_RENDER_PIXELS = 50_000_000;\nn");
+  const allText = lines.map((line) => line.text).join("\n");
   const patch = {};
   const put = (key, value) => { if (value) patch[key] = value; };
 
