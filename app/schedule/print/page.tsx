@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { safeActionError } from "../../lib/client-security";
+
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
 import { buildDailyReportPreviewModel } from "../daily-report-print-model";
@@ -116,7 +118,7 @@ export default function DailyReportPrintPage() {
       setBackgroundUrl(typeof value?.backgroundUrl === "string" && value.backgroundUrl ? value.backgroundUrl : null);
       setMessage(`${scheduleRes.data?.length || 0}件を既存日報の配置ルールで確認できます。`);
     } catch (error: any) {
-      setMessage(`日報プレビューの読み込みエラー: ${error?.message || error}`);
+      setMessage(safeActionError("日報プレビューの読み込み", error));
     }
   }
 
