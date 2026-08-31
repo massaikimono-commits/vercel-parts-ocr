@@ -33,9 +33,10 @@
   .heroToday{width:100%;min-height:190px;border:0;border-radius:24px;padding:24px;background:#2f6fe4;color:#fff;text-align:left;display:flex;flex-direction:column;justify-content:space-between}
   .heroToday span{font-size:22px;font-weight:800}.heroToday strong{font-size:48px;line-height:1}.heroToday small{font-size:16px;font-weight:800}
   .unfinishedBox{margin-top:12px;background:#fff;border:1px solid #e0e5ed;border-radius:20px;padding:14px}
-  .unfinishedTitle{font-size:18px;font-weight:900;margin-bottom:8px;color:#a14332}
+  .unfinishedTitle{font-size:18px;font-weight:900;margin-bottom:8px;color:#27364a}
   .unfinishedRow{width:100%;border:0;border-top:1px solid #edf0f4;border-radius:0;padding:12px 2px;display:flex;align-items:center;gap:10px;text-align:left}
-  .unfinishedRow:first-of-type{border-top:0}.statusDot{width:34px;height:34px;border-radius:50%;background:#fff0ec;color:#b34834;display:flex;align-items:center;justify-content:center;font-weight:900;flex:0 0 auto}
+  .unfinishedRow:first-of-type{border-top:0}.statusDot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;flex:0 0 auto}
+  .statusDot.pending{background:#fff0ec;color:#b34834}.statusDot.running{background:#fff4dd;color:#996100}
   .uMain{display:grid;gap:3px;flex:1}.uMain small{color:#748093}.unfinishedRow em{font-size:11px;font-style:normal;font-weight:900;border-radius:999px;padding:4px 7px;background:#fff2d9;color:#8a5b00}
   .mobileActions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
   .mobileActions button{min-height:76px;font-weight:900}
