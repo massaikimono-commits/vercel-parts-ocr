@@ -109,6 +109,25 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     return { pending, inProgress, completed };
   }, [todayRows]);
 
+  const workerLoad = useMemo(() => {
+    const grouped = new Map<string, { name: string; pending: number; running: number; total: number; urgent: number }>();
+    for (const work of works) {
+      if (work.work_completed || work.status === "completed" || work.status === "cancelled") continue;
+      const name = work.worker_name?.trim() || "担当未設定";
+      const row = grouped.get(name) || { name, pending: 0, running: 0, total: 0, urgent: 0 };
+      row.total += 1;
+      if (work.status === "in_progress") row.running += 1;
+      else row.pending += 1;
+      if (work.is_urgent) row.urgent += 1;
+      grouped.set(name, row);
+    }
+    return [...grouped.values()].sort((a, b) => {
+      if (a.name === "担当未設定") return 1;
+      if (b.name === "担当未設定") return -1;
+      return b.total - a.total || b.running - a.running || a.name.localeCompare(b.name, "ja");
+    });
+  }, [works]);
+
   const unfinished = useMemo(() => {
     const seenWorkIds = new Set<string>();
     return todayRows.filter(({ work }) => {
@@ -209,6 +228,24 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           </button>
         </div>
 
+        {!busy && !loadError && workerLoad.length > 0 && (
+          <div className="homeWorkload" aria-label="作業担当者の負荷">
+            <div className="homeWorkloadHead">
+              <div><b>作業担当者の負荷</b><small>未完了・作業中の偏りを確認</small></div>
+              <button onClick={() => openDay(todayJst())}>1日のスケジュールで詳しく見る</button>
+            </div>
+            <div className="homeWorkloadGrid">
+              {workerLoad.slice(0, 6).map((row) => (
+                <button key={row.name} className={row.name === "担当未設定" ? "homeWorker unassigned" : "homeWorker"} onClick={() => openDay(todayJst())}>
+                  <b>{row.name}</b>
+                  <span>未完了 <strong>{row.total}</strong>台</span>
+                  <small>未実施 {row.pending}・作業中 {row.running}{row.urgent > 0 ? `・急ぎ ${row.urgent}` : ""}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="dateSearch">
           <div><b>予定の日付検索</b><small>見たい日を選んで1日のスケジュールを開く</small></div>
           <input type="date" value={searchDay} onChange={(e) => setSearchDay(e.target.value)} />
@@ -237,6 +274,14 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         .statusTile.done{border-color:#99d0ad;background:#effaf3;color:#277247}
         .desktopStatusLine{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
         .desktopStatusLine b{font-size:12px;background:#f1f5f9;border-radius:999px;padding:5px 8px;color:#526174}
+        .homeWorkload{margin-top:14px;background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:15px}
+        .homeWorkloadHead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+        .homeWorkloadHead>div{display:grid;gap:2px}.homeWorkloadHead b{font-size:16px}.homeWorkloadHead small{color:#718096}
+        .homeWorkloadHead button{padding:8px 10px;font-size:12px}
+        .homeWorkloadGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+        .homeWorker{display:grid;gap:3px;text-align:left;color:#172033;border-color:#dbe3ee;padding:11px}
+        .homeWorker>b{font-size:15px}.homeWorker span{font-size:12px;color:#5d6878}.homeWorker span strong{font-size:20px;color:#172033}.homeWorker small{font-size:11px;color:#718096}.homeWorker.unassigned{border-color:#e6aa5a;background:#fff9e8}
+        @media(max-width:780px){.homeWorkloadGrid{grid-template-columns:1fr 1fr}}
         @media(max-width:380px){.statusTile span{font-size:10px}.statusTile strong{font-size:24px}}
       `}</style>
     </main>
