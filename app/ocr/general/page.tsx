@@ -5,6 +5,7 @@ import { safeActionError } from "../../lib/client-security";
 
 import { useEffect, useRef, useState } from "react";
 import { consumeOCRTransferImage } from "../transfer";
+import { validateDocumentFile } from "../../lib/file-security";
 
 type Part = {
   id: string;
@@ -348,6 +349,8 @@ export default function GeneralOCRPage() {
   }, []);
 
   async function runOCR(file: File) {
+    const fileCheck = await validateDocumentFile(file);
+    if (!fileCheck.ok) { setMessage(fileCheck.message); return; }
     setBusy(true); setProgress(1); setParts([]); setRawText(""); setDebug(""); setMessage("用紙全体を解析しています…");
     if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(file));
