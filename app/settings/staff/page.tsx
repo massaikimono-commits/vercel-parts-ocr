@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { safeActionError } from "../../lib/client-security";
+
 import { useEffect, useState } from "react";
 import { supabase } from "../../supabase";
 
@@ -30,7 +32,7 @@ export default function StaffSettingsPage() {
       .order("is_active", { ascending: false })
       .order("display_order", { ascending: true })
       .order("display_name", { ascending: true });
-    if (error) setMessage("社員一覧の読み込みエラー: " + error.message);
+    if (error) setMessage(safeActionError("社員一覧の読み込み", error));
     else setStaff((data || []) as StaffMember[]);
     setBusy(false);
   }
@@ -52,7 +54,7 @@ export default function StaffSettingsPage() {
       updated_at: new Date().toISOString(),
     });
     if (error) {
-      setMessage("社員追加エラー: " + error.message);
+      setMessage(safeActionError("社員の追加", error));
       setBusy(false);
       return;
     }
@@ -78,7 +80,7 @@ export default function StaffSettingsPage() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", member.id);
-    setMessage(error ? "保存エラー: " + error.message : member.display_name + " を保存しました。");
+    setMessage(error ? safeActionError("社員情報の保存", error) : member.display_name + " を保存しました。");
     setBusy(false);
   }
 
@@ -89,7 +91,7 @@ export default function StaffSettingsPage() {
       .from("staff_members")
       .update({ is_active: next, updated_at: new Date().toISOString() })
       .eq("id", member.id);
-    if (error) setMessage("更新エラー: " + error.message);
+    if (error) setMessage(safeActionError("社員情報の更新", error));
     else setMessage(next ? member.display_name + " を在籍に戻しました。" : member.display_name + " を退職扱いにしました。過去の担当者名は残ります。");
     await load();
   }
