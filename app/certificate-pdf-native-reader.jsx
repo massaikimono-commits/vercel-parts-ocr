@@ -233,7 +233,7 @@ function anchored(lines, labels, parser, options = {}) {
 
 function parseNative(tokens) {
   const lines = buildLines(tokens);
-  const allText = lines.map((line) => line.text).join("\n");
+  const allText = lines.map((line) => line.text).join("\const MAX_PDF_PAGES = 20;\nconst MAX_PDF_RENDER_PIXELS = 50_000_000;\nn");
   const patch = {};
   const put = (key, value) => { if (value) patch[key] = value; };
 
@@ -324,8 +324,11 @@ async function renderPage(pdf, pageNumber, targetWidth = 1800) {
   const scale = Math.max(1, Math.min(4, targetWidth / Math.max(1, base.width)));
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(viewport.width));
-  canvas.height = Math.max(1, Math.round(viewport.height));
+  const renderWidth = Math.max(1, Math.round(viewport.width));
+  const renderHeight = Math.max(1, Math.round(viewport.height));
+  if (renderWidth * renderHeight > MAX_PDF_RENDER_PIXELS) throw new Error("PDFページの描画サイズが大きすぎます。");
+  canvas.width = renderWidth;
+  canvas.height = renderHeight;
   const ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -497,6 +500,7 @@ export default function CertificatePdfNativeReader() {
         const pdfjs = await loadPdfJs();
         const data = new Uint8Array(await file.arrayBuffer());
         const pdf = await pdfjs.getDocument({ data }).promise;
+        if ((pdf.numPages || 1) > MAX_PDF_PAGES) { await pdf.destroy?.().catch?.(() => {}); throw new Error("PDFのページ数が多すぎます。"); }
         try {
           const chosen = await choosePage(pdf);
           const page = await pdf.getPage(chosen.pageNumber);
