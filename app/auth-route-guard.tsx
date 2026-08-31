@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "./supabase";
+import { clearSensitiveLocalState } from "./lib/client-security";
 
 function isPublicPath(pathname: string) {
   // 現在の公開入口はログイン画面の / のみ。
@@ -30,6 +31,7 @@ export default function AuthRouteGuard({ children }: { children: React.ReactNode
     void supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       if (!data.session) {
+        clearSensitiveLocalState();
         location.replace("/");
         return;
       }
@@ -40,6 +42,7 @@ export default function AuthRouteGuard({ children }: { children: React.ReactNode
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session && location.pathname !== "/") {
+        clearSensitiveLocalState();
         location.replace("/");
       }
     });
