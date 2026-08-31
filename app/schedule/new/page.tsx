@@ -13,6 +13,12 @@ type StaffMember = {
   short_name: string | null;
 };
 
+type ExternalVendor = {
+  id: string;
+  display_name: string;
+  short_name: string | null;
+};
+
 type TimeOption = {
   key: string;
   label: string;
@@ -87,6 +93,9 @@ export default function ScheduleNewPage() {
   const [model, setModel] = useState("");
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [staffId, setStaffId] = useState("");
+  const [vendors, setVendors] = useState<ExternalVendor[]>([]);
+  const [vendorId, setVendorId] = useState("");
+  const [vendorName, setVendorName] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
   const [needsLoaner, setNeedsLoaner] = useState(false);
   const [notes, setNotes] = useState("");
@@ -132,6 +141,7 @@ export default function ScheduleNewPage() {
 
   useEffect(() => {
     void loadStaff();
+    void loadVendors();
   }, []);
 
   async function loadStaff() {
@@ -146,6 +156,20 @@ export default function ScheduleNewPage() {
       return;
     }
     setStaffMembers((data || []) as StaffMember[]);
+  }
+
+  async function loadVendors() {
+    const { data, error } = await supabase
+      .from("external_vendors")
+      .select("id,display_name,short_name")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .order("display_name", { ascending: true });
+    if (error) {
+      setMessage(`外注先一覧の読み込みエラー: ${error.message}`);
+      return;
+    }
+    setVendors((data || []) as ExternalVendor[]);
   }
 
   async function loadCapacity() {
@@ -339,14 +363,14 @@ export default function ScheduleNewPage() {
           .eq("id", workOrderId);
         if (flagError) throw flagError;
 
-        if (staffId) {
-          const { error: staffError } = await supabase.rpc("set_work_order_worker", {
-            p_work_order_id: workOrderId,
-            p_staff_id: staffId,
-            p_actor: "schedule-registration",
-          });
-          if (staffError) throw staffError;
-        }
+        const { error: assignmentError } = await supabase.rpc("set_work_order_assignment", {
+          p_work_order_id: workOrderId,
+          p_staff_id: staffId || null,
+          p_vendor_id: reason === "板金塗装" ? (vendorId || null) : null,
+          p_vendor_name: reason === "板金塗装" ? (vendorName.trim() || null) : null,
+          p_actor: "schedule-registration",
+        });
+        if (assignmentError) throw assignmentError;
       }
 
       if (addDelivery && entryType !== "delivery" && selectedDelivery && workOrderId && vehicleId) {
@@ -520,10 +544,28 @@ export default function ScheduleNewPage() {
               ))}
             </select>
           </label>
+          {reason === "板金塗装" && (
+            <>
+              <label>外注先
+                <select value={vendorId} onChange={(e) => { setVendorId(e.target.value); if (e.target.value) setVendorName(""); }}>
+                  <option value="">未選択 / 直接入力</option>
+                  {vendors.map((vendor) => (
+                    <option key={vendor.id} value={vendor.id}>{vendor.short_name || vendor.display_name}</option>
+                  ))}
+                </select>
+              </label>
+              {!vendorId && (
+                <label>外注先名（直接入力）
+                  <input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：○○鈑金" />
+                </label>
+              )}
+            </>
+          )}
           <div className="flagBox">
             <label className="switch"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />急ぎ</label>
             <label className="switch"><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} />代車あり</label>
             <button type="button" onClick={() => location.assign("/settings/staff")}>社員名を管理</button>
+            {reason === "板金塗装" && <button type="button" onClick={() => location.assign("/settings/vendors")}>外注先を管理</button>}
           </div>
           <label className="wide">備考<textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>
