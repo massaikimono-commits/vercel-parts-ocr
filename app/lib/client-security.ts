@@ -33,3 +33,12 @@ export function clearSensitiveLocalState() {
     // ログアウト自体は失敗させない。
   }
 }
+
+
+export function spreadsheetSafeCell(value: unknown) {
+  const text = String(value ?? "");
+  if (/^[\t\r\n]/.test(text) || /^[\s]*[=+\-@]/.test(text)) {
+    return "'" + text;
+  }
+  return text;
+}
