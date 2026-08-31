@@ -12,6 +12,7 @@ type WorkOrder = {
   checked_in_at: string | null;
   checked_out_at: string | null;
   reason: string | null;
+  is_urgent: boolean | null;
 };
 
 type LoadRow = {
@@ -21,6 +22,7 @@ type LoadRow = {
   inProgress: number;
   completedWaiting: number;
   staying: number;
+  urgent: number;
   oldestStayDays: number;
 };
 
@@ -60,7 +62,7 @@ export default function WorkloadPage() {
     try {
       const { data, error } = await supabase
         .from("work_orders")
-        .select("id,worker_name,status,work_completed,checked_in_at,checked_out_at,reason")
+        .select("id,worker_name,status,work_completed,checked_in_at,checked_out_at,reason,is_urgent")
         .is("checked_out_at", null)
         .neq("status", "cancelled")
         .limit(500);
@@ -86,6 +88,7 @@ export default function WorkloadPage() {
         inProgress: 0,
         completedWaiting: 0,
         staying: 0,
+        urgent: 0,
         oldestStayDays: 0,
       };
       row.total += 1;
@@ -96,6 +99,7 @@ export default function WorkloadPage() {
       } else {
         row.notStarted += 1;
       }
+      if (work.is_urgent && !work.work_completed && work.status !== "completed") row.urgent += 1;
 
       const stayDays = elapsedStayDays(work.checked_in_at);
       if (stayDays !== null) {
@@ -108,6 +112,7 @@ export default function WorkloadPage() {
       const aActive = a.notStarted + a.inProgress;
       const bActive = b.notStarted + b.inProgress;
       return bActive - aActive
+        || b.urgent - a.urgent
         || b.oldestStayDays - a.oldestStayDays
         || b.total - a.total
         || a.name.localeCompare(b.name, "ja");
@@ -120,8 +125,9 @@ export default function WorkloadPage() {
     inProgress: acc.inProgress + row.inProgress,
     completedWaiting: acc.completedWaiting + row.completedWaiting,
     staying: acc.staying + row.staying,
+    urgent: acc.urgent + row.urgent,
     oldestStayDays: Math.max(acc.oldestStayDays, row.oldestStayDays),
-  }), { total: 0, notStarted: 0, inProgress: 0, completedWaiting: 0, staying: 0, oldestStayDays: 0 }), [rows]);
+  }), { total: 0, notStarted: 0, inProgress: 0, completedWaiting: 0, staying: 0, urgent: 0, oldestStayDays: 0 }), [rows]);
 
   return (
     <main className="loadPage">
@@ -144,6 +150,7 @@ export default function WorkloadPage() {
         <div><span>出庫前</span><b>{totals.total}</b></div>
         <div><span>未実施</span><b>{totals.notStarted}</b></div>
         <div><span>作業中</span><b>{totals.inProgress}</b></div>
+        <div><span>急ぎ未完了</span><b>{totals.urgent}</b></div>
         <div><span>作業完了・納車待ち</span><b>{totals.completedWaiting}</b></div>
         <div><span>入庫中</span><b>{totals.staying}</b></div>
         <div><span>最長滞留</span><b>{totals.staying ? `${totals.oldestStayDays}日` : "-"}</b></div>
@@ -151,13 +158,14 @@ export default function WorkloadPage() {
 
       <section className="tableCard">
         <div className="tableHead">
-          <span>担当者</span><span>未実施</span><span>作業中</span><span>完了待ち</span><span>入庫中</span><span>最長滞留</span><span>合計</span>
+          <span>担当者</span><span>未実施</span><span>作業中</span><span>急ぎ</span><span>完了待ち</span><span>入庫中</span><span>最長滞留</span><span>合計</span>
         </div>
         {rows.map((row) => (
           <div className={`loadRow ${row.name === "担当未設定" ? "unassigned" : ""}`} key={row.name}>
             <b>{row.name}</b>
             <span className={row.notStarted ? "warn" : ""}>{row.notStarted}</span>
             <span className={row.inProgress ? "progress" : ""}>{row.inProgress}</span>
+            <span className={row.urgent ? "urgent" : ""}>{row.urgent}</span>
             <span>{row.completedWaiting}</span>
             <span className={row.staying ? "stay" : ""}>{row.staying}</span>
             <span className={row.oldestStayDays ? "stayAge" : ""}>{row.staying ? `${row.oldestStayDays}日` : "-"}</span>
@@ -167,14 +175,14 @@ export default function WorkloadPage() {
         {!busy && rows.length === 0 && <div className="empty">現在の出庫前作業はありません。</div>}
       </section>
 
-      <div className="hint">同じ作業を複数予定に登録していても、work_orders単位で1台として集計します。入庫日時がある出庫前車両は「入庫中」として数え、担当者ごとの最長滞留日数も表示します。</div>
+      <div className="hint">同じ作業を複数予定に登録していても、work_orders単位で1台として集計します。急ぎは未完了作業だけを数えます。入庫日時がある出庫前車両は「入庫中」として数え、担当者ごとの最長滞留日数も表示します。</div>
 
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button{font:inherit}
         .loadPage{max-width:1120px;margin:0 auto;padding:16px 14px 50px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}.top button,.reload{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
-        .hero{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px}.eyebrow{color:#2674e8;font-weight:800}.hero h1{font-size:28px;margin:3px 0}.hero p{margin:0;color:#6d798a}.summary{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:10px 0}.summary>div{background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:13px;display:grid;gap:4px}.summary span{font-size:12px;color:#687587}.summary b{font-size:26px}.tableCard{background:#fff;border:1px solid #d9e0ea;border-radius:18px;overflow:hidden}.tableHead,.loadRow{display:grid;grid-template-columns:minmax(160px,1.5fr) repeat(6,minmax(70px,.6fr));gap:8px;align-items:center;padding:11px 14px}.tableHead{background:#f7f9fc;color:#657184;font-size:11px;font-weight:900}.tableHead span:not(:first-child),.loadRow span,.loadRow strong{text-align:center}.loadRow{border-top:1px solid #edf0f4}.loadRow>b{font-size:15px}.loadRow span,.loadRow strong{border-radius:999px;padding:5px 7px;font-weight:900}.loadRow .warn{background:#fff4d8;color:#8a5a00}.loadRow .progress{background:#eaf3ff;color:#245ca8}.loadRow .stay{background:#eef7ed;color:#356d31}.loadRow .stayAge{background:#fff4d8;color:#8a5a00}.loadRow.unassigned{background:#fff8f2}.loadRow.unassigned>b{color:#a25417}.empty{padding:28px;text-align:center;color:#8b97a7}.hint{font-size:12px;color:#78869a;margin-top:8px}
+        .hero{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px}.eyebrow{color:#2674e8;font-weight:800}.hero h1{font-size:28px;margin:3px 0}.hero p{margin:0;color:#6d798a}.summary{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin:10px 0}.summary>div{background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:13px;display:grid;gap:4px}.summary span{font-size:12px;color:#687587}.summary b{font-size:26px}.tableCard{background:#fff;border:1px solid #d9e0ea;border-radius:18px;overflow:hidden}.tableHead,.loadRow{display:grid;grid-template-columns:minmax(160px,1.5fr) repeat(7,minmax(70px,.6fr));gap:8px;align-items:center;padding:11px 14px}.tableHead{background:#f7f9fc;color:#657184;font-size:11px;font-weight:900}.tableHead span:not(:first-child),.loadRow span,.loadRow strong{text-align:center}.loadRow{border-top:1px solid #edf0f4}.loadRow>b{font-size:15px}.loadRow span,.loadRow strong{border-radius:999px;padding:5px 7px;font-weight:900}.loadRow .warn{background:#fff4d8;color:#8a5a00}.loadRow .progress{background:#eaf3ff;color:#245ca8}.loadRow .urgent{background:#fff0f0;color:#b02a2a}.loadRow .stay{background:#eef7ed;color:#356d31}.loadRow .stayAge{background:#fff4d8;color:#8a5a00}.loadRow.unassigned{background:#fff8f2}.loadRow.unassigned>b{color:#a25417}.empty{padding:28px;text-align:center;color:#8b97a7}.hint{font-size:12px;color:#78869a;margin-top:8px}
         @media(max-width:850px){.summary{grid-template-columns:repeat(3,1fr)}}
-        @media(max-width:650px){.hero{display:block}.reload{margin-top:12px;width:100%}.summary{grid-template-columns:1fr 1fr}.tableCard{overflow-x:auto}.tableHead,.loadRow{min-width:820px}.hero h1{font-size:24px}}
+        @media(max-width:650px){.hero{display:block}.reload{margin-top:12px;width:100%}.summary{grid-template-columns:1fr 1fr}.tableCard{overflow-x:auto}.tableHead,.loadRow{min-width:900px}.hero h1{font-size:24px}}
       `}</style>
     </main>
   );
