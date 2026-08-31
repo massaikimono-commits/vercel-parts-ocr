@@ -121,10 +121,14 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     location.assign("/schedule/new?day=" + day);
   }
 
+  const pendingCount = unfinished.filter(({ work }) => work?.status !== "in_progress").length;
+  const runningCount = unfinished.filter(({ work }) => work?.status === "in_progress").length;
   const todayCountLabel = busy ? "…" : loadError ? "確認要" : todayRows.length + "件";
   const todayStatusLabel = busy
     ? "読み込み中"
-    : loadError || (unfinished.length ? "作業未実施 " + unfinished.length + "件" : "作業未実施なし");
+    : loadError || (unfinished.length
+      ? [pendingCount ? `未実施 ${pendingCount}件` : "", runningCount ? `作業中 ${runningCount}件` : ""].filter(Boolean).join(" / ")
+      : "未完了なし");
 
   return (
     <main className="homeDash">
@@ -142,18 +146,24 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
 
         {!busy && !loadError && unfinished.length > 0 && (
           <div className="unfinishedBox">
-            <div className="unfinishedTitle">作業未実施 <strong>{unfinished.length}件</strong></div>
-            {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => (
-              <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openDay(todayJst())}>
-                <span className="statusDot">未</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b><small>下4桁 {last4(vehicle)}　{work?.reason || ""}</small></span>
-                {work?.is_urgent && <em>急ぎ</em>}
-                {work?.needs_loaner && <em>代車</em>}
-              </button>
-            ))}
+            <div className="unfinishedTitle">作業状況 <strong>{unfinished.length}件</strong></div>
+            {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => {
+              const running = work?.status === "in_progress";
+              return (
+                <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openDay(todayJst())}>
+                  <span className={`statusDot ${running ? "running" : "pending"}`}>{running ? "中" : "未"}</span>
+                  <span className="uMain">
+                    <b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b>
+                    <small>{running ? "作業中" : "作業未実施"}　下4桁 {last4(vehicle)}　{work?.reason || ""}</small>
+                  </span>
+                  {work?.is_urgent && <em>急ぎ</em>}
+                  {work?.needs_loaner && <em>代車</em>}
+                </button>
+              );
+            })}
             {unfinished.length > 5 && (
               <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
-                ほか {unfinished.length - 5}件も未実施　→ 1日のスケジュールで確認
+                ほか {unfinished.length - 5}件も未完了　→ 1日のスケジュールで確認
               </button>
             )}
           </div>
