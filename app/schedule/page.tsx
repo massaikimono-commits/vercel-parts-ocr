@@ -67,6 +67,13 @@ const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   onsite_repair: "出張整備",
 };
 
+const ENTRY_COMPLETE_LABEL: Record<ScheduleEntry["entry_type"], string> = {
+  delivery: "納車完了",
+  pickup: "引取完了",
+  customer_visit: "受付完了",
+  onsite_repair: "出張完了",
+};
+
 const LAYOUT_KEY = "icb-schedule-column-layout";
 const LAYOUT_SETTING_KEY = "schedule_layout";
 
@@ -487,8 +494,8 @@ export default function SchedulePage() {
             </div>
           </div>
           {!isDelivery && (
-            <button className={entry.completed ? "complete active noPrint" : "complete noPrint"} onClick={() => void toggleCompleted(entry)} aria-label="入出庫予定完了切替">
-              {entry.completed ? "✓ 予定完了" : "予定完了"}
+            <button className={entry.completed ? "complete active noPrint" : "complete noPrint"} onClick={() => void toggleCompleted(entry)} aria-label={`${ENTRY_COMPLETE_LABEL[entry.entry_type]}切替`}>
+              {entry.completed ? `✓ ${ENTRY_COMPLETE_LABEL[entry.entry_type]}` : ENTRY_COMPLETE_LABEL[entry.entry_type]}
             </button>
           )}
         </div>
