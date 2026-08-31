@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
+import { safeActionError } from "../../lib/client-security";
 
 type EntryType = "delivery" | "pickup" | "customer_visit" | "onsite_repair";
 type Reason = "点検" | "車検" | "一般整備" | "板金塗装";
@@ -152,7 +153,7 @@ export default function ScheduleNewPage() {
       .order("display_order", { ascending: true })
       .order("display_name", { ascending: true });
     if (error) {
-      setMessage(`社員一覧の読み込みエラー: ${error.message}`);
+      setMessage(safeActionError("社員一覧の読み込み", error));
       return;
     }
     setStaffMembers((data || []) as StaffMember[]);
@@ -166,7 +167,7 @@ export default function ScheduleNewPage() {
       .order("display_order", { ascending: true })
       .order("display_name", { ascending: true });
     if (error) {
-      setMessage(`外注先一覧の読み込みエラー: ${error.message}`);
+      setMessage(safeActionError("外注先一覧の読み込み", error));
       return;
     }
     setVendors((data || []) as ExternalVendor[]);
@@ -175,7 +176,7 @@ export default function ScheduleNewPage() {
   async function loadCapacity() {
     const { data, error } = await supabase.rpc("schedule_capacity", { p_day: day });
     if (error) {
-      setMessage(`空き状況の読み込みエラー: ${error.message}`);
+      setMessage(safeActionError("空き状況の読み込み", error));
       return;
     }
     const row = Array.isArray(data) ? data[0] : data;
@@ -206,7 +207,7 @@ export default function ScheduleNewPage() {
           || "";
       });
     } catch (error: any) {
-      setMessage(`時間候補の読み込みエラー: ${error?.message || error}`);
+      setMessage(safeActionError("時間候補の読み込み", error));
       setTimeOptions([]);
       setSelectedTimeKey("");
     } finally {
@@ -222,7 +223,7 @@ export default function ScheduleNewPage() {
       p_reason: reason,
     });
     if (error) {
-      setMessage(`納車時間候補の読み込みエラー: ${error.message}`);
+      setMessage(safeActionError("納車時間候補の読み込み", error));
       return;
     }
     const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
@@ -398,7 +399,7 @@ export default function ScheduleNewPage() {
       setMessage("予定を登録しました。1日のスケジュールへ戻ります。");
       window.setTimeout(() => location.assign(`/schedule?day=${day}`), 350);
     } catch (error: any) {
-      setMessage(`予定登録エラー: ${error?.message || error}`);
+      setMessage(safeActionError("予定登録", error));
     } finally {
       setBusy(false);
     }
