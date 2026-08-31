@@ -28,6 +28,8 @@ type WorkOrder = {
   status: string;
   worker_name: string | null;
   work_completed: boolean;
+  stay_reason: string | null;
+  planned_delivery_date: string | null;
 };
 
 type ScheduleEntry = {
@@ -160,7 +162,7 @@ export default function ScheduleSearchPage() {
 
       const { data: workData, error: workError } = await supabase
         .from("work_orders")
-        .select("id,vehicle_id,reason,status,worker_name,work_completed")
+        .select("id,vehicle_id,reason,status,worker_name,work_completed,stay_reason,planned_delivery_date")
         .in("vehicle_id", vehicleIds)
         .limit(300);
       if (workError) throw workError;
@@ -286,6 +288,8 @@ export default function ScheduleSearchPage() {
                     {vehicle?.registration_number_last4 && <span>下4桁 {vehicle.registration_number_last4}</span>}
                     {customer?.phone && <span>{customer.phone}</span>}
                     {work?.worker_name && <span>担当 {work.worker_name}</span>}
+                    {work?.stay_reason && <span>滞留理由 {work.stay_reason}</span>}
+                    {work?.planned_delivery_date && <span>納車予定 {work.planned_delivery_date}</span>}
                   </div>
                   <div className="state">{work?.work_completed ? "作業完了" : work?.status === "in_progress" ? "作業中" : "作業未実施"}</div>
                   <button className="editBtn" onClick={() => location.assign("/schedule/edit?id="+entry.id)}>予約変更</button>
