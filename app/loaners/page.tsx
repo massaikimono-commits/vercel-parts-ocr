@@ -36,6 +36,13 @@ function timeLabel(value:string) {
   return new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(value));
 }
 
+function reservationStatusLabel(status:string) {
+  if(status==="checked_out") return "貸出中";
+  if(status==="returned") return "返却済み";
+  if(status==="cancelled") return "取消";
+  return "予約済み";
+}
+
 export default function LoanerPage() {
   const [day,setDay] = useState(todayJst());
   const [vehicles,setVehicles] = useState<LoanerVehicle[]>([]);
@@ -101,8 +108,24 @@ export default function LoanerPage() {
     await load();
   }
 
+  async function updateReservationStatus(id:string,status:"reserved"|"checked_out"|"returned"|"cancelled") {
+    setBusy(true);
+    const {error}=await supabase.rpc("update_loaner_reservation_status",{
+      p_reservation_id:id,
+      p_status:status,
+      p_actor:"staff",
+    });
+    if(error){
+      setMessage("貸出状態の更新エラー: "+error.message);
+      setBusy(false);
+      return;
+    }
+    setMessage(status==="checked_out"?"代車を貸出中にしました。":status==="returned"?"代車を返却済みにしました。":"代車予約の状態を更新しました。");
+    await load();
+  }
+
   const availableCount = useMemo(
-    ()=>vehicles.filter(v=>v.operationalStatus==="active" && !v.reservations?.length).length,
+    ()=>vehicles.filter(v=>v.operationalStatus==="active" && !v.reservations?.some(r=>r.status!=="returned" && r.status!=="cancelled")).length,
     [vehicles]
   );
 
@@ -135,7 +158,8 @@ export default function LoanerPage() {
 
       <section className="board">
         {vehicles.map(v=>{
-          const available=v.operationalStatus==="active" && !(v.reservations||[]).length;
+          const activeReservations=(v.reservations||[]).filter(r=>r.status!=="returned" && r.status!=="cancelled");
+          const available=v.operationalStatus==="active" && activeReservations.length===0;
           return (
             <article className={`loanerCard ${available?"available":"busyCard"}`} key={v.loanerVehicleId}>
               <div className="cardHead">
@@ -151,11 +175,19 @@ export default function LoanerPage() {
                 <span>{v.operationalStatus==="active"?"稼働中":v.operationalStatus==="maintenance"?"整備中":v.operationalStatus}</span>
               </div>
               {(v.reservations||[]).map(r=>(
-                <div className="reservation" key={r.loanerReservationId}>
-                  <b>{timeLabel(r.startsAt)}〜{timeLabel(r.endsAt)}</b>
-                  <span>{r.customerName || "予約"}</span>
-                  {r.registrationLast4 && <small>下4桁 {r.registrationLast4}</small>}
-                  {r.reason && <small>{r.reason}</small>}
+                <div className={`reservation status-${r.status}`} key={r.loanerReservationId}>
+                  <div className="reservationMain">
+                    <b>{timeLabel(r.startsAt)}〜{timeLabel(r.endsAt)}</b>
+                    <span>{r.customerName || "予約"}</span>
+                    <strong className="reservationStatus">{reservationStatusLabel(r.status)}</strong>
+                    {r.registrationLast4 && <small>下4桁 {r.registrationLast4}</small>}
+                    {r.reason && <small>{r.reason}</small>}
+                  </div>
+                  <div className="reservationActions">
+                    {r.status==="reserved" && <button disabled={busy} onClick={()=>void updateReservationStatus(r.loanerReservationId,"checked_out")}>貸出開始</button>}
+                    {r.status==="checked_out" && <button className="returnBtn" disabled={busy} onClick={()=>void updateReservationStatus(r.loanerReservationId,"returned")}>返却</button>}
+                    {r.status==="returned" && <button disabled={busy} onClick={()=>void updateReservationStatus(r.loanerReservationId,"reserved")}>予約に戻す</button>}
+                  </div>
                 </div>
               ))}
               <div className="actions">
@@ -191,7 +223,7 @@ export default function LoanerPage() {
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}
         .loanerPage{max-width:1100px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
         .hero,.addCard{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.hero{display:flex;justify-content:space-between;gap:12px}.eyebrow{color:#2674e8;font-weight:800}.hero h1{margin:3px 0}.notice{color:#667487}.summary{display:flex;gap:7px;flex-wrap:wrap}.summary>div{background:#f6f8fb;border-radius:12px;padding:10px;min-width:80px;display:grid}.summary b{font-size:22px}.summary small{color:#78869a}
-        .dateBar{display:flex;gap:8px;margin-bottom:12px}.dateBar input,.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:10px;background:#fff}.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:14px}.loanerCard{background:#fff;border:1px solid #dbe3ee;border-radius:15px;padding:13px}.loanerCard.available{box-shadow:inset 4px 0 0 #6fb184}.loanerCard.busyCard{box-shadow:inset 4px 0 0 #d79a3d}.cardHead{display:flex;justify-content:space-between;gap:8px}.cardHead>div{display:grid}.cardHead>div span{font-size:11px;color:#6d798a}.cardHead strong{font-size:11px;border-radius:999px;padding:4px 7px;height:max-content}.cardHead .ok{background:#e9f7ef;color:#25703c}.cardHead .ng{background:#fff0db;color:#925b08}.meta{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}.meta span{font-size:10px;background:#f1f4f8;border-radius:999px;padding:3px 6px}.reservation{margin-top:8px;background:#f8fafc;border-radius:9px;padding:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}.reservation span{font-weight:800}.reservation small{color:#6c7888}.actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}.actions button{font-size:10px;padding:6px 8px}.empty{background:#fff;padding:25px;border-radius:14px;text-align:center;color:#8592a4}
+        .dateBar{display:flex;gap:8px;margin-bottom:12px}.dateBar input,.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:10px;background:#fff}.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:14px}.loanerCard{background:#fff;border:1px solid #dbe3ee;border-radius:15px;padding:13px}.loanerCard.available{box-shadow:inset 4px 0 0 #6fb184}.loanerCard.busyCard{box-shadow:inset 4px 0 0 #d79a3d}.cardHead{display:flex;justify-content:space-between;gap:8px}.cardHead>div{display:grid}.cardHead>div span{font-size:11px;color:#6d798a}.cardHead strong{font-size:11px;border-radius:999px;padding:4px 7px;height:max-content}.cardHead .ok{background:#e9f7ef;color:#25703c}.cardHead .ng{background:#fff0db;color:#925b08}.meta{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}.meta span{font-size:10px;background:#f1f4f8;border-radius:999px;padding:3px 6px}.reservation{margin-top:8px;background:#f8fafc;border-radius:9px;padding:8px;display:grid;gap:7px}.reservationMain{display:flex;gap:5px;flex-wrap:wrap;align-items:center}.reservationMain>span{font-weight:800}.reservation small{color:#6c7888}.reservationStatus{font-size:10px;border-radius:999px;padding:3px 6px;background:#eef2f7;color:#596678}.status-checked_out .reservationStatus{background:#fff0db;color:#925b08}.status-returned{opacity:.72}.status-returned .reservationStatus{background:#e9f7ef;color:#25703c}.reservationActions{display:flex;gap:5px}.reservationActions button{font-size:11px;padding:6px 9px}.reservationActions .returnBtn{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}.actions button{font-size:10px;padding:6px 8px}.empty{background:#fff;padding:25px;border-radius:14px;text-align:center;color:#8592a4}
         .addCard h2{margin-top:0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.grid label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#627083}.primary{margin-top:12px;background:#2f6fe4;color:#fff;border-color:#2f6fe4}
         @media(max-width:800px){.hero{display:block}.summary{margin-top:10px}.board{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}}@media(max-width:520px){.grid{grid-template-columns:1fr}}
       `}</style>
