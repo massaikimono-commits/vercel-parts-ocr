@@ -19,9 +19,9 @@ export const DAILY_REPORT_TEMPLATE = {
     width: 1,
     height: 1,
     paperSize: "A3" as const,
-    orientation: "landscape" as const,
-    widthMm: 420,
-    heightMm: 297,
+    orientation: "portrait" as const,
+    widthMm: 297,
+    heightMm: 420,
   },
   background: {
     source: "user-supplied-existing-form" as const,
