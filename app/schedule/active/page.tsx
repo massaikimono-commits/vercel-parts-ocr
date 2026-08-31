@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
+import { safeActionError } from "../../lib/client-security";
 
 type EntryType = "pickup" | "customer_visit" | "onsite_repair";
 type Reason = "点検" | "車検" | "一般整備" | "板金塗装";
@@ -134,7 +135,7 @@ export default function ActiveVehicleSchedulePage() {
         setCustomer(customerData as Customer);
       }
     } catch (error: any) {
-      setMessage(`作業車両の読み込みエラー: ${error?.message || error}`);
+      setMessage(safeActionError("作業車両の読み込み", error));
     }
   }
 
@@ -158,7 +159,7 @@ export default function ActiveVehicleSchedulePage() {
       p_entry_type: entryType,
     });
     if (error) {
-      setMessage(`時間候補の読み込みエラー: ${error.message}`);
+      setMessage(safeActionError("時間候補の読み込み", error));
       return;
     }
     const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
@@ -172,7 +173,7 @@ export default function ActiveVehicleSchedulePage() {
       p_entry_type: "delivery",
     });
     if (error) {
-      setMessage(`納車時間候補の読み込みエラー: ${error.message}`);
+      setMessage(safeActionError("納車時間候補の読み込み", error));
       return;
     }
     const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
@@ -301,7 +302,7 @@ export default function ActiveVehicleSchedulePage() {
       setMessage("既存車両へ予定を登録しました。顧客・車両を重複作成していません。");
       window.setTimeout(() => location.assign(`/schedule?day=${day}`), 450);
     } catch (error: any) {
-      setMessage(`予定登録エラー: ${error?.message || error}`);
+      setMessage(safeActionError("予定登録", error));
     } finally {
       setBusy(false);
     }
