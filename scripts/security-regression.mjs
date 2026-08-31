@@ -17,6 +17,7 @@ const ocrDedicated = read("app/ocr/page.tsx");
 const ocrGeneral = read("app/ocr/general/page.tsx");
 const ocrAuto = read("app/ocr/auto/page.tsx");
 const vehicleFast = read("app/vehicle-workflow-fast/page.tsx");
+const supabaseClient = read("app/supabase.ts");
 
 pass("route guard imported", layout.includes('AuthRouteGuard from "./auth-route-guard"'));
 pass("route guard wraps app", layout.includes("<AuthRouteGuard>") && layout.includes("</AuthRouteGuard>"));
@@ -29,6 +30,8 @@ pass("dedicated OCR validates files", ocrDedicated.includes("validateDocumentFil
 pass("generic OCR validates files", ocrGeneral.includes("validateDocumentFile(file)"));
 pass("auto OCR validates files", ocrAuto.includes("validateDocumentFile(file)"));
 pass("vehicle OCR validates files", vehicleFast.includes("validateDocumentFile(file,{allowPdf:true})"));
+pass("URL auth session detection disabled", supabaseClient.includes("detectSessionInUrl: false"));
+pass("sensitive routes disable caching", netlify.includes('Cache-Control = "no-store, max-age=0"') && netlify.includes('for = "/schedule/*"') && netlify.includes('for = "/customer-vehicles/*"'));
 
 for (const [name, needle] of [
   ["X-Frame-Options", 'X-Frame-Options = "DENY"'],
