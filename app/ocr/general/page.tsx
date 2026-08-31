@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { safeActionError } from "../../lib/client-security";
+
 import { useEffect, useRef, useState } from "react";
 import { consumeOCRTransferImage } from "../transfer";
 
@@ -371,7 +373,7 @@ export default function GeneralOCRPage() {
       setMessage(best.length ? `${best.length}件の部品候補を読み取りました。必ず内容を確認してください。` : "部品行を確定できませんでした。下のOCR原文を確認して手入力してください。");
       setProgress(100);
     } catch (error: any) {
-      setMessage(`OCRエラー: ${error?.message || error}`);
+      setMessage(safeActionError("部品伝票OCR", error));
     } finally {
       if (worker) { try { await worker.terminate(); } catch {} }
       setBusy(false);
