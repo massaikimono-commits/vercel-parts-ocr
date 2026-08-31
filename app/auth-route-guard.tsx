@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "./supabase";
 import { clearSensitiveLocalState } from "./lib/client-security";
+import { isActiveAppSession } from "./lib/auth-security";
 
 function isPublicPath(pathname: string) {
   // 現在の公開入口はログイン画面の / のみ。
@@ -28,23 +29,31 @@ export default function AuthRouteGuard({ children }: { children: React.ReactNode
 
     setReady(false);
 
-    void supabase.auth.getSession().then(({ data }) => {
+    void supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
-      if (!data.session) {
+      if (!data.session || !(await isActiveAppSession(data.session))) {
         clearSensitiveLocalState();
+        if (data.session) await supabase.auth.signOut();
         location.replace("/");
         return;
       }
-      setReady(true);
+      if (mounted) setReady(true);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session && location.pathname !== "/") {
-        clearSensitiveLocalState();
-        location.replace("/");
-      }
+      // SupabaseのAuthコールバック内で別のAuth/DB処理をawaitしない。
+      setTimeout(() => {
+        if (!mounted) return;
+        void (async () => {
+          if (!session || !(await isActiveAppSession(session))) {
+            clearSensitiveLocalState();
+            if (session) await supabase.auth.signOut();
+            if (location.pathname !== "/") location.replace("/");
+          }
+        })();
+      }, 0);
     });
 
     return () => {
