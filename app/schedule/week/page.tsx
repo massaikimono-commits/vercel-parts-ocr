@@ -261,17 +261,22 @@ export default function WeeklySchedulePage() {
     return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
   }
 
-  function overlapCount(dayRows: Array<{entry: ScheduleEntry}>) {
+  function overlapInfo(dayRows: Array<{entry: ScheduleEntry}>) {
     let count = 0;
+    const ids = new Set<string>();
     for (let i = 0; i < dayRows.length; i += 1) {
       for (let j = i + 1; j < dayRows.length; j += 1) {
         const a = dayRows[i].entry;
         const b = dayRows[j].entry;
         if (a.entry_type !== b.entry_type) continue;
-        if (new Date(a.starts_at) < new Date(b.ends_at) && new Date(a.ends_at) > new Date(b.starts_at)) count += 1;
+        if (new Date(a.starts_at) < new Date(b.ends_at) && new Date(a.ends_at) > new Date(b.starts_at)) {
+          count += 1;
+          ids.add(a.id);
+          ids.add(b.id);
+        }
       }
     }
-    return count;
+    return { count, ids };
   }
 
   function capacitySummary(day: string) {
@@ -359,7 +364,7 @@ export default function WeeklySchedulePage() {
         {weekDays.map((day) => {
           const dayRows = rowsByDay[day] || [];
           const cap = capacitySummary(day);
-          const overlaps = overlapCount(dayRows);
+          const overlap = overlapInfo(dayRows);
           const isToday = day === todayJst();
           return (
             <article key={day} className={`dayColumn ${isToday ? "today" : ""} ${cap.className === "closed" ? "dayClosed" : ""}`}>
@@ -372,12 +377,12 @@ export default function WeeklySchedulePage() {
                 <b>{cap.label}</b>
                 {cap.detail && <small>{cap.detail}</small>}
               </div>
-              {overlaps > 0 && <div className="overlapWarn">⚠ 同一区分の時間重複 {overlaps}件</div>}
+              {overlap.count > 0 && <div className="overlapWarn">⚠ 同一区分の時間重複 {overlap.count}件</div>}
 
               <div className="dayRows">
                 {!dayRows.length && <div className="empty">予定なし</div>}
                 {dayRows.map(({ entry, work, vehicle, customer }) => (
-                  <div className={`weekRow ${work?.is_urgent ? "urgent" : ""}`} key={entry.id}>
+                  <div className={`weekRow ${work?.is_urgent ? "urgent" : ""} ${overlap.ids.has(entry.id) ? "overlapping" : ""}`} key={entry.id}>
                     <div className="rowTop">
                       <b>{dailyReportTimeLabel(entry)}</b>
                       <span>{ENTRY_LABEL[entry.entry_type]}{work?.reason ? "・" + work.reason : ""}</span>
@@ -388,6 +393,7 @@ export default function WeeklySchedulePage() {
                       {work?.worker_name && <span>担当 {work.worker_name}</span>}
                       {work?.needs_loaner && <span className="loaner">代車</span>}
                       {work?.is_urgent && <span className="urgentTag">急ぎ</span>}
+                      {overlap.ids.has(entry.id) && <span className="overlapTag">時間重複</span>}
                     </div>
                   </div>
                 ))}
@@ -412,7 +418,7 @@ export default function WeeklySchedulePage() {
         .weekBoard{display:grid;grid-template-columns:repeat(7,minmax(170px,1fr));gap:8px;align-items:stretch;overflow-x:auto;padding-bottom:6px}.dayColumn{min-width:170px;background:#fff;border:1px solid #d9e0ea;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:590px}.dayColumn.today{outline:3px solid #2674e8;outline-offset:-2px}.dayColumn.dayClosed{background:#f5f6f8}
         .dayHead{border:0;background:#f7f9fc;padding:11px 10px;display:flex;justify-content:space-between;align-items:center;width:100%;font-weight:900;color:#172033}.dayHead span{font-size:16px}.dayHead b{font-size:12px;background:#e8eef7;border-radius:999px;padding:3px 7px}
         .availability{margin:8px;border-radius:10px;padding:8px;display:grid;gap:2px}.availability b{font-size:13px}.availability small{font-size:10px;line-height:1.45}.availability.open{background:#edf8f0;color:#236c3b}.availability.tight{background:#fff7e8;color:#8a5a08}.availability.full{background:#fdeeee;color:#9c3434}.availability.over{background:#ffe7e7;color:#a32121;border:2px solid #ef9a9a}.availability.closed{background:#eceff3;color:#657180}.availability.unknown{background:#f4f6f8;color:#798596}.overlapWarn{margin:0 8px 8px;background:#fff0db;color:#8b5609;border-radius:9px;padding:7px;font-size:10px;font-weight:900}
-        .dayRows{padding:0 8px 8px;display:grid;gap:6px;align-content:start;flex:1}.weekRow{border:1px solid #e0e6ef;border-radius:10px;padding:8px;background:#fff}.weekRow.urgent{border-color:#e8aa58;box-shadow:inset 3px 0 0 #e8aa58}.rowTop{display:flex;justify-content:space-between;gap:5px;align-items:center}.rowTop b{font-size:14px}.rowTop span{font-size:11px;color:#5c6878;text-align:right}.rowCustomer{font-weight:900;font-size:14px;margin-top:4px;line-height:1.25}.rowMeta{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rowMeta span{font-size:9px;background:#f1f4f8;border-radius:999px;padding:3px 5px}.rowMeta .loaner{background:#eaf3ff;color:#245ca8}.rowMeta .urgentTag{background:#fff0db;color:#995b00}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
+        .dayRows{padding:0 8px 8px;display:grid;gap:6px;align-content:start;flex:1}.weekRow{border:1px solid #e0e6ef;border-radius:10px;padding:8px;background:#fff}.weekRow.urgent{border-color:#e8aa58;box-shadow:inset 3px 0 0 #e8aa58}.weekRow.overlapping{border-color:#e58b8b;background:#fff8f8}.rowTop{display:flex;justify-content:space-between;gap:5px;align-items:center}.rowTop b{font-size:14px}.rowTop span{font-size:11px;color:#5c6878;text-align:right}.rowCustomer{font-weight:900;font-size:14px;margin-top:4px;line-height:1.25}.rowMeta{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rowMeta span{font-size:9px;background:#f1f4f8;border-radius:999px;padding:3px 5px}.rowMeta .loaner{background:#eaf3ff;color:#245ca8}.rowMeta .urgentTag{background:#fff0db;color:#995b00}.rowMeta .overlapTag{background:#ffe7e7;color:#a32121;font-weight:900}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
         .dayActions{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:8px;border-top:1px solid #edf0f4}.dayActions button{font-size:10px;padding:7px 5px}.dayActions .register{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.hint{font-size:12px;color:#78869a;margin-top:8px}
         @media(max-width:900px){.weekHero{display:block}.weekNav{margin-top:12px}.weekBoard{grid-template-columns:repeat(7,220px)}.dayColumn{min-width:220px;min-height:520px}}
       `}</style>
