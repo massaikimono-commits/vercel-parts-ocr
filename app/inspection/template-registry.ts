@@ -12,6 +12,9 @@ export type RecordTemplateRegistryEntry = {
   sourceStatus: RecordTemplateSourceStatus;
   coordinateStatus: RecordTemplateCoordinateStatus;
   finalPrintEnabled: boolean;
+  paperSize: "A4" | "A3";
+  sourceFormat: "PDF";
+  sourceReference: "USER_SUPPLIED_PDF" | "WAITING_FOR_PDF";
   notes: string;
 };
 
@@ -31,7 +34,10 @@ export const RECORD_TEMPLATE_REGISTRY: readonly RecordTemplateRegistryEntry[] = 
     sourceStatus: "RECEIVED",
     coordinateStatus: "UNCONFIRMED",
     finalPrintEnabled: false,
-    notes: "受領済み帳票としてテンプレート管理。座標は帳票単位で確認して確定する。",
+    paperSize: "A4",
+    sourceFormat: "PDF",
+    sourceReference: "USER_SUPPLIED_PDF",
+    notes: "既送PDFを正本として参照する。座標はPDF帳票単位で確認して確定する。",
   },
   {
     key: "APPENDIX_5_PRIVATE_TRUCK",
@@ -39,7 +45,10 @@ export const RECORD_TEMPLATE_REGISTRY: readonly RecordTemplateRegistryEntry[] = 
     sourceStatus: "RECEIVED",
     coordinateStatus: "UNCONFIRMED",
     finalPrintEnabled: false,
-    notes: "受領済み帳票としてテンプレート管理。座標は帳票単位で確認して確定する。",
+    paperSize: "A4",
+    sourceFormat: "PDF",
+    sourceReference: "USER_SUPPLIED_PDF",
+    notes: "既送PDFを正本として参照する。座標はPDF帳票単位で確認して確定する。",
   },
   {
     key: "APPENDIX_6_PRIVATE_PASSENGER",
@@ -47,7 +56,10 @@ export const RECORD_TEMPLATE_REGISTRY: readonly RecordTemplateRegistryEntry[] = 
     sourceStatus: "RECEIVED",
     coordinateStatus: "UNCONFIRMED",
     finalPrintEnabled: false,
-    notes: "受領済み帳票としてテンプレート管理。座標は帳票単位で確認して確定する。",
+    paperSize: "A4",
+    sourceFormat: "PDF",
+    sourceReference: "USER_SUPPLIED_PDF",
+    notes: "既送PDFを正本として参照する。座標はPDF帳票単位で確認して確定する。",
   },
   {
     key: "SCHEDULE_CHECK",
@@ -55,7 +67,10 @@ export const RECORD_TEMPLATE_REGISTRY: readonly RecordTemplateRegistryEntry[] = 
     sourceStatus: "RECEIVED",
     coordinateStatus: "UNCONFIRMED",
     finalPrintEnabled: false,
-    notes: "受領済み帳票としてテンプレート管理。既存ルールを保持し、座標は勝手に固定しない。",
+    paperSize: "A4",
+    sourceFormat: "PDF",
+    sourceReference: "USER_SUPPLIED_PDF",
+    notes: "既送PDFを正本として参照する。既存ルールを保持し、座標はPDF基準で確定する。",
   },
   {
     key: "DESIGNATED_MAINTENANCE_RECORD",
@@ -63,7 +78,10 @@ export const RECORD_TEMPLATE_REGISTRY: readonly RecordTemplateRegistryEntry[] = 
     sourceStatus: "WAITING_FOR_PDF",
     coordinateStatus: "BLOCKED_BY_SOURCE",
     finalPrintEnabled: false,
-    notes: "PDF受領待ち。帳票座標および最終印刷実装は未確定のまま保持する。",
+    paperSize: "A3",
+    sourceFormat: "PDF",
+    sourceReference: "WAITING_FOR_PDF",
+    notes: "A3。PDF受領待ち。PDF受領までは帳票座標および最終印刷実装を確定しない。",
   },
 ] as const;
 
