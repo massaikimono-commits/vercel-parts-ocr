@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
 import { dailyReportTimeLabel } from "../print-rules";
+import { safeActionError } from "../../lib/client-security";
 
 type ScheduleEntry = {
   id: string;
@@ -224,7 +225,7 @@ export default function WeeklySchedulePage() {
       setCalendar(Object.fromEntries(((calendarRes.data || []) as CalendarDay[]).map((x) => [x.business_date, x])));
       setMessage(weekTitle(weekStart) + " の予定を表示しています。");
     } catch (error: any) {
-      setMessage("週間予定の読み込みエラー: " + (error?.message || error));
+      setMessage(safeActionError("週間予定の読み込み", error));
     } finally {
       setBusy(false);
     }
