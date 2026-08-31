@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
+import { safeActionError } from "../lib/client-security";
 
 type LoanerVehicle = {
   loanerVehicleId: string;
@@ -55,7 +56,7 @@ export default function LoanerPage() {
     setBusy(true);
     const {data,error} = await supabase.rpc("loaner_day_board",{p_day:day});
     if(error){
-      setMessage("代車一覧の読み込みエラー: "+error.message);
+      setMessage(safeActionError("代車一覧の読み込み", error));
     }else{
       setVehicles((data?.vehicles || []) as LoanerVehicle[]);
       setCounts(data?.counts || {});
@@ -81,7 +82,7 @@ export default function LoanerPage() {
       updated_at:new Date().toISOString(),
     });
     if(error){
-      setMessage("代車追加エラー: "+error.message);
+      setMessage(safeActionError("代車追加", error));
       setBusy(false);
       return;
     }
@@ -96,7 +97,7 @@ export default function LoanerPage() {
       operational_status:status,
       updated_at:new Date().toISOString(),
     }).eq("id",id);
-    if(error) setMessage("状態更新エラー: "+error.message);
+    if(error) setMessage(safeActionError("代車状態の更新", error));
     else setMessage("代車状態を更新しました。");
     await load();
   }
