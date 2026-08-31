@@ -1,6 +1,6 @@
 export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
 
-type FileCheck = { ok: true } | { ok: false; message: string };
+type FileCheck = { ok: true; kind: "image" | "pdf" } | { ok: false; message: string };
 
 function ascii(bytes: Uint8Array) {
   return String.fromCharCode(...Array.from(bytes));
@@ -35,10 +35,10 @@ export async function validateDocumentFile(
 
   if (pdf) {
     return options.allowPdf
-      ? { ok: true }
+      ? { ok: true, kind: "pdf" }
       : { ok: false, message: "この画面ではPDFは読み込めません。画像を選んでください。" };
   }
-  if (jpeg || png || webp || heif) return { ok: true };
+  if (jpeg || png || webp || heif) return { ok: true, kind: "image" };
 
   return {
     ok: false,
