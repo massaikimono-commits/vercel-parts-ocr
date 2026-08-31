@@ -27,7 +27,7 @@ for (const key of [
   expect(registry, `key: "${key}"`, key);
 }
 
-const a4Count = (registry.match(/paperSize: "A4"/g) || []).length;
+const a4Count = (registry.match(/paperSize: "A4",/g) || []).length;
 if (a4Count !== 4) {
   console.error("FAIL: expected exactly four A4 non-designated record templates, got", a4Count);
   process.exit(1);
