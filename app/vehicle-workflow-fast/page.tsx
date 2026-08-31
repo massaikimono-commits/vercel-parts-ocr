@@ -2,6 +2,7 @@
 "use client";
 
 import { safeActionError } from "../lib/client-security";
+import { validateDocumentFile } from "../lib/file-security";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase";
@@ -244,7 +245,7 @@ export default function VehicleWorkflowFast(){
     }catch(e:any){console.error(e);setMessage(`写真OCRエラー: ${e?.message||"読み取りに失敗しました"}`);}finally{if(worker)await worker.terminate().catch(()=>{});setDocBusy(false);}
   }
 
-  function onFile(file:File){if(file.type==="application/pdf"){fileKind.current="pdf";setDocBusy(true);setProgress(10);setMessage("PDFネイティブ読み取り中…");setTimeout(()=>{if(fileKind.current==="pdf")setDocBusy(false);},12000);return;}void readPhoto(file);}
+  async function onFile(file:File){const fileCheck=await validateDocumentFile(file,{allowPdf:true});if(!fileCheck.ok){setMessage(fileCheck.message);return;}if(fileCheck.kind==="pdf"){fileKind.current="pdf";setDocBusy(true);setProgress(10);setMessage("PDFネイティブ読み取り中…");setTimeout(()=>{if(fileKind.current==="pdf")setDocBusy(false);},12000);return;}void readPhoto(file);}
 
   async function save(){if(!vehicle.chassis&&!vehicle.registration){setMessage("車台番号または登録番号を確認してください。");return;}const c=vehicle.certificate,p:any={vehicle_number:vehicle.chassis||vehicle.registration,registration_number:vehicle.registration||null,registration_number_last4:vehicle.last4||null,chassis_number:vehicle.chassis||null,model:vehicle.model||null,fuel_type:vehicle.type,vehicle_weight:vehicle.weight?Number(vehicle.weight):null,curb_weight_kg:toInt(c.vehicleWeightKg),gross_vehicle_weight_kg:toInt(c.grossVehicleWeightKg),seating_capacity:toInt(c.seatingCapacity),engine_model:c.engineModel||null,usage_category:c.purpose||null,body_type:c.bodyShape||null,inspection_certificate_number:c.documentNumber||null,user_name_snapshot:c.userName||null,first_registration:vehicle.firstRegistration||null,inspection_expiry_date:dateIso(c.inspectionExpiry),certificate_fields:c,front_front_axle_weight_kg:toInt(c.frontFrontAxleWeightKg),front_rear_axle_weight_kg:toInt(c.frontRearAxleWeightKg),rear_front_axle_weight_kg:toInt(c.rearFrontAxleWeightKg),rear_rear_axle_weight_kg:toInt(c.rearRearAxleWeightKg),customer_id:vehicle.customerId||null,updated_at:new Date().toISOString()};const q=vehicle.id?await supabase.from("vehicles").update(p).eq("id",vehicle.id).select().single():await supabase.from("vehicles").insert(p).select().single();if(q.error){setMessage(safeActionError("車両情報の保存", q.error));return;}const v={...vehicle,id:q.data.id};setVehicle(v);setVehicles(old=>[v,...old.filter(x=>x.id!==v.id)]);localStorage.setItem(ACTIVE_KEY,JSON.stringify(v));setMessage("車検証情報を保存し、作業車両に設定しました。");}
   function startOCR(){if(!vehicle.chassis&&!vehicle.registration){setMessage("先に車両を選択または保存してください。");return;}localStorage.setItem(ACTIVE_KEY,JSON.stringify(vehicle));try{const a=JSON.parse(localStorage.getItem("parts-data")||"[]");localStorage.setItem(BEFORE_KEY,JSON.stringify(Array.isArray(a)?a.map((x:any)=>x.id).filter(Boolean):[]));}catch{localStorage.setItem(BEFORE_KEY,"[]");}location.assign("/ocr/auto");}
