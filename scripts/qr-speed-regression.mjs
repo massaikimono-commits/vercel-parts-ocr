@@ -39,6 +39,9 @@ const cases = [
   // Photo captures can shift the normalized certificate vertically. Keep the
   // density detector effective near both ends of its lower-page scan band.
   { name: "photo-shift-up", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.84 },
+  // The production scan starts at 80% page height. A handheld photo can place
+  // QR symbols just inside that edge, so keep a synthetic near-boundary target.
+  { name: "photo-shift-up-edge", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.815 },
   { name: "photo-shift-down", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.955 },
   // Stronger downward framing still occurs in handheld photos. Pin useful QR
   // targeting close to the lower scan edge without widening the production band.
