@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { safeActionError } from "../../lib/client-security";
+
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
 import {
@@ -151,7 +153,7 @@ export default function InspectionPrintPage() {
         : "この作業の保存済み記録簿がありません。先に入力画面で保存してください。"
       );
     } catch (error: any) {
-      setMessage(`読み込みエラー: ${error?.message || error}`);
+      setMessage(safeActionError("印刷情報の読み込み", error));
     } finally {
       setBusy(false);
     }
@@ -167,7 +169,7 @@ export default function InspectionPrintPage() {
       .eq("id", record.id);
 
     if (error) {
-      setMessage(`印刷状態の保存エラー: ${error.message}`);
+      setMessage(safeActionError("印刷状態の保存", error));
       setBusy(false);
       return;
     }
