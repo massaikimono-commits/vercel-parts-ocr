@@ -45,6 +45,11 @@ function scanForbiddenKeys(value, id, location = "fixture") {
   }
 }
 
+function hasAllCharacteristics(data, required) {
+  const characteristics = new Set(Array.isArray(data.characteristics) ? data.characteristics : []);
+  return required.every((item) => characteristics.has(item));
+}
+
 for (const { file, data } of fixtures) {
   const id = data.id || file;
   if (!Array.isArray(data.expected) || !data.expected.length) fail(id, "expected rows are missing");
@@ -81,6 +86,19 @@ if (!yellowFixtures.length) {
       }
     }
   }
+
+  const yellowCompositeCoverage = yellowFixtures.some(({ data }) => hasAllCharacteristics(data, [
+    "黄色伝票",
+    "白い部品一覧との重なり",
+    "斜め撮影",
+    "台形歪み",
+    "赤線",
+    "手書き",
+    "背景文字の写り込み",
+  ]));
+  if (!yellowCompositeCoverage) {
+    fail("yellow", "missing composite coverage for overlap + angle/perspective + red line/handwriting + background text");
+  }
 }
 
 const whiteFixtures = fixtures.filter(({ data }) => String(data.id || "").includes("white"));
@@ -110,6 +128,19 @@ if (!whiteFixtures.length) {
       if (mapped.cost !== "") fail(id, `expected[${i}].cost must remain blank`);
     }
   }
+
+  const whiteOcclusionCoverage = whiteFixtures.some(({ data }) => hasAllCharacteristics(data, [
+    "白い部品一覧",
+    "部分的な紙の重なり",
+    "斜め撮影",
+    "台形歪み",
+    "回転",
+    "背景文字の写り込み",
+    "部品名称の折返し",
+  ]));
+  if (!whiteOcclusionCoverage) {
+    fail("white", "missing coverage for partial occlusion + angle/perspective/rotation + background text + wrapped part names");
+  }
 }
 
 if (failures.length) {
@@ -122,4 +153,6 @@ const yellowRows = yellowFixtures.reduce((sum, { data }) => sum + (data.expected
 const whiteRows = whiteFixtures.reduce((sum, { data }) => sum + (data.expected?.length || 0), 0);
 console.log(`PASS parts-photo fixture regression: ${fixtures.length} fixture(s)`);
 console.log(`  yellow: ${yellowFixtures.length} fixture(s), ${yellowRows} ground-truth row(s), 標準価格→定価 / 単価→仕入れ`);
+console.log("  yellow coverage: overlap + angle/perspective + red line/handwriting + background text");
 console.log(`  white: ${whiteFixtures.length} fixture(s), ${whiteRows} ground-truth row(s), 単価→定価 / 仕入れ→空欄`);
+console.log("  white coverage: partial occlusion + angle/perspective/rotation + background text + wrapped part names");
