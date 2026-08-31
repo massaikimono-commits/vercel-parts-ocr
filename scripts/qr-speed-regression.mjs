@@ -1,11 +1,11 @@
 import { performance } from "node:perf_hooks";
 import { detectCertificateQrDensityCenters } from "../app/lib/certificate-qr-density.mjs";
 
-function syntheticQrImage(width, height, centers, yCenter = 0.90) {
+function syntheticQrImage(width, height, centers, yCenter = 0.90, sizeScale = 1) {
   const rgba = new Uint8ClampedArray(width * height * 4);
   rgba.fill(255);
-  const size = Math.max(42, Math.round(width * 0.052));
-  const cell = Math.max(3, Math.floor(size / 13));
+  const size = Math.max(32, Math.round(width * 0.052 * sizeScale));
+  const cell = Math.max(2, Math.floor(size / 13));
   const cy = Math.floor(height * yCenter);
   for (const center of centers) {
     const cx = Math.round(width * center);
@@ -36,6 +36,11 @@ const cases = [
   { name: "registered-five-left", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.90 },
   { name: "registered-five-right", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.90 },
   { name: "legacy-two", expected: 2, centers: [0.703, 0.928], yCenter: 0.90 },
+  // Photo distance changes apparent QR size even after page normalization. Keep
+  // density targeting stable for both smaller and larger symbols without touching
+  // production thresholds.
+  { name: "photo-small-qr", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.90, sizeScale: 0.78 },
+  { name: "photo-large-qr", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.90, sizeScale: 1.28 },
   // Photo captures can shift the normalized certificate vertically. Keep the
   // density detector effective near both ends of its lower-page scan band.
   { name: "photo-shift-up", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.84 },
@@ -73,7 +78,7 @@ const maxAverageMs = 750;
 const results = [];
 
 for (const test of cases) {
-  const rgba = syntheticQrImage(width, height, test.centers, test.yCenter);
+  const rgba = syntheticQrImage(width, height, test.centers, test.yCenter, test.sizeScale ?? 1);
 
   // Warm-up keeps the budget focused on steady-state detector cost, not Node startup/JIT.
   detectCertificateQrDensityCenters(rgba, width, height);
