@@ -2,6 +2,9 @@
 
 import { useEffect } from "react";
 
+const MAX_PDF_PAGES = 20;
+const MAX_PDF_RENDER_PIXELS = 50_000_000;
+
 const PDF_ACCEPT = "image/*,application/pdf,.pdf";
 
 function vehicleCard() {
