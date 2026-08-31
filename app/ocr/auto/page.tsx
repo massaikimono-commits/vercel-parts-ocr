@@ -3,6 +3,7 @@
 
 import { useRef, useState } from "react";
 import { saveOCRTransferImage } from "../transfer";
+import { validateDocumentFile } from "../../lib/file-security";
 
 type Mode = "dedicated" | "general" | "unknown" | "";
 type CropBox = { x: number; y: number; w: number; h: number };
@@ -241,6 +242,8 @@ export default function AutoOCRPage() {
   const [message, setMessage] = useState("伝票を1回選ぶだけで、専用OCRか汎用OCRかを自動判定します。");
 
   async function detect(file: File) {
+    const fileCheck = await validateDocumentFile(file);
+    if (!fileCheck.ok) { setMessage(fileCheck.message); return; }
     setBusy(true);
     setProgress(1);
     setMode("");
