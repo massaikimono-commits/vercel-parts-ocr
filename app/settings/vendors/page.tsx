@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { safeActionError } from "../../lib/client-security";
+
 import { useEffect, useState } from "react";
 import { supabase } from "../../supabase";
 
@@ -32,7 +34,7 @@ export default function VendorSettingsPage() {
       .order("is_active", { ascending: false })
       .order("display_order", { ascending: true })
       .order("display_name", { ascending: true });
-    if (error) setMessage("外注先一覧の読み込みエラー: " + error.message);
+    if (error) setMessage(safeActionError("外注先一覧の読み込み", error));
     else setVendors((data || []) as ExternalVendor[]);
     setBusy(false);
   }
@@ -55,7 +57,7 @@ export default function VendorSettingsPage() {
       updated_at: new Date().toISOString(),
     });
     if (error) {
-      setMessage("外注先追加エラー: " + error.message);
+      setMessage(safeActionError("外注先の追加", error));
       setBusy(false);
       return;
     }
@@ -83,7 +85,7 @@ export default function VendorSettingsPage() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", vendor.id);
-    setMessage(error ? "保存エラー: " + error.message : vendor.display_name + " を保存しました。");
+    setMessage(error ? safeActionError("外注先情報の保存", error) : vendor.display_name + " を保存しました。");
     setBusy(false);
   }
 
@@ -94,7 +96,7 @@ export default function VendorSettingsPage() {
       .from("external_vendors")
       .update({ is_active: next, updated_at: new Date().toISOString() })
       .eq("id", vendor.id);
-    if (error) setMessage("更新エラー: " + error.message);
+    if (error) setMessage(safeActionError("外注先情報の更新", error));
     else setMessage(next ? vendor.display_name + " を使用中に戻しました。" : vendor.display_name + " を使用停止にしました。過去の外注先名は残ります。");
     await load();
   }
