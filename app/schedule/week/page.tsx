@@ -282,10 +282,29 @@ export default function WeeklySchedulePage() {
     }
     if (!c) return { className: "unknown", label: "空き確認中", detail: "" };
 
-    const morning = Math.max(0, c.morning_total_limit - c.morning_count);
-    const afternoon = Math.max(0, c.afternoon_total_limit - c.afternoon_count);
-    const inspection = Math.max(0, c.morning_inspection_warning - c.morning_inspection_count);
+    const morningRaw = c.morning_total_limit - c.morning_count;
+    const afternoonRaw = c.afternoon_total_limit - c.afternoon_count;
+    const inspectionRaw = c.morning_inspection_warning - c.morning_inspection_count;
+    const over = Math.max(0, -morningRaw) + Math.max(0, -afternoonRaw);
+    const inspectionOver = Math.max(0, -inspectionRaw);
+    const morning = Math.max(0, morningRaw);
+    const afternoon = Math.max(0, afternoonRaw);
+    const inspection = Math.max(0, inspectionRaw);
     const total = morning + afternoon;
+
+    if (over > 0 || inspectionOver > 0) {
+      const overParts = [
+        morningRaw < 0 ? `午前 +${-morningRaw}` : null,
+        afternoonRaw < 0 ? `午後 +${-afternoonRaw}` : null,
+        inspectionRaw < 0 ? `車検午前 +${-inspectionRaw}` : null,
+      ].filter(Boolean).join("　");
+      return {
+        className: "over",
+        label: "⚠ 取りすぎ",
+        detail: `${overParts}　残り 午前${morning} / 午後${afternoon} / 車検午前${inspection}`,
+      };
+    }
+
     const className = total === 0 ? "full" : total <= 3 ? "tight" : "open";
     const label = total === 0 ? "× 上限" : total <= 3 ? "△ 残り少" : "○ 空きあり";
     return {
@@ -383,7 +402,7 @@ export default function WeeklySchedulePage() {
         })}
       </section>
 
-      <div className="hint">横にスクロールすると1週間を続けて確認できます。空き表示は現在の午前・午後の上限と車検午前枠から自動計算します。</div>
+      <div className="hint">横にスクロールすると1週間を続けて確認できます。空き表示は現在の午前・午後の上限と車検午前枠から自動計算し、上限超過時は取りすぎ台数も表示します。</div>
 
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}
@@ -392,7 +411,7 @@ export default function WeeklySchedulePage() {
         .jumpBar{display:flex;gap:8px;align-items:end;background:#fff;border:1px solid #d9e0ea;border-radius:16px;padding:11px 14px;margin-bottom:10px}.jumpBar label{display:grid;gap:4px;font-size:12px;font-weight:800;color:#637084}.jumpBar input{border:1px solid #cbd6e3;border-radius:9px;padding:8px 10px;background:#fff}
         .weekBoard{display:grid;grid-template-columns:repeat(7,minmax(170px,1fr));gap:8px;align-items:stretch;overflow-x:auto;padding-bottom:6px}.dayColumn{min-width:170px;background:#fff;border:1px solid #d9e0ea;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:590px}.dayColumn.today{outline:3px solid #2674e8;outline-offset:-2px}.dayColumn.dayClosed{background:#f5f6f8}
         .dayHead{border:0;background:#f7f9fc;padding:11px 10px;display:flex;justify-content:space-between;align-items:center;width:100%;font-weight:900;color:#172033}.dayHead span{font-size:16px}.dayHead b{font-size:12px;background:#e8eef7;border-radius:999px;padding:3px 7px}
-        .availability{margin:8px;border-radius:10px;padding:8px;display:grid;gap:2px}.availability b{font-size:13px}.availability small{font-size:10px;line-height:1.45}.availability.open{background:#edf8f0;color:#236c3b}.availability.tight{background:#fff7e8;color:#8a5a08}.availability.full{background:#fdeeee;color:#9c3434}.availability.closed{background:#eceff3;color:#657180}.availability.unknown{background:#f4f6f8;color:#798596}.overlapWarn{margin:0 8px 8px;background:#fff0db;color:#8b5609;border-radius:9px;padding:7px;font-size:10px;font-weight:900}
+        .availability{margin:8px;border-radius:10px;padding:8px;display:grid;gap:2px}.availability b{font-size:13px}.availability small{font-size:10px;line-height:1.45}.availability.open{background:#edf8f0;color:#236c3b}.availability.tight{background:#fff7e8;color:#8a5a08}.availability.full{background:#fdeeee;color:#9c3434}.availability.over{background:#ffe7e7;color:#a32121;border:2px solid #ef9a9a}.availability.closed{background:#eceff3;color:#657180}.availability.unknown{background:#f4f6f8;color:#798596}.overlapWarn{margin:0 8px 8px;background:#fff0db;color:#8b5609;border-radius:9px;padding:7px;font-size:10px;font-weight:900}
         .dayRows{padding:0 8px 8px;display:grid;gap:6px;align-content:start;flex:1}.weekRow{border:1px solid #e0e6ef;border-radius:10px;padding:8px;background:#fff}.weekRow.urgent{border-color:#e8aa58;box-shadow:inset 3px 0 0 #e8aa58}.rowTop{display:flex;justify-content:space-between;gap:5px;align-items:center}.rowTop b{font-size:14px}.rowTop span{font-size:11px;color:#5c6878;text-align:right}.rowCustomer{font-weight:900;font-size:14px;margin-top:4px;line-height:1.25}.rowMeta{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rowMeta span{font-size:9px;background:#f1f4f8;border-radius:999px;padding:3px 5px}.rowMeta .loaner{background:#eaf3ff;color:#245ca8}.rowMeta .urgentTag{background:#fff0db;color:#995b00}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
         .dayActions{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:8px;border-top:1px solid #edf0f4}.dayActions button{font-size:10px;padding:7px 5px}.dayActions .register{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.hint{font-size:12px;color:#78869a;margin-top:8px}
         @media(max-width:900px){.weekHero{display:block}.weekNav{margin-top:12px}.weekBoard{grid-template-columns:repeat(7,220px)}.dayColumn{min-width:220px;min-height:520px}}
