@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import HomeDashboard from "./home-dashboard";
 import { clearSensitiveLocalState, safeActionError, spreadsheetSafeCell } from "./lib/client-security";
+import { isActiveAppSession } from "./lib/auth-security";
 
 type Part = {
   id: string;
@@ -525,16 +526,42 @@ export default function Home() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (mounted) {
-        setSession(data.session);
+
+    const applySession = async (sess: any) => {
+      if (!mounted) return;
+
+      if (!sess) {
+        setSession(null);
         setAuthLoading(false);
+        return;
       }
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+
+      const active = await isActiveAppSession(sess);
+      if (!mounted) return;
+
+      if (!active) {
+        clearSensitiveLocalState();
+        setSession(null);
+        setAuthMsg("このアカウントは現在利用できません。");
+        setAuthLoading(false);
+        await supabase.auth.signOut();
+        return;
+      }
+
       setSession(sess);
+      setAuthMsg("");
       setAuthLoading(false);
+    };
+
+    void supabase.auth.getSession().then(({ data }) => applySession(data.session));
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+      // Authコールバックを塞がないよう、検証は次のイベントループで行う。
+      setTimeout(() => {
+        if (mounted) void applySession(sess);
+      }, 0);
     });
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
