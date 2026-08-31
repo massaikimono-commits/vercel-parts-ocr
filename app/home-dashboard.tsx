@@ -226,6 +226,19 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <button onClick={() => location.assign("/customer-vehicles")}><b>顧客・車両管理</b><small>検索・編集</small></button>
         </div>
       </section>
+
+      <style jsx global>{`
+        .todayStatusGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+        .statusTile{min-width:0;padding:12px 6px;display:grid;grid-template-columns:1fr auto auto;gap:4px;align-items:end;text-align:left;border-width:2px}
+        .statusTile span{grid-column:1/-1;font-size:12px;font-weight:900;white-space:nowrap}
+        .statusTile strong{font-size:28px;line-height:1}.statusTile small{font-size:11px;font-weight:800;padding-bottom:2px}
+        .statusTile.pending{border-color:#e3a09a;background:#fff4f2;color:#9b3f35}
+        .statusTile.progress{border-color:#e6c56a;background:#fff9e8;color:#7d5b00}
+        .statusTile.done{border-color:#99d0ad;background:#effaf3;color:#277247}
+        .desktopStatusLine{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+        .desktopStatusLine b{font-size:12px;background:#f1f5f9;border-radius:999px;padding:5px 8px;color:#526174}
+        @media(max-width:380px){.statusTile span{font-size:10px}.statusTile strong{font-size:24px}}
+      `}</style>
     </main>
   );
 }
