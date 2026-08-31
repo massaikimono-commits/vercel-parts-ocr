@@ -47,8 +47,11 @@ async function renderPage(pdf, pageNumber, targetWidth = 1600) {
   const scale = Math.max(1, Math.min(5, targetWidth / Math.max(1, base.width)));
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(viewport.width));
-  canvas.height = Math.max(1, Math.round(viewport.height));
+  const renderWidth = Math.max(1, Math.round(viewport.width));
+  const renderHeight = Math.max(1, Math.round(viewport.height));
+  if (renderWidth * renderHeight > MAX_PDF_RENDER_PIXELS) throw new Error("PDFページの描画サイズが大きすぎます。");
+  canvas.width = renderWidth;
+  canvas.height = renderHeight;
   const ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -131,6 +134,7 @@ async function pdfToImageFile(file) {
   const pdfjs = await loadPdfJs();
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data }).promise;
+  if ((pdf.numPages || 1) > MAX_PDF_PAGES) { await pdf.destroy?.().catch?.(() => {}); throw new Error("PDFのページ数が多すぎます。"); }
   try {
     const pageNumber = await choosePage(pdf);
     showPdfStatus(`PDF ${pdf.numPages}ページ中 ${pageNumber}ページ目を車検証として高解像度変換中…`);
