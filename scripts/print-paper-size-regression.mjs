@@ -39,8 +39,8 @@ expect(registry, 'sourceReference: "WAITING_FOR_PDF"', "designated PDF waiting")
 expect(workshop, 'paperSize: "A4"', "workshop A4");
 expect(workshop, 'sourceFormat: "PDF"', "workshop PDF source");
 expect(dailyTemplate, 'paperSize: "A3"', "daily report A3");
-expect(dailyTemplate, 'orientation: "landscape"', "daily report landscape");
-expect(dailyPrint, '@page{size:A3 landscape;margin:0}', "daily report print A3");
+expect(dailyTemplate, 'orientation: "portrait"', "daily report portrait");
+expect(dailyPrint, '@page{size:A3 portrait;margin:0}', "daily report print A3");
 expect(partsPrint, 'format: "a4"', "parts form A4 PDF");
 expect(partsPrint, 'canvas.width = 210 * pxPerMm', "parts A4 width");
 expect(partsPrint, 'canvas.height = 297 * pxPerMm', "parts A4 height");
