@@ -2,6 +2,7 @@
 "use client";
 
 import { safeActionError } from "../lib/client-security";
+import { validateDocumentFile } from "../lib/file-security";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase";
@@ -188,6 +189,8 @@ export default function Page(){
   }
 
   async function read(file:File){
+    const fileCheck = await validateDocumentFile(file);
+    if (!fileCheck.ok) { setMessage(fileCheck.message); return; }
     if(!file.type.startsWith("image/")){setMessage("写真・画像を選んでください。");return;}
     setQrPriority({});
     setDocBusy(true);setProgress(1);setDebug("");setMessage("車検証の各欄を読み取り中です…");if(preview)URL.revokeObjectURL(preview);setPreview(URL.createObjectURL(file));let worker:any=null;
