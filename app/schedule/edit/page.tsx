@@ -24,8 +24,25 @@ type Entry = {
 
 type WorkOrder = {
   id:string;
+  reason:string;
+  worker_staff_id:string|null;
+  worker_name:string|null;
+  outsource_vendor_id:string|null;
+  outsource_vendor_name:string|null;
   stay_reason:string|null;
   planned_delivery_date:string|null;
+};
+
+type StaffMember = {
+  id:string;
+  display_name:string;
+  short_name:string|null;
+};
+
+type ExternalVendor = {
+  id:string;
+  display_name:string;
+  short_name:string|null;
 };
 
 function dateKey(value:string){
@@ -46,13 +63,31 @@ export default function ScheduleEditPage(){
   const [selected,setSelected]=useState("");
   const [stayReason,setStayReason]=useState("");
   const [plannedDeliveryDate,setPlannedDeliveryDate]=useState("");
+  const [reason,setReason]=useState("");
+  const [staffMembers,setStaffMembers]=useState<StaffMember[]>([]);
+  const [staffId,setStaffId]=useState("");
+  const [vendors,setVendors]=useState<ExternalVendor[]>([]);
+  const [vendorId,setVendorId]=useState("");
+  const [vendorName,setVendorName]=useState("");
   const [message,setMessage]=useState("予約情報を読み込みます。");
   const [warnings,setWarnings]=useState<string[]>([]);
   const [busy,setBusy]=useState(true);
 
   const id=typeof window!=="undefined" ? new URLSearchParams(location.search).get("id") : null;
 
-  useEffect(()=>{ if(id) void loadEntry(id); else { setBusy(false); setMessage("変更する予定が指定されていません。"); } },[]);
+  useEffect(()=>{
+    void loadAssignments();
+    if(id) void loadEntry(id); else { setBusy(false); setMessage("変更する予定が指定されていません。"); }
+  },[]);
+
+  async function loadAssignments(){
+    const [staffRes,vendorRes]=await Promise.all([
+      supabase.from("staff_members").select("id,display_name,short_name").eq("is_active",true).order("display_order",{ascending:true}).order("display_name",{ascending:true}),
+      supabase.from("external_vendors").select("id,display_name,short_name").eq("is_active",true).order("display_order",{ascending:true}).order("display_name",{ascending:true}),
+    ]);
+    if(!staffRes.error) setStaffMembers((staffRes.data||[]) as StaffMember[]);
+    if(!vendorRes.error) setVendors((vendorRes.data||[]) as ExternalVendor[]);
+  }
 
   async function loadEntry(entryId:string){
     setBusy(true);
@@ -64,10 +99,14 @@ export default function ScheduleEditPage(){
     setEntry(e);
     if(e.work_order_id){
       const {data:workData,error:workError}=await supabase.from("work_orders")
-        .select("id,stay_reason,planned_delivery_date")
+        .select("id,reason,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name,stay_reason,planned_delivery_date")
         .eq("id",e.work_order_id).maybeSingle();
       if(workError){setMessage("作業情報の読み込みエラー: "+workError.message);setBusy(false);return;}
       const work=(workData||null) as WorkOrder|null;
+      setReason(work?.reason||"");
+      setStaffId(work?.worker_staff_id||"");
+      setVendorId(work?.outsource_vendor_id||"");
+      setVendorName(work?.outsource_vendor_id ? "" : (work?.outsource_vendor_name||""));
       setStayReason(work?.stay_reason||"");
       setPlannedDeliveryDate(work?.planned_delivery_date||"");
     }
@@ -108,6 +147,15 @@ export default function ScheduleEditPage(){
       planned_delivery_date:plannedDeliveryDate||null,
     }).eq("id",entry.work_order_id);
     if(error) throw error;
+
+    const {error:assignmentError}=await supabase.rpc("set_work_order_assignment",{
+      p_work_order_id:entry.work_order_id,
+      p_staff_id:staffId||null,
+      p_vendor_id:reason==="板金塗装" ? (vendorId||null) : null,
+      p_vendor_name:reason==="板金塗装" ? (vendorName.trim()||null) : null,
+      p_actor:"schedule-edit",
+    });
+    if(assignmentError) throw assignmentError;
   }
 
   async function save(override=false){
@@ -177,6 +225,30 @@ export default function ScheduleEditPage(){
           </label>}
         </div>
         {entry.work_order_id && <section className="stayBox">
+          <b>担当・外注先</b>
+          <div className="grid stayGrid">
+            <label>作業担当
+              <select value={staffId} onChange={(e)=>setStaffId(e.target.value)}>
+                <option value="">未選択</option>
+                {staffMembers.map(staff=><option key={staff.id} value={staff.id}>{staff.short_name||staff.display_name}</option>)}
+              </select>
+            </label>
+            {reason==="板金塗装" && <label>外注先
+              <select value={vendorId} onChange={(e)=>{setVendorId(e.target.value);if(e.target.value)setVendorName("");}}>
+                <option value="">未選択 / 直接入力</option>
+                {vendors.map(vendor=><option key={vendor.id} value={vendor.id}>{vendor.short_name||vendor.display_name}</option>)}
+              </select>
+            </label>}
+            {reason==="板金塗装" && !vendorId && <label>外注先名（直接入力）
+              <input value={vendorName} onChange={(e)=>setVendorName(e.target.value)} placeholder="例：○○鈑金" />
+            </label>}
+          </div>
+          <div className="manageLinks">
+            <button type="button" onClick={()=>location.assign("/settings/staff")}>社員名を管理</button>
+            {reason==="板金塗装" && <button type="button" onClick={()=>location.assign("/settings/vendors")}>外注先を管理</button>}
+          </div>
+        </section>}
+        {entry.work_order_id && <section className="stayBox">
           <b>滞留・納車情報</b>
           <div className="grid stayGrid">
             <label>滞留理由
@@ -193,7 +265,7 @@ export default function ScheduleEditPage(){
     </section>
     <style jsx global>{`
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}
-      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}@media(max-width:600px){.grid{grid-template-columns:1fr}}
+      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}@media(max-width:600px){.grid{grid-template-columns:1fr}}
     `}</style>
   </main>;
 }
