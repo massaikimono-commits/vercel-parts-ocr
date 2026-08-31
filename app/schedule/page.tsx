@@ -24,6 +24,7 @@ type WorkOrder = {
   reason: "点検" | "車検" | "一般整備" | "板金塗装";
   status: string;
   worker_name: string | null;
+  outsource_vendor_name: string | null;
   expected_completion_date: string | null;
   delivery_completed: boolean;
   work_completed: boolean;
@@ -198,7 +199,7 @@ export default function SchedulePage() {
           .order("starts_at", { ascending: true }),
         supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,worker_name,expected_completion_date,delivery_completed,work_completed,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
+          .select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,delivery_completed,work_completed,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
           .neq("status", "cancelled"),
         supabase
           .from("vehicles")
@@ -428,6 +429,8 @@ export default function SchedulePage() {
         <div className="stayInfo">
           <div className="stayReason"><b>滞留理由</b><span>{work.stay_reason || "未登録"}</span></div>
           <div className="stayDelivery"><b>納車予定日</b><span>{work.planned_delivery_date || "未定"}</span></div>
+          {work.worker_name && <div className="stayReason"><b>作業担当</b><span>{work.worker_name}</span></div>}
+          {work.outsource_vendor_name && <div className="stayDelivery"><b>外注先</b><span>{work.outsource_vendor_name}</span></div>}
         </div>
         <div className="meta">
           {work.worker_name && <span>担当 {work.worker_name}</span>}
@@ -493,6 +496,7 @@ export default function SchedulePage() {
           <span>下4桁 <b>{last4Label(vehicle)}</b></span>
           <span>{work?.reason || "入庫要因未設定"}</span>
           {work?.worker_name && <span>担当 {work.worker_name}</span>}
+          {work?.outsource_vendor_name && <span>外注 {work.outsource_vendor_name}</span>}
           {work?.expected_completion_date && <span>完成予定 {work.expected_completion_date}</span>}
           {completionPosition === "meta" && <div className="workStateSlot">{workStateControl(work)}</div>}
         </div>
