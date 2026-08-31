@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
 const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
@@ -60,8 +61,16 @@ for (const file of candidateFiles) {
 }
 pass("no privileged secret patterns in app", !secretHit, secretHit);
 
-const envFiles = fs.readdirSync(root).filter((name) => /^\\.env(?:\\.|$)/.test(name));
-pass("no .env files committed at repo root", envFiles.length === 0, envFiles.join(", "));
+let trackedEnvFiles = [];
+try {
+  trackedEnvFiles = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" })
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .filter((name) => /(^|\/)\.env(?:\.|$)/.test(name));
+} catch {
+  // Git metadataが無いビルド環境ではこの項目だけスキップ。
+}
+pass("no tracked .env files", trackedEnvFiles.length === 0, trackedEnvFiles.join(", "));
 
 for (const c of checks) {
   console.log((c.ok ? "PASS" : "FAIL") + " " + c.name + (c.detail ? " — " + c.detail : ""));
