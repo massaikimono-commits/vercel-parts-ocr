@@ -12,6 +12,11 @@ const guard = read("app/auth-route-guard.tsx");
 const supabase = read("app/supabase.ts");
 const netlify = read("netlify.toml");
 const pkg = JSON.parse(read("package.json"));
+const fileSecurity = read("app/lib/file-security.ts");
+const ocrDedicated = read("app/ocr/page.tsx");
+const ocrGeneral = read("app/ocr/general/page.tsx");
+const ocrAuto = read("app/ocr/auto/page.tsx");
+const vehicleFast = read("app/vehicle-workflow-fast/page.tsx");
 
 pass("route guard imported", layout.includes('AuthRouteGuard from "./auth-route-guard"'));
 pass("route guard wraps app", layout.includes("<AuthRouteGuard>") && layout.includes("</AuthRouteGuard>"));
@@ -19,14 +24,20 @@ pass("route guard checks session", guard.includes("supabase.auth.getSession()"))
 pass("route guard redirects unauthenticated users", guard.includes('location.replace("/")'));
 pass("publishable Supabase key only", supabase.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") && !/SERVICE_ROLE|service_role/i.test(supabase));
 pass("package is private", pkg.private === true);
+pass("file signature validator exists", fileSecurity.includes("validateDocumentFile") && fileSecurity.includes("%PDF-") && fileSecurity.includes("WEBP"));
+pass("dedicated OCR validates files", ocrDedicated.includes("validateDocumentFile(file)"));
+pass("generic OCR validates files", ocrGeneral.includes("validateDocumentFile(file)"));
+pass("auto OCR validates files", ocrAuto.includes("validateDocumentFile(file)"));
+pass("vehicle OCR validates files", vehicleFast.includes("validateDocumentFile(file,{allowPdf:true})"));
 
-// CSP is currently optional until Netlify-compatible policy is validated.
 for (const [name, needle] of [
   ["X-Frame-Options", 'X-Frame-Options = "DENY"'],
   ["X-Content-Type-Options", 'X-Content-Type-Options = "nosniff"'],
   ["HSTS", "Strict-Transport-Security"],
   ["Referrer-Policy", "Referrer-Policy"],
   ["Permissions-Policy", "Permissions-Policy"],
+  ["CSP", "Content-Security-Policy"],
+  ["Cross-Origin-Opener-Policy", "Cross-Origin-Opener-Policy"],
 ]) {
   pass("security header: " + name, netlify.includes(needle));
 }
