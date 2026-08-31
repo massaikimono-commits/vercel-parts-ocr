@@ -1,4 +1,5 @@
 import "./globals.css";
+import AuthRouteGuard from "./auth-route-guard";
 import CertificatePriorityFix from "./certificate-priority-fix";
 import CertificateEssentialFieldsFix from "./certificate-essential-fields-fix";
 import CertificateRowPriorityFix from "./certificate-row-priority-fix";
@@ -187,8 +188,9 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
   return (
     <html lang="ja">
       <body>
-        {children}
-        <CertificatePriorityFix />
+        <AuthRouteGuard>
+          {children}
+          <CertificatePriorityFix />
         <CertificateEssentialFieldsFix />
         <CertificateRowPriorityFix />
         <CertificateFuelClassificationFix />
@@ -203,7 +205,8 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificateQrApply />
         <CertificatePhotoRescue />
         <CertificateFinalNativeFix />
-        <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
+          <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
+        </AuthRouteGuard>
       </body>
     </html>
   );
