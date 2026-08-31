@@ -22,6 +22,12 @@ type Entry = {
   print_time_mode:string;
 };
 
+type WorkOrder = {
+  id:string;
+  stay_reason:string|null;
+  planned_delivery_date:string|null;
+};
+
 function dateKey(value:string){
   return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(value));
 }
@@ -31,12 +37,15 @@ function timeKey(value:string){
 }
 
 const LABEL:Record<string,string>={delivery:"納車",pickup:"引取",customer_visit:"来社",onsite_repair:"出張"};
+const STAY_REASON_SUGGESTIONS=["部品待ち","外注作業待ち","見積確認待ち","お客様連絡待ち","作業待ち"];
 
 export default function ScheduleEditPage(){
   const [entry,setEntry]=useState<Entry|null>(null);
   const [day,setDay]=useState("");
   const [options,setOptions]=useState<TimeOption[]>([]);
   const [selected,setSelected]=useState("");
+  const [stayReason,setStayReason]=useState("");
+  const [plannedDeliveryDate,setPlannedDeliveryDate]=useState("");
   const [message,setMessage]=useState("予約情報を読み込みます。");
   const [warnings,setWarnings]=useState<string[]>([]);
   const [busy,setBusy]=useState(true);
@@ -53,6 +62,15 @@ export default function ScheduleEditPage(){
     if(error){setMessage("予定の読み込みエラー: "+error.message);setBusy(false);return;}
     const e=data as Entry;
     setEntry(e);
+    if(e.work_order_id){
+      const {data:workData,error:workError}=await supabase.from("work_orders")
+        .select("id,stay_reason,planned_delivery_date")
+        .eq("id",e.work_order_id).maybeSingle();
+      if(workError){setMessage("作業情報の読み込みエラー: "+workError.message);setBusy(false);return;}
+      const work=(workData||null) as WorkOrder|null;
+      setStayReason(work?.stay_reason||"");
+      setPlannedDeliveryDate(work?.planned_delivery_date||"");
+    }
     const d=dateKey(e.starts_at);
     setDay(d);
     await loadOptions(d,e);
@@ -82,6 +100,15 @@ export default function ScheduleEditPage(){
   }
 
   const selectedOption=useMemo(()=>options.find(x=>x.key===selected)||null,[options,selected]);
+
+  async function saveWorkDetails(){
+    if(!entry?.work_order_id) return;
+    const {error}=await supabase.from("work_orders").update({
+      stay_reason:stayReason.trim()||null,
+      planned_delivery_date:plannedDeliveryDate||null,
+    }).eq("id",entry.work_order_id);
+    if(error) throw error;
+  }
 
   async function save(override=false){
     if(!entry){return;}
@@ -121,7 +148,8 @@ export default function ScheduleEditPage(){
         return;
       }
       if(data?.updated){
-        setMessage("予約を変更しました。履歴にも保存しました。");
+        await saveWorkDetails();
+        setMessage("予約と滞留情報を変更しました。予約変更は履歴にも保存しました。");
         window.setTimeout(()=>location.assign("/schedule?day="+day),350);
       }
     }catch(error:any){
@@ -148,13 +176,24 @@ export default function ScheduleEditPage(){
             </select>
           </label>}
         </div>
+        {entry.work_order_id && <section className="stayBox">
+          <b>滞留・納車情報</b>
+          <div className="grid stayGrid">
+            <label>滞留理由
+              <input list="stay-reasons" value={stayReason} onChange={(e)=>setStayReason(e.target.value)} placeholder="例：部品待ち" />
+              <datalist id="stay-reasons">{STAY_REASON_SUGGESTIONS.map(x=><option key={x} value={x} />)}</datalist>
+            </label>
+            <label>納車予定日<input type="date" value={plannedDeliveryDate} onChange={(e)=>setPlannedDeliveryDate(e.target.value)} /></label>
+          </div>
+          <small>候補から選んでも自由入力でも保存できます。</small>
+        </section>}
         {!!warnings.length && <div className="warnings"><b>確認が必要</b>{warnings.map((w,i)=><div key={i}>・{w}</div>)}<button onClick={()=>void save(true)}>警告を確認して変更</button></div>}
-        <button className="primary" disabled={busy} onClick={()=>void save(false)}>この日時に変更</button>
+        <button className="primary" disabled={busy} onClick={()=>void save(false)}>この内容で変更</button>
       </>}
     </section>
     <style jsx global>{`
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}
-      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}@media(max-width:600px){.grid{grid-template-columns:1fr}}
+      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}@media(max-width:600px){.grid{grid-template-columns:1fr}}
     `}</style>
   </main>;
 }
