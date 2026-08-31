@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { safeActionError } from "../lib/client-security";
+
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
 import {
@@ -271,7 +273,7 @@ export default function InspectionPage() {
       await prepareInspection(v, initialWorkId, pool, history);
       setMessage("車両情報・対象作業・今回の部品・過去の印刷結果を読み込みました。");
     } catch (error: any) {
-      setMessage(`読み込みエラー: ${error?.message || error}`);
+      setMessage(safeActionError("記録簿情報の読み込み", error));
     } finally {
       setBusy(false);
     }
@@ -349,7 +351,7 @@ export default function InspectionPage() {
       }
       setMessage("対象作業に合わせて、記録簿・前回印刷結果・今回の部品伝票を再判定しました。");
     } catch (error: any) {
-      setMessage(`自動入力エラー: ${error?.message || error}`);
+      setMessage(safeActionError("記録簿の自動入力", error));
     } finally {
       setBusy(false);
     }
@@ -425,7 +427,7 @@ export default function InspectionPage() {
       if (jobError) throw jobError;
       setMessage(nextStatus === "printed" ? "印刷結果を次回用の基準として保存しました。" : nextStatus === "confirmed" ? "点検整備記録簿を確認済みにしました。" : "点検整備記録簿の下書きを保存しました。");
     } catch (error: any) {
-      setMessage(`保存エラー: ${error?.message || error}`);
+      setMessage(safeActionError("記録簿の保存", error));
     } finally {
       setBusy(false);
     }
@@ -466,7 +468,7 @@ export default function InspectionPage() {
       if (error) throw error;
       setMessage(nextStatus === "printed" ? "指定整備記録簿を印刷済みとして保存しました。" : nextStatus === "confirmed" ? "指定整備記録簿を確認済みにしました。" : "指定整備記録簿の下書きを保存しました。");
     } catch (error: any) {
-      setMessage(`保存エラー: ${error?.message || error}`);
+      setMessage(safeActionError("記録簿の保存", error));
     } finally {
       setBusy(false);
     }
