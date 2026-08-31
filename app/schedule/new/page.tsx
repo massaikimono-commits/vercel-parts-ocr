@@ -110,11 +110,10 @@ export default function ScheduleNewPage() {
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("day");
-    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q !== day) {
-      setDay(q);
-      setDeliveryDay(q);
-      return;
-    }
+    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDay(q);
+  }, []);
+
+  useEffect(() => {
     setDeliveryDay(day);
   }, [day]);
 
@@ -577,7 +576,13 @@ export default function ScheduleNewPage() {
         .primary{width:100%;background:#2f6fe4;border-color:#2f6fe4;color:#fff;font-size:18px;padding:16px}
         .errors,.warnings{margin-top:12px;border-radius:12px;padding:13px 14px;line-height:1.7}.errors{background:#fff0f0;border:1px solid #efbcbc;color:#8f2f2f}.warnings{background:#fff8df;border:1px solid #ecd98d;color:#6d5912}.warnings button{margin-top:8px;background:#fff}
         .footnote{color:#6f7c8e;line-height:1.6;margin-bottom:0}
-        @media(max-width:650px){.grid{grid-template-columns:1fr}.grid .wide{grid-column:auto}.capacity{grid-template-columns:1fr 1fr}.capacity>div:last-child{grid-column:1/-1}}
+        @media(max-width:650px){
+          .grid{grid-template-columns:1fr}.grid .wide{grid-column:auto}.capacity{grid-template-columns:1fr 1fr}.capacity>div:last-child{grid-column:1/-1}
+          .availabilityTitle{align-items:flex-start}.legend{line-height:1.8}
+          .timeGrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+          .timeSlot{min-height:54px;padding:10px 6px;white-space:nowrap;gap:4px}
+          .timeSlot span{font-size:13px}.timeSlot b{font-size:17px}
+        }
       `}</style>
     </main>
   );
