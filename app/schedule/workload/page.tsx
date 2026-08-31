@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
+import { safeActionError } from "../../lib/client-security";
 
 type WorkOrder = {
   id: string;
@@ -69,7 +70,7 @@ export default function WorkloadPage() {
       setMessage("現在出庫前の作業を担当者別に集計しています。");
     } catch (error: any) {
       setWorks([]);
-      setMessage("負荷表の読み込みエラー: " + (error?.message || error));
+      setMessage(safeActionError("負荷表の読み込み", error));
     } finally {
       setBusy(false);
     }
