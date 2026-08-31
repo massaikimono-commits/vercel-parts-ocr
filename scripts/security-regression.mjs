@@ -19,6 +19,9 @@ const ocrAuto = read("app/ocr/auto/page.tsx");
 const vehicleFast = read("app/vehicle-workflow-fast/page.tsx");
 const supabaseClient = read("app/supabase.ts");
 const authSecurity = read("app/lib/auth-security.ts");
+const nextConfig = read("next.config.mjs");
+const pdfNative = read("app/certificate-pdf-native-reader.jsx");
+const pdfBridge = read("app/certificate-pdf-bridge.jsx");
 
 pass("route guard imported", layout.includes('AuthRouteGuard from "./auth-route-guard"'));
 pass("route guard wraps app", layout.includes("<AuthRouteGuard>") && layout.includes("</AuthRouteGuard>"));
@@ -37,6 +40,12 @@ pass("protected routes require active app user", guard.includes("isActiveAppSess
 pass("home session requires active app user", layout.length > 0 && read("app/page.tsx").includes("isActiveAppSession"));
 pass("sensitive routes disable caching", netlify.includes('Cache-Control = "no-store, max-age=0"') && netlify.includes('for = "/schedule/*"') && netlify.includes('for = "/customer-vehicles/*"'));
 pass("spreadsheet export neutralizer", read("app/lib/client-security.ts").includes("spreadsheetSafeCell"));
+pass("PDF resource limits", pdfNative.includes("MAX_PDF_PAGES") && pdfNative.includes("MAX_PDF_RENDER_PIXELS") && pdfBridge.includes("MAX_PDF_PAGES"));
+pass("oversized image guard", fileSecurity.includes("MAX_IMAGE_PIXELS") && fileSecurity.includes("MAX_IMAGE_EDGE"));
+pass("strict referrer privacy", netlify.includes('Referrer-Policy = "no-referrer"'));
+pass("robots disabled", layout.includes("index: false") && layout.includes("follow: false") && netlify.includes("X-Robots-Tag"));
+pass("browser source maps disabled", nextConfig.includes("productionBrowserSourceMaps: false"));
+pass("framework header disabled", nextConfig.includes("poweredByHeader: false"));
 
 for (const [name, needle] of [
   ["X-Frame-Options", 'X-Frame-Options = "DENY"'],
