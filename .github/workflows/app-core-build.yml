@@ -12,6 +12,9 @@ on:
       - "tsconfig.json"
       - ".github/workflows/app-core-build.yml"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,6 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Keep OCR tuning out of app core
