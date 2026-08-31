@@ -29,18 +29,19 @@ export const DAILY_REPORT_TEMPLATE = {
     commitToPublicRepo: false,
   },
   regions: {
-    date: { x: 0.015, y: 0.012, width: 0.31, height: 0.042 },
-    delivery: { x: 0.012, y: 0.085, width: 0.47, height: 0.655 },
-    inbound: { x: 0.515, y: 0.085, width: 0.472, height: 0.655 },
-    messages: { x: 0.012, y: 0.75, width: 0.63, height: 0.09 },
-    stayingVehicles: { x: 0.012, y: 0.855, width: 0.35, height: 0.135 },
-    bodyShopVehicles: { x: 0.385, y: 0.855, width: 0.25, height: 0.135 },
-    plannedDeliveries: { x: 0.66, y: 0.75, width: 0.327, height: 0.24 },
+    // Measured from the supplied A3 portrait PDF.
+    date: { x: 0.044, y: 0.024, width: 0.34, height: 0.042 },
+    delivery: { x: 0.044, y: 0.105, width: 0.455, height: 0.621 },
+    inbound: { x: 0.529, y: 0.105, width: 0.442, height: 0.621 },
+    messages: { x: 0.044, y: 0.726, width: 0.637, height: 0.054 },
+    stayingVehicles: { x: 0.044, y: 0.807, width: 0.334, height: 0.161 },
+    bodyShopVehicles: { x: 0.378, y: 0.807, width: 0.303, height: 0.161 },
+    plannedDeliveries: { x: 0.681, y: 0.753, width: 0.290, height: 0.215 },
   } satisfies Record<string, DailyReportRegion>,
   rows: {
     count: 23,
-    top: 0.11,
-    bottom: 0.735,
+    top: 0.105,
+    bottom: 0.699,
   },
 } as const;
 
