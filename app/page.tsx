@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import HomeDashboard from "./home-dashboard";
+import { clearSensitiveLocalState, safeActionError } from "./lib/client-security";
 
 type Part = {
   id: string;
@@ -633,7 +634,7 @@ export default function Home() {
     const { data, error } = existing
       ? await supabase.from("vehicles").update(payload).eq("id", existing).select().single()
       : await supabase.from("vehicles").insert(payload).select().single();
-    if (error) return setMsg(`車両保存エラー: ${error.message}`);
+    if (error) return setMsg(safeActionError("車両情報の保存", error));
     const saved: any = { ...normalized, id: data.id };
     setVehicles((v) => [saved, ...v.filter((x: any) => x.number !== saved.number)].slice(0, 500));
     setVehicle(saved);
@@ -657,7 +658,7 @@ export default function Home() {
     const { data, error } = customer.id
       ? await supabase.from("customers").update(payload).eq("id", customer.id).select().single()
       : await supabase.from("customers").insert(payload).select().single();
-    if (error) return setMsg(`顧客保存エラー: ${error.message}`);
+    if (error) return setMsg(safeActionError("顧客情報の保存", error));
     const saved = { ...customer, id: data.id };
     setCustomers((c) => [saved, ...c.filter((x) => x.id !== saved.id)].slice(0, 500));
     setCustomer(saved);
@@ -786,6 +787,9 @@ export default function Home() {
     );
   }
 
-  return <HomeDashboard onLogout={() => supabase.auth.signOut()} />;
+  return <HomeDashboard onLogout={async () => {
+    clearSensitiveLocalState();
+    await supabase.auth.signOut();
+  }} />;
 
 }
