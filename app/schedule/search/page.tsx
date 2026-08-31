@@ -30,6 +30,8 @@ type WorkOrder = {
   work_completed: boolean;
   stay_reason: string | null;
   planned_delivery_date: string | null;
+  checked_in_at: string | null;
+  checked_out_at: string | null;
 };
 
 type ScheduleEntry = {
@@ -79,6 +81,15 @@ function customerLabel(c: Customer | null) {
 
 function safeLike(text: string) {
   return text.replace(/[,%()]/g, " ").trim();
+}
+
+function stayElapsedLabel(work: WorkOrder | null) {
+  if (!work?.checked_in_at || work.checked_out_at) return null;
+  const start = Date.parse(dayKey(work.checked_in_at) + "T00:00:00Z");
+  const today = Date.parse(dayKey(new Date().toISOString()) + "T00:00:00Z");
+  if (!Number.isFinite(start) || !Number.isFinite(today) || today < start) return null;
+  const days = Math.floor((today - start) / 86_400_000);
+  return days === 0 ? "本日入庫" : `入庫から${days}日`;
 }
 
 export default function ScheduleSearchPage() {
@@ -162,7 +173,7 @@ export default function ScheduleSearchPage() {
 
       const { data: workData, error: workError } = await supabase
         .from("work_orders")
-        .select("id,vehicle_id,reason,status,worker_name,work_completed,stay_reason,planned_delivery_date")
+        .select("id,vehicle_id,reason,status,worker_name,work_completed,stay_reason,planned_delivery_date,checked_in_at,checked_out_at")
         .in("vehicle_id", vehicleIds)
         .limit(300);
       if (workError) throw workError;
@@ -277,7 +288,9 @@ export default function ScheduleSearchPage() {
               </div>
             </div>
             <div className="resultList">
-              {dayRows.map(({entry,work,vehicle,customer}) => (
+              {dayRows.map(({entry,work,vehicle,customer}) => {
+                const elapsed = stayElapsedLabel(work);
+                return (
                 <div className="resultRow" key={entry.id}>
                   <div className="time">{dateTimeLabel(entry.starts_at).split(" ").pop()}</div>
                   <div className="main">
@@ -288,13 +301,15 @@ export default function ScheduleSearchPage() {
                     {vehicle?.registration_number_last4 && <span>下4桁 {vehicle.registration_number_last4}</span>}
                     {customer?.phone && <span>{customer.phone}</span>}
                     {work?.worker_name && <span>担当 {work.worker_name}</span>}
+                    {elapsed && <span className="elapsed">{elapsed}</span>}
                     {work?.stay_reason && <span>滞留理由 {work.stay_reason}</span>}
                     {work?.planned_delivery_date && <span>納車予定 {work.planned_delivery_date}</span>}
                   </div>
                   <div className="state">{work?.work_completed ? "作業完了" : work?.status === "in_progress" ? "作業中" : "作業未実施"}</div>
                   <button className="editBtn" onClick={() => location.assign("/schedule/edit?id="+entry.id)}>予約変更</button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </article>
         ))}
@@ -305,7 +320,7 @@ export default function ScheduleSearchPage() {
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}
         .searchPage{max-width:1050px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
         .searchCard,.dayGroup{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.eyebrow{font-weight:800;color:#2674e8}.searchCard h1{margin:4px 0 14px;font-size:31px}.searchRow{display:grid;grid-template-columns:1fr auto;gap:8px}.searchRow input{border:2px solid #b9c6d8;border-radius:12px;padding:14px;font-size:18px}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4;min-width:100px}.pastToggle{display:flex;align-items:center;gap:7px;margin-top:10px;color:#5d6878;font-weight:700}.pastToggle input{width:auto}.notice{margin-top:10px;color:#647184}
-        .dayTitle{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #edf0f4;padding-bottom:10px}.dayTitle>div{display:flex;gap:6px}.resultList{display:grid;gap:7px;margin-top:10px}.resultRow{display:grid;grid-template-columns:70px minmax(180px,1.4fr) minmax(180px,1fr) auto auto;gap:10px;align-items:center;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.time{font-weight:900;font-size:16px}.main{display:grid}.main span,.meta{color:#697587;font-size:12px}.meta{display:flex;gap:5px;flex-wrap:wrap}.meta span{background:#f2f5f8;border-radius:999px;padding:4px 6px}.state{font-size:12px;font-weight:900;border-radius:999px;padding:5px 8px;background:#f1f3f6;white-space:nowrap}.editBtn{font-size:11px;padding:7px 9px}.empty{background:#fff;border-radius:16px;padding:28px;text-align:center;color:#8c98a8}
+        .dayTitle{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #edf0f4;padding-bottom:10px}.dayTitle>div{display:flex;gap:6px}.resultList{display:grid;gap:7px;margin-top:10px}.resultRow{display:grid;grid-template-columns:70px minmax(180px,1.4fr) minmax(180px,1fr) auto auto;gap:10px;align-items:center;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.time{font-weight:900;font-size:16px}.main{display:grid}.main span,.meta{color:#697587;font-size:12px}.meta{display:flex;gap:5px;flex-wrap:wrap}.meta span{background:#f2f5f8;border-radius:999px;padding:4px 6px}.meta .elapsed{background:#fff4d8;color:#8a5a00;font-weight:900}.state{font-size:12px;font-weight:900;border-radius:999px;padding:5px 8px;background:#f1f3f6;white-space:nowrap}.editBtn{font-size:11px;padding:7px 9px}.empty{background:#fff;border-radius:16px;padding:28px;text-align:center;color:#8c98a8}
         @media(max-width:720px){.resultRow{grid-template-columns:55px 1fr}.meta,.state,.editBtn{grid-column:2}.searchRow{grid-template-columns:1fr}.primary{width:100%}.dayTitle{align-items:flex-start;flex-direction:column}}
       `}</style>
     </main>
