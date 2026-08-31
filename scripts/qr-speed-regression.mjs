@@ -50,9 +50,11 @@ const cases = [
   // Keep these fully synthetic so no certificate content or personal data is stored.
   { name: "photo-shift-left-edge", expected: 1, centers: [0.435], yCenter: 0.90 },
   { name: "photo-shift-right-edge", expected: 1, centers: [0.965], yCenter: 0.90 },
-  // Handheld framing can combine horizontal and vertical shifts. Pin the two
-  // most extreme in-window corners so boundary interactions cannot drop targets.
+  // Handheld framing can combine horizontal and vertical shifts. Pin all four
+  // extreme in-window corners so boundary interactions cannot drop targets.
   { name: "photo-shift-upper-left-corner", expected: 1, centers: [0.435], yCenter: 0.815 },
+  { name: "photo-shift-upper-right-corner", expected: 1, centers: [0.965], yCenter: 0.815 },
+  { name: "photo-shift-lower-left-corner", expected: 1, centers: [0.435], yCenter: 0.97 },
   { name: "photo-shift-lower-right-corner", expected: 1, centers: [0.965], yCenter: 0.97 },
   // QR-like patches outside the lower/right scan window must not expand the
   // search area or create false candidates. These pin both scan boundaries.
