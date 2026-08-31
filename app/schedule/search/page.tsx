@@ -27,6 +27,7 @@ type WorkOrder = {
   reason: string;
   status: string;
   worker_name: string | null;
+  outsource_vendor_name: string | null;
   work_completed: boolean;
   stay_reason: string | null;
   planned_delivery_date: string | null;
@@ -173,7 +174,7 @@ export default function ScheduleSearchPage() {
 
       const { data: workData, error: workError } = await supabase
         .from("work_orders")
-        .select("id,vehicle_id,reason,status,worker_name,work_completed,stay_reason,planned_delivery_date,checked_in_at,checked_out_at")
+        .select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,work_completed,stay_reason,planned_delivery_date,checked_in_at,checked_out_at")
         .in("vehicle_id", vehicleIds)
         .limit(300);
       if (workError) throw workError;
@@ -301,6 +302,7 @@ export default function ScheduleSearchPage() {
                     {vehicle?.registration_number_last4 && <span>下4桁 {vehicle.registration_number_last4}</span>}
                     {customer?.phone && <span>{customer.phone}</span>}
                     {work?.worker_name && <span>担当 {work.worker_name}</span>}
+                    {work?.outsource_vendor_name && <span>外注 {work.outsource_vendor_name}</span>}
                     {elapsed && <span className="elapsed">{elapsed}</span>}
                     {work?.stay_reason && <span>滞留理由 {work.stay_reason}</span>}
                     {work?.planned_delivery_date && <span>納車予定 {work.planned_delivery_date}</span>}
