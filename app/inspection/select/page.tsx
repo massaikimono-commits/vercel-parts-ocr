@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
 import {
+import { safeActionError } from "../../lib/client-security";
   WORKSHOP_RECORD_TEMPLATES,
   decideWorkshopRecordTemplate,
   type WorkshopRecordTemplateKey,
@@ -111,7 +112,7 @@ export default function InspectionRecordSelectPage() {
       setWorkOrderId(works[0]?.id || "");
       setMessage("車両情報と作業内容から記録簿候補を判定しました。");
     } catch (error: any) {
-      setMessage(`読み込みエラー: ${error?.message || error}`);
+      setMessage(safeActionError("記録簿候補の読み込み", error));
     } finally {
       setBusy(false);
     }
