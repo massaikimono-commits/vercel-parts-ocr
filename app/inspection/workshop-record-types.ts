@@ -17,6 +17,8 @@ export type WorkshopRecordTemplate = {
   family: "STATUTORY" | "WORKSHOP_SCHEDULE";
   supportsPreviousPrintBaseline: boolean;
   currentPartsAreOneTimeOnly: boolean;
+  paperSize: "A4";
+  sourceFormat: "PDF";
 };
 
 export type WorkshopTemplateDecision = {
@@ -39,6 +41,8 @@ export const WORKSHOP_RECORD_TEMPLATES: Record<WorkshopRecordTemplateKey, Worksh
     family: "STATUTORY",
     supportsPreviousPrintBaseline: true,
     currentPartsAreOneTimeOnly: true,
+    paperSize: "A4",
+    sourceFormat: "PDF",
   },
   APPENDIX_5_PRIVATE_TRUCK: {
     key: "APPENDIX_5_PRIVATE_TRUCK",
@@ -46,6 +50,8 @@ export const WORKSHOP_RECORD_TEMPLATES: Record<WorkshopRecordTemplateKey, Worksh
     family: "STATUTORY",
     supportsPreviousPrintBaseline: true,
     currentPartsAreOneTimeOnly: true,
+    paperSize: "A4",
+    sourceFormat: "PDF",
   },
   APPENDIX_6_PRIVATE_PASSENGER: {
     key: "APPENDIX_6_PRIVATE_PASSENGER",
@@ -53,6 +59,8 @@ export const WORKSHOP_RECORD_TEMPLATES: Record<WorkshopRecordTemplateKey, Worksh
     family: "STATUTORY",
     supportsPreviousPrintBaseline: true,
     currentPartsAreOneTimeOnly: true,
+    paperSize: "A4",
+    sourceFormat: "PDF",
   },
   SCHEDULE_CHECK: {
     key: "SCHEDULE_CHECK",
@@ -60,6 +68,8 @@ export const WORKSHOP_RECORD_TEMPLATES: Record<WorkshopRecordTemplateKey, Worksh
     family: "WORKSHOP_SCHEDULE",
     supportsPreviousPrintBaseline: true,
     currentPartsAreOneTimeOnly: true,
+    paperSize: "A4",
+    sourceFormat: "PDF",
   },
 };
 
