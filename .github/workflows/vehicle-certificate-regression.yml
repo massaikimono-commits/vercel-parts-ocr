@@ -38,3 +38,12 @@ jobs:
 
       - name: Run yellow/white parts layout semantics
         run: npm run test:parts-layout
+
+      - name: Run security regression
+        run: npm run test:security
+
+      - name: Build Next.js app
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build
