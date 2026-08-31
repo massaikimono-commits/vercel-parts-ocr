@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
-import {
 import { safeActionError } from "../../lib/client-security";
+import {
   WORKSHOP_RECORD_TEMPLATES,
   decideWorkshopRecordTemplate,
   type WorkshopRecordTemplateKey,
