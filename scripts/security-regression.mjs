@@ -1,0 +1,77 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
+const checks = [];
+const pass = (name, ok, detail = "") => checks.push({ name, ok, detail });
+
+const layout = read("app/layout.tsx");
+const guard = read("app/auth-route-guard.tsx");
+const supabase = read("app/supabase.ts");
+const netlify = read("netlify.toml");
+const pkg = JSON.parse(read("package.json"));
+
+pass("route guard imported", layout.includes('AuthRouteGuard from "./auth-route-guard"'));
+pass("route guard wraps app", layout.includes("<AuthRouteGuard>") && layout.includes("</AuthRouteGuard>"));
+pass("route guard checks session", guard.includes("supabase.auth.getSession()"));
+pass("route guard redirects unauthenticated users", guard.includes('location.replace("/")'));
+pass("publishable Supabase key only", supabase.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") && !/SERVICE_ROLE|service_role/i.test(supabase));
+pass("package is private", pkg.private === true);
+
+for (const [name, needle] of [
+  ["X-Frame-Options", 'X-Frame-Options = "DENY"'],
+  ["X-Content-Type-Options", 'X-Content-Type-Options = "nosniff"'],
+  ["HSTS", "Strict-Transport-Security"],
+  ["Referrer-Policy", "Referrer-Policy"],
+  ["Permissions-Policy", "Permissions-Policy"],
+  ["CSP", "Content-Security-Policy"],
+]) {
+  pass("security header: " + name, netlify.includes(needle));
+}
+
+const forbiddenSecretPatterns = [
+  /SUPABASE_SERVICE_ROLE_KEY/i,
+  /\\bservice_role\\b/i,
+  /BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY/,
+];
+
+function walk(dir) {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (["node_modules", ".next", ".git"].includes(entry.name)) continue;
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walk(p));
+    else out.push(p);
+  }
+  return out;
+}
+
+const candidateFiles = ["app", "scripts"]
+  .filter((p) => fs.existsSync(path.join(root, p)))
+  .flatMap((p) => walk(path.join(root, p)))
+  .filter((p) => /\\.(?:js|jsx|ts|tsx|mjs|json|toml|md)$/i.test(p));
+
+let secretHit = "";
+for (const file of candidateFiles) {
+  const body = fs.readFileSync(file, "utf8");
+  if (forbiddenSecretPatterns.some((re) => re.test(body))) {
+    secretHit = path.relative(root, file);
+    break;
+  }
+}
+pass("no privileged secret patterns in app/scripts", !secretHit, secretHit);
+
+const envFiles = fs.readdirSync(root).filter((name) => /^\\.env(?:\\.|$)/.test(name));
+pass("no .env files committed at repo root", envFiles.length === 0, envFiles.join(", "));
+
+for (const c of checks) {
+  console.log((c.ok ? "PASS" : "FAIL") + " " + c.name + (c.detail ? " — " + c.detail : ""));
+}
+
+const failed = checks.filter((c) => !c.ok);
+if (failed.length) {
+  console.error("Security regression failed: " + failed.length + " check(s)");
+  process.exit(1);
+}
+console.log("All " + checks.length + " security regression checks passed.");
