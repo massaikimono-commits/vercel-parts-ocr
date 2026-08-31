@@ -124,7 +124,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     return [...grouped.values()].sort((a, b) => {
       if (a.name === "担当未設定") return 1;
       if (b.name === "担当未設定") return -1;
-      return b.total - a.total || b.running - a.running || a.name.localeCompare(b.name, "ja");
+      return b.urgent - a.urgent || b.total - a.total || b.running - a.running || a.name.localeCompare(b.name, "ja");
     });
   }, [works]);
 
@@ -231,15 +231,15 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         {!busy && !loadError && workerLoad.length > 0 && (
           <div className="homeWorkload" aria-label="作業担当者の負荷">
             <div className="homeWorkloadHead">
-              <div><b>作業担当者の負荷</b><small>未完了・作業中の偏りを確認</small></div>
+              <div><b>作業担当者の負荷</b><small>急ぎ案件を優先し、未完了・作業中の偏りを確認</small></div>
               <button onClick={() => openDay(todayJst())}>1日のスケジュールで詳しく見る</button>
             </div>
             <div className="homeWorkloadGrid">
               {workerLoad.slice(0, 6).map((row) => (
-                <button key={row.name} className={row.name === "担当未設定" ? "homeWorker unassigned" : "homeWorker"} onClick={() => openDay(todayJst())}>
-                  <b>{row.name}</b>
+                <button key={row.name} className={`${row.name === "担当未設定" ? "homeWorker unassigned" : "homeWorker"}${row.urgent > 0 ? " urgent" : ""}`} onClick={() => openDay(todayJst())}>
+                  <b>{row.name}{row.urgent > 0 && <em className="urgentBadge">急ぎ {row.urgent}</em>}</b>
                   <span>未完了 <strong>{row.total}</strong>台</span>
-                  <small>未実施 {row.pending}・作業中 {row.running}{row.urgent > 0 ? `・急ぎ ${row.urgent}` : ""}</small>
+                  <small>未実施 {row.pending}・作業中 {row.running}</small>
                 </button>
               ))}
             </div>
@@ -280,7 +280,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         .homeWorkloadHead button{padding:8px 10px;font-size:12px}
         .homeWorkloadGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
         .homeWorker{display:grid;gap:3px;text-align:left;color:#172033;border-color:#dbe3ee;padding:11px}
-        .homeWorker>b{font-size:15px}.homeWorker span{font-size:12px;color:#5d6878}.homeWorker span strong{font-size:20px;color:#172033}.homeWorker small{font-size:11px;color:#718096}.homeWorker.unassigned{border-color:#e6aa5a;background:#fff9e8}
+        .homeWorker>b{font-size:15px;display:flex;align-items:center;justify-content:space-between;gap:8px}.homeWorker span{font-size:12px;color:#5d6878}.homeWorker span strong{font-size:20px;color:#172033}.homeWorker small{font-size:11px;color:#718096}.homeWorker.unassigned{border-color:#e6aa5a;background:#fff9e8}.homeWorker.urgent{border-color:#e4a099;background:#fff8f7}.urgentBadge{font-size:10px;font-style:normal;background:#b8493e;color:white;border-radius:999px;padding:3px 6px;white-space:nowrap}
         @media(max-width:780px){.homeWorkloadGrid{grid-template-columns:1fr 1fr}}
         @media(max-width:380px){.statusTile span{font-size:10px}.statusTile strong{font-size:24px}}
       `}</style>
