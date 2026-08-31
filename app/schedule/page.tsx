@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
 import { dailyReportTimeLabel, prepareDailyReportSection } from "./print-rules";
+import { safeActionError } from "../lib/client-security";
 
 type ScheduleEntry = {
   id: string;
@@ -179,7 +180,7 @@ export default function SchedulePage() {
       },
       updated_at: new Date().toISOString(),
     }, { onConflict: "setting_key" });
-    if (error) setMessage("表示設定の保存エラー: " + error.message);
+    if (error) setMessage(safeActionError("表示設定の保存", error));
   }
 
   useEffect(() => {
@@ -226,7 +227,7 @@ export default function SchedulePage() {
       setCustomers((customerRes.data || []) as Customer[]);
       setMessage(`${scheduleRes.data?.length || 0}件の予定があります。`);
     } catch (error: any) {
-      setMessage(`予定の読み込みエラー: ${error?.message || error}`);
+      setMessage(safeActionError("予定の読み込み", error));
     } finally {
       setBusy(false);
     }
@@ -294,7 +295,7 @@ export default function SchedulePage() {
     const { error } = await supabase.from("schedule_entries").update({ completed: next }).eq("id", entry.id);
     if (error) {
       setEntries((old) => old.map((x) => x.id === entry.id ? { ...x, completed: !next } : x));
-      setMessage(`完了状態の保存エラー: ${error.message}`);
+      setMessage(safeActionError("完了状態の保存", error));
       return;
     }
     setMessage(next ? "予定を完了にしました。" : "予定を未完了へ戻しました。");
@@ -313,7 +314,7 @@ export default function SchedulePage() {
       } : x));
       setMessage(next ? "作業完了にしました。" : "作業完了を解除しました。");
     } catch (error: any) {
-      setMessage(`作業状態の保存エラー: ${error?.message || error}`);
+      setMessage(safeActionError("作業状態の保存", error));
     }
   }
 
@@ -333,7 +334,7 @@ export default function SchedulePage() {
       } : x));
       setMessage(nextStatus === "in_progress" ? "作業中にしました。" : "作業未実施へ戻しました。");
     } catch (error: any) {
-      setMessage(`作業状態の保存エラー: ${error?.message || error}`);
+      setMessage(safeActionError("作業状態の保存", error));
     }
   }
 
@@ -369,7 +370,7 @@ export default function SchedulePage() {
       } : x));
       setMessage("滞留理由・納車予定日を保存しました。");
     } catch (error: any) {
-      setMessage(`滞留情報の保存エラー: ${error?.message || error}`);
+      setMessage(safeActionError("滞留情報の保存", error));
     }
   }
 
