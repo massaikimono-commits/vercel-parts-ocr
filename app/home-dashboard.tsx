@@ -162,6 +162,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         <div className="mobileActions">
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
           <button className="scheduleAction" onClick={() => openDay(todayJst())}>1日のスケジュール</button>
+          <button onClick={() => location.assign("/schedule/search")}>名前・電話・下4桁で予定検索</button>
           <button onClick={() => location.assign("/schedule/week")}>1週間の予定検索</button>
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票読取</button>
           <button onClick={() => location.assign("/inspection/select")}>記録簿作成</button>
@@ -184,6 +185,8 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         </div>
 
         <div className="desktopTools">
+          <button onClick={() => location.assign("/schedule/search")}><b>予定即検索</b><small>名前・電話・下4桁</small></button>
+          <button onClick={() => location.assign("/loaners")}><b>代車管理</b><small>空き・貸出・返却予定</small></button>
           <button onClick={() => location.assign("/ocr/auto")}><b>部品伝票読取</b><small>3番目によく使う</small></button>
           <button onClick={() => location.assign("/inspection/select")}><b>記録簿作成</b><small>記録簿を選んで作成</small></button>
           <button onClick={() => location.assign("/vehicle-workflow")}><b>車検証読取</b><small>必要なときだけ</small></button>
