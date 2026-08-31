@@ -9,6 +9,7 @@ import CertificatePdfNativeReader from "./certificate-pdf-native-reader";
 import CertificatePdfBridge from "./certificate-pdf-bridge";
 import CertificateQrFast from "./certificate-qr-fast";
 import CertificateQrRescue from "./certificate-qr-rescue";
+import CertificateQrLowerSixFallback from "./certificate-qr-lower-six-fallback";
 import CertificateKeiBaseline from "./certificate-kei-baseline";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
 import CertificatePhotoRescue from "./certificate-photo-rescue";
@@ -197,6 +198,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificatePdfBridge />
         <CertificateQrFast />
         <CertificateQrRescue />
+        <CertificateQrLowerSixFallback />
         <CertificateKeiBaseline />
         <CertificateQrApply />
         <CertificatePhotoRescue />
