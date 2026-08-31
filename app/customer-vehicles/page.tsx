@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
+import { safeActionError } from "../lib/client-security";
 
 type Customer = {
   id: string;
@@ -229,7 +230,7 @@ export default function CustomerVehiclesPage() {
           : `顧客 ${customerList.length}件・車両 ${vehicleList.length}台を読み込みました。`
       );
     } catch (error: any) {
-      setMessage(`読み込みエラー: ${error?.message || error}`);
+      setMessage(safeActionError("顧客・車両情報の読み込み", error));
     } finally {
       setBusy(false);
     }
@@ -375,7 +376,7 @@ export default function CustomerVehiclesPage() {
       setCustomerEditing(false);
       setMessage(`${customerLabel(normalized)} を保存し、この車両へ紐付けました。`);
     } catch (error: any) {
-      setMessage(`顧客保存エラー: ${error?.message || error}`);
+      setMessage(safeActionError("顧客情報の保存", error));
     } finally {
       setSavingCustomer(false);
     }
@@ -393,7 +394,7 @@ export default function CustomerVehiclesPage() {
       const customer = customers.find((c) => c.id === linkCustomerId);
       setMessage(`${customer ? customerLabel(customer) : "選択した顧客"} をこの車両へ紐付けました。`);
     } catch (error: any) {
-      setMessage(`顧客紐付けエラー: ${error?.message || error}`);
+      setMessage(safeActionError("顧客と車両の紐付け", error));
     }
   }
 
