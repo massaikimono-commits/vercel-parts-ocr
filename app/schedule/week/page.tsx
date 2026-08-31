@@ -118,8 +118,12 @@ function weekTitle(start: string) {
 }
 
 export default function WeeklySchedulePage() {
-  const [weekStart, setWeekStart] = useState(() => mondayOf(todayJst()));
-  const [jumpDay, setJumpDay] = useState(todayJst());
+  const initialDay = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("day")
+    : null;
+  const initialValidDay = initialDay && /^\d{4}-\d{2}-\d{2}$/.test(initialDay) ? initialDay : todayJst();
+  const [weekStart, setWeekStart] = useState(() => mondayOf(initialValidDay));
+  const [jumpDay, setJumpDay] = useState(initialValidDay);
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [works, setWorks] = useState<WorkOrder[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -132,15 +136,6 @@ export default function WeeklySchedulePage() {
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   useEffect(() => {
-    const q = new URLSearchParams(location.search).get("day");
-    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) {
-      setJumpDay(q);
-      const start = mondayOf(q);
-      if (start !== weekStart) {
-        setWeekStart(start);
-        return;
-      }
-    }
     void loadWeek();
   }, [weekStart]);
 
