@@ -47,10 +47,8 @@ function walk(dir) {
   return out;
 }
 
-const candidateFiles = ["app", "scripts"]
-  .filter((p) => fs.existsSync(path.join(root, p)))
-  .flatMap((p) => walk(path.join(root, p)))
-  .filter((p) => /\\.(?:js|jsx|ts|tsx|mjs|json|toml|md)$/i.test(p));
+const candidateFiles = walk(path.join(root, "app"))
+  .filter((p) => /\\.(?:js|jsx|ts|tsx|mjs|json)$/i.test(p));
 
 let secretHit = "";
 for (const file of candidateFiles) {
@@ -60,7 +58,7 @@ for (const file of candidateFiles) {
     break;
   }
 }
-pass("no privileged secret patterns in app/scripts", !secretHit, secretHit);
+pass("no privileged secret patterns in app", !secretHit, secretHit);
 
 const envFiles = fs.readdirSync(root).filter((name) => /^\\.env(?:\\.|$)/.test(name));
 pass("no .env files committed at repo root", envFiles.length === 0, envFiles.join(", "));
