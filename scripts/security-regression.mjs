@@ -18,6 +18,7 @@ const ocrGeneral = read("app/ocr/general/page.tsx");
 const ocrAuto = read("app/ocr/auto/page.tsx");
 const vehicleFast = read("app/vehicle-workflow-fast/page.tsx");
 const supabaseClient = read("app/supabase.ts");
+const authSecurity = read("app/lib/auth-security.ts");
 
 pass("route guard imported", layout.includes('AuthRouteGuard from "./auth-route-guard"'));
 pass("route guard wraps app", layout.includes("<AuthRouteGuard>") && layout.includes("</AuthRouteGuard>"));
@@ -31,7 +32,11 @@ pass("generic OCR validates files", ocrGeneral.includes("validateDocumentFile(fi
 pass("auto OCR validates files", ocrAuto.includes("validateDocumentFile(file)"));
 pass("vehicle OCR validates files", vehicleFast.includes("validateDocumentFile(file,{allowPdf:true})"));
 pass("URL auth session detection disabled", supabaseClient.includes("detectSessionInUrl: false"));
+pass("active app-user verifier exists", authSecurity.includes("app_user_profiles") && authSecurity.includes("is_active"));
+pass("protected routes require active app user", guard.includes("isActiveAppSession"));
+pass("home session requires active app user", layout.length > 0 && read("app/page.tsx").includes("isActiveAppSession"));
 pass("sensitive routes disable caching", netlify.includes('Cache-Control = "no-store, max-age=0"') && netlify.includes('for = "/schedule/*"') && netlify.includes('for = "/customer-vehicles/*"'));
+pass("spreadsheet export neutralizer", read("app/lib/client-security.ts").includes("spreadsheetSafeCell"));
 
 for (const [name, needle] of [
   ["X-Frame-Options", 'X-Frame-Options = "DENY"'],
