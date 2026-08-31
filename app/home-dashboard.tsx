@@ -95,10 +95,24 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     return { entry, work, vehicle, customer };
   }), [entries, workMap, vehicleMap, customerMap]);
 
+  const statusCounts = useMemo(() => {
+    const uniqueWorks = new Map<string, WorkOrder>();
+    for (const { work } of todayRows) if (work) uniqueWorks.set(work.id, work);
+    let pending = 0;
+    let inProgress = 0;
+    let completed = 0;
+    for (const work of uniqueWorks.values()) {
+      if (work.work_completed || work.status === "completed") completed += 1;
+      else if (work.status === "in_progress") inProgress += 1;
+      else pending += 1;
+    }
+    return { pending, inProgress, completed };
+  }, [todayRows]);
+
   const unfinished = useMemo(() => {
     const seenWorkIds = new Set<string>();
     return todayRows.filter(({ work }) => {
-      if (!work || work.work_completed || work.status === "completed" || seenWorkIds.has(work.id)) return false;
+      if (!work || work.work_completed || work.status === "completed" || work.status === "in_progress" || seenWorkIds.has(work.id)) return false;
       seenWorkIds.add(work.id);
       return true;
     });
@@ -124,7 +138,9 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   const todayCountLabel = busy ? "…" : loadError ? "確認要" : todayRows.length + "件";
   const todayStatusLabel = busy
     ? "読み込み中"
-    : loadError || (unfinished.length ? "作業未実施 " + unfinished.length + "件" : "作業未実施なし");
+    : loadError
+      ? "状態は1日のスケジュールで確認"
+      : `未実施 ${statusCounts.pending}・作業中 ${statusCounts.inProgress}・完了 ${statusCounts.completed}`;
 
   return (
     <main className="homeDash">
@@ -139,6 +155,20 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <strong>{todayCountLabel}</strong>
           <small>{todayStatusLabel}</small>
         </button>
+
+        {!busy && !loadError && (
+          <div className="todayStatusGrid" aria-label="今日の作業状態">
+            <button className="statusTile pending" onClick={() => openDay(todayJst())}>
+              <span>作業未実施</span><strong>{statusCounts.pending}</strong><small>台</small>
+            </button>
+            <button className="statusTile progress" onClick={() => openDay(todayJst())}>
+              <span>作業中</span><strong>{statusCounts.inProgress}</strong><small>台</small>
+            </button>
+            <button className="statusTile done" onClick={() => openDay(todayJst())}>
+              <span>作業完了</span><strong>{statusCounts.completed}</strong><small>台</small>
+            </button>
+          </div>
+        )}
 
         {!busy && !loadError && unfinished.length > 0 && (
           <div className="unfinishedBox">
@@ -173,7 +203,10 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       <section className="desktopMain">
         <div className="desktopHeroGrid">
           <button className="desktopHero primaryHero" onClick={() => registerDay(todayJst())}><span>予定登録</span><strong>＋ 新しい予定を登録</strong><small>いちばん使う機能</small></button>
-          <button className="desktopHero" onClick={() => openDay(todayJst())}><span>今日の予定</span><strong>{todayCountLabel}</strong><small>{todayStatusLabel}</small></button>
+          <button className="desktopHero todayHero" onClick={() => openDay(todayJst())}>
+            <span>今日の予定</span><strong>{todayCountLabel}</strong><small>{todayStatusLabel}</small>
+            {!busy && !loadError && <div className="desktopStatusLine"><b>未実施 {statusCounts.pending}</b><b>作業中 {statusCounts.inProgress}</b><b>完了 {statusCounts.completed}</b></div>}
+          </button>
         </div>
 
         <div className="dateSearch">
