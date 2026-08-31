@@ -94,9 +94,20 @@ export default function ScheduleEditPage(){
     setSelected(match?.key || opts[0]?.key || "");
   }
 
+  function resetWarningsForTargetChange(){
+    setWarnings([]);
+    setMessage("変更先を更新しました。保存時に空き・重複・上限を再確認します。");
+  }
+
   async function changeDay(next:string){
     setDay(next);
+    resetWarningsForTargetChange();
     if(entry) await loadOptions(next,entry);
+  }
+
+  function changeTime(next:string){
+    setSelected(next);
+    resetWarningsForTargetChange();
   }
 
   const selectedOption=useMemo(()=>options.find(x=>x.key===selected)||null,[options,selected]);
@@ -170,7 +181,7 @@ export default function ScheduleEditPage(){
         <div className="grid">
           <label>変更日<input type="date" value={day} onChange={(e)=>void changeDay(e.target.value)} /></label>
           {entry.entry_type!=="onsite_repair" && <label>変更時間
-            <select value={selected} onChange={(e)=>setSelected(e.target.value)}>
+            <select value={selected} onChange={(e)=>changeTime(e.target.value)}>
               {!options.length && <option value="">候補なし</option>}
               {options.map(x=><option key={x.key} value={x.key}>{x.label}</option>)}
             </select>
