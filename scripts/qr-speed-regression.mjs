@@ -41,6 +41,10 @@ const cases = [
   // production thresholds.
   { name: "photo-small-qr", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.90, sizeScale: 0.78 },
   { name: "photo-large-qr", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.90, sizeScale: 1.28 },
+  // Distance and handheld vertical framing can vary at the same time. Pin the
+  // combined cases near both vertical scan boundaries to catch compound drops.
+  { name: "photo-small-qr-upper-edge", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.815, sizeScale: 0.78 },
+  { name: "photo-large-qr-lower-edge", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.97, sizeScale: 1.28 },
   // Photo captures can shift the normalized certificate vertically. Keep the
   // density detector effective near both ends of its lower-page scan band.
   { name: "photo-shift-up", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.84 },
