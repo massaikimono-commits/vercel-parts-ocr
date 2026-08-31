@@ -30,6 +30,8 @@ type WorkOrder = {
   worker_name: string | null;
   expected_completion_date: string | null;
   planned_delivery_at: string | null;
+  planned_delivery_date: string | null;
+  stay_reason: string | null;
   checked_in_at: string | null;
   checked_out_at: string | null;
   status: string;
@@ -100,7 +102,7 @@ export default function DailyReportPrintPage() {
         supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,completed,notes,print_time_mode,print_time_label_override").gte("starts_at", start).lt("starts_at", end),
         supabase.from("vehicles").select("id,customer_id,registration_number,registration_number_last4"),
         supabase.from("customers").select("id,name,company_name,schedule_display_name"),
-        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,expected_completion_date,planned_delivery_at,checked_in_at,checked_out_at,status,work_completed"),
+        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,expected_completion_date,planned_delivery_at,planned_delivery_date,stay_reason,checked_in_at,checked_out_at,status,work_completed"),
         supabase.from("app_settings").select("setting_value").eq("setting_key", "daily_report_template").maybeSingle(),
       ]);
       for (const res of [scheduleRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
@@ -159,7 +161,9 @@ export default function DailyReportPrintPage() {
 
   function workLine(work: WorkOrder, prefix = "") {
     const completion = work.expected_completion_date ? ` 完成:${work.expected_completion_date}` : "";
-    return `${prefix}${customerForVehicle(work.vehicle_id)} ${last4ForVehicle(work.vehicle_id)} ${work.reason}${completion}`.trim();
+    const stay = work.stay_reason ? ` ${work.stay_reason}` : "";
+    const deliveryDay = work.planned_delivery_date ? ` 納車:${work.planned_delivery_date}` : "";
+    return `${prefix}${customerForVehicle(work.vehicle_id)} ${last4ForVehicle(work.vehicle_id)} ${work.reason}${stay}${completion}${deliveryDay}`.trim();
   }
 
   return (
