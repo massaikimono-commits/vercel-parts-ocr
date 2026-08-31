@@ -22,19 +22,48 @@ const fixtures = files.map((file) => ({
 const failures = [];
 const fail = (id, message) => failures.push(`${id}: ${message}`);
 
+const forbiddenPersonalDataKeys = new Set([
+  "customerName",
+  "customer_name",
+  "phone",
+  "address",
+  "chassisNumber",
+  "registrationNumber",
+  "slipNumber",
+]);
+
+function scanForbiddenKeys(value, id, location = "fixture") {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => scanForbiddenKeys(item, id, `${location}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+
+  for (const [key, child] of Object.entries(value)) {
+    if (forbiddenPersonalDataKeys.has(key)) fail(id, `forbidden personal-data key at ${location}.${key}`);
+    scanForbiddenKeys(child, id, `${location}.${key}`);
+  }
+}
+
 for (const { file, data } of fixtures) {
   const id = data.id || file;
   if (!Array.isArray(data.expected) || !data.expected.length) fail(id, "expected rows are missing");
   if (!data.columnMapping || typeof data.columnMapping !== "object") fail(id, "columnMapping is missing");
   if (!Number.isInteger(data.captureVariants) || data.captureVariants < 1) fail(id, "captureVariants must be >= 1");
 
+  const kind = String(data.id || "").includes("yellow")
+    ? "yellow"
+    : String(data.id || "").includes("white")
+      ? "white"
+      : "unknown";
+  if (kind === "unknown") fail(id, "fixture id must identify yellow or white document type");
+  if (kind !== "unknown" && !file.includes(kind)) fail(id, `filename must match ${kind} document type`);
+
   // Ground-truth files must remain anonymous. Do not add actual customer or vehicle identifiers.
-  const forbiddenKeys = ["customerName", "customer_name", "phone", "address", "chassisNumber", "registrationNumber", "slipNumber"];
+  scanForbiddenKeys(data, id);
   const serialized = JSON.stringify(data);
-  for (const key of forbiddenKeys) {
-    if (Object.prototype.hasOwnProperty.call(data, key)) fail(id, `forbidden top-level personal-data key: ${key}`);
-  }
   if (/\b0\d{1,4}-\d{1,4}-\d{3,4}\b/.test(serialized)) fail(id, "phone-like value found in fixture");
+  if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(serialized)) fail(id, "email-like value found in fixture");
 }
 
 const yellowFixtures = fixtures.filter(({ data }) => String(data.id || "").includes("yellow"));
