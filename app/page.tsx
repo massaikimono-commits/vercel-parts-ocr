@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import HomeDashboard from "./home-dashboard";
-import { clearSensitiveLocalState, safeActionError } from "./lib/client-security";
+import { clearSensitiveLocalState, safeActionError, spreadsheetSafeCell } from "./lib/client-security";
 
 type Part = {
   id: string;
@@ -732,14 +732,14 @@ export default function Home() {
   }
 
   function copyTSV() {
-    const s = ["部品名称\t個数\t定価\t仕入れ", ...parts.map((p) => `${p.name}\t${p.qty}\t${p.retail}\t${p.cost}`)].join("\n");
+    const s = [["部品名称", "個数", "定価", "仕入れ"], ...parts.map((p) => [p.name, p.qty, p.retail, p.cost])].map((r) => r.map(spreadsheetSafeCell).join("\t")).join("\n");
     navigator.clipboard?.writeText(s);
     setMsg("Excel貼り付け用データをコピーしました。");
   }
 
   function csv() {
     const s = [["部品名称", "個数", "定価", "仕入れ"], ...parts.map((p) => [p.name, p.qty, p.retail, p.cost])]
-      .map((r) => r.map((x) => `"${String(x).replaceAll('"', '""')}"`).join(","))
+      .map((r) => r.map((x) => `"${spreadsheetSafeCell(x).replaceAll('"', '""')}"`).join(","))
       .join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\ufeff" + s], { type: "text/csv;charset=utf-8" }));
