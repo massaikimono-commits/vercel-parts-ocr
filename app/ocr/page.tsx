@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { consumeOCRTransferImage } from "./transfer";
+import { validateDocumentFile } from "../lib/file-security";
 
 type Part = { id: string; name: string; qty: string; retail: string; cost: string; source?: string };
 type CropBox = { x: number; y: number; w: number; h: number };
@@ -194,6 +195,8 @@ export default function HighAccuracyOCRPage() {
   }, []);
 
   async function runOCR(file: File) {
+    const fileCheck = await validateDocumentFile(file);
+    if (!fileCheck.ok) { setMessage(fileCheck.message); return; }
     setBusy(true); setProgress(1); setParts([]); setDebugText(""); setMessage("伝票位置を補正しています…");
     if (preview) URL.revokeObjectURL(preview); setPreview(URL.createObjectURL(file));
     let worker: any = null;
