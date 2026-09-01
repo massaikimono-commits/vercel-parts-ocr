@@ -338,7 +338,7 @@ export default function ScheduleSearchPage() {
                     {work?.stay_reason && <span>滞留理由 {work.stay_reason}</span>}
                     {work?.planned_delivery_date && <span>納車予定 {work.planned_delivery_date}</span>}
                   </div>
-                  <div className="state">{work?.work_completed ? "作業完了" : work?.status === "in_progress" ? "作業中" : "作業未実施"}</div>
+                  <div className="state">{work?.work_completed || work?.status === "completed" ? "作業完了" : work?.status === "in_progress" ? "作業中" : "作業未実施"}</div>
                   <button className="editBtn" onClick={() => location.assign("/schedule/edit?id="+entry.id)}>予約変更</button>
                 </div>
                 );
