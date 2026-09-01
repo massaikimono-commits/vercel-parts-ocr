@@ -135,3 +135,15 @@ where jobname='icb-security-retention-daily';
 select
   has_function_privilege('anon','private.purge_expired_operational_security_data()','execute') as anon_execute,
   has_function_privilege('authenticated','private.purge_expired_operational_security_data()','execute') as auth_execute;
+
+-- 13. Login-device classifier exposed to app roles.
+-- Expected: both values false.
+select
+  has_function_privilege('anon','private.login_device_class(text)','execute') as anon_execute,
+  has_function_privilege('authenticated','private.login_device_class(text)','execute') as auth_execute;
+
+-- 14. Login alert RPC privilege boundary.
+-- Expected: anon=false, authenticated=true.
+select
+  has_function_privilege('anon','public.my_login_security_alerts(integer)','execute') as anon_execute,
+  has_function_privilege('authenticated','public.my_login_security_alerts(integer)','execute') as auth_execute;

@@ -12,6 +12,7 @@ This repository is an internal business application. Do not commit secrets, priv
 - Spreadsheet exports must neutralize formula injection.
 - Runtime PDF worker code must be bundled from the locked `pdfjs-dist` dependency, not loaded from a third-party CDN.
 - Runtime Tesseract assets must be same-origin and version-matched to the locked OCR dependencies.
+- Login anomaly alerts must cover progressive failures, success after repeated failures, and newly observed device/browser classes. IP changes alone are not treated as suspicious because mobile/Wi-Fi addresses can change normally.
 
 ## Required database controls
 
@@ -20,6 +21,7 @@ This repository is an internal business application. Do not commit secrets, priv
 - The Data API pre-request hook must enforce an active app user for authenticated requests.
 - Anonymous SECURITY DEFINER access is limited to explicitly approved pre-auth functions: customer booking token functions plus `check_login_throttle` and `record_login_failure`.
 - `login_security_events` is fail-closed for direct client access and is exposed only through the approved login-security RPCs.
+- Login-device classification helpers must remain in the private schema and must not be executable by `anon` or `authenticated`.
 - SECURITY DEFINER functions must use a fixed search path; use an empty path with schema-qualified objects or place `pg_temp` last.
 - Public views exposed to authenticated users must use `security_invoker=true`.
 - The `documents` Storage bucket must remain private and restricted by RLS.
