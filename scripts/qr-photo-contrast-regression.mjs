@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import { detectCertificateQrDensityCenters } from "../app/lib/certificate-qr-density.mjs";
 
 function syntheticQrImage(
@@ -89,6 +90,13 @@ const cases = [
   { name: "slight-blur-lower-shadow-photo", foreground: 55, background: 248, horizontalShade: 0, verticalShade: 24, blurRadius: 1 },
 ];
 
+const speedRuns = 3;
+// Keep the same deliberately generous ceiling as the layout speed regression.
+// This catches accidental multi-second slowdowns under degraded photo conditions
+// without making CI sensitive to normal shared-runner variance.
+const maxAverageMs = 750;
+const speedResults = [];
+
 for (const test of cases) {
   const rgba = syntheticQrImage(
     width,
@@ -100,7 +108,17 @@ for (const test of cases) {
     test.verticalShade,
     test.blurRadius,
   );
-  const actual = detectCertificateQrDensityCenters(rgba, width, height);
+
+  // Warm up before measuring so Node startup/JIT does not dominate the budget.
+  detectCertificateQrDensityCenters(rgba, width, height);
+
+  const started = performance.now();
+  let actual = [];
+  for (let i = 0; i < speedRuns; i += 1) {
+    actual = detectCertificateQrDensityCenters(rgba, width, height);
+  }
+  const averageMs = (performance.now() - started) / speedRuns;
+
   if (actual.length < centers.length) {
     throw new Error(`${test.name}: expected >=${centers.length} QR targets, got ${actual.length}`);
   }
@@ -109,6 +127,11 @@ for (const test of cases) {
       throw new Error(`${test.name}: missed QR center ${expectedX}; actual=${actual.map((item) => item.x).join(",")}`);
     }
   }
+  if (averageMs > maxAverageMs) {
+    throw new Error(`${test.name}: QR detector too slow under degraded photo conditions: ${averageMs.toFixed(1)}ms average > ${maxAverageMs}ms budget`);
+  }
+  speedResults.push(`${test.name}=${averageMs.toFixed(1)}ms`);
 }
 
 console.log(`PASS QR photo contrast coverage: ${cases.map((test) => test.name).join(" | ")}`);
+console.log(`PASS QR degraded-photo speed coverage: ${speedResults.join(" | ")}`);
