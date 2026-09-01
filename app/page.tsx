@@ -716,7 +716,7 @@ export default function Home() {
     try {
       const prepared = await prepareOCRImages(file);
       setProgress(8);
-      const tesseract: any = await import("tesseract.js");
+      const tesseract: any = await import("./lib/tesseract-local");
       worker = await tesseract.createWorker("jpn+eng", 1, {
         logger: (m: any) => {
           if (m.status === "recognizing text") {
