@@ -202,7 +202,7 @@ export default function HighAccuracyOCRPage() {
     let worker: any = null;
     try {
       const source = await sourceCanvas(file); const paper = detectPaperBox(source); const tesseract: any = await import("../lib/tesseract-local");
-      worker = await tesseract.createWorker("jpn+eng", 1, { logger: (m: any) => { if (m.status === "recognizing text") setProgress((old) => Math.max(old, Math.min(96, old + Math.max(1, Math.round((m.progress || 0) * 2))))); } });
+      worker = await tesseract.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang",  logger: (m: any) => { if (m.status === "recognizing text") setProgress((old) => Math.max(old, Math.min(96, old + Math.max(1, Math.round((m.progress || 0) * 2))))); } });
       const found: Part[] = []; const logs: string[] = [`paper x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`]; const firstRowY = 0.440; const rowStep = 0.100; let emptyRows = 0;
 
       for (let row = 0; row < 5; row += 1) {
