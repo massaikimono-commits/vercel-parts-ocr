@@ -174,7 +174,7 @@ export default function VehicleWorkflowFast(){
       const srcPromise=loadCanvas(file);const tessPromise=import("../lib/tesseract-local");
       await wait(250);let qr=readQr();
       const [rawSrc,t]:any=await Promise.all([srcPromise,tessPromise]);const normalized=normalizeCertificateCanvas(rawSrc,1800);const src=normalized.canvas;rawSrc.width=1;rawSrc.height=1;const paper={x:0,y:0,w:src.width,h:src.height};setProgress(12);
-      const workerPromise=t.createWorker("jpn+eng",1);const P=t.PSM,block=P?.SINGLE_BLOCK??"6",sparse=P?.SPARSE_TEXT??"11";
+      const workerPromise=t.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });const P=t.PSM,block=P?.SINGLE_BLOCK??"6",sparse=P?.SPARSE_TEXT??"11";
       // QRはOCR worker起動と並列。最大約1.5秒だけ先行待ちする。
       for(let i=0;i<5&&!Object.keys(qr).length;i++){await wait(250);qr=readQr();}
       mergePatch(qr);setProgress(22);
