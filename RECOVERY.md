@@ -3,8 +3,11 @@
 ## Current layers
 
 - Critical business rows are snapshotted before UPDATE or DELETE into `private.recovery_row_snapshots`.
+- The recovery trigger was transaction-tested on 2026-09-01 with a rolled-back UPDATE; snapshot creation fired successfully without leaving a business-data change.
 - Row snapshots are retained for 180 days.
-- Application users cannot directly read or modify the recovery snapshot table.
+- `icb-security-retention-daily` runs daily through Supabase Cron and deletes recovery snapshots older than 180 days.
+- The same retention job deletes login-security events older than 180 days.
+- Application users cannot directly read or modify the recovery snapshot table or execute the retention function.
 - Code rollback points are kept in Git history and the security snapshot branch.
 
 ## Platform backup
@@ -22,7 +25,7 @@ Supabase database backups and logical dumps do not restore Storage object bytes.
 3. For an accidental row update or deletion, inspect the private recovery snapshot and restore only the required data.
 4. For database-wide loss, restore from the latest trusted off-site database backup or supported Supabase platform backup.
 5. Restore Storage objects separately when needed.
-6. Re-check authentication, RLS, API grants, Storage policies, and security headers.
+6. Re-check authentication, RLS, API grants, Storage policies, Cron retention, and security headers.
 7. Run the full regression suite and production build before reopening normal operation.
 
 ## Tables protected by row snapshots
