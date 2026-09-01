@@ -16,7 +16,9 @@ assert.match(source, /work\.status === "cancelled"/, "キャンセル済みデ�
 assert.match(source, /scheduled_at\?: string \| null/, "滞留判定は既存scheduled_atを再利用できる");
 assert.match(source, /const activeFrom = work\.checked_in_at \|\| work\.scheduled_at/, "未入庫の将来予定を過去日の日報へ滞留表示しない");
 assert.match(source, /new Date\(activeFrom\)\.getTime\(\) >= endOfDay/, "滞留車両は選択日の終了時点までに開始した作業だけを対象にする");
-assert.match(source, /new Date\(work\.checked_out_at\)\.getTime\(\) >= endOfDay/, "後日出庫した車両は過去日の滞留欄に残す");
-assert.match(source, /work\.work_completed \|\| work\.status === "completed"/, "出庫日時が無い完了済み作業は現在の滞留欄へ残さない");
+assert.match(source, /checkedOutAt !== null && checkedOutAt < endOfDay/, "選択日より前に出庫済みの車両は滞留欄へ残さない");
+assert.match(source, /legacyLaterCheckout/, "完了日時が無い旧データでも後日出庫なら過去日の滞留欄に残す");
+assert.match(source, /work\.work_completed_at/, "完了日時がある場合は選択日時点の完了状態を使う");
+assert.match(source, /work\.work_completed \|\| work\.status === "completed"/, "完了日時が無い現在データは完了状態をフォールバックに使う");
 
 console.log("daily report secondary sections regression: ok");

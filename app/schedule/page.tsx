@@ -29,6 +29,7 @@ type WorkOrder = {
   expected_completion_date: string | null;
   delivery_completed: boolean;
   work_completed: boolean;
+  work_completed_at: string | null;
   scheduled_at: string | null;
   checked_in_at: string | null;
   checked_out_at: string | null;
@@ -143,6 +144,7 @@ export default function SchedulePage() {
   const [busy, setBusy] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const [message, setMessage] = useState("当日の入出庫予定を読み込みます。");
+  const [focusWorkId, setFocusWorkId] = useState("");
 
   useEffect(() => {
     void loadLayout();
@@ -184,7 +186,9 @@ export default function SchedulePage() {
   }
 
   useEffect(() => {
-    const q = new URLSearchParams(location.search).get("day");
+    const params = new URLSearchParams(location.search);
+    const q = params.get("day");
+    setFocusWorkId(params.get("focus") || "");
     if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDay(q);
     setInitialized(true);
   }, []);
@@ -193,6 +197,12 @@ export default function SchedulePage() {
     if (!initialized) return;
     void load();
   }, [initialized, day]);
+
+  useEffect(() => {
+    if (busy || !focusWorkId) return;
+    const target = document.querySelector<HTMLElement>(`[data-work-id="${focusWorkId}"]`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [busy, focusWorkId, entries]);
 
   async function load() {
     setBusy(true);
@@ -207,7 +217,7 @@ export default function SchedulePage() {
           .order("starts_at", { ascending: true }),
         supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,delivery_completed,work_completed,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
+          .select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,delivery_completed,work_completed,work_completed_at,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
           .neq("status", "cancelled"),
         supabase
           .from("vehicles")
@@ -250,8 +260,8 @@ export default function SchedulePage() {
   const workload = useMemo(() => {
     const map = new Map<string, { name: string; unfinished: number; running: number; urgent: number }>();
     for (const work of workOrders) {
-      if (work.work_completed || work.status === "completed" || work.status === "cancelled") continue;
-      const name = work.worker_name || "担当未設定";
+      if (work.checked_out_at || work.work_completed || work.status === "completed" || work.status === "cancelled") continue;
+      const name = work.worker_name?.trim() || "担当未設定";
       const row = map.get(name) || { name, unfinished: 0, running: 0, urgent: 0 };
       row.unfinished += 1;
       if (work.status === "in_progress") row.running += 1;
@@ -269,7 +279,17 @@ export default function SchedulePage() {
     const endOfDay = new Date(`${day}T23:59:59+09:00`).getTime();
     return workOrders
       .filter((work) => {
-        if (work.work_completed || work.checked_out_at || work.status === "completed") return false;
+        const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
+        if (checkedOutAt !== null && checkedOutAt <= endOfDay) return false;
+
+        const completedAt = work.work_completed_at ? new Date(work.work_completed_at).getTime() : null;
+        const isHistoricalDay = endOfDay < Date.now();
+        const legacyLaterCheckout = isHistoricalDay && checkedOutAt !== null && checkedOutAt > endOfDay;
+        const completedByDayEnd = completedAt !== null
+          ? completedAt <= endOfDay
+          : (work.work_completed || work.status === "completed") && !legacyLaterCheckout;
+        if (completedByDayEnd) return false;
+
         const activelyCheckedIn = Boolean(work.checked_in_at);
         const inProgress = work.status === "in_progress";
         if (!activelyCheckedIn && !inProgress) return false;
@@ -426,7 +446,7 @@ export default function SchedulePage() {
   function renderStayingVehicle(item: typeof stayingVehicles[number]) {
     const { work, vehicle, customer } = item;
     return (
-      <article key={work.id} className={`stayItem ${work.is_urgent ? "urgentItem" : ""}`}>
+      <article key={work.id} data-work-id={work.id} className={`stayItem ${work.is_urgent ? "urgentItem" : ""} ${focusWorkId === work.id ? "focusedWork" : ""}`}>
         <div className="itemTop">
           <div>
             <div className="customerRow"><b>{customerLabel(customer)}</b>{workFlags(work)}</div>
@@ -484,7 +504,7 @@ export default function SchedulePage() {
     const { entry, work, vehicle, customer } = item;
     const isDelivery = entry.entry_type === "delivery";
     return (
-      <article key={entry.id} className={`scheduleItem ${!isDelivery && entry.completed ? "done" : ""} ${work?.is_urgent ? "urgentItem" : ""}`}>
+      <article key={entry.id} data-work-id={work?.id || undefined} className={`scheduleItem ${!isDelivery && entry.completed ? "done" : ""} ${work?.is_urgent ? "urgentItem" : ""} ${work && focusWorkId === work.id ? "focusedWork" : ""}`}>
         <div className="itemTop">
           <div className="itemMain">
             <b>{timeLabel(entry)}　{ENTRY_LABEL[entry.entry_type]}</b>
@@ -582,12 +602,16 @@ export default function SchedulePage() {
         {!workload.length && <div className="empty">未完了の担当車両はありません。</div>}
         <div className="workloadGrid">
           {workload.map((row) => (
-            <div className={`workloadCard ${row.name === "担当未設定" ? "unassigned" : ""}`} key={row.name}>
+            <button
+              className={`workloadCard ${row.name === "担当未設定" ? "unassigned" : ""}`}
+              key={row.name}
+              onClick={() => location.assign("/schedule/workload?worker=" + encodeURIComponent(row.name) + "&filter=unfinished")}
+            >
               <b>{row.name}</b>
               <span>未完了 <strong>{row.unfinished}</strong>台</span>
               <span>作業中 <strong>{row.running}</strong>台</span>
               {row.urgent > 0 && <em>急ぎ {row.urgent}台</em>}
-            </div>
+            </button>
           ))}
         </div>
       </section>

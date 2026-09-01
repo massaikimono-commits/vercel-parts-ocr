@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:certificate && npm run test:parts && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:schedule-work-state && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:daily-report-secondary && npm run test:qr-speed && npm run test:parts-layout && npm run test:paper-sizes && npm run test:security && next build",
+    "build": "npm run test:certificate && npm run test:parts && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:schedule-work-state && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:daily-report-secondary && npm run test:qr-speed && npm run test:parts-layout && npm run test:paper-sizes && npm run test:security && npm run test:app-core-safety && next build",
     "start": "next start",
     "test:certificate": "node scripts/vehicle-certificate-regression.mjs",
     "test:parts": "node scripts/parts-slip-regression.mjs",
@@ -22,6 +22,7 @@
     "test:parts-layout": "node scripts/parts-layout-semantics-regression.mjs",
     "test:paper-sizes": "node scripts/print-paper-size-regression.mjs",
     "test:security": "node scripts/security-regression.mjs",
+    "test:app-core-safety": "node scripts/app-core-safety-regression.mjs",
     "prepare:tesseract": "node scripts/prepare-tesseract-assets.mjs",
     "postinstall": "node scripts/prepare-tesseract-assets.mjs",
     "predev": "node scripts/prepare-tesseract-assets.mjs"
