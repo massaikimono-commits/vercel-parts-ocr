@@ -84,6 +84,7 @@ const cases = [
   { name: "lower-edge-shadow-photo", foreground: 115, background: 245, horizontalShade: 0, verticalShade: 34, blurRadius: 0 },
   { name: "combined-uneven-lower-shadow-photo", foreground: 115, background: 245, horizontalShade: 24, verticalShade: 28, blurRadius: 0 },
   { name: "slight-horizontal-blur-photo", foreground: 45, background: 248, horizontalShade: 0, verticalShade: 0, blurRadius: 1 },
+  { name: "slight-blur-lower-shadow-photo", foreground: 55, background: 248, horizontalShade: 0, verticalShade: 24, blurRadius: 1 },
 ];
 
 for (const test of cases) {
