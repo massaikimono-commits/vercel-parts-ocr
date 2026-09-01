@@ -79,6 +79,11 @@ export default function LoanerPage() {
   const [maker,setMaker] = useState("");
   const [model,setModel] = useState("");
 
+  useEffect(()=>{
+    const q = new URLSearchParams(location.search).get("day");
+    if(q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDay(q);
+  },[]);
+
   useEffect(()=>{ void load(); },[day]);
 
   async function load() {
