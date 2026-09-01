@@ -83,7 +83,7 @@ for (const [name, needle] of [
 
 const forbiddenSecretPatterns = [
   /SUPABASE_SERVICE_ROLE_KEY/i,
-  /\\bservice_role\\b/i,
+  /\bservice_role\b/i,
   /BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY/,
 ];
 
@@ -99,7 +99,7 @@ function walk(dir) {
 }
 
 const candidateFiles = walk(path.join(root, "app"))
-  .filter((p) => /\\.(?:js|jsx|ts|tsx|mjs|json)$/i.test(p));
+  .filter((p) => /\.(?:js|jsx|ts|tsx|mjs|json)$/i.test(p));
 
 let secretHit = "";
 for (const file of candidateFiles) {
