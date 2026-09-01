@@ -36,6 +36,7 @@ const page = read("app/page.tsx");
 const sessionLifetime = read("app/session-lifetime-guard.tsx");
 const sessionLifetimeGuard = read("app/session-lifetime-guard.tsx");
 const tesseractLocal = read("app/lib/tesseract-local.ts");
+const tesseractAssetVersions = read("public/tesseract/ASSET_VERSIONS.txt");
 
 pass("route guard imported", layout.includes('AuthRouteGuard from "./auth-route-guard"'));
 pass("route guard wraps app", layout.includes("<AuthRouteGuard>") && layout.includes("</AuthRouteGuard>"));
@@ -48,6 +49,15 @@ pass("CI blocks high dependency vulnerabilities", ocrWorkflow.includes("npm audi
 pass("CI uses npm ci", ocrWorkflow.includes("npm ci --no-audit --no-fund") && coreWorkflow.includes("npm ci --no-audit --no-fund"));
 pass("security-patched jsPDF locked", lock.packages?.["node_modules/jspdf"]?.version === "4.2.1");
 pass("security-patched Next.js locked", lock.packages?.["node_modules/next"]?.version === "16.3.4");
+pass(
+  "Tesseract vendored versions match lockfile",
+  lock.packages?.["node_modules/tesseract.js"]?.version === "5.1.1" &&
+    lock.packages?.["node_modules/tesseract.js-core"]?.version === "5.1.1" &&
+    tesseractAssetVersions.includes("tesseract.js=5.1.1") &&
+    tesseractAssetVersions.includes("tesseract.js-core=5.1.1") &&
+    tesseractAssetVersions.includes("@tesseract.js-data/jpn=1.0.0") &&
+    tesseractAssetVersions.includes("@tesseract.js-data/eng=1.0.0")
+);
 pass("npm lockfile v3 present", lock.lockfileVersion === 3 && lock.packages?.[""]);
 pass("file signature validator exists", fileSecurity.includes("validateDocumentFile") && fileSecurity.includes("%PDF-") && fileSecurity.includes("WEBP"));
 pass("dedicated OCR validates files", ocrDedicated.includes("validateDocumentFile(file)"));
@@ -151,6 +161,7 @@ for (const file of candidateFiles) {
     directTesseractImportFiles.push(rel);
   }
 }
+pass("one-time Tesseract vendor workflow removed", !fs.existsSync(path.join(root, ".github/workflows/vendor-tesseract-assets.yml")));
 pass(
   "Tesseract runtime is same-origin only",
   directTesseractImportFiles.length === 0 &&
