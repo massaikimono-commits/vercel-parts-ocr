@@ -380,7 +380,7 @@ export default function CertificateGeometryFix() {
       try {
         const source = await sourceCanvas(img);
         const paper = paperBox(source);
-        const t: any = await import("tesseract.js");
+        const t: any = await import("./lib/tesseract-local");
         worker = await t.createWorker("jpn+eng", 1);
         const single = t.PSM?.SINGLE_LINE ?? "7";
 
