@@ -717,7 +717,7 @@ export default function Home() {
       const prepared = await prepareOCRImages(file);
       setProgress(8);
       const tesseract: any = await import("./lib/tesseract-local");
-      worker = await tesseract.createWorker("jpn+eng", 1, {
+      worker = await tesseract.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang", 
         logger: (m: any) => {
           if (m.status === "recognizing text") {
             const p = Math.round((m.progress || 0) * 42);
