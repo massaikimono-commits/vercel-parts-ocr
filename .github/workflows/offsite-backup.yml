@@ -1,6 +1,13 @@
 name: Off-site backup
 
 on:
+  pull_request:
+    branches:
+      - fix/certificate-pdf-native-v1
+    paths:
+      - ".github/workflows/offsite-backup.yml"
+      - "scripts/offsite-backup.sh"
+      - "OFFSITE-BACKUP.md"
   workflow_dispatch:
   schedule:
     # 04:30 JST every day.
@@ -10,12 +17,31 @@ permissions:
   contents: read
 
 concurrency:
-  group: icb-offsite-backup
+  group: icb-offsite-backup-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
+  lint:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate backup script syntax
+        shell: bash
+        run: bash -n scripts/offsite-backup.sh
+      - name: Confirm workflow is disabled by default
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "OFFSITE_BACKUP_ENABLED" .github/workflows/offsite-backup.yml
+          grep -F "vars.OFFSITE_BACKUP_ENABLED == 'true'" .github/workflows/offsite-backup.yml
+
   backup:
-    if: ${{ github.event_name == 'workflow_dispatch' || vars.OFFSITE_BACKUP_ENABLED == 'true' }}
+    if: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || vars.OFFSITE_BACKUP_ENABLED == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
