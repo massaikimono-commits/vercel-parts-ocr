@@ -166,7 +166,7 @@ async function targetedRead(file) {
   const source = await canvasFromFile(file);
   const paper = detectPaper(source);
   const tesseract = await import("./lib/tesseract-local");
-  const worker = await tesseract.createWorker("jpn+eng", 1);
+  const worker = await tesseract.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });
   const dateRaws = [], bodyRaws = [], dateCandidates = [], bodyCandidates = [];
   const q = window.__vehicleCertificateQrPriority || {};
   const minYear = parseMonthYear(q.firstRegistration) || 1926;
