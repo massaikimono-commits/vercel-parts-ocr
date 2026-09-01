@@ -51,17 +51,18 @@ export default function SessionLifetimeGuard() {
     let signingOut = false;
 
     const signOutExpiredSession = async () => {
-      if (stopped || signingOut) return;
+      if (stopped || signingOut) return false;
       const { data } = await supabase.auth.getSession();
-      if (!data.session) return;
+      if (!data.session) return false;
       ensureSessionTimes();
-      if (!sessionExpired()) return;
+      if (!sessionExpired()) return false;
 
       signingOut = true;
       clearSensitiveLocalState();
       await supabase.auth.signOut();
       if (location.pathname !== "/") location.replace("/");
       else location.reload();
+      return true;
     };
 
     void supabase.auth.getSession().then(({ data }) => {
@@ -74,16 +75,22 @@ export default function SessionLifetimeGuard() {
       "touchstart",
       "scroll",
     ];
-    const onActivity = () => recordActivity();
+    const onActivity = () => {
+      if (sessionExpired()) {
+        void signOutExpiredSession();
+        return;
+      }
+      recordActivity();
+    };
     for (const eventName of activityEvents) {
       window.addEventListener(eventName, onActivity, { passive: true });
     }
 
     const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        recordActivity();
-        void signOutExpiredSession();
-      }
+      if (document.visibilityState !== "visible") return;
+      void signOutExpiredSession().then((expired) => {
+        if (!expired) recordActivity();
+      });
     };
     document.addEventListener("visibilitychange", onVisible);
 
