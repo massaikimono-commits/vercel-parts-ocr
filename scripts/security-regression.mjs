@@ -35,6 +35,7 @@ const homeDashboard = read("app/home-dashboard.tsx");
 const page = read("app/page.tsx");
 const sessionLifetime = read("app/session-lifetime-guard.tsx");
 const sessionLifetimeGuard = read("app/session-lifetime-guard.tsx");
+const tesseractLocal = read("app/lib/tesseract-local.ts");
 
 pass("route guard imported", layout.includes('AuthRouteGuard from "./auth-route-guard"'));
 pass("route guard wraps app", layout.includes("<AuthRouteGuard>") && layout.includes("</AuthRouteGuard>"));
@@ -62,6 +63,7 @@ pass("spreadsheet export neutralizer", read("app/lib/client-security.ts").includ
 pass("PDF resource limits", pdfNative.includes("MAX_PDF_PAGES") && pdfNative.includes("MAX_PDF_RENDER_PIXELS") && pdfBridge.includes("MAX_PDF_PAGES"));
 pass("logout clears temporary session context", clientSecurity.includes('sessionStorage.removeItem("parts-active-vehicle")') && clientSecurity.includes('sessionStorage.removeItem("parts-before-ocr-ids")'));
 pass("login history linked from dashboard", homeDashboard.includes('/settings/login-history'));
+pass("automatic login anomaly alerts wired", homeDashboard.includes("my_login_security_alerts") && loginHistory.includes("my_login_security_alerts"));
 pass("auto logout reason is shown", page.includes("icb-auto-logout-reason") && page.includes("30分間操作がなかったため自動ログアウトしました。"));
 pass("inactive logout is audited", sessionLifetime.includes('rpc("record_logout")'));
 pass("inactive sessions use local signout", sessionLifetime.includes('signOut({ scope: "local" })'));
@@ -74,7 +76,7 @@ pass("login attempts are recorded", page.includes("record_login_failure") && pag
 pass("root dashboard disables caching", netlify.includes('for = "/"') && netlify.includes('Cache-Control = "no-store, max-age=0"'));
 pass("session revalidated on history restore", sessionLifetimeGuard.includes('window.addEventListener("pageshow"'));
 pass("absolute session timeout enforced", sessionLifetimeGuard.includes("12 * 60 * 60 * 1000"));
-pass("idle session timeout enforced", sessionLifetimeGuard.includes("60 * 60 * 1000") && sessionLifetimeGuard.includes("sessionExpired()"));
+pass("idle session timeout enforced", sessionLifetimeGuard.includes("30 * 60 * 1000") && sessionLifetimeGuard.includes("sessionExpired()"));
 pass("temporary vehicle context is session-only", layout.includes("sessionStorage.getItem(ACTIVE_KEY)") && customerVehicles.includes("sessionStorage.setItem(ACTIVE_KEY") && partsData.includes("sessionStorage.getItem(ACTIVE_KEY)") && vehicleFast.includes("sessionStorage.setItem(ACTIVE_KEY") && vehicleV3.includes("sessionStorage.setItem(ACTIVE_KEY"));
 pass("PDF worker is bundled locally", pdfNative.includes('new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url)') && pdfBridge.includes('new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url)') && !pdfNative.includes("cdn.jsdelivr.net") && !pdfBridge.includes("cdn.jsdelivr.net"));
 pass("oversized image guard", fileSecurity.includes("MAX_IMAGE_PIXELS") && fileSecurity.includes("MAX_IMAGE_EDGE"));
@@ -136,6 +138,35 @@ for (const file of candidateFiles) {
     dangerousHtmlFiles.push(path.relative(root, file));
   }
 }
+let directTesseractImportFiles = [];
+for (const file of candidateFiles) {
+  const rel = path.relative(root, file).replaceAll("\\", "/");
+  if (rel === "app/lib/tesseract-local.ts") continue;
+  const body = fs.readFileSync(file, "utf8");
+  if (
+    /(?:from\s+["']tesseract\.js["']|import\(["']tesseract\.js["']\))/.test(body) ||
+    /cdn\.jsdelivr\.net\/npm\/tesseract/i.test(body) ||
+    /tessdata\.projectnaptha\.com/i.test(body)
+  ) {
+    directTesseractImportFiles.push(rel);
+  }
+}
+pass(
+  "Tesseract runtime is same-origin only",
+  directTesseractImportFiles.length === 0 &&
+    tesseractLocal.includes('workerPath: "/tesseract/worker.min.js"') &&
+    tesseractLocal.includes('corePath: "/tesseract/core"') &&
+    tesseractLocal.includes('langPath: "/tesseract/lang"') &&
+    fs.existsSync(path.join(root, "public/tesseract/worker.min.js")) &&
+    fs.existsSync(path.join(root, "public/tesseract/core/tesseract-core.wasm.js")) &&
+    fs.existsSync(path.join(root, "public/tesseract/core/tesseract-core-simd.wasm.js")) &&
+    fs.existsSync(path.join(root, "public/tesseract/core/tesseract-core-lstm.wasm.js")) &&
+    fs.existsSync(path.join(root, "public/tesseract/core/tesseract-core-simd-lstm.wasm.js")) &&
+    fs.existsSync(path.join(root, "public/tesseract/lang/jpn.traineddata.gz")) &&
+    fs.existsSync(path.join(root, "public/tesseract/lang/eng.traineddata.gz")),
+  directTesseractImportFiles.join(", ")
+);
+
 pass("no dynamic code execution sinks", !dynamicSinkHit, dynamicSinkHit);
 const normalizedDangerousHtmlFiles = dangerousHtmlFiles.map((file) => file.replaceAll("\\", "/"));
 const unexpectedDangerousHtmlFiles = normalizedDangerousHtmlFiles.filter((file) => file !== "app/layout.tsx");
