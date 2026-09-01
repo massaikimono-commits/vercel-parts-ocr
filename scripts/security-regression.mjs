@@ -106,6 +106,27 @@ for (const file of candidateFiles) {
 }
 pass("no privileged secret patterns in app", !secretHit, secretHit);
 
+let dynamicSinkHit = "";
+let dangerousHtmlFiles = [];
+for (const file of candidateFiles) {
+  const body = fs.readFileSync(file, "utf8");
+  if (!dynamicSinkHit && /(\beval\s*\(|new\s+Function\s*\(|document\.write\s*\(|javascript\s*:)/i.test(body)) {
+    dynamicSinkHit = path.relative(root, file);
+  }
+  if (body.includes("dangerouslySetInnerHTML")) {
+    dangerousHtmlFiles.push(path.relative(root, file));
+  }
+}
+pass("no dynamic code execution sinks", !dynamicSinkHit, dynamicSinkHit);
+pass(
+  "dangerouslySetInnerHTML limited to static layout enhancer",
+  dangerousHtmlFiles.length === 1 &&
+    dangerousHtmlFiles[0] === "app/layout.tsx" &&
+    layout.includes("dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }}"),
+  dangerousHtmlFiles.join(", ")
+);
+
+
 let trackedEnvFiles = [];
 try {
   trackedEnvFiles = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" })
