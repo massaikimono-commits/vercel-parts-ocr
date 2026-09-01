@@ -7,6 +7,9 @@ export function safeActionError(action: string, error?: unknown) {
 
 export function clearSensitiveLocalState() {
   try {
+    sessionStorage.removeItem("parts-active-vehicle");
+    sessionStorage.removeItem("parts-before-ocr-ids");
+    // 旧バージョンで残った一時キーも掃除する。
     localStorage.removeItem("parts-active-vehicle");
     localStorage.removeItem("parts-before-ocr-ids");
 
