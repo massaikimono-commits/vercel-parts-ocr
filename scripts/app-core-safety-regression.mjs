@@ -15,6 +15,7 @@ const loanerWeek = read("app","loaners","week","page.tsx");
 const workload = read("app","schedule","workload","page.tsx");
 const scheduleSearch = read("app","schedule","search","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
+const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.sql");
 function assert(condition, message) {
   if (!condition) {
     console.error(`app-core safety regression failed: ${message}`);
@@ -66,4 +67,12 @@ assert(sql.includes("create_schedule_registration_v2"), "DB safety manifest must
 assert(sql.includes("reschedule_schedule_entry_v2"), "DB safety manifest must track atomic reschedule");
 assert(sql.includes("loaner vehicle is already reserved for this period"), "DB safety manifest must track loaner conflict guard");
 assert(sql.includes("active loaner reservations must be cleared"), "DB safety manifest must track loaner status guard");
+assert(sql.includes("Keeps an active loaner reservation aligned"), "DB safety manifest must track reschedule-to-loaner synchronization");
+assert(loanerSyncSql.includes("create or replace function public.reschedule_schedule_entry_v2"), "loaner sync must stay inside the existing reschedule RPC");
+assert(loanerSyncSql.includes("pg_advisory_xact_lock"), "loaner reschedule sync must serialize allocation checks");
+assert(loanerSyncSql.includes("other.id<>lr.id"), "loaner reschedule sync must exclude its own active reservation from overlap checks");
+assert(loanerSyncSql.includes("lr.status='reserved'"), "reserved loaner starts must follow inbound schedule changes");
+assert(loanerSyncSql.includes("e.entry_type='delivery'"), "loaner return time must follow delivery schedule changes");
+assert(loanerSyncSql.includes("loanerSynced"), "reschedule RPC must report whether a linked loaner was synchronized");
+assert(!loanerSyncSql.toLowerCase().includes("create table"), "loaner reschedule sync must not add tables");
 console.log("app-core safety regression passed");
