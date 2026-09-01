@@ -4,11 +4,12 @@ import { useEffect } from "react";
 import { supabase } from "./supabase";
 import { clearSensitiveLocalState } from "./lib/client-security";
 
-const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const ABSOLUTE_TIMEOUT_MS = 12 * 60 * 60 * 1000;
 const LAST_ACTIVITY_KEY = "icb-last-activity-at";
 const SESSION_STARTED_KEY = "icb-session-started-at";
 const ACTIVITY_WRITE_THROTTLE_MS = 30 * 1000;
+const AUTO_LOGOUT_REASON_KEY = "icb-auto-logout-reason";
 
 function readTime(key: string) {
   try {
@@ -38,34 +39,49 @@ function recordActivity() {
   }
 }
 
-function sessionExpired(now = Date.now()) {
+function expiryReason(now = Date.now()): "idle" | "absolute" | null {
   const started = readTime(SESSION_STARTED_KEY);
   const last = readTime(LAST_ACTIVITY_KEY);
-  if (!started || !last) return false;
-  return now - last >= IDLE_TIMEOUT_MS || now - started >= ABSOLUTE_TIMEOUT_MS;
+  if (!started || !last) return null;
+  if (now - last >= IDLE_TIMEOUT_MS) return "idle";
+  if (now - started >= ABSOLUTE_TIMEOUT_MS) return "absolute";
+  return null;
+}
+
+function sessionExpired(now = Date.now()) {
+  return expiryReason(now) !== null;
 }
 
 export default function SessionLifetimeGuard() {
   useEffect(() => {
     let stopped = false;
     let signingOut = false;
+    let hasSession = false;
 
     const signOutExpiredSession = async () => {
       if (stopped || signingOut) return false;
       const { data } = await supabase.auth.getSession();
       if (!data.session) return false;
       ensureSessionTimes();
-      if (!sessionExpired()) return false;
+      const reason = expiryReason();
+      if (!reason) return false;
 
       signingOut = true;
+      try {
+        await supabase.rpc("record_logout");
+      } catch {}
+      try {
+        sessionStorage.setItem(AUTO_LOGOUT_REASON_KEY, reason);
+      } catch {}
       clearSensitiveLocalState();
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
       if (location.pathname !== "/") location.replace("/");
       else location.reload();
       return true;
     };
 
     void supabase.auth.getSession().then(({ data }) => {
+      hasSession = Boolean(data.session);
       if (data.session) ensureSessionTimes();
     });
 
@@ -76,6 +92,7 @@ export default function SessionLifetimeGuard() {
       "scroll",
     ];
     const onActivity = () => {
+      if (!hasSession) return;
       if (sessionExpired()) {
         void signOutExpiredSession();
         return;
@@ -114,6 +131,7 @@ export default function SessionLifetimeGuard() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      hasSession = Boolean(session);
       if (event === "SIGNED_IN" && session) ensureSessionTimes();
       if (event === "SIGNED_OUT") clearSensitiveLocalState();
     });
