@@ -36,6 +36,13 @@ type Customer = {
   schedule_display_name: string | null;
 };
 
+type SecurityAlert = {
+  severity: "warning" | "high";
+  alert_code: string;
+  occurred_at: string | null;
+  message: string;
+};
+
 function todayJst() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
@@ -62,8 +69,19 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   const [searchDay, setSearchDay] = useState(todayJst());
   const [busy, setBusy] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [securityAlert, setSecurityAlert] = useState<SecurityAlert | null>(null);
 
-  useEffect(() => { void loadToday(); }, []);
+  useEffect(() => {
+    void loadToday();
+    void loadSecurityAlert();
+  }, []);
+
+  async function loadSecurityAlert() {
+    const { data, error } = await supabase.rpc("my_login_security_alerts", { p_limit: 3 });
+    if (error) return;
+    const alerts = (data || []) as SecurityAlert[];
+    setSecurityAlert(alerts[0] || null);
+  }
 
   async function loadToday() {
     setBusy(true);
@@ -136,6 +154,18 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         <div><div className="homeLogo">icb</div><div className="homeSub">業務メニュー</div></div>
         <button className="logout" onClick={() => void onLogout()}>ログアウト</button>
       </header>
+
+      {securityAlert && (
+        <button
+          className="notice"
+          style={{ width: "100%", textAlign: "left", marginBottom: 12 }}
+          onClick={() => location.assign("/settings/login-history")}
+        >
+          <strong>⚠ セキュリティ確認</strong><br />
+          {securityAlert.message}<br />
+          <small>タップしてログイン履歴を確認</small>
+        </button>
+      )}
 
       <section className="mobileToday">
         <button className="heroToday" onClick={() => openDay(todayJst())}>
