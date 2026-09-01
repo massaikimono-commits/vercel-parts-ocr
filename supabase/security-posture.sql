@@ -76,3 +76,46 @@ from pg_db_role_setting s
 join pg_roles r on r.oid=s.setrole
 where r.rolname='authenticator'
   and array_to_string(s.setconfig,',') like '%pgrst.db_pre_request%';
+
+
+-- 8. Missing recovery snapshot triggers on critical business tables.
+-- Expected: no rows.
+with expected(table_name) as (
+  values
+    ('customers'),
+    ('vehicles'),
+    ('vehicle_documents'),
+    ('work_orders'),
+    ('schedule_entries'),
+    ('parts'),
+    ('part_receipts'),
+    ('inspection_records'),
+    ('completed_forms'),
+    ('customer_booking_requests'),
+    ('loaner_reservations')
+)
+select e.table_name
+from expected e
+where not exists (
+  select 1
+  from information_schema.triggers t
+  where t.trigger_schema='public'
+    and t.event_object_table=e.table_name
+    and t.trigger_name='recovery_snapshot_before_change'
+)
+order by e.table_name;
+
+-- 9. Recovery snapshot table accidentally exposed to app roles.
+-- Expected: all values false.
+select
+  has_table_privilege('anon','private.recovery_row_snapshots','select') as anon_select,
+  has_table_privilege('authenticated','private.recovery_row_snapshots','select') as auth_select,
+  has_table_privilege('authenticated','private.recovery_row_snapshots','insert') as auth_insert,
+  has_table_privilege('authenticated','private.recovery_row_snapshots','update') as auth_update,
+  has_table_privilege('authenticated','private.recovery_row_snapshots','delete') as auth_delete;
+
+-- 10. Recovery trigger function callable directly by app roles.
+-- Expected: both values false.
+select
+  has_function_privilege('anon','private.capture_recovery_row_snapshot()','execute') as anon_execute,
+  has_function_privilege('authenticated','private.capture_recovery_row_snapshot()','execute') as auth_execute;
