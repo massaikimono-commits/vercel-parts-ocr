@@ -195,7 +195,7 @@ export default function Page(){
     setQrPriority({});
     setDocBusy(true);setProgress(1);setDebug("");setMessage("車検証の各欄を読み取り中です…");if(preview)URL.revokeObjectURL(preview);setPreview(URL.createObjectURL(file));let worker:any=null;
     try{
-      const src=await loadCanvas(file),paper=detectPaper(src),t:any=await import("tesseract.js");worker=await t.createWorker("jpn+eng",1);const P=t.PSM,single=P?.SINGLE_LINE??"7",block=P?.SINGLE_BLOCK??"6",c=emptyCert(),log:string[]=[`紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];let n=0;
+      const src=await loadCanvas(file),paper=detectPaper(src),t:any=await import("../../lib/tesseract-local");worker=await t.createWorker("jpn+eng",1);const P=t.PSM,single=P?.SINGLE_LINE??"7",block=P?.SINGLE_BLOCK??"6",c=emptyCert(),log:string[]=[`紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];let n=0;
       const rd=async(k:string,b:[number,number,number,number],p:(s:string)=>string,wl="",psm=single)=>{const r=await cell(worker,src,paper,psm,b,p,wl);c[k]=r.value;log.push(`【${FIELDS.find(x=>x[0]===k)?.[1]||k} 生OCR】 ${r.raw||"(空)"}`,`【${FIELDS.find(x=>x[0]===k)?.[1]||k} 採用】 ${r.value||"未読"}`);setProgress(Math.min(94,Math.round(++n/32*94)));};
 
       await rd("recordDate",[.65,.090,.25,.030],jpDate); await rd("documentNumber",[.70,.137,.18,.027],docNo,"0123456789");
