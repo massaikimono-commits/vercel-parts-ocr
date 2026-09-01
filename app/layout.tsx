@@ -1,5 +1,6 @@
 import "./globals.css";
 import AuthRouteGuard from "./auth-route-guard";
+import SessionLifetimeGuard from "./session-lifetime-guard";
 import CertificatePriorityFix from "./certificate-priority-fix";
 import CertificateEssentialFieldsFix from "./certificate-essential-fields-fix";
 import CertificateRowPriorityFix from "./certificate-row-priority-fix";
@@ -200,6 +201,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
   return (
     <html lang="ja">
       <body>
+        <SessionLifetimeGuard />
         <AuthRouteGuard>
           {children}
           <CertificatePriorityFix />
