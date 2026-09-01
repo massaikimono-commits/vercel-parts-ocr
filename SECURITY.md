@@ -11,6 +11,7 @@ This repository is an internal business application. Do not commit secrets, priv
 - Uploaded OCR inputs must pass file signature and resource-limit validation before parsing.
 - Spreadsheet exports must neutralize formula injection.
 - Runtime PDF worker code must be bundled from the locked `pdfjs-dist` dependency, not loaded from a third-party CDN.
+- Runtime Tesseract assets must be same-origin and version-matched to the locked OCR dependencies.
 
 ## Required database controls
 
@@ -22,6 +23,12 @@ This repository is an internal business application. Do not commit secrets, priv
 - Public views exposed to authenticated users must use `security_invoker=true`.
 - The `documents` Storage bucket must remain private and restricted by RLS.
 - New tables/functions should fail closed and require explicit grants/policies.
+
+## Recovery controls
+
+- Row-level recovery snapshots for critical business tables must remain private and retained for 180 days.
+- Row-level snapshots do not replace an independent database/Storage backup.
+- Follow `RECOVERY.md` for recovery order.
 
 ## Dependency and CI controls
 
