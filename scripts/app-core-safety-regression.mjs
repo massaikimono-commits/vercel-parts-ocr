@@ -11,6 +11,7 @@ const reportPrint = read("app","schedule","print","page.tsx");
 const secondary = read("app","schedule","daily-report-secondary-sections.ts");
 const loaners = read("app","loaners","page.tsx");
 const week = read("app","schedule","week","page.tsx");
+const loanerWeek = read("app","loaners","week","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 function assert(condition, message) {
   if (!condition) {
@@ -40,6 +41,10 @@ assert(!loaners.includes('.from("loaner_vehicles").update({'), "loaner status mu
 assert(week.includes("要確認日のみ表示"), "weekly schedule must offer problem-day filtering");
 assert(week.includes("firstAttentionDay"), "weekly schedule must allow direct access to the first attention day");
 assert(week.includes('capacityClass === "over"') && week.includes('capacityClass === "full"') && week.includes('capacityClass === "tight"'), "weekly attention filter must cover overbooked/full/tight days");
+assert(loanerWeek.includes("unassignedDemand"), "weekly loaner board must calculate unassigned demand");
+assert(loanerWeek.includes("assignedWorkOrderIds"), "weekly loaner shortage must exclude already-assigned work orders");
+assert(loanerWeek.includes("代車不足"), "weekly loaner board must visibly warn about shortages");
+assert(loanerWeek.includes("返却予定未定を含む"), "weekly loaner board must flag unknown return dates");
 assert(sql.includes("create_schedule_registration_v2"), "DB safety manifest must track atomic registration");
 assert(sql.includes("reschedule_schedule_entry_v2"), "DB safety manifest must track atomic reschedule");
 assert(sql.includes("loaner vehicle is already reserved for this period"), "DB safety manifest must track loaner conflict guard");
