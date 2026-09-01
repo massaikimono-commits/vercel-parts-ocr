@@ -221,7 +221,7 @@ export default function CertificatePhotoDerivedV2() {
 
         showStatus("写真補完v2: 不足している数値セルだけ再読取中…");
         const source = await sourceCanvas(file);
-        const t = await import("tesseract.js");
+        const t = await import("./lib/tesseract-local");
         const worker = await t.createWorker("eng", 1);
         let tuple = null;
         let output = null;
