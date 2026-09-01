@@ -146,6 +146,15 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     });
   }, [todayRows]);
 
+  const completedRows = useMemo(() => {
+    const seenWorkIds = new Set<string>();
+    return todayRows.filter(({ work }) => {
+      if (!work || (!work.work_completed && work.status !== "completed") || seenWorkIds.has(work.id)) return false;
+      seenWorkIds.add(work.id);
+      return true;
+    });
+  }, [todayRows]);
+
   function customerName(customer: Customer | null) {
     return customer?.schedule_display_name || customer?.company_name || customer?.name || "お客様未登録";
   }
@@ -235,6 +244,23 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           </div>
         )}
 
+        {!busy && !loadError && completedRows.length > 0 && (
+          <div className="completedBox">
+            <div className="completedTitle">作業完了 <strong>{completedRows.length}件</strong></div>
+            {completedRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
+              <button key={work?.id || entry.id} className="completedRow" onClick={() => openDay(todayJst())}>
+                <span className="completedDot">済</span>
+                <span className="uMain"><b>{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+              </button>
+            ))}
+            {completedRows.length > 3 && (
+              <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
+                ほか {completedRows.length - 3}件も完了　→ 1日のスケジュールで確認
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="mobileActions">
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
           <button className="scheduleAction" onClick={() => openDay(todayJst())}>1日のスケジュール</button>
@@ -304,6 +330,11 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         .progressRow{width:100%;display:flex;align-items:center;gap:8px;text-align:left;padding:9px 7px;border:0;border-top:1px solid #f0dfac;border-radius:0;background:transparent;color:#172033}
         .progressRow:first-of-type{border-top:0}.progressRow em{font-size:10px;font-style:normal;background:#b8493e;color:white;border-radius:999px;padding:3px 6px;white-space:nowrap}
         .progressDot{width:28px;height:28px;flex:0 0 28px;display:grid;place-items:center;border-radius:999px;background:#d99f00;color:white;font-size:12px;font-weight:900}
+        .completedBox{margin-top:10px;border:2px solid #99d0ad;background:#f4fbf6;border-radius:16px;padding:10px}
+        .completedTitle{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:900;color:#277247;padding:2px 2px 7px}
+        .completedRow{width:100%;display:flex;align-items:center;gap:8px;text-align:left;padding:9px 7px;border:0;border-top:1px solid #cfe8d7;border-radius:0;background:transparent;color:#172033}
+        .completedRow:first-of-type{border-top:0}
+        .completedDot{width:28px;height:28px;flex:0 0 28px;display:grid;place-items:center;border-radius:999px;background:#3c9560;color:white;font-size:12px;font-weight:900}
         .desktopStatusLine{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
         .desktopStatusLine b{font-size:12px;background:#f1f5f9;border-radius:999px;padding:5px 8px;color:#526174}
         .homeWorkload{margin-top:14px;background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:15px}
