@@ -123,7 +123,7 @@ export default function WeeklyLoanerPage() {
   return (
     <main className="loanerWeek">
       <header className="top">
-        <button onClick={() => location.assign("/loaners")}>← 代車管理</button>
+        <button onClick={() => location.assign("/loaners?day=" + weekStart)}>← 代車管理</button>
         <div><b>1週間の代車空き</b><span>自社代車・レンタカー</span></div>
         <strong>icb</strong>
       </header>
@@ -171,7 +171,7 @@ export default function WeeklyLoanerPage() {
 
       <div className="footerActions">
         <button onClick={() => location.assign("/schedule/week?day=" + weekStart)}>週間予定も確認</button>
-        <button onClick={() => location.assign("/loaners")}>代車の貸出・返却管理</button>
+        <button onClick={() => location.assign("/loaners?day=" + weekStart)}>代車の貸出・返却管理</button>
       </div>
 
       <style jsx global>{`
