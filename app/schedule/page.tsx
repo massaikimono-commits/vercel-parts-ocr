@@ -262,9 +262,11 @@ export default function SchedulePage() {
         if (checkedOutAt !== null && checkedOutAt <= endOfDay) return false;
 
         const completedAt = work.work_completed_at ? new Date(work.work_completed_at).getTime() : null;
+        const isHistoricalDay = endOfDay < Date.now();
+        const legacyLaterCheckout = isHistoricalDay && checkedOutAt !== null && checkedOutAt > endOfDay;
         const completedByDayEnd = completedAt !== null
           ? completedAt <= endOfDay
-          : work.work_completed || work.status === "completed";
+          : (work.work_completed || work.status === "completed") && !legacyLaterCheckout;
         if (completedByDayEnd) return false;
 
         const activelyCheckedIn = Boolean(work.checked_in_at);

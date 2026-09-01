@@ -87,6 +87,9 @@ function workCompletedOnReportDay(work: WorkOrder, day: string) {
   if (work.work_completed_at) {
     return new Date(work.work_completed_at).getTime() < endMs;
   }
+  const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
+  const legacyLaterCheckout = endMs < Date.now() && checkedOutAt !== null && checkedOutAt >= endMs;
+  if (legacyLaterCheckout) return false;
   return work.work_completed || work.status === "completed";
 }
 

@@ -33,12 +33,15 @@ function isActiveWorkshopWork(work: DailyReportSecondaryWork, endOfDay: number) 
 
   // Evaluate checkout and completion as they stood at the selected day's end.
   // Later checkout/completion must not erase a vehicle from an older daily report.
-  if (work.checked_out_at && new Date(work.checked_out_at).getTime() < endOfDay) return false;
+  const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
+  if (checkedOutAt !== null && checkedOutAt < endOfDay) return false;
 
   if (work.work_completed_at) {
     if (new Date(work.work_completed_at).getTime() < endOfDay) return false;
   } else if (work.work_completed || work.status === "completed") {
-    return false;
+    const isHistoricalDay = endOfDay < Date.now();
+    const legacyLaterCheckout = isHistoricalDay && checkedOutAt !== null && checkedOutAt >= endOfDay;
+    if (!legacyLaterCheckout) return false;
   }
 
   return true;
