@@ -2,6 +2,8 @@
 
 import { useLayoutEffect } from "react";
 
+const PDF_WORKER_SRC = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
+
 const MAX_PDF_PAGES = 20;
 const MAX_PDF_RENDER_PIXELS = 50_000_000;
 
@@ -292,7 +294,7 @@ function parseNative(tokens) {
 async function loadPdfJs() {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+    pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
   }
   return pdfjs;
 }
