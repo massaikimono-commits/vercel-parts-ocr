@@ -123,12 +123,14 @@ for (const file of candidateFiles) {
   }
 }
 pass("no dynamic code execution sinks", !dynamicSinkHit, dynamicSinkHit);
+const normalizedDangerousHtmlFiles = dangerousHtmlFiles.map((file) => file.replaceAll("\\", "/"));
+const unexpectedDangerousHtmlFiles = normalizedDangerousHtmlFiles.filter((file) => file !== "app/layout.tsx");
 pass(
   "dangerouslySetInnerHTML limited to static layout enhancer",
-  dangerousHtmlFiles.length === 1 &&
-    dangerousHtmlFiles[0] === "app/layout.tsx" &&
+  unexpectedDangerousHtmlFiles.length === 0 &&
+    normalizedDangerousHtmlFiles.includes("app/layout.tsx") &&
     layout.includes("dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }}"),
-  dangerousHtmlFiles.join(", ")
+  normalizedDangerousHtmlFiles.join(", ")
 );
 
 
