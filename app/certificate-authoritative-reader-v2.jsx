@@ -165,7 +165,7 @@ function crop(source, paper, box, targetWidth = 3000, binary = false) {
 async function targetedRead(file) {
   const source = await canvasFromFile(file);
   const paper = detectPaper(source);
-  const tesseract = await import("tesseract.js");
+  const tesseract = await import("./lib/tesseract-local");
   const worker = await tesseract.createWorker("jpn+eng", 1);
   const dateRaws = [], bodyRaws = [], dateCandidates = [], bodyCandidates = [];
   const q = window.__vehicleCertificateQrPriority || {};
