@@ -44,12 +44,12 @@ function readParts(): Part[] {
 }
 
 function readActive(): ActiveVehicle | null {
-  try { return JSON.parse(localStorage.getItem(ACTIVE_KEY) || "null"); } catch { return null; }
+  try { return JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null"); } catch { return null; }
 }
 
 function readBeforeIds() {
   try {
-    const x = JSON.parse(localStorage.getItem(BEFORE_KEY) || "[]");
+    const x = JSON.parse(sessionStorage.getItem(BEFORE_KEY) || "[]");
     return new Set(Array.isArray(x) ? x : []);
   } catch { return new Set<string>(); }
 }
@@ -104,7 +104,7 @@ export default function PartsDataPage() {
       linkedAt: new Date().toISOString(),
     } : p);
     persist(next);
-    localStorage.removeItem(BEFORE_KEY);
+    sessionStorage.removeItem(BEFORE_KEY);
     setBeforeIds(new Set());
     setMessage(`${ids.length}件を ${activeVehicle.registration || activeVehicle.number || "選択車両"} に紐付けました。`);
   }
