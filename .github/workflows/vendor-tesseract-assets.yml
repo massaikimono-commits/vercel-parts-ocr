@@ -59,12 +59,12 @@ jobs:
           cp node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz \
             public/tesseract/lang/eng.traineddata.gz
 
-          cat > public/tesseract/ASSET_VERSIONS.txt <<'EOF'
-tesseract.js=5.1.1
-tesseract.js-core=5.1.1
-@tesseract.js-data/jpn=1.0.0 (4.0.0_best_int)
-@tesseract.js-data/eng=1.0.0 (4.0.0_best_int)
-EOF
+          printf '%s\n' \
+            'tesseract.js=5.1.1' \
+            'tesseract.js-core=5.1.1' \
+            '@tesseract.js-data/jpn=1.0.0 (4.0.0_best_int)' \
+            '@tesseract.js-data/eng=1.0.0 (4.0.0_best_int)' \
+            > public/tesseract/ASSET_VERSIONS.txt
 
           test -s public/tesseract/worker.min.js
           test -s public/tesseract/core/tesseract-core.wasm.js
