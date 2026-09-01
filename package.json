@@ -21,19 +21,25 @@
     "test:qr-speed": "node scripts/qr-speed-regression.mjs",
     "test:parts-layout": "node scripts/parts-layout-semantics-regression.mjs",
     "test:paper-sizes": "node scripts/print-paper-size-regression.mjs",
-    "test:security": "node scripts/security-regression.mjs"
+    "test:security": "node scripts/security-regression.mjs",
+    "prepare:tesseract": "node scripts/prepare-tesseract-assets.mjs",
+    "postinstall": "node scripts/prepare-tesseract-assets.mjs",
+    "predev": "node scripts/prepare-tesseract-assets.mjs"
   },
   "dependencies": {
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "tesseract.js": "^5.1.1",
+    "tesseract.js": "5.1.1",
     "@supabase/supabase-js": "^2.54.0",
     "jspdf": "4.2.1",
     "jsqr": "^1.4.0",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
-    "pdfjs-dist": "^4.10.38"
+    "pdfjs-dist": "^4.10.38",
+    "tesseract.js-core": "5.1.1",
+    "@tesseract.js-data/jpn": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.24",
