@@ -259,7 +259,7 @@ export default function AutoOCRPage() {
       await saveOCRTransferImage(file);
       const image = await prepareForDetection(file);
       const tesseract: any = await import("../../lib/tesseract-local");
-      worker = await tesseract.createWorker("jpn+eng", 1, {
+      worker = await tesseract.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang", 
         logger: (m: any) => {
           if (m.status === "recognizing text") setProgress(Math.max(1, Math.min(94, Math.round((m.progress || 0) * 80) + 5)));
         },
