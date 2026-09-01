@@ -33,6 +33,7 @@ const clientSecurity = read("app/lib/client-security.ts");
 const loginHistory = read("app/settings/login-history/page.tsx");
 const homeDashboard = read("app/home-dashboard.tsx");
 const page = read("app/page.tsx");
+const sessionLifetime = read("app/session-lifetime-guard.tsx");
 const sessionLifetimeGuard = read("app/session-lifetime-guard.tsx");
 
 pass("route guard imported", layout.includes('AuthRouteGuard from "./auth-route-guard"'));
@@ -61,6 +62,13 @@ pass("spreadsheet export neutralizer", read("app/lib/client-security.ts").includ
 pass("PDF resource limits", pdfNative.includes("MAX_PDF_PAGES") && pdfNative.includes("MAX_PDF_RENDER_PIXELS") && pdfBridge.includes("MAX_PDF_PAGES"));
 pass("logout clears temporary session context", clientSecurity.includes('sessionStorage.removeItem("parts-active-vehicle")') && clientSecurity.includes('sessionStorage.removeItem("parts-before-ocr-ids")'));
 pass("login history linked from dashboard", homeDashboard.includes('/settings/login-history'));
+pass("auto logout reason is shown", page.includes("icb-auto-logout-reason") && page.includes("30分間操作がなかったため自動ログアウトしました。"));
+pass("inactive logout is audited", sessionLifetime.includes('rpc("record_logout")'));
+pass("inactive sessions use local signout", sessionLifetime.includes('signOut({ scope: "local" })'));
+pass("12 hour absolute session cap remains", sessionLifetime.includes("const ABSOLUTE_TIMEOUT_MS = 12 * 60 * 60 * 1000;"));
+pass("30 minute inactivity timeout", sessionLifetime.includes("const IDLE_TIMEOUT_MS = 30 * 60 * 1000;"));
+pass("login button blocks repeated submits", page.includes("loginBusy") && page.includes("disabled={loginBusy}"));
+pass("progressive login throttle wired", page.includes("check_login_throttle") && page.includes("record_login_failure"));
 pass("login history screen exists", loginHistory.includes("my_login_security_history") && loginHistory.includes("ログイン履歴"));
 pass("login attempts are recorded", page.includes("record_login_failure") && page.includes("record_login_success") && page.includes("record_logout"));
 pass("root dashboard disables caching", netlify.includes('for = "/"') && netlify.includes('Cache-Control = "no-store, max-age=0"'));
