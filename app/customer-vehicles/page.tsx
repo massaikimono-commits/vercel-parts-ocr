@@ -216,7 +216,7 @@ export default function CustomerVehiclesPage() {
       setCloudParts(cloud);
 
       try {
-        const active = JSON.parse(localStorage.getItem(ACTIVE_KEY) || "null");
+        const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null");
         const found = vehicleList.find((v) => v.id === active?.id || v.number === active?.number);
         if (found) {
           setSelectedVehicleId(found.id);
@@ -273,7 +273,7 @@ export default function CustomerVehiclesPage() {
     setSelectedVehicleId(v.id);
     setLinkCustomerId(v.customerId || "");
     setCustomerEditing(false);
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify({
+    sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
       id: v.id,
       number: v.number,
       registration: v.registration,
@@ -288,7 +288,7 @@ export default function CustomerVehiclesPage() {
     if (!selectedVehicle) return;
     selectVehicle(selectedVehicle);
     const before = readLocalParts().map((p) => p.id).filter(Boolean);
-    localStorage.setItem("parts-before-ocr-ids", JSON.stringify(before));
+    sessionStorage.setItem("parts-before-ocr-ids", JSON.stringify(before));
     location.assign("/ocr/auto");
   }
 
