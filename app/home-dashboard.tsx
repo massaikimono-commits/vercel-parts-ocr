@@ -137,6 +137,15 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     });
   }, [todayRows]);
 
+  const inProgressRows = useMemo(() => {
+    const seenWorkIds = new Set<string>();
+    return todayRows.filter(({ work }) => {
+      if (!work || work.work_completed || work.status !== "in_progress" || seenWorkIds.has(work.id)) return false;
+      seenWorkIds.add(work.id);
+      return true;
+    });
+  }, [todayRows]);
+
   function customerName(customer: Customer | null) {
     return customer?.schedule_display_name || customer?.company_name || customer?.name || "お客様未登録";
   }
@@ -186,6 +195,24 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             <button className="statusTile done" onClick={() => openDay(todayJst())}>
               <span>作業完了</span><strong>{statusCounts.completed}</strong><small>台</small>
             </button>
+          </div>
+        )}
+
+        {!busy && !loadError && inProgressRows.length > 0 && (
+          <div className="progressBox">
+            <div className="progressTitle">いま作業中 <strong>{inProgressRows.length}件</strong></div>
+            {inProgressRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
+              <button key={work?.id || entry.id} className="progressRow" onClick={() => openDay(todayJst())}>
+                <span className="progressDot">中</span>
+                <span className="uMain"><b>{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+                {work?.is_urgent && <em>急ぎ</em>}
+              </button>
+            ))}
+            {inProgressRows.length > 3 && (
+              <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
+                ほか {inProgressRows.length - 3}件も作業中　→ 1日のスケジュールで確認
+              </button>
+            )}
           </div>
         )}
 
@@ -272,6 +299,11 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         .statusTile.pending{border-color:#e3a09a;background:#fff4f2;color:#9b3f35}
         .statusTile.progress{border-color:#e6c56a;background:#fff9e8;color:#7d5b00}
         .statusTile.done{border-color:#99d0ad;background:#effaf3;color:#277247}
+        .progressBox{margin-top:10px;border:2px solid #e6c56a;background:#fffdf4;border-radius:16px;padding:10px}
+        .progressTitle{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:900;color:#715300;padding:2px 2px 7px}
+        .progressRow{width:100%;display:flex;align-items:center;gap:8px;text-align:left;padding:9px 7px;border:0;border-top:1px solid #f0dfac;border-radius:0;background:transparent;color:#172033}
+        .progressRow:first-of-type{border-top:0}.progressRow em{font-size:10px;font-style:normal;background:#b8493e;color:white;border-radius:999px;padding:3px 6px;white-space:nowrap}
+        .progressDot{width:28px;height:28px;flex:0 0 28px;display:grid;place-items:center;border-radius:999px;background:#d99f00;color:white;font-size:12px;font-weight:900}
         .desktopStatusLine{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
         .desktopStatusLine b{font-size:12px;background:#f1f5f9;border-radius:999px;padding:5px 8px;color:#526174}
         .homeWorkload{margin-top:14px;background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:15px}
