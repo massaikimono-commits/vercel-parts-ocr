@@ -10,6 +10,7 @@ const schedule = read("app","schedule","page.tsx");
 const reportPrint = read("app","schedule","print","page.tsx");
 const secondary = read("app","schedule","daily-report-secondary-sections.ts");
 const loaners = read("app","loaners","page.tsx");
+const week = read("app","schedule","week","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 function assert(condition, message) {
   if (!condition) {
@@ -36,6 +37,9 @@ assert(reportPrint.includes("workCompletedOnReportDay"), "daily report completio
 assert(secondary.includes("work_completed_at"), "daily report secondary sections must use completion timestamp");
 assert(loaners.includes('supabase.rpc("set_loaner_vehicle_operational_status"'), "loaner operational status must use guarded RPC");
 assert(!loaners.includes('.from("loaner_vehicles").update({'), "loaner status must not bypass guarded RPC");
+assert(week.includes("要確認日のみ表示"), "weekly schedule must offer problem-day filtering");
+assert(week.includes("firstAttentionDay"), "weekly schedule must allow direct access to the first attention day");
+assert(week.includes('capacityClass === "over"') && week.includes('capacityClass === "full"') && week.includes('capacityClass === "tight"'), "weekly attention filter must cover overbooked/full/tight days");
 assert(sql.includes("create_schedule_registration_v2"), "DB safety manifest must track atomic registration");
 assert(sql.includes("reschedule_schedule_entry_v2"), "DB safety manifest must track atomic reschedule");
 assert(sql.includes("loaner vehicle is already reserved for this period"), "DB safety manifest must track loaner conflict guard");
