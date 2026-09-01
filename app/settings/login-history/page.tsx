@@ -12,6 +12,13 @@ type LoginEvent = {
   aal: string | null;
 };
 
+type SecurityAlert = {
+  severity: "warning" | "high";
+  alert_code: string;
+  occurred_at: string | null;
+  message: string;
+};
+
 function jst(value: string) {
   return new Date(value).toLocaleString("ja-JP", {
     timeZone: "Asia/Tokyo",
@@ -53,17 +60,22 @@ export default function LoginHistoryPage() {
   const [rows, setRows] = useState<LoginEvent[]>([]);
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
+  const [alerts, setAlerts] = useState<SecurityAlert[]>([]);
 
   async function load() {
     setBusy(true);
     setMessage("");
-    const { data, error } = await supabase.rpc("my_login_security_history", { p_limit: 100 });
-    if (error) {
-      setMessage(safeActionError("ログイン履歴の読み込み", error));
+    const [historyRes, alertRes] = await Promise.all([
+      supabase.rpc("my_login_security_history", { p_limit: 100 }),
+      supabase.rpc("my_login_security_alerts", { p_limit: 10 }),
+    ]);
+    if (historyRes.error) {
+      setMessage(safeActionError("ログイン履歴の読み込み", historyRes.error));
       setBusy(false);
       return;
     }
-    setRows((data || []) as LoginEvent[]);
+    setRows((historyRes.data || []) as LoginEvent[]);
+    if (!alertRes.error) setAlerts((alertRes.data || []) as SecurityAlert[]);
     setBusy(false);
   }
 
@@ -89,6 +101,18 @@ export default function LoginHistoryPage() {
           自分のIDに対する直近のログイン状況です。
           IPアドレスは携帯回線・Wi-Fi・会社回線などで変わるため、IPだけで不正アクセスとは判断しません。
         </p>
+
+        {alerts.length > 0 && (
+          <div className="notice">
+            <strong>⚠ 自動検知した要注意ログイン</strong>
+            {alerts.map((alert, i) => (
+              <div key={alert.alert_code + "-" + i} style={{ marginTop: 8 }}>
+                {alert.message}
+                {alert.occurred_at ? <small>　{jst(alert.occurred_at)}</small> : null}
+              </div>
+            ))}
+          </div>
+        )}
 
         {failedCount > 0 && (
           <div className="notice">
