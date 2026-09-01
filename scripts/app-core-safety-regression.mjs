@@ -12,6 +12,7 @@ const secondary = read("app","schedule","daily-report-secondary-sections.ts");
 const loaners = read("app","loaners","page.tsx");
 const week = read("app","schedule","week","page.tsx");
 const loanerWeek = read("app","loaners","week","page.tsx");
+const workload = read("app","schedule","workload","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 function assert(condition, message) {
   if (!condition) {
@@ -45,6 +46,10 @@ assert(loanerWeek.includes("unassignedDemand"), "weekly loaner board must calcul
 assert(loanerWeek.includes("assignedWorkOrderIds"), "weekly loaner shortage must exclude already-assigned work orders");
 assert(loanerWeek.includes("代車不足"), "weekly loaner board must visibly warn about shortages");
 assert(loanerWeek.includes("返却予定未定を含む"), "weekly loaner board must flag unknown return dates");
+assert(workload.includes("該当作業を直接確認"), "workload page must expose actionable work details");
+assert(workload.includes("chooseWorker"), "workload counts must filter directly by worker/state");
+assert(workload.includes('location.assign("/schedule/edit?id="'), "workload details must open the existing schedule edit flow");
+assert(!workload.includes('href="/work-complete"') && !workload.includes('href="/delivery-complete"'), "workload actions must not introduce standalone completion menus");
 assert(sql.includes("create_schedule_registration_v2"), "DB safety manifest must track atomic registration");
 assert(sql.includes("reschedule_schedule_entry_v2"), "DB safety manifest must track atomic reschedule");
 assert(sql.includes("loaner vehicle is already reserved for this period"), "DB safety manifest must track loaner conflict guard");
