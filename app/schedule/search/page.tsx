@@ -87,8 +87,20 @@ function customerLabel(c: Customer | null) {
   return c?.schedule_display_name || c?.company_name || c?.name || "お客様未登録";
 }
 
+function normalizeSearchInput(text: string) {
+  return text
+    .normalize("NFKC")
+    .replace(/[‐‑‒–—―−ー]/g, "-")
+    .replace(/[　\s]+/g, " ")
+    .trim();
+}
+
+function searchDigits(text: string) {
+  return normalizeSearchInput(text).replace(/[^0-9]/g, "");
+}
+
 function safeLike(text: string) {
-  return text.replace(/[,%()]/g, " ").trim();
+  return normalizeSearchInput(text).replace(/[,%()]/g, " ").trim();
 }
 
 function phoneSearchPatterns(digits: string) {
@@ -117,7 +129,7 @@ export default function ScheduleSearchPage() {
   const [range, setRange] = useState<SearchRange>("future");
 
   async function search(nextRange: SearchRange = range) {
-    const q = query.trim();
+    const q = normalizeSearchInput(query);
     setRange(nextRange);
     if (!q) {
       setRows([]);
@@ -129,7 +141,7 @@ export default function ScheduleSearchPage() {
 
     try {
       const like = safeLike(q);
-      const digits = q.replace(/\D/g, "");
+      const digits = searchDigits(q);
       const nowIso = new Date().toISOString();
       const customerFilters = [
         `name.ilike.%${like}%`,
@@ -307,6 +319,7 @@ export default function ScheduleSearchPage() {
             </button>
           ))}
         </div>
+        <div className="searchHint">全角数字・全角英数字・ハイフン有無・空白混じりでも検索できます。</div>
         <div className="notice">{message}</div>
       </section>
 
@@ -352,7 +365,7 @@ export default function ScheduleSearchPage() {
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}
         .searchPage{max-width:1050px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
-        .searchCard,.dayGroup{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.eyebrow{font-weight:800;color:#2674e8}.searchCard h1{margin:4px 0 14px;font-size:31px}.searchRow{display:grid;grid-template-columns:1fr auto;gap:8px}.searchRow input{border:2px solid #b9c6d8;border-radius:12px;padding:14px;font-size:18px}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4;min-width:100px}.rangeTabs{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.rangeTabs button{color:#526176;background:#f8fafc}.rangeTabs button.active{background:#172033;color:#fff;border-color:#172033}.notice{margin-top:10px;color:#647184}
+        .searchCard,.dayGroup{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.eyebrow{font-weight:800;color:#2674e8}.searchCard h1{margin:4px 0 14px;font-size:31px}.searchRow{display:grid;grid-template-columns:1fr auto;gap:8px}.searchRow input{border:2px solid #b9c6d8;border-radius:12px;padding:14px;font-size:18px}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4;min-width:100px}.rangeTabs{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.rangeTabs button{color:#526176;background:#f8fafc}.rangeTabs button.active{background:#172033;color:#fff;border-color:#172033}.searchHint{margin-top:9px;font-size:11px;color:#78869a}.notice{margin-top:6px;color:#647184}
         .dayTitle{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #edf0f4;padding-bottom:10px}.dayTitle>div{display:flex;gap:6px}.resultList{display:grid;gap:7px;margin-top:10px}.resultRow{display:grid;grid-template-columns:70px minmax(180px,1.4fr) minmax(180px,1fr) auto auto;gap:10px;align-items:center;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.time{font-weight:900;font-size:16px}.main{display:grid}.main span,.meta{color:#697587;font-size:12px}.meta{display:flex;gap:5px;flex-wrap:wrap}.meta span{background:#f2f5f8;border-radius:999px;padding:4px 6px}.meta .elapsed{background:#fff4d8;color:#8a5a00;font-weight:900}.state{font-size:12px;font-weight:900;border-radius:999px;padding:5px 8px;background:#f1f3f6;white-space:nowrap}.editBtn{font-size:11px;padding:7px 9px}.empty{background:#fff;border-radius:16px;padding:28px;text-align:center;color:#8c98a8}
         @media(max-width:720px){.resultRow{grid-template-columns:55px 1fr}.meta,.state,.editBtn{grid-column:2}.searchRow{grid-template-columns:1fr}.primary{width:100%}.dayTitle{align-items:flex-start;flex-direction:column}.rangeTabs{display:grid;grid-template-columns:1fr 1fr 1fr}.rangeTabs button{padding:10px 6px;font-size:12px}}
       `}</style>

@@ -13,6 +13,7 @@ const loaners = read("app","loaners","page.tsx");
 const week = read("app","schedule","week","page.tsx");
 const loanerWeek = read("app","loaners","week","page.tsx");
 const workload = read("app","schedule","workload","page.tsx");
+const scheduleSearch = read("app","schedule","search","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 function assert(condition, message) {
   if (!condition) {
@@ -50,6 +51,9 @@ assert(workload.includes("該当作業を直接確認"), "workload page must exp
 assert(workload.includes("chooseWorker"), "workload counts must filter directly by worker/state");
 assert(workload.includes('location.assign("/schedule/edit?id="'), "workload details must open the existing schedule edit flow");
 assert(!workload.includes('href="/work-complete"') && !workload.includes('href="/delivery-complete"'), "workload actions must not introduce standalone completion menus");
+assert(scheduleSearch.includes('.normalize("NFKC")'), "schedule search must normalize full-width input");
+assert(scheduleSearch.includes("searchDigits"), "schedule search must normalize phone/last4 digits before querying");
+assert(scheduleSearch.includes("全角数字・全角英数字"), "schedule search must tell staff normalized input is supported");
 assert(sql.includes("create_schedule_registration_v2"), "DB safety manifest must track atomic registration");
 assert(sql.includes("reschedule_schedule_entry_v2"), "DB safety manifest must track atomic reschedule");
 assert(sql.includes("loaner vehicle is already reserved for this period"), "DB safety manifest must track loaner conflict guard");
