@@ -91,6 +91,15 @@ function safeLike(text: string) {
   return text.replace(/[,%()]/g, " ").trim();
 }
 
+function phoneSearchPatterns(digits: string) {
+  if (!digits) return [];
+  const patterns = [`phone.ilike.%${digits}%`];
+  if (digits.length >= 3) {
+    patterns.push(`phone.ilike.%${digits.split("").join("%")}%'`.slice(0, -1));
+  }
+  return patterns;
+}
+
 function stayElapsedLabel(work: WorkOrder | null) {
   if (!work?.checked_in_at || work.checked_out_at) return null;
   const start = Date.parse(dayKey(work.checked_in_at) + "T00:00:00Z");
@@ -122,16 +131,17 @@ export default function ScheduleSearchPage() {
       const like = safeLike(q);
       const digits = q.replace(/\D/g, "");
       const nowIso = new Date().toISOString();
+      const customerFilters = [
+        `name.ilike.%${like}%`,
+        `company_name.ilike.%${like}%`,
+        `schedule_display_name.ilike.%${like}%`,
+        ...(digits ? phoneSearchPatterns(digits) : [`phone.ilike.%${like}%`]),
+      ];
 
       const customerPromise = supabase
         .from("customers")
         .select("id,name,company_name,schedule_display_name,phone")
-        .or([
-          `name.ilike.%${like}%`,
-          `company_name.ilike.%${like}%`,
-          `schedule_display_name.ilike.%${like}%`,
-          `phone.ilike.%${digits || like}%`,
-        ].join(","))
+        .or(customerFilters.join(","))
         .limit(100);
 
       const vehicleQueries = [
