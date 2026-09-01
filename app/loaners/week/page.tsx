@@ -79,10 +79,22 @@ function isAvailable(v: any) {
   );
 }
 
+function needsAttention(row: DayBoard) {
+  return Boolean(
+    row.error ||
+    row.shortage > 0 ||
+    row.unassignedDemand > 0 ||
+    row.unknownReturn > 0 ||
+    row.cancellationPending > 0 ||
+    row.available <= 1
+  );
+}
+
 export default function WeeklyLoanerPage() {
   const [weekStart, setWeekStart] = useState(() => mondayOf(todayJst()));
   const [rows, setRows] = useState<DayBoard[]>([]);
   const [busy, setBusy] = useState(true);
+  const [showAttentionOnly, setShowAttentionOnly] = useState(false);
   const [message, setMessage] = useState("1週間の代車状況を読み込みます。");
 
   const days = useMemo(
@@ -164,52 +176,52 @@ export default function WeeklyLoanerPage() {
     const [boardRows, demandByDay] = await Promise.all([
       Promise.all(
         days.map(async (day) => {
-        const { data, error } = await supabase.rpc("loaner_day_board", { p_day: day });
-        if (error) {
+          const { data, error } = await supabase.rpc("loaner_day_board", { p_day: day });
+          if (error) {
+            return {
+              day,
+              available: 0,
+              companyAvailable: 0,
+              rentalAvailable: 0,
+              companyActive: 0,
+              rentalActive: 0,
+              reserved: 0,
+              cancellationPending: 0,
+              demand: 0,
+              assignedDemand: 0,
+              unassignedDemand: 0,
+              shortage: 0,
+              unknownReturn: 0,
+              error: error.message,
+            } as DayBoard;
+          }
+
+          const vehicles = (data?.vehicles || []) as any[];
+          const counts = data?.counts || {};
+          const companyAvailable = vehicles.filter(
+            (v) => v.sourceType === "company_vehicle" && isAvailable(v)
+          ).length;
+          const rentalAvailable = vehicles.filter(
+            (v) => v.sourceType === "rental_company" && isAvailable(v)
+          ).length;
+          const assignedWorkOrderIds = new Set<string>();
+          for (const vehicle of vehicles) {
+            for (const reservation of (vehicle?.reservations || []) as any[]) {
+              if (reservation?.workOrderId) assignedWorkOrderIds.add(String(reservation.workOrderId));
+            }
+          }
+
           return {
             day,
-            available: 0,
-            companyAvailable: 0,
-            rentalAvailable: 0,
-            companyActive: 0,
-            rentalActive: 0,
-            reserved: 0,
-            cancellationPending: 0,
-            demand: 0,
-            assignedDemand: 0,
-            unassignedDemand: 0,
-            shortage: 0,
-            unknownReturn: 0,
-            error: error.message,
-          } as DayBoard;
-        }
-
-        const vehicles = (data?.vehicles || []) as any[];
-        const counts = data?.counts || {};
-        const companyAvailable = vehicles.filter(
-          (v) => v.sourceType === "company_vehicle" && isAvailable(v)
-        ).length;
-        const rentalAvailable = vehicles.filter(
-          (v) => v.sourceType === "rental_company" && isAvailable(v)
-        ).length;
-        const assignedWorkOrderIds = new Set<string>();
-        for (const vehicle of vehicles) {
-          for (const reservation of (vehicle?.reservations || []) as any[]) {
-            if (reservation?.workOrderId) assignedWorkOrderIds.add(String(reservation.workOrderId));
-          }
-        }
-
-        return {
-          day,
-          available: companyAvailable + rentalAvailable,
-          companyAvailable,
-          rentalAvailable,
-          companyActive: counts.companyVehiclesActive ?? 0,
-          rentalActive: counts.rentalCompanyVehiclesActive ?? 0,
-          reserved: counts.reservedOnDay ?? 0,
-          cancellationPending: counts.rentalCancellationPending ?? 0,
-          assignedWorkOrderIds,
-        };
+            available: companyAvailable + rentalAvailable,
+            companyAvailable,
+            rentalAvailable,
+            companyActive: counts.companyVehiclesActive ?? 0,
+            rentalActive: counts.rentalCompanyVehiclesActive ?? 0,
+            reserved: counts.reservedOnDay ?? 0,
+            cancellationPending: counts.rentalCancellationPending ?? 0,
+            assignedWorkOrderIds,
+          };
         })
       ),
       demandPromise,
@@ -258,6 +270,9 @@ export default function WeeklyLoanerPage() {
     };
   }, [rows]);
 
+  const attentionRows = useMemo(() => rows.filter(needsAttention), [rows]);
+  const displayRows = showAttentionOnly ? attentionRows : rows;
+
   return (
     <main className="loanerWeek">
       <header className="top">
@@ -285,8 +300,25 @@ export default function WeeklyLoanerPage() {
         <div><span>週間の未割当必要数</span><b>{shortageSummary.unassigned}台日</b></div>
       </section>
 
+      <section className="attentionControls">
+        <button
+          className={showAttentionOnly ? "active" : ""}
+          disabled={busy}
+          onClick={() => setShowAttentionOnly((current) => !current)}
+        >
+          {showAttentionOnly ? "7日すべて表示" : `要確認日のみ表示 (${attentionRows.length})`}
+        </button>
+        <button
+          disabled={busy || attentionRows.length === 0}
+          onClick={() => attentionRows[0] && location.assign("/loaners?day=" + attentionRows[0].day)}
+        >
+          最初の要確認日を開く
+        </button>
+        <span>不足・未割当・返却日未定・取消待ち・空き1台以下を要確認として表示</span>
+      </section>
+
       <section className="weekGrid">
-        {rows.map((row) => {
+        {displayRows.map((row) => {
           const low = row.available <= 1 && !row.error && row.shortage === 0;
           return (
             <button
@@ -318,6 +350,9 @@ export default function WeeklyLoanerPage() {
             </button>
           );
         })}
+        {!busy && displayRows.length === 0 && (
+          <div className="noAttention">この週に要確認の代車日はありません。</div>
+        )}
       </section>
 
       <div className="footerActions">
@@ -328,8 +363,8 @@ export default function WeeklyLoanerPage() {
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}
         .loanerWeek{max-width:1180px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
-        .controls{display:flex;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid #d9e0ea;border-radius:16px;padding:12px}.controls input{border:1px solid #cbd6e3;border-radius:10px;padding:9px;background:#fff}.message{color:#667487;margin:10px 2px}.shortageSummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}.shortageSummary>div{background:#fff;border:1px solid #d9e0ea;border-radius:12px;padding:10px 12px;display:grid}.shortageSummary span{font-size:11px;color:#657387}.shortageSummary b{font-size:20px}.shortageSummary.hasShortage>div:first-child,.shortageSummary.hasShortage>div:nth-child(2){background:#ffecec;border-color:#efaaaa;color:#9f2525}.weekGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}.dayCard{display:block;text-align:left;color:#172033;padding:12px;min-height:230px}.dayCard.low{box-shadow:inset 0 4px 0 #d79a3d}.dayCard.shortage{box-shadow:inset 0 5px 0 #d64545;background:#fff8f8;border-color:#efaaaa}.dayCard.error{box-shadow:inset 0 4px 0 #c84a4a}.dayHead{display:grid;border-bottom:1px solid #e4e9f0;padding-bottom:7px;margin-bottom:10px}.dayHead small{color:#7b8797;font-weight:600}.available{display:flex;align-items:baseline;gap:5px}.available span{font-size:11px;color:#657387}.available strong{font-size:32px;color:#25703c}.available small{color:#657387}.breakdown{display:grid;gap:4px;margin-top:8px;font-size:11px}.breakdown span{background:#f3f6fa;border-radius:7px;padding:5px}.demandBreakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:8px}.demandBreakdown span{font-size:9px;background:#eef3fa;border-radius:6px;padding:4px;text-align:center}.demandBreakdown b{font-size:13px}.reservationCount{font-size:11px;margin-top:8px;color:#586678}.warning,.shortageWarning{font-size:11px;margin-top:6px;border-radius:7px;padding:5px}.warning{background:#fff0db;color:#925b08}.shortageWarning{background:#ffe2e2;color:#a32121;font-weight:900}.errorText{color:#b33636}.footerActions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
-        @media(max-width:980px){.weekGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.dayCard{min-height:180px}}@media(max-width:560px){.weekGrid{grid-template-columns:1fr}.dayCard{min-height:0}.controls{display:grid;grid-template-columns:1fr 1fr}.controls input{grid-column:1/-1}.shortageSummary{grid-template-columns:1fr}.footerActions{display:grid}.top>div span{display:none}}
+        .controls{display:flex;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid #d9e0ea;border-radius:16px;padding:12px}.controls input{border:1px solid #cbd6e3;border-radius:10px;padding:9px;background:#fff}.message{color:#667487;margin:10px 2px}.shortageSummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}.shortageSummary>div{background:#fff;border:1px solid #d9e0ea;border-radius:12px;padding:10px 12px;display:grid}.shortageSummary span{font-size:11px;color:#657387}.shortageSummary b{font-size:20px}.shortageSummary.hasShortage>div:first-child,.shortageSummary.hasShortage>div:nth-child(2){background:#ffecec;border-color:#efaaaa;color:#9f2525}.attentionControls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}.attentionControls button.active{background:#2674e8;color:#fff;border-color:#2674e8}.attentionControls span{font-size:11px;color:#657387}.weekGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}.dayCard{display:block;text-align:left;color:#172033;padding:12px;min-height:230px}.dayCard.low{box-shadow:inset 0 4px 0 #d79a3d}.dayCard.shortage{box-shadow:inset 0 5px 0 #d64545;background:#fff8f8;border-color:#efaaaa}.dayCard.error{box-shadow:inset 0 4px 0 #c84a4a}.dayHead{display:grid;border-bottom:1px solid #e4e9f0;padding-bottom:7px;margin-bottom:10px}.dayHead small{color:#7b8797;font-weight:600}.available{display:flex;align-items:baseline;gap:5px}.available span{font-size:11px;color:#657387}.available strong{font-size:32px;color:#25703c}.available small{color:#657387}.breakdown{display:grid;gap:4px;margin-top:8px;font-size:11px}.breakdown span{background:#f3f6fa;border-radius:7px;padding:5px}.demandBreakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:8px}.demandBreakdown span{font-size:9px;background:#eef3fa;border-radius:6px;padding:4px;text-align:center}.demandBreakdown b{font-size:13px}.reservationCount{font-size:11px;margin-top:8px;color:#586678}.warning,.shortageWarning{font-size:11px;margin-top:6px;border-radius:7px;padding:5px}.warning{background:#fff0db;color:#925b08}.shortageWarning{background:#ffe2e2;color:#a32121;font-weight:900}.errorText{color:#b33636}.noAttention{grid-column:1/-1;background:#fff;border:1px solid #d9e0ea;border-radius:12px;padding:22px;text-align:center;color:#657387}.footerActions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+        @media(max-width:980px){.weekGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.dayCard{min-height:180px}}@media(max-width:560px){.weekGrid{grid-template-columns:1fr}.dayCard{min-height:0}.controls{display:grid;grid-template-columns:1fr 1fr}.controls input{grid-column:1/-1}.shortageSummary{grid-template-columns:1fr}.attentionControls{display:grid}.footerActions{display:grid}.top>div span{display:none}}
       `}</style>
     </main>
   );
