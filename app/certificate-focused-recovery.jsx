@@ -244,7 +244,7 @@ export default function CertificateFocusedRecovery() {
         const deskewed = deskewDocument(prepared.normalized);
         const upper = crop(deskewed.canvas, 0.02, 0.62, 3400);
 
-        const t = await import("tesseract.js");
+        const t = await import("./lib/tesseract-local");
         worker = await t.createWorker("jpn+eng", 1);
         await worker.setParameters({
           preserve_interword_spaces: "1",
