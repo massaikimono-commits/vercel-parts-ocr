@@ -110,6 +110,7 @@ const cases = [
   { name: "slight-horizontal-blur-photo", foreground: 45, background: 248, horizontalShade: 0, verticalShade: 0, blurRadius: 1, verticalBlurRadius: 0 },
   { name: "slight-vertical-blur-photo", foreground: 45, background: 248, horizontalShade: 0, verticalShade: 0, blurRadius: 0, verticalBlurRadius: 1 },
   { name: "slight-blur-lower-shadow-photo", foreground: 55, background: 248, horizontalShade: 0, verticalShade: 24, blurRadius: 1, verticalBlurRadius: 0 },
+  { name: "slight-vertical-blur-lower-shadow-photo", foreground: 55, background: 248, horizontalShade: 0, verticalShade: 24, blurRadius: 0, verticalBlurRadius: 1 },
 ];
 
 const speedRuns = 3;
