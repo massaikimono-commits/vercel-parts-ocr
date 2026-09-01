@@ -292,7 +292,7 @@ export default function ScheduleNewPage() {
         .filter((c) => Number(c.score) >= 70 && vehicleCandidates.some((v) => v.customerId === c.customerId && Number(v.score) >= 50))
         .map((c) => c.customerId)
     );
-    const strongCustomers = customerCandidates.filter((x) => strongCustomerIds.has(x.customerId) || pairedCustomerIds.has(x.customerId));
+    const strongCustomers = customerCandidates.filter((x) => Number(x.score) >= 70 || strongCustomerIds.has(x.customerId) || pairedCustomerIds.has(x.customerId));
     const strongVehicles = vehicleCandidates.filter((x) => Number(x.score) >= 100 || (x.customerId ? pairedCustomerIds.has(x.customerId) : false));
 
     if (!strongCustomers.length && !strongVehicles.length) {

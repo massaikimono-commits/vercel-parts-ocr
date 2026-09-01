@@ -20,6 +20,7 @@ function assert(condition, message) {
 assert(scheduleNew.includes('supabase.rpc("find_schedule_registration_duplicates"'), "schedule registration must check duplicates");
 assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_v2"'), "schedule registration must be atomic");
 assert(scheduleNew.includes("p_existing_vehicle_id"), "existing vehicle reuse must remain supported");
+assert(scheduleNew.includes("Number(x.score) >= 70"), "exact-name/company duplicate candidates must require an explicit reuse/new decision");
 assert(scheduleNew.includes("納車予定は入庫・作業予定の終了後"), "delivery must not precede inbound/work end");
 assert(!scheduleNew.includes('supabase.rpc("create_manual_schedule_registration"'), "legacy partial schedule RPC must not be used");
 assert(!scheduleNew.includes('.from("schedule_entries").insert({'), "delivery insert must stay inside atomic RPC");
