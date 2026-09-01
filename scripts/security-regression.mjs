@@ -26,6 +26,10 @@ const authSecurity = read("app/lib/auth-security.ts");
 const nextConfig = read("next.config.mjs");
 const pdfNative = read("app/certificate-pdf-native-reader.jsx");
 const pdfBridge = read("app/certificate-pdf-bridge.jsx");
+const customerVehicles = read("app/customer-vehicles/page.tsx");
+const partsData = read("app/parts-data/page.tsx");
+const vehicleV3 = read("app/vehicle-workflow-v3/page.tsx");
+const clientSecurity = read("app/lib/client-security.ts");
 
 pass("route guard imported", layout.includes('AuthRouteGuard from "./auth-route-guard"'));
 pass("route guard wraps app", layout.includes("<AuthRouteGuard>") && layout.includes("</AuthRouteGuard>"));
@@ -51,6 +55,9 @@ pass("home session requires active app user", layout.length > 0 && read("app/pag
 pass("sensitive routes disable caching", netlify.includes('Cache-Control = "no-store, max-age=0"') && netlify.includes('for = "/schedule/*"') && netlify.includes('for = "/customer-vehicles/*"'));
 pass("spreadsheet export neutralizer", read("app/lib/client-security.ts").includes("spreadsheetSafeCell"));
 pass("PDF resource limits", pdfNative.includes("MAX_PDF_PAGES") && pdfNative.includes("MAX_PDF_RENDER_PIXELS") && pdfBridge.includes("MAX_PDF_PAGES"));
+pass("logout clears temporary session context", clientSecurity.includes('sessionStorage.removeItem("parts-active-vehicle")') && clientSecurity.includes('sessionStorage.removeItem("parts-before-ocr-ids")'));
+pass("temporary vehicle context is session-only", layout.includes("sessionStorage.getItem(ACTIVE_KEY)") && customerVehicles.includes("sessionStorage.setItem(ACTIVE_KEY") && partsData.includes("sessionStorage.getItem(ACTIVE_KEY)") && vehicleFast.includes("sessionStorage.setItem(ACTIVE_KEY") && vehicleV3.includes("sessionStorage.setItem(ACTIVE_KEY"));
+pass("PDF worker is bundled locally", pdfNative.includes('new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url)') && pdfBridge.includes('new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url)') && !pdfNative.includes("cdn.jsdelivr.net") && !pdfBridge.includes("cdn.jsdelivr.net"));
 pass("oversized image guard", fileSecurity.includes("MAX_IMAGE_PIXELS") && fileSecurity.includes("MAX_IMAGE_EDGE"));
 pass("strict referrer privacy", netlify.includes('Referrer-Policy = "no-referrer"'));
 pass("robots disabled", layout.includes("index: false") && layout.includes("follow: false") && netlify.includes("X-Robots-Tag"));
