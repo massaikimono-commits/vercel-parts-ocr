@@ -35,5 +35,18 @@ export async function createWorker(
 export const PSM = Tesseract.PSM;
 export const OEM = Tesseract.OEM;
 export const createScheduler = Tesseract.createScheduler;
-export const recognize = Tesseract.recognize;
+export async function recognize(
+  image: any,
+  langs: any = "eng",
+  options: any = {}
+) {
+  return Tesseract.recognize(image, langs, {
+    ...options,
+    workerPath: LOCAL_TESSERACT_OPTIONS.workerPath,
+    corePath: LOCAL_TESSERACT_OPTIONS.corePath,
+    langPath: LOCAL_TESSERACT_OPTIONS.langPath,
+    gzip: true,
+    workerBlobURL: false,
+  });
+}
 export const setLogging = Tesseract.setLogging;
