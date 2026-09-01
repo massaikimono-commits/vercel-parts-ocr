@@ -10,6 +10,7 @@ function syntheticQrImage(
   horizontalShade = 0,
   verticalShade = 0,
   blurRadius = 0,
+  verticalBlurRadius = 0,
 ) {
   const rgba = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y += 1) {
@@ -71,6 +72,25 @@ function syntheticQrImage(
     }
   }
 
+  if (verticalBlurRadius > 0) {
+    const source = new Uint8ClampedArray(rgba);
+    const yMin = Math.max(verticalBlurRadius, Math.floor(height * 0.84));
+    const yMax = Math.min(height - verticalBlurRadius, Math.ceil(height * 0.96));
+    for (let y = yMin; y < yMax; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        let sum = 0;
+        let count = 0;
+        for (let dy = -verticalBlurRadius; dy <= verticalBlurRadius; dy += 1) {
+          sum += source[((y + dy) * width + x) * 4];
+          count += 1;
+        }
+        const value = Math.round(sum / count);
+        const p = (y * width + x) * 4;
+        rgba[p] = rgba[p + 1] = rgba[p + 2] = value;
+      }
+    }
+  }
+
   return rgba;
 }
 
@@ -78,16 +98,17 @@ const width = 1200;
 const height = 1697;
 const centers = [0.511, 0.567, 0.617, 0.733, 0.789];
 const cases = [
-  { name: "normal-photo", foreground: 20, background: 250, horizontalShade: 0, verticalShade: 0, blurRadius: 0 },
-  { name: "washed-photo", foreground: 150, background: 245, horizontalShade: 0, verticalShade: 0, blurRadius: 0 },
-  { name: "low-contrast-photo", foreground: 190, background: 240, horizontalShade: 0, verticalShade: 0, blurRadius: 0 },
-  { name: "low-contrast-slight-blur-photo", foreground: 185, background: 240, horizontalShade: 0, verticalShade: 0, blurRadius: 1 },
-  { name: "low-contrast-lower-shadow-photo", foreground: 175, background: 240, horizontalShade: 0, verticalShade: 20, blurRadius: 0 },
-  { name: "uneven-light-photo", foreground: 120, background: 245, horizontalShade: 30, verticalShade: 0, blurRadius: 0 },
-  { name: "lower-edge-shadow-photo", foreground: 115, background: 245, horizontalShade: 0, verticalShade: 34, blurRadius: 0 },
-  { name: "combined-uneven-lower-shadow-photo", foreground: 115, background: 245, horizontalShade: 24, verticalShade: 28, blurRadius: 0 },
-  { name: "slight-horizontal-blur-photo", foreground: 45, background: 248, horizontalShade: 0, verticalShade: 0, blurRadius: 1 },
-  { name: "slight-blur-lower-shadow-photo", foreground: 55, background: 248, horizontalShade: 0, verticalShade: 24, blurRadius: 1 },
+  { name: "normal-photo", foreground: 20, background: 250, horizontalShade: 0, verticalShade: 0, blurRadius: 0, verticalBlurRadius: 0 },
+  { name: "washed-photo", foreground: 150, background: 245, horizontalShade: 0, verticalShade: 0, blurRadius: 0, verticalBlurRadius: 0 },
+  { name: "low-contrast-photo", foreground: 190, background: 240, horizontalShade: 0, verticalShade: 0, blurRadius: 0, verticalBlurRadius: 0 },
+  { name: "low-contrast-slight-blur-photo", foreground: 185, background: 240, horizontalShade: 0, verticalShade: 0, blurRadius: 1, verticalBlurRadius: 0 },
+  { name: "low-contrast-lower-shadow-photo", foreground: 175, background: 240, horizontalShade: 0, verticalShade: 20, blurRadius: 0, verticalBlurRadius: 0 },
+  { name: "uneven-light-photo", foreground: 120, background: 245, horizontalShade: 30, verticalShade: 0, blurRadius: 0, verticalBlurRadius: 0 },
+  { name: "lower-edge-shadow-photo", foreground: 115, background: 245, horizontalShade: 0, verticalShade: 34, blurRadius: 0, verticalBlurRadius: 0 },
+  { name: "combined-uneven-lower-shadow-photo", foreground: 115, background: 245, horizontalShade: 24, verticalShade: 28, blurRadius: 0, verticalBlurRadius: 0 },
+  { name: "slight-horizontal-blur-photo", foreground: 45, background: 248, horizontalShade: 0, verticalShade: 0, blurRadius: 1, verticalBlurRadius: 0 },
+  { name: "slight-vertical-blur-photo", foreground: 45, background: 248, horizontalShade: 0, verticalShade: 0, blurRadius: 0, verticalBlurRadius: 1 },
+  { name: "slight-blur-lower-shadow-photo", foreground: 55, background: 248, horizontalShade: 0, verticalShade: 24, blurRadius: 1, verticalBlurRadius: 0 },
 ];
 
 const speedRuns = 3;
@@ -107,6 +128,7 @@ for (const test of cases) {
     test.horizontalShade,
     test.verticalShade,
     test.blurRadius,
+    test.verticalBlurRadius,
   );
 
   // Warm up before measuring so Node startup/JIT does not dominate the budget.
