@@ -36,6 +36,7 @@ type WorkOrder = {
   checked_out_at: string | null;
   status: string;
   work_completed: boolean;
+  work_completed_at: string | null;
 };
 
 type PreviewEntry = Entry & {
@@ -80,6 +81,15 @@ function stayDayCountForReport(work: WorkOrder, day: string) {
   return Math.floor((reportDay - start) / 86400000) + 1;
 }
 
+function workCompletedOnReportDay(work: WorkOrder, day: string) {
+  const { end } = bounds(day);
+  const endMs = new Date(end).getTime();
+  if (work.work_completed_at) {
+    return new Date(work.work_completed_at).getTime() < endMs;
+  }
+  return work.work_completed || work.status === "completed";
+}
+
 function regionStyle(region: DailyReportRegion) {
   return {
     left: `${region.x * 100}%`,
@@ -111,7 +121,7 @@ export default function DailyReportPrintPage() {
         supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,completed,notes,print_time_mode,print_time_label_override").gte("starts_at", start).lt("starts_at", end),
         supabase.from("vehicles").select("id,customer_id,registration_number,registration_number_last4"),
         supabase.from("customers").select("id,name,company_name,schedule_display_name"),
-        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,expected_completion_date,planned_delivery_at,planned_delivery_date,stay_reason,checked_in_at,checked_out_at,status,work_completed"),
+        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,expected_completion_date,planned_delivery_at,planned_delivery_date,stay_reason,checked_in_at,checked_out_at,status,work_completed,work_completed_at"),
         supabase.from("app_settings").select("setting_value").eq("setting_key", "daily_report_template").maybeSingle(),
       ]);
       for (const res of [scheduleRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
@@ -141,7 +151,7 @@ export default function DailyReportPrintPage() {
       last4: vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----",
       reason: work?.reason || "",
       workerName: work?.worker_name || "",
-      workCompleted: Boolean(work?.work_completed),
+      workCompleted: work ? workCompletedOnReportDay(work, day) : false,
     };
   }), [entries, vehicleMap, customerMap, workMap]);
 

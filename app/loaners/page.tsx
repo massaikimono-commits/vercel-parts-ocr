@@ -127,10 +127,11 @@ export default function LoanerPage() {
 
   async function setStatus(id:string,status:string) {
     setBusy(true);
-    const {error}=await supabase.from("loaner_vehicles").update({
-      operational_status:status,
-      updated_at:new Date().toISOString(),
-    }).eq("id",id);
+    const {error}=await supabase.rpc("set_loaner_vehicle_operational_status",{
+      p_loaner_vehicle_id:id,
+      p_status:status,
+      p_actor:"staff",
+    });
     if(error) setMessage("状態更新エラー: "+error.message);
     else setMessage("代車状態を更新しました。");
     await load();

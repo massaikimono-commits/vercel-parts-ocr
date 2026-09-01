@@ -20,6 +20,7 @@ type WorkOrder = {
   is_urgent: boolean;
   needs_loaner: boolean;
   worker_name: string | null;
+  checked_out_at: string | null;
 };
 
 type Vehicle = {
@@ -71,7 +72,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     const bounds = jstBounds(todayJst());
     const [entryRes, workRes, vehicleRes, customerRes] = await Promise.all([
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
-      supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name").neq("status", "cancelled"),
+      supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
     ]);
@@ -112,7 +113,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   const workerLoad = useMemo(() => {
     const grouped = new Map<string, { name: string; pending: number; running: number; total: number; urgent: number }>();
     for (const work of works) {
-      if (work.work_completed || work.status === "completed" || work.status === "cancelled") continue;
+      if (work.checked_out_at || work.work_completed || work.status === "completed" || work.status === "cancelled") continue;
       const name = work.worker_name?.trim() || "担当未設定";
       const row = grouped.get(name) || { name, pending: 0, running: 0, total: 0, urgent: 0 };
       row.total += 1;
