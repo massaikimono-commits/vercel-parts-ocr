@@ -144,7 +144,7 @@ async function targetedRead(file) {
   const prepared = await prepareDocumentImage(file, { maxSide: 3200, cropPaper: true, minPaperConfidence: 0.46 });
   const source = prepared.normalized;
   const t = await import("./lib/tesseract-local");
-  const worker = await t.createWorker("jpn+eng", 1);
+  const worker = await t.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });
   const raws = [];
   const plans = [
     [0.14, 0.19, 0.34, 0.065],
