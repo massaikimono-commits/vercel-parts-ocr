@@ -8,6 +8,7 @@ export type DailyReportSecondaryWork = {
   reason: string;
   status: string;
   work_completed: boolean;
+  work_completed_at?: string | null;
   scheduled_at?: string | null;
   checked_in_at?: string | null;
   checked_out_at?: string | null;
@@ -27,17 +28,22 @@ function isActiveWorkshopWork(work: DailyReportSecondaryWork, endOfDay: number) 
   if (work.status === "cancelled") return false;
 
   const activeFrom = work.checked_in_at || work.scheduled_at;
-  const active = Boolean(work.checked_in_at) || work.status === "in_progress";
+  const active = Boolean(work.checked_in_at) || work.status === "in_progress" || work.status === "completed";
   if (!active || (activeFrom && new Date(activeFrom).getTime() >= endOfDay)) return false;
 
-  // Historical daily reports must be evaluated as of the selected day's end,
-  // not from the work order's current state. A vehicle checked out on a later
-  // day was still a staying vehicle on the earlier report.
-  if (work.checked_out_at) {
-    return new Date(work.checked_out_at).getTime() >= endOfDay;
+  // Evaluate checkout and completion as they stood at the selected day's end.
+  // Later checkout/completion must not erase a vehicle from an older daily report.
+  const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
+  if (checkedOutAt !== null && checkedOutAt < endOfDay) return false;
+
+  if (work.work_completed_at) {
+    if (new Date(work.work_completed_at).getTime() < endOfDay) return false;
+  } else if (work.work_completed || work.status === "completed") {
+    const isHistoricalDay = endOfDay < Date.now();
+    const legacyLaterCheckout = isHistoricalDay && checkedOutAt !== null && checkedOutAt >= endOfDay;
+    if (!legacyLaterCheckout) return false;
   }
 
-  if (work.work_completed || work.status === "completed") return false;
   return true;
 }
 

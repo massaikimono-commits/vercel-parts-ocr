@@ -9,6 +9,7 @@ import {
   WORKSHOP_RECORD_TEMPLATES,
   type WorkshopRecordTemplateKey,
 } from "../workshop-record-types";
+import { canFinalizeRecordTemplatePrint } from "../template-registry";
 
 type Vehicle = {
   id: string;
@@ -86,6 +87,7 @@ export default function InspectionPrintPage() {
   const [mode, setMode] = useState<"inspection" | "designated">("inspection");
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("保存済み記録簿を読み込みます。");
+  const [printDialogOpened, setPrintDialogOpened] = useState(false);
 
   useEffect(() => { void load(); }, []);
 
@@ -159,25 +161,30 @@ export default function InspectionPrintPage() {
     }
   }
 
-  async function printAndMark() {
-    if (!record || busy) return;
+  function openPrintDialog() {
+    if (!canPrint) return;
+    setPrintDialogOpened(true);
+    setMessage("印刷ダイアログを開きました。実際に印刷できた場合だけ「印刷完了を記録」を押してください。");
+    window.print();
+  }
+
+  async function markPrinted() {
+    if (!record || busy || !canPrint) return;
     setBusy(true);
     const updatedAt = new Date().toISOString();
     const { error } = await supabase
       .from("inspection_records")
       .update({ status: "printed", updated_at: updatedAt })
       .eq("id", record.id);
-
     if (error) {
       setMessage(safeActionError("印刷状態の保存", error));
       setBusy(false);
       return;
     }
-
     setRecord((current) => current ? { ...current, status: "printed", updated_at: updatedAt } : current);
-    setMessage("印刷済みとして保存しました。印刷ダイアログを開きます。");
+    setMessage("実際の印刷完了を記録しました。");
+    setPrintDialogOpened(false);
     setBusy(false);
-    window.setTimeout(() => window.print(), 0);
   }
 
   const items = useMemo(() => {
@@ -196,7 +203,13 @@ export default function InspectionPrintPage() {
     ? WORKSHOP_RECORD_TEMPLATES[templateKey].label
     : mode === "designated" ? "指定整備記録簿" : "点検整備記録簿";
 
-  const canPrint = Boolean(record && !busy && mode !== "designated");
+  const canPrint = Boolean(
+    record &&
+    !busy &&
+    mode !== "designated" &&
+    templateKey &&
+    canFinalizeRecordTemplatePrint(templateKey)
+  );
   const inputParams = new URLSearchParams();
   if (templateKey) inputParams.set("template", templateKey);
   if (mode === "designated") inputParams.set("mode", "designated");
@@ -218,13 +231,21 @@ export default function InspectionPrintPage() {
         </div>
         <div className="actions">
           <button onClick={() => location.assign(inputUrl)}>入力へ戻る</button>
-          <button className="primary" disabled={!canPrint} onClick={() => void printAndMark()}>🖨 この内容を印刷</button>
+          <button className="primary" disabled={!canPrint} onClick={openPrintDialog}>🖨 この内容を印刷</button>
+          {printDialogOpened && canPrint && (
+            <button onClick={() => void markPrinted()}>印刷完了を記録</button>
+          )}
         </div>
       </section>
 
       {mode === "designated" && (
         <div className="designatedWaiting noPrint">
           指定整備記録簿はA3・PDF参照で実装します。現在はPDF受領待ちのため最終印刷を無効にしています。
+        </div>
+      )}
+      {mode === "inspection" && record && !canPrint && (
+        <div className="designatedWaiting noPrint">
+          この帳票はPDF座標と最終印刷許可が未確定です。入力内容のプレビューはできますが、座標確認が完了するまで最終印刷は無効です。
         </div>
       )}
 

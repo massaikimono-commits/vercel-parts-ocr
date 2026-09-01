@@ -130,6 +130,7 @@ export default function WeeklySchedulePage() {
   const [calendar, setCalendar] = useState<Record<string, CalendarDay>>({});
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("1週間の予定を読み込みます。");
+  const [attentionOnly, setAttentionOnly] = useState(false);
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
@@ -262,17 +263,22 @@ export default function WeeklySchedulePage() {
     return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
   }
 
-  function overlapCount(dayRows: Array<{entry: ScheduleEntry}>) {
+  function overlapInfo(dayRows: Array<{entry: ScheduleEntry}>) {
     let count = 0;
+    const ids = new Set<string>();
     for (let i = 0; i < dayRows.length; i += 1) {
       for (let j = i + 1; j < dayRows.length; j += 1) {
         const a = dayRows[i].entry;
         const b = dayRows[j].entry;
         if (a.entry_type !== b.entry_type) continue;
-        if (new Date(a.starts_at) < new Date(b.ends_at) && new Date(a.ends_at) > new Date(b.starts_at)) count += 1;
+        if (new Date(a.starts_at) < new Date(b.ends_at) && new Date(a.ends_at) > new Date(b.starts_at)) {
+          count += 1;
+          ids.add(a.id);
+          ids.add(b.id);
+        }
       }
     }
-    return count;
+    return { count, ids };
   }
 
   function capacitySummary(day: string) {
@@ -323,10 +329,58 @@ export default function WeeklySchedulePage() {
     location.assign("/schedule/new?day=" + day);
   }
 
+  function editEntry(id: string) {
+    location.assign("/schedule/edit?id=" + encodeURIComponent(id));
+  }
+
   function jumpToWeek() {
     if (!jumpDay) return;
     setWeekStart(mondayOf(jumpDay));
   }
+
+  const weekStats = useMemo(() => {
+    let overlapDays = 0;
+    let overbookedDays = 0;
+    let morningRemaining = 0;
+    let afternoonRemaining = 0;
+    let inspectionRemaining = 0;
+    let unknownDays = 0;
+
+    for (const day of weekDays) {
+      const cal = calendar[day];
+      if (cal && !cal.is_business_day) continue;
+      if (overlapInfo(rowsByDay[day] || []).count > 0) overlapDays += 1;
+
+      const c = capacities[day];
+      if (!c) {
+        unknownDays += 1;
+        continue;
+      }
+
+      const morningRaw = c.morning_total_limit - c.morning_count;
+      const afternoonRaw = c.afternoon_total_limit - c.afternoon_count;
+      const inspectionRaw = c.morning_inspection_warning - c.morning_inspection_count;
+      if (morningRaw < 0 || afternoonRaw < 0 || inspectionRaw < 0) overbookedDays += 1;
+      morningRemaining += Math.max(0, morningRaw);
+      afternoonRemaining += Math.max(0, afternoonRaw);
+      inspectionRemaining += Math.max(0, inspectionRaw);
+    }
+
+    return { overlapDays, overbookedDays, morningRemaining, afternoonRemaining, inspectionRemaining, unknownDays };
+  }, [weekDays, rowsByDay, capacities, calendar]);
+
+  const attentionDays = useMemo(() => {
+    return weekDays.filter((day) => {
+      const cal = calendar[day];
+      if (cal && !cal.is_business_day) return false;
+      const overlap = overlapInfo(rowsByDay[day] || []).count > 0;
+      const capacityClass = capacitySummary(day).className;
+      return overlap || capacityClass === "over" || capacityClass === "full" || capacityClass === "tight";
+    });
+  }, [weekDays, rowsByDay, capacities, calendar]);
+
+  const visibleWeekDays = attentionOnly ? attentionDays : weekDays;
+  const firstAttentionDay = attentionDays[0] || null;
 
   return (
     <main className="weekPage">
@@ -356,11 +410,40 @@ export default function WeeklySchedulePage() {
         <button onClick={jumpToWeek}>この週を見る</button>
       </section>
 
-      <section className="weekBoard">
-        {weekDays.map((day) => {
+      <section className="weekSummary" aria-label="週間予定サマリー">
+        <div><span>週間予定</span><b>{entries.length}件</b></div>
+        <div className={weekStats.overlapDays > 0 ? "summaryWarn" : ""}><span>時間重複</span><b>{weekStats.overlapDays}日</b></div>
+        <div className={weekStats.overbookedDays > 0 ? "summaryDanger" : ""}><span>取りすぎ</span><b>{weekStats.overbookedDays}日</b></div>
+        <div><span>週間の残り枠</span><b>午前 {weekStats.morningRemaining} / 午後 {weekStats.afternoonRemaining}</b><small>車検午前 {weekStats.inspectionRemaining}{weekStats.unknownDays > 0 ? `　未確認 ${weekStats.unknownDays}日` : ""}</small></div>
+      </section>
+
+      <section className="attentionBar" aria-label="週間予定の要確認日">
+        <div>
+          <b>要確認 {attentionDays.length}日</b>
+          <span>時間重複・取りすぎ・上限・残り少のある日だけ確認できます。</span>
+        </div>
+        <div className="attentionActions">
+          <button
+            className={attentionOnly ? "activeFilter" : ""}
+            onClick={() => setAttentionOnly((value) => !value)}
+            disabled={busy}
+          >
+            {attentionOnly ? "7日すべて表示" : "要確認日のみ表示"}
+          </button>
+          <button onClick={() => firstAttentionDay && openDay(firstAttentionDay)} disabled={!firstAttentionDay || busy}>
+            最初の要確認日を開く
+          </button>
+        </div>
+      </section>
+
+      <section className={`weekBoard ${attentionOnly ? "attentionOnly" : ""}`}>
+        {attentionOnly && visibleWeekDays.length === 0 && (
+          <div className="noAttention">この週は時間重複・取りすぎ・上限・残り少の要確認日はありません。</div>
+        )}
+        {visibleWeekDays.map((day) => {
           const dayRows = rowsByDay[day] || [];
           const cap = capacitySummary(day);
-          const overlaps = overlapCount(dayRows);
+          const overlap = overlapInfo(dayRows);
           const isToday = day === todayJst();
           return (
             <article key={day} className={`dayColumn ${isToday ? "today" : ""} ${cap.className === "closed" ? "dayClosed" : ""}`}>
@@ -373,12 +456,12 @@ export default function WeeklySchedulePage() {
                 <b>{cap.label}</b>
                 {cap.detail && <small>{cap.detail}</small>}
               </div>
-              {overlaps > 0 && <div className="overlapWarn">⚠ 同一区分の時間重複 {overlaps}件</div>}
+              {overlap.count > 0 && <div className="overlapWarn">⚠ 同一区分の時間重複 {overlap.count}件</div>}
 
               <div className="dayRows">
                 {!dayRows.length && <div className="empty">予定なし</div>}
                 {dayRows.map(({ entry, work, vehicle, customer }) => (
-                  <div className={`weekRow ${work?.is_urgent ? "urgent" : ""}`} key={entry.id}>
+                  <button type="button" className={`weekRow ${work?.is_urgent ? "urgent" : ""} ${overlap.ids.has(entry.id) ? "overlapping" : ""}`} key={entry.id} onClick={() => editEntry(entry.id)} aria-label={`${customerName(customer)}の予約を変更`}>
                     <div className="rowTop">
                       <b>{dailyReportTimeLabel(entry)}</b>
                       <span>{ENTRY_LABEL[entry.entry_type]}{work?.reason ? "・" + work.reason : ""}</span>
@@ -389,8 +472,10 @@ export default function WeeklySchedulePage() {
                       {work?.worker_name && <span>担当 {work.worker_name}</span>}
                       {work?.needs_loaner && <span className="loaner">代車</span>}
                       {work?.is_urgent && <span className="urgentTag">急ぎ</span>}
+                      {overlap.ids.has(entry.id) && <span className="overlapTag">時間重複</span>}
                     </div>
-                  </div>
+                    <div className="rowEditHint">タップして予約変更</div>
+                  </button>
                 ))}
               </div>
 
@@ -403,19 +488,20 @@ export default function WeeklySchedulePage() {
         })}
       </section>
 
-      <div className="hint">横にスクロールすると1週間を続けて確認できます。空き表示は現在の午前・午後の上限と車検午前枠から自動計算し、上限超過時は取りすぎ台数も表示します。</div>
+      <div className="hint">横にスクロールすると1週間を続けて確認できます。上部サマリーと「要確認日のみ表示」で問題日を先に確認でき、予約カードをタップすると空き確認付きの予約変更へ直接進めます。</div>
 
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}
         .weekPage{max-width:1600px;margin:0 auto;padding:16px 14px 50px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.top>div{display:grid;text-align:center}.top>div span{font-size:12px;color:#78869a}.top button,.weekNav button,.jumpBar button,.dayActions button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
         .weekHero{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:18px 20px;display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:10px}.eyebrow{color:#2674e8;font-weight:800}.weekHero h1{font-size:28px;margin:3px 0}.weekHero p{margin:0;color:#6d798a}.weekNav{display:flex;gap:7px;flex-wrap:wrap}
         .jumpBar{display:flex;gap:8px;align-items:end;background:#fff;border:1px solid #d9e0ea;border-radius:16px;padding:11px 14px;margin-bottom:10px}.jumpBar label{display:grid;gap:4px;font-size:12px;font-weight:800;color:#637084}.jumpBar input{border:1px solid #cbd6e3;border-radius:9px;padding:8px 10px;background:#fff}
-        .weekBoard{display:grid;grid-template-columns:repeat(7,minmax(170px,1fr));gap:8px;align-items:stretch;overflow-x:auto;padding-bottom:6px}.dayColumn{min-width:170px;background:#fff;border:1px solid #d9e0ea;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:590px}.dayColumn.today{outline:3px solid #2674e8;outline-offset:-2px}.dayColumn.dayClosed{background:#f5f6f8}
+        .weekSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.weekSummary>div{background:#fff;border:1px solid #d9e0ea;border-radius:13px;padding:10px 12px;display:grid;gap:2px}.weekSummary span{font-size:11px;color:#68768a;font-weight:800}.weekSummary b{font-size:17px}.weekSummary small{font-size:10px;color:#68768a}.weekSummary .summaryWarn{background:#fff7e8;border-color:#edc780}.weekSummary .summaryDanger{background:#ffecec;border-color:#efaaaa;color:#9f2525}
+        .attentionBar{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:10px 12px;margin-bottom:10px}.attentionBar>div:first-child{display:grid;gap:2px}.attentionBar span{font-size:11px;color:#68768a}.attentionActions{display:flex;gap:7px;flex-wrap:wrap}.attentionActions button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:10px;padding:8px 10px;font-weight:800}.attentionActions .activeFilter{background:#2674e8;color:#fff;border-color:#2674e8}.attentionActions button:disabled{opacity:.45}.noAttention{grid-column:1/-1;background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:24px;text-align:center;color:#68768a}.weekBoard{display:grid;grid-template-columns:repeat(7,minmax(170px,1fr));gap:8px;align-items:stretch;overflow-x:auto;padding-bottom:6px}.weekBoard.attentionOnly{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));overflow-x:visible}.dayColumn{min-width:170px;background:#fff;border:1px solid #d9e0ea;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:590px}.dayColumn.today{outline:3px solid #2674e8;outline-offset:-2px}.dayColumn.dayClosed{background:#f5f6f8}
         .dayHead{border:0;background:#f7f9fc;padding:11px 10px;display:flex;justify-content:space-between;align-items:center;width:100%;font-weight:900;color:#172033}.dayHead span{font-size:16px}.dayHead b{font-size:12px;background:#e8eef7;border-radius:999px;padding:3px 7px}
         .availability{margin:8px;border-radius:10px;padding:8px;display:grid;gap:2px}.availability b{font-size:13px}.availability small{font-size:10px;line-height:1.45}.availability.open{background:#edf8f0;color:#236c3b}.availability.tight{background:#fff7e8;color:#8a5a08}.availability.full{background:#fdeeee;color:#9c3434}.availability.over{background:#ffe7e7;color:#a32121;border:2px solid #ef9a9a}.availability.closed{background:#eceff3;color:#657180}.availability.unknown{background:#f4f6f8;color:#798596}.overlapWarn{margin:0 8px 8px;background:#fff0db;color:#8b5609;border-radius:9px;padding:7px;font-size:10px;font-weight:900}
-        .dayRows{padding:0 8px 8px;display:grid;gap:6px;align-content:start;flex:1}.weekRow{border:1px solid #e0e6ef;border-radius:10px;padding:8px;background:#fff}.weekRow.urgent{border-color:#e8aa58;box-shadow:inset 3px 0 0 #e8aa58}.rowTop{display:flex;justify-content:space-between;gap:5px;align-items:center}.rowTop b{font-size:14px}.rowTop span{font-size:11px;color:#5c6878;text-align:right}.rowCustomer{font-weight:900;font-size:14px;margin-top:4px;line-height:1.25}.rowMeta{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rowMeta span{font-size:9px;background:#f1f4f8;border-radius:999px;padding:3px 5px}.rowMeta .loaner{background:#eaf3ff;color:#245ca8}.rowMeta .urgentTag{background:#fff0db;color:#995b00}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
+        .dayRows{padding:0 8px 8px;display:grid;gap:6px;align-content:start;flex:1}.weekRow{border:1px solid #e0e6ef;border-radius:10px;padding:8px;background:#fff;width:100%;color:inherit;text-align:left;cursor:pointer}.weekRow:hover,.weekRow:focus-visible{border-color:#8eb5ef;box-shadow:0 0 0 2px rgba(38,116,232,.12);outline:none}.weekRow.urgent{border-color:#e8aa58;box-shadow:inset 3px 0 0 #e8aa58}.weekRow.overlapping{border-color:#e58b8b;background:#fff8f8}.rowTop{display:flex;justify-content:space-between;gap:5px;align-items:center}.rowTop b{font-size:14px}.rowTop span{font-size:11px;color:#5c6878;text-align:right}.rowCustomer{font-weight:900;font-size:14px;margin-top:4px;line-height:1.25}.rowMeta{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rowMeta span{font-size:9px;background:#f1f4f8;border-radius:999px;padding:3px 5px}.rowMeta .loaner{background:#eaf3ff;color:#245ca8}.rowMeta .urgentTag{background:#fff0db;color:#995b00}.rowMeta .overlapTag{background:#ffe7e7;color:#a32121;font-weight:900}.rowEditHint{font-size:9px;color:#2674e8;font-weight:800;text-align:right;margin-top:5px}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
         .dayActions{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:8px;border-top:1px solid #edf0f4}.dayActions button{font-size:10px;padding:7px 5px}.dayActions .register{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.hint{font-size:12px;color:#78869a;margin-top:8px}
-        @media(max-width:900px){.weekHero{display:block}.weekNav{margin-top:12px}.weekBoard{grid-template-columns:repeat(7,220px)}.dayColumn{min-width:220px;min-height:520px}}
+        @media(max-width:900px){.weekHero{display:block}.weekNav{margin-top:12px}.weekSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.attentionBar{display:grid}.weekBoard{grid-template-columns:repeat(7,220px)}.weekBoard.attentionOnly{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.dayColumn{min-width:220px;min-height:520px}}
       `}</style>
     </main>
   );
