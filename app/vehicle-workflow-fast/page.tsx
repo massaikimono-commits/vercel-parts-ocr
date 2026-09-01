@@ -171,7 +171,7 @@ export default function VehicleWorkflowFast(){
     (window as any).__vehicleCertificateQrPriority=null;(window as any).__vehicleCertificatePhotoPriority=null;(window as any).__vehicleCertificateQr=[];
     let worker:any=null;const started=performance.now();let passes=0;
     try{
-      const srcPromise=loadCanvas(file);const tessPromise=import("tesseract.js");
+      const srcPromise=loadCanvas(file);const tessPromise=import("../../lib/tesseract-local");
       await wait(250);let qr=readQr();
       const [rawSrc,t]:any=await Promise.all([srcPromise,tessPromise]);const normalized=normalizeCertificateCanvas(rawSrc,1800);const src=normalized.canvas;rawSrc.width=1;rawSrc.height=1;const paper={x:0,y:0,w:src.width,h:src.height};setProgress(12);
       const workerPromise=t.createWorker("jpn+eng",1);const P=t.PSM,block=P?.SINGLE_BLOCK??"6",sparse=P?.SPARSE_TEXT??"11";
