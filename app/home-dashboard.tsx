@@ -36,6 +36,13 @@ type Customer = {
   schedule_display_name: string | null;
 };
 
+type LoginSecurityAlert = {
+  severity: "warning" | "high";
+  alert_code: string;
+  occurred_at: string | null;
+  message: string;
+};
+
 type SecurityAlert = {
   severity: "warning" | "high";
   alert_code: string;
@@ -69,6 +76,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   const [searchDay, setSearchDay] = useState(todayJst());
   const [busy, setBusy] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [securityAlerts, setSecurityAlerts] = useState<LoginSecurityAlert[]>([]);
   const [securityAlert, setSecurityAlert] = useState<SecurityAlert | null>(null);
 
   useEffect(() => {
@@ -165,6 +173,19 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           {securityAlert.message}<br />
           <small>タップしてログイン履歴を確認</small>
         </button>
+      )}
+
+      {securityAlerts.length > 0 && (
+        <section className="card" style={{ border: "2px solid currentColor", marginBottom: 12 }}>
+          <h2 style={{ marginTop: 0 }}>⚠️ ログイン安全確認</h2>
+          {securityAlerts.slice(0, 2).map((alert) => (
+            <p key={alert.alert_code + String(alert.occurred_at)}>
+              <strong>{alert.severity === "high" ? "要確認" : "注意"}：</strong>
+              {alert.message}
+            </p>
+          ))}
+          <button onClick={() => location.assign("/settings/login-history")}>ログイン履歴を確認</button>
+        </section>
       )}
 
       <section className="mobileToday">
