@@ -428,7 +428,7 @@ export default function CertificateCalibratedFix() {
       try {
         const source = await sourceCanvas(img);
         const paper = paperBox(source);
-        const t: any = await import("tesseract.js");
+        const t: any = await import("./lib/tesseract-local");
         worker = await t.createWorker("jpn+eng", 1);
         const sparse = t.PSM?.SPARSE_TEXT ?? "11";
         const block = t.PSM?.SINGLE_BLOCK ?? "6";
