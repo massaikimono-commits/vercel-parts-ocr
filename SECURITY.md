@@ -18,7 +18,8 @@ This repository is an internal business application. Do not commit secrets, priv
 - Every application table in `public` must have RLS enabled.
 - `anon` must not have direct DML access to public application tables.
 - The Data API pre-request hook must enforce an active app user for authenticated requests.
-- Anonymous SECURITY DEFINER access is limited to the explicitly approved customer booking token functions.
+- Anonymous SECURITY DEFINER access is limited to explicitly approved pre-auth functions: customer booking token functions plus `check_login_throttle` and `record_login_failure`.
+- `login_security_events` is fail-closed for direct client access and is exposed only through the approved login-security RPCs.
 - SECURITY DEFINER functions must use a fixed search path; use an empty path with schema-qualified objects or place `pg_temp` last.
 - Public views exposed to authenticated users must use `security_invoker=true`.
 - The `documents` Storage bucket must remain private and restricted by RLS.
@@ -27,6 +28,8 @@ This repository is an internal business application. Do not commit secrets, priv
 ## Recovery controls
 
 - Row-level recovery snapshots for critical business tables must remain private and retained for 180 days.
+- The daily `icb-security-retention-daily` Cron job must remove recovery snapshots and login-security events older than 180 days.
+- The retention cleanup function must not be executable by `anon` or `authenticated`.
 - Row-level snapshots do not replace an independent database/Storage backup.
 - Follow `RECOVERY.md` for recovery order.
 

@@ -37,7 +37,10 @@ where n.nspname='public'
   )
 order by c.relname;
 
--- 4. Anonymous SECURITY DEFINER functions outside the approved token allowlist.
+-- 4. Anonymous SECURITY DEFINER functions outside the approved pre-auth allowlist.
+-- Booking token functions are public by design. The two login-security functions
+-- are also pre-auth by design: one checks progressive throttling and the other
+-- records a failed attempt without revealing whether the login ID exists.
 select p.proname, pg_get_function_identity_arguments(p.oid) as args
 from pg_proc p
 join pg_namespace n on n.oid=p.pronamespace
@@ -47,7 +50,9 @@ where n.nspname='public'
   and p.proname not in (
     'customer_booking_by_token',
     'cancel_customer_booking_by_token',
-    'reschedule_customer_booking_by_token'
+    'reschedule_customer_booking_by_token',
+    'check_login_throttle',
+    'record_login_failure'
   )
 order by p.proname,args;
 
@@ -76,7 +81,6 @@ from pg_db_role_setting s
 join pg_roles r on r.oid=s.setrole
 where r.rolname='authenticator'
   and array_to_string(s.setconfig,',') like '%pgrst.db_pre_request%';
-
 
 -- 8. Missing recovery snapshot triggers on critical business tables.
 -- Expected: no rows.
@@ -119,3 +123,15 @@ select
 select
   has_function_privilege('anon','private.capture_recovery_row_snapshot()','execute') as anon_execute,
   has_function_privilege('authenticated','private.capture_recovery_row_snapshot()','execute') as auth_execute;
+
+-- 11. Daily recovery/security retention job.
+-- Expected: one active row named icb-security-retention-daily.
+select jobname, schedule, command, active
+from cron.job
+where jobname='icb-security-retention-daily';
+
+-- 12. Retention cleanup function exposed to app roles.
+-- Expected: both values false.
+select
+  has_function_privilege('anon','private.purge_expired_operational_security_data()','execute') as anon_execute,
+  has_function_privilege('authenticated','private.purge_expired_operational_security_data()','execute') as auth_execute;
