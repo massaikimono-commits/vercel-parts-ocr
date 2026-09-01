@@ -20,7 +20,8 @@
     "test:daily-report-secondary": "node scripts/daily-report-secondary-sections-regression.mjs",
     "test:qr-speed": "node scripts/qr-speed-regression.mjs",
     "test:parts-layout": "node scripts/parts-layout-semantics-regression.mjs",
-    "test:paper-sizes": "node scripts/print-paper-size-regression.mjs"
+    "test:paper-sizes": "node scripts/print-paper-size-regression.mjs",
+    "test:app-core-safety": "node scripts/app-core-safety-regression.mjs"
   },
   "dependencies": {
     "next": "14.2.25",

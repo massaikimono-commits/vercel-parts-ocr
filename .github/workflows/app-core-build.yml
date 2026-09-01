@@ -63,8 +63,18 @@ jobs:
         run: |
           npm run test:schedule-print
           npm run test:schedule-print-layout
+          npm run test:schedule-work-state
           npm run test:daily-report-template
           npm run test:daily-report-allocation
+          npm run test:daily-report-print-model
+          npm run test:daily-report-secondary
+          npm run test:app-core-safety
+
+      - name: Run remaining print and OCR safety checks
+        run: |
+          npm run test:qr-speed
+          npm run test:parts-layout
+          npm run test:paper-sizes
 
       - name: Build Next.js app
         env:

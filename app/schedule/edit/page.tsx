@@ -117,15 +117,6 @@ export default function ScheduleEditPage(){
     return selectedOption ? `${day} ${selectedOption.label}` : `${day} 時間候補なし`;
   },[day,entry,selectedOption]);
 
-  async function saveWorkDetails(){
-    if(!entry?.work_order_id) return;
-    const {error}=await supabase.from("work_orders").update({
-      stay_reason:stayReason.trim()||null,
-      planned_delivery_date:plannedDeliveryDate||null,
-    }).eq("id",entry.work_order_id);
-    if(error) throw error;
-  }
-
   async function save(override=false){
     if(!entry){return;}
     if(entry.entry_type!=="onsite_repair" && !selectedOption){
@@ -146,11 +137,13 @@ export default function ScheduleEditPage(){
         endsAt=new Date(new Date(startsAt).getTime()+duration).toISOString();
         mode=entry.print_time_mode;
       }
-      const {data,error}=await supabase.rpc("reschedule_schedule_entry",{
+      const {data,error}=await supabase.rpc("reschedule_schedule_entry_v2",{
         p_entry_id:entry.id,
         p_starts_at:startsAt,
         p_ends_at:endsAt,
         p_print_time_mode:mode,
+        p_stay_reason:entry.work_order_id ? stayReason.trim()||null : null,
+        p_planned_delivery_date:entry.work_order_id ? plannedDeliveryDate||null : null,
         p_actor:"schedule-edit",
         p_allow_warning_override:override,
       });
@@ -164,8 +157,7 @@ export default function ScheduleEditPage(){
         return;
       }
       if(data?.updated){
-        await saveWorkDetails();
-        setMessage("予約と滞留情報を変更しました。予約変更は履歴にも保存しました。");
+        setMessage("予約と滞留情報を一括変更しました。予約変更と滞留情報は履歴にも保存しました。");
         window.setTimeout(()=>location.assign("/schedule?day="+day),350);
       }
     }catch(error:any){

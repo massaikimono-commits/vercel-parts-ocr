@@ -39,6 +39,23 @@ type Capacity = {
   morning_inspection_warning_reached: boolean;
 };
 
+type DuplicateCustomerCandidate = {
+  customerId: string;
+  displayName: string;
+  phone: string | null;
+  score: number;
+};
+
+type DuplicateVehicleCandidate = {
+  vehicleId: string;
+  customerId: string | null;
+  registrationNumber: string | null;
+  registrationLast4: string | null;
+  maker: string | null;
+  model: string | null;
+  score: number;
+};
+
 const ENTRY_LABEL: Record<EntryType, string> = {
   delivery: "納車",
   pickup: "引き取り",
@@ -107,6 +124,12 @@ export default function ScheduleNewPage() {
   const [message, setMessage] = useState("入出庫予定を登録します。");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [hardErrors, setHardErrors] = useState<string[]>([]);
+  const [duplicateCustomers, setDuplicateCustomers] = useState<DuplicateCustomerCandidate[]>([]);
+  const [duplicateVehicles, setDuplicateVehicles] = useState<DuplicateVehicleCandidate[]>([]);
+  const [existingCustomerId, setExistingCustomerId] = useState("");
+  const [existingVehicleId, setExistingVehicleId] = useState("");
+  const [duplicateDecisionFingerprint, setDuplicateDecisionFingerprint] = useState("");
+  const [duplicateBypassFingerprint, setDuplicateBypassFingerprint] = useState("");
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("day");
@@ -240,6 +263,53 @@ export default function ScheduleNewPage() {
     };
   }
 
+  function duplicateFingerprint() {
+    return [
+      customerName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
+      companyName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
+      phone.normalize("NFKC").replace(/\\D/g, ""),
+      registrationNumber.normalize("NFKC").replace(/[\\s　・･-]+/g, "").toUpperCase(),
+      registrationLast4.normalize("NFKC").replace(/[^0-9A-Za-z]/g, "").toUpperCase(),
+    ].join("|");
+  }
+
+  async function checkDuplicateRegistration() {
+    const { data, error } = await supabase.rpc("find_schedule_registration_duplicates", {
+      p_customer_name: customerName.trim() || null,
+      p_company_name: companyName.trim() || null,
+      p_phone: phone.trim() || null,
+      p_registration_number: registrationNumber.trim() || null,
+      p_registration_last4: registrationLast4.trim() || null,
+      p_chassis_number: null,
+    });
+    if (error) throw error;
+
+    const customerCandidates = (Array.isArray(data?.customerCandidates) ? data.customerCandidates : []) as DuplicateCustomerCandidate[];
+    const vehicleCandidates = (Array.isArray(data?.vehicleCandidates) ? data.vehicleCandidates : []) as DuplicateVehicleCandidate[];
+    const strongCustomerIds = new Set(customerCandidates.filter((x) => Number(x.score) >= 100).map((x) => x.customerId));
+    const pairedCustomerIds = new Set(
+      customerCandidates
+        .filter((c) => Number(c.score) >= 70 && vehicleCandidates.some((v) => v.customerId === c.customerId && Number(v.score) >= 50))
+        .map((c) => c.customerId)
+    );
+    const strongCustomers = customerCandidates.filter((x) => strongCustomerIds.has(x.customerId) || pairedCustomerIds.has(x.customerId));
+    const strongVehicles = vehicleCandidates.filter((x) => Number(x.score) >= 100 || (x.customerId ? pairedCustomerIds.has(x.customerId) : false));
+
+    if (!strongCustomers.length && !strongVehicles.length) {
+      setDuplicateCustomers([]);
+      setDuplicateVehicles([]);
+      return true;
+    }
+
+    setDuplicateCustomers(strongCustomers);
+    setDuplicateVehicles(strongVehicles);
+    setExistingCustomerId("");
+    setExistingVehicleId("");
+    setDuplicateDecisionFingerprint("");
+    setMessage("既存のお客様・車両と一致する候補があります。重複登録を防ぐため、使用する既存データか「新規として登録」を選んでください。");
+    return false;
+  }
+
   async function preflight() {
     const main = mainTimes();
     if (!main) throw new Error("時間を選択してください。");
@@ -257,6 +327,9 @@ export default function ScheduleNewPage() {
     let deliveryCheck = { allowed: true, overrideRequired: false, hardErrors: [] as string[], warnings: [] as string[] };
     if (addDelivery && entryType !== "delivery") {
       if (!selectedDelivery) throw new Error("納車時間を選択してください。");
+      if (new Date(selectedDelivery.startsAt).getTime() < new Date(main.endsAt).getTime()) {
+        throw new Error("納車予定は入庫・作業予定の終了後に設定してください。");
+      }
       const { data: deliveryData, error: deliveryError } = await supabase.rpc("schedule_slot_check", {
         p_entry_type: "delivery",
         p_starts_at: selectedDelivery.startsAt,
@@ -291,6 +364,16 @@ export default function ScheduleNewPage() {
 
     setBusy(true);
     try {
+      const fp = duplicateFingerprint();
+      const decisionIsCurrent = duplicateDecisionFingerprint === fp;
+      const selectedCustomerForSubmit = decisionIsCurrent ? existingCustomerId : "";
+      const selectedVehicleForSubmit = decisionIsCurrent ? existingVehicleId : "";
+
+      if (!selectedCustomerForSubmit && !selectedVehicleForSubmit && duplicateBypassFingerprint !== fp) {
+        const clear = await checkDuplicateRegistration();
+        if (!clear) return;
+      }
+
       const check = await preflight();
       if (!check.allowed || check.hardErrors.length) {
         setHardErrors(check.hardErrors.length ? check.hardErrors : ["この時間は登録できません。"]);
@@ -304,7 +387,12 @@ export default function ScheduleNewPage() {
         return;
       }
 
-      const { data, error } = await supabase.rpc("create_manual_schedule_registration", {
+      const fpNow = duplicateFingerprint();
+      const decisionIsCurrentNow = duplicateDecisionFingerprint === fpNow;
+      const selectedCustomerForSubmitNow = decisionIsCurrentNow ? existingCustomerId : "";
+      const selectedVehicleForSubmitNow = decisionIsCurrentNow ? existingVehicleId : "";
+
+      const { data, error } = await supabase.rpc("create_schedule_registration_v2", {
         p_customer_name: customerName.trim(),
         p_entry_type: entryType,
         p_reason: reason,
@@ -315,62 +403,38 @@ export default function ScheduleNewPage() {
         p_phone: phone.trim() || null,
         p_schedule_display_name: scheduleDisplayName.trim() || null,
         p_registration_number: registrationNumber.trim() || null,
-        p_registration_last4: (registrationLast4.trim() || registrationNumber.match(/(\d{4})(?!.*\d)/)?.[1] || "").slice(-4) || null,
+        p_registration_last4: (registrationLast4.trim() || registrationNumber.match(/(\\d{4})(?!.*\\d)/)?.[1] || "").slice(-4) || null,
         p_maker: maker.trim() || null,
         p_model: model.trim() || null,
-        p_worker_name: null,
+        p_staff_id: staffId || null,
         p_notes: notes.trim() || null,
         p_inspection_schedule_type: inspectionScheduleType || null,
         p_print_time_mode: check.main.printMode,
+        p_is_urgent: isUrgent,
+        p_needs_loaner: needsLoaner,
+        p_existing_customer_id: selectedCustomerForSubmitNow || null,
+        p_existing_vehicle_id: selectedVehicleForSubmitNow || null,
+        p_add_delivery: addDelivery && entryType !== "delivery",
+        p_delivery_starts_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
+        p_delivery_ends_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
+        p_delivery_print_time_mode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
         p_allow_warning_override: allowOverride,
       });
       if (error) throw error;
 
-      const workOrderId = data?.workOrderId;
-      const vehicleId = data?.vehicleId;
-
-      if (workOrderId) {
-        const { error: flagError } = await supabase
-          .from("work_orders")
-          .update({
-            is_urgent: isUrgent,
-            needs_loaner: needsLoaner,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", workOrderId);
-        if (flagError) throw flagError;
-
-        if (staffId) {
-          const { error: staffError } = await supabase.rpc("set_work_order_worker", {
-            p_work_order_id: workOrderId,
-            p_staff_id: staffId,
-            p_actor: "schedule-registration",
-          });
-          if (staffError) throw staffError;
-        }
+      const rpcHardErrors = Array.isArray(data?.hardErrors) ? data.hardErrors.map(String) : [];
+      const rpcWarnings = Array.isArray(data?.warnings) ? data.warnings.map(String) : [];
+      if (rpcHardErrors.length || data?.allowed === false) {
+        setHardErrors(rpcHardErrors.length ? rpcHardErrors : ["この内容では登録できません。"]);
+        setMessage("登録直前の再確認で登録できない条件が見つかりました。");
+        return;
       }
-
-      if (addDelivery && entryType !== "delivery" && selectedDelivery && workOrderId && vehicleId) {
-        const { error: workError } = await supabase
-          .from("work_orders")
-          .update({
-            planned_delivery_at: selectedDelivery.startsAt,
-            last_schedule_change_at: new Date().toISOString(),
-          })
-          .eq("id", workOrderId);
-        if (workError) throw workError;
-
-        const { error: scheduleError } = await supabase.from("schedule_entries").insert({
-          vehicle_id: vehicleId,
-          work_order_id: workOrderId,
-          entry_type: "delivery",
-          starts_at: selectedDelivery.startsAt,
-          ends_at: selectedDelivery.endsAt,
-          print_time_mode: selectedDelivery.mode,
-          notes: notes.trim() || null,
-        });
-        if (scheduleError) throw scheduleError;
+      if (data?.overrideRequired && !allowOverride) {
+        setWarnings(rpcWarnings);
+        setMessage("登録直前の再確認で警告が見つかりました。内容を確認してください。");
+        return;
       }
+      if (!data?.created) throw new Error("予定を登録できませんでした。");
 
       setMessage("予定を登録しました。1日のスケジュールへ戻ります。");
       window.setTimeout(() => location.assign(`/schedule?day=${day}`), 350);
@@ -417,6 +481,46 @@ export default function ScheduleNewPage() {
           </div>
         )}
       </section>
+
+      {(duplicateCustomers.length > 0 || duplicateVehicles.length > 0) && (
+        <section className="card">
+          <h2>重複候補の確認</h2>
+          <div className="notice">既存のお客様・車両を選ぶと、新しい仮顧客・仮車両を増やさず予定だけ登録します。</div>
+          <div style={{display:"grid",gap:8,marginTop:12}}>
+            {duplicateVehicles.map((v) => (
+              <button type="button" key={v.vehicleId} onClick={() => {
+                setExistingVehicleId(v.vehicleId);
+                setExistingCustomerId(v.customerId || "");
+                setDuplicateDecisionFingerprint(duplicateFingerprint());
+                setDuplicateBypassFingerprint("");
+                setMessage("既存車両を使用して予定を登録します。");
+              }}>
+                既存車両を使う：{v.registrationNumber || `下4桁 ${v.registrationLast4 || "----"}`} {[v.maker,v.model].filter(Boolean).join(" ")}
+              </button>
+            ))}
+            {duplicateCustomers.map((c) => (
+              <button type="button" key={c.customerId} onClick={() => {
+                setExistingVehicleId("");
+                setExistingCustomerId(c.customerId);
+                setDuplicateDecisionFingerprint(duplicateFingerprint());
+                setDuplicateBypassFingerprint("");
+                setMessage("既存顧客に新しい車両を追加して予定を登録します。");
+              }}>
+                既存顧客を使う：{c.displayName}{c.phone ? ` / ${c.phone}` : ""}
+              </button>
+            ))}
+            <button type="button" onClick={() => {
+              setExistingVehicleId("");
+              setExistingCustomerId("");
+              setDuplicateDecisionFingerprint("");
+              setDuplicateBypassFingerprint(duplicateFingerprint());
+              setMessage("候補とは別のお客様・車両として新規登録します。");
+            }}>
+              候補とは別なので新規として登録
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <h2>① 日時と区分</h2>

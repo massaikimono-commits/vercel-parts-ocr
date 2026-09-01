@@ -1,0 +1,18 @@
+-- App-core safety RPC manifest.
+-- Applied to the existing Supabase project on 2026-09-01.
+-- No tables were added.
+--
+-- create_schedule_registration_v2
+--   Atomic customer/vehicle reuse or creation + work order + main schedule + delivery schedule.
+--   Rejects delivery before the inbound/work interval ends.
+--
+-- reschedule_schedule_entry_v2
+--   Atomic schedule change + stay reason + planned delivery date + history.
+--
+-- update_loaner_reservation_status
+--   Reactivating a reservation checks operational state and overlap first.
+--   Guard text: loaner vehicle is already reserved for this period
+--
+-- set_loaner_vehicle_operational_status
+--   Blocks maintenance/out-of-service while reserved/checked-out reservations exist.
+--   Guard text: active loaner reservations must be cleared before changing vehicle availability
