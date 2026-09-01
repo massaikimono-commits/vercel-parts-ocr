@@ -322,7 +322,7 @@ export default function CertificateMicroCellsFix() {
       try {
         const source = await sourceCanvas(img);
         const paper = detectPaper(source);
-        const t = await import("tesseract.js");
+        const t = await import("./lib/tesseract-local");
         worker = await t.createWorker("jpn+eng", 1);
         const psm = t.PSM?.SINGLE_LINE ?? "7";
 
