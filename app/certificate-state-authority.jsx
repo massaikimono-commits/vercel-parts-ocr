@@ -159,7 +159,7 @@ function mode(items) {
 async function targetedRead(file) {
   const source = await canvasFromFile(file);
   const paper = detectPaper(source);
-  const t = await import("tesseract.js");
+  const t = await import("./lib/tesseract-local");
   const worker = await t.createWorker("jpn+eng", 1);
   const dateCandidates = [], bodyCandidates = [], dateRaws = [], bodyRaws = [];
 
