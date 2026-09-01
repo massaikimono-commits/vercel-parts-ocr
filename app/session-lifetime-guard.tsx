@@ -94,6 +94,19 @@ export default function SessionLifetimeGuard() {
     };
     document.addEventListener("visibilitychange", onVisible);
 
+    const onPageShow = () => {
+      void (async () => {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          clearSensitiveLocalState();
+          if (location.pathname !== "/") location.replace("/");
+          return;
+        }
+        await signOutExpiredSession();
+      })();
+    };
+    window.addEventListener("pageshow", onPageShow);
+
     const timer = window.setInterval(() => {
       void signOutExpiredSession();
     }, 60 * 1000);
@@ -112,6 +125,7 @@ export default function SessionLifetimeGuard() {
         window.removeEventListener(eventName, onActivity);
       }
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
       subscription.unsubscribe();
     };
   }, []);
