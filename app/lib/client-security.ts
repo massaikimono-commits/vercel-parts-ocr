@@ -12,6 +12,8 @@ export function clearSensitiveLocalState() {
     // 旧バージョンで残った一時キーも掃除する。
     localStorage.removeItem("parts-active-vehicle");
     localStorage.removeItem("parts-before-ocr-ids");
+    localStorage.removeItem("icb-last-activity-at");
+    localStorage.removeItem("icb-session-started-at");
 
     const raw = localStorage.getItem("parts-data");
     if (raw) {
