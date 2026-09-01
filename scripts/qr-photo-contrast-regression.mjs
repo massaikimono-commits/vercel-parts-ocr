@@ -105,6 +105,7 @@ const cases = [
   { name: "low-contrast-slight-vertical-blur-photo", foreground: 185, background: 240, horizontalShade: 0, verticalShade: 0, blurRadius: 0, verticalBlurRadius: 1 },
   { name: "low-contrast-lower-shadow-photo", foreground: 175, background: 240, horizontalShade: 0, verticalShade: 20, blurRadius: 0, verticalBlurRadius: 0 },
   { name: "uneven-light-photo", foreground: 120, background: 245, horizontalShade: 30, verticalShade: 0, blurRadius: 0, verticalBlurRadius: 0 },
+  { name: "uneven-light-slight-vertical-blur-photo", foreground: 120, background: 245, horizontalShade: 30, verticalShade: 0, blurRadius: 0, verticalBlurRadius: 1 },
   { name: "lower-edge-shadow-photo", foreground: 115, background: 245, horizontalShade: 0, verticalShade: 34, blurRadius: 0, verticalBlurRadius: 0 },
   { name: "combined-uneven-lower-shadow-photo", foreground: 115, background: 245, horizontalShade: 24, verticalShade: 28, blurRadius: 0, verticalBlurRadius: 0 },
   { name: "slight-horizontal-blur-photo", foreground: 45, background: 248, horizontalShade: 0, verticalShade: 0, blurRadius: 1, verticalBlurRadius: 0 },
