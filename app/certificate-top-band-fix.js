@@ -419,7 +419,7 @@ async function buildSource(img) {
 async function extract(img) {
   const source = await buildSource(img);
   const paper = detectPaper(source);
-  const t = await import("tesseract.js");
+  const t = await import("./lib/tesseract-local");
   const worker = await t.createWorker("jpn+eng", 1);
 
   try {
