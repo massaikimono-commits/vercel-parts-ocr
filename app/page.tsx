@@ -479,6 +479,7 @@ export default function Home() {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [authMsg, setAuthMsg] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
   const [tab, setTab] = useState<
     "vehicle" | "customerVehicle" | "ocr" | "data" | "print" | "settings"
   >("vehicle");
@@ -566,6 +567,20 @@ export default function Home() {
       mounted = false;
       subscription.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const reason = sessionStorage.getItem("icb-auto-logout-reason");
+      if (reason) {
+        sessionStorage.removeItem("icb-auto-logout-reason");
+        setAuthMsg(
+          reason === "idle"
+            ? "30分間操作がなかったため自動ログアウトしました。"
+            : "セキュリティ保護のため再ログインしてください。"
+        );
+      }
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -784,6 +799,62 @@ export default function Home() {
     r.readAsDataURL(file);
   }
 
+  async function loginWithProtection() {
+    if (loginBusy) return;
+
+    setAuthMsg("");
+    const id = loginId.trim().toLowerCase();
+    if (!id) return setAuthMsg("ログインIDを入力してください。");
+    if (!password) return setAuthMsg("パスワードを入力してください。");
+
+    setLoginBusy(true);
+    try {
+      const { data: throttleData, error: throttleError } = await supabase.rpc(
+        "check_login_throttle",
+        { p_login_id: id }
+      );
+
+      if (throttleError) {
+        setAuthMsg("ログイン保護機能を確認できませんでした。少し待ってから再試行してください。");
+        return;
+      }
+
+      const throttle = Array.isArray(throttleData) ? throttleData[0] : throttleData;
+      if (throttle?.blocked) {
+        const minutes = Math.max(1, Math.ceil(Number(throttle.retry_after_seconds || 0) / 60));
+        setAuthMsg(`短時間に複数回ログインに失敗したため、一時的に制限しています。約${minutes}分後に再試行してください。`);
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email: `${id}@icb.local`,
+        password,
+      });
+
+      if (error) {
+        await supabase.rpc("record_login_failure", { p_login_id: id });
+
+        const { data: afterFailure } = await supabase.rpc(
+          "check_login_throttle",
+          { p_login_id: id }
+        );
+        const nextThrottle = Array.isArray(afterFailure) ? afterFailure[0] : afterFailure;
+
+        if (nextThrottle?.blocked) {
+          const minutes = Math.max(1, Math.ceil(Number(nextThrottle.retry_after_seconds || 0) / 60));
+          setAuthMsg(`ログインIDまたはパスワードが違います。安全のため約${minutes}分間ログインを制限します。`);
+        } else {
+          setAuthMsg("ログインIDまたはパスワードが違います。");
+        }
+        return;
+      }
+
+      await supabase.rpc("record_login_success");
+    } finally {
+      setLoginBusy(false);
+    }
+  }
+
   const active = parts.find((p) => p.id === selected);
 
   if (authLoading) {
@@ -799,19 +870,13 @@ export default function Home() {
           <input type="text" autoCapitalize="none" autoCorrect="off" placeholder="ログインID" value={loginId} onChange={(e) => setLoginId(e.target.value)} />
           <input type="password" placeholder="パスワード" value={password} onChange={(e) => setPassword(e.target.value)} />
           <div className="actions">
-            <button className="primary" onClick={async () => {
-              setAuthMsg("");
-              const id = loginId.trim().toLowerCase();
-              if (!id) return setAuthMsg("ログインIDを入力してください。");
-              if (!password) return setAuthMsg("パスワードを入力してください。");
-              const { error } = await supabase.auth.signInWithPassword({ email: `${id}@icb.local`, password });
-              if (error) {
-                await supabase.rpc("record_login_failure", { p_login_id: id });
-                setAuthMsg("ログインIDまたはパスワードが違います。");
-                return;
-              }
-              await supabase.rpc("record_login_success");
-            }}>ログイン</button>
+            <button
+              className="primary"
+              disabled={loginBusy}
+              onClick={() => void loginWithProtection()}
+            >
+              {loginBusy ? "確認中…" : "ログイン"}
+            </button>
           </div>
           {authMsg && <div className="notice">{authMsg}</div>}
         </section>
