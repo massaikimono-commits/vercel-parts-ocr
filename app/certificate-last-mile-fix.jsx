@@ -205,7 +205,7 @@ function eraHint() {
 async function readRegistrationDate(file) {
   const src = await imageCanvas(file);
   const paper = detectPaper(src);
-  const t = await import("tesseract.js");
+  const t = await import("./lib/tesseract-local");
   const worker = await t.createWorker("jpn+eng", 1);
   const raws = [];
   const candidates = [];
