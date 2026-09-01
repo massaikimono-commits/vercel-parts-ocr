@@ -395,7 +395,7 @@ function ensureDebug(values) {
 }
 
 async function extract(img, debug) {
-  const source = await buildSource(img), paper = detectPaper(source), t = await import("tesseract.js");
+  const source = await buildSource(img), paper = detectPaper(source), t = await import("./lib/tesseract-local");
   const worker = await t.createWorker("jpn+eng", 1);
   const logs = [`精密紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];
   try {
