@@ -53,8 +53,8 @@ const photoPickerEnhancer = `
   });
 
   const autoLinkCurrentBatch = () => {
-    const vehicle = parse(localStorage.getItem(ACTIVE_KEY), null);
-    const before = parse(localStorage.getItem(BEFORE_KEY), null);
+    const vehicle = parse(sessionStorage.getItem(ACTIVE_KEY), null);
+    const before = parse(sessionStorage.getItem(BEFORE_KEY), null);
     const parts = parse(localStorage.getItem(PARTS_KEY), []);
     if (!vehicle || !Array.isArray(before) || !Array.isArray(parts)) return;
 
@@ -68,14 +68,14 @@ const photoPickerEnhancer = `
 
     if (changed) localStorage.setItem(PARTS_KEY, JSON.stringify(next));
     if (changed || parts.some((p) => p?.id && !beforeIds.has(p.id))) {
-      localStorage.removeItem(BEFORE_KEY);
+      sessionStorage.removeItem(BEFORE_KEY);
     }
   };
 
   const originalSetItem = Storage.prototype.setItem;
   Storage.prototype.setItem = function(key, value) {
     if (this === localStorage && key === PARTS_KEY) {
-      const vehicle = parse(localStorage.getItem(ACTIVE_KEY), null);
+      const vehicle = parse(sessionStorage.getItem(ACTIVE_KEY), null);
       const previous = parse(localStorage.getItem(PARTS_KEY), []);
       const incoming = parse(value, null);
       if (vehicle && Array.isArray(previous) && Array.isArray(incoming)) {
