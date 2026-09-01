@@ -213,7 +213,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {inProgressRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="progressRow" onClick={() => openDay(todayJst())}>
                 <span className="progressDot">中</span>
-                <span className="uMain"><b>{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
               </button>
             ))}
@@ -250,7 +250,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {completedRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="completedRow" onClick={() => openDay(todayJst())}>
                 <span className="completedDot">済</span>
-                <span className="uMain"><b>{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
               </button>
             ))}
             {completedRows.length > 3 && (
