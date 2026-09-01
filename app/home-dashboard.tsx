@@ -177,6 +177,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票読取</button>
           <button onClick={() => location.assign("/inspection/select")}>記録簿作成</button>
           <button onClick={() => location.assign("/vehicle-workflow")}>車検証読取</button>
+          <button onClick={() => location.assign("/settings/login-history")}>ログイン履歴</button>
         </div>
       </section>
 
@@ -201,6 +202,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <button onClick={() => location.assign("/inspection/select")}><b>記録簿作成</b><small>記録簿を選んで作成</small></button>
           <button onClick={() => location.assign("/vehicle-workflow")}><b>車検証読取</b><small>必要なときだけ</small></button>
           <button onClick={() => location.assign("/customer-vehicles")}><b>顧客・車両管理</b><small>検索・編集</small></button>
+          <button onClick={() => location.assign("/settings/login-history")}><b>ログイン履歴</b><small>不審なアクセスを確認</small></button>
         </div>
       </section>
     </main>
