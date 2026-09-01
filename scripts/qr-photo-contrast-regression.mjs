@@ -1,11 +1,21 @@
 import { detectCertificateQrDensityCenters } from "../app/lib/certificate-qr-density.mjs";
 
-function syntheticQrImage(width, height, centers, foreground, background, shade = 0) {
+function syntheticQrImage(
+  width,
+  height,
+  centers,
+  foreground,
+  background,
+  horizontalShade = 0,
+  verticalShade = 0,
+) {
   const rgba = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const p = (y * width + x) * 4;
-      const localShade = Math.round(shade * (x / Math.max(1, width - 1)));
+      const xShade = horizontalShade * (x / Math.max(1, width - 1));
+      const yShade = verticalShade * (y / Math.max(1, height - 1));
+      const localShade = Math.round(xShade + yShade);
       const value = Math.max(0, background - localShade);
       rgba[p] = rgba[p + 1] = rgba[p + 2] = value;
       rgba[p + 3] = 255;
@@ -29,7 +39,9 @@ function syntheticQrImage(width, height, centers, foreground, background, shade 
         const y = top + yy;
         if (x < 0 || x >= width || y < 0 || y >= height) continue;
         const p = (y * width + x) * 4;
-        const localShade = Math.round(shade * (x / Math.max(1, width - 1)));
+        const xShade = horizontalShade * (x / Math.max(1, width - 1));
+        const yShade = verticalShade * (y / Math.max(1, height - 1));
+        const localShade = Math.round(xShade + yShade);
         const value = Math.max(0, foreground - localShade);
         rgba[p] = rgba[p + 1] = rgba[p + 2] = value;
       }
@@ -42,10 +54,11 @@ const width = 1200;
 const height = 1697;
 const centers = [0.511, 0.567, 0.617, 0.733, 0.789];
 const cases = [
-  { name: "normal-photo", foreground: 20, background: 250, shade: 0 },
-  { name: "washed-photo", foreground: 150, background: 245, shade: 0 },
-  { name: "low-contrast-photo", foreground: 190, background: 240, shade: 0 },
-  { name: "uneven-light-photo", foreground: 120, background: 245, shade: 30 },
+  { name: "normal-photo", foreground: 20, background: 250, horizontalShade: 0, verticalShade: 0 },
+  { name: "washed-photo", foreground: 150, background: 245, horizontalShade: 0, verticalShade: 0 },
+  { name: "low-contrast-photo", foreground: 190, background: 240, horizontalShade: 0, verticalShade: 0 },
+  { name: "uneven-light-photo", foreground: 120, background: 245, horizontalShade: 30, verticalShade: 0 },
+  { name: "lower-edge-shadow-photo", foreground: 115, background: 245, horizontalShade: 0, verticalShade: 34 },
 ];
 
 for (const test of cases) {
@@ -55,7 +68,8 @@ for (const test of cases) {
     centers,
     test.foreground,
     test.background,
-    test.shade,
+    test.horizontalShade,
+    test.verticalShade,
   );
   const actual = detectCertificateQrDensityCenters(rgba, width, height);
   if (actual.length < centers.length) {
