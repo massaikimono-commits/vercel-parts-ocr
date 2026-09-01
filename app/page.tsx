@@ -805,7 +805,12 @@ export default function Home() {
               if (!id) return setAuthMsg("ログインIDを入力してください。");
               if (!password) return setAuthMsg("パスワードを入力してください。");
               const { error } = await supabase.auth.signInWithPassword({ email: `${id}@icb.local`, password });
-              if (error) setAuthMsg("ログインIDまたはパスワードが違います。");
+              if (error) {
+                await supabase.rpc("record_login_failure", { p_login_id: id });
+                setAuthMsg("ログインIDまたはパスワードが違います。");
+                return;
+              }
+              await supabase.rpc("record_login_success");
             }}>ログイン</button>
           </div>
           {authMsg && <div className="notice">{authMsg}</div>}
@@ -815,6 +820,7 @@ export default function Home() {
   }
 
   return <HomeDashboard onLogout={async () => {
+    await supabase.rpc("record_logout");
     clearSensitiveLocalState();
     await supabase.auth.signOut();
   }} />;
