@@ -36,7 +36,7 @@
     "jsqr": "^1.4.0",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
-    "pdfjs-dist": "^4.10.38",
+    "pdfjs-dist": "^6.3.289",
     "tesseract.js-core": "5.1.1",
     "@tesseract.js-data/jpn": "1.0.0",
     "@tesseract.js-data/eng": "1.0.0"
