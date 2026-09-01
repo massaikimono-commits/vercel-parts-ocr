@@ -186,8 +186,8 @@ function crop(source, box, contrast = false) {
 async function targetedRead(file) {
   const prepared = await prepareDocumentImage(file, { maxSide: 3200, cropPaper: true, minPaperConfidence: 0.46 });
   const source = prepared.normalized;
-  const t = await import("tesseract.js");
-  const worker = await t.createWorker("jpn+eng", 1);
+  const t = await import("./lib/tesseract-local");
+  const worker = await t.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });
   const raws = [];
   const plans = [
     { box: [0.58, 0.045, 0.38, 0.085], psm: String(t.PSM?.SINGLE_BLOCK ?? "6") },

@@ -182,8 +182,8 @@ function crop(source, paper, box, binary = false, targetWidth = 2500) {
 async function readRegistrationDate(file) {
   const source = await canvasFromFile(file);
   const paper = detectPaper(source);
-  const t = await import("tesseract.js");
-  const worker = await t.createWorker("jpn+eng", 1);
+  const t = await import("./lib/tesseract-local");
+  const worker = await t.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });
   const boxes = [
     [0.155, 0.405, 0.214, 0.246],
     [0.175, 0.395, 0.218, 0.244],

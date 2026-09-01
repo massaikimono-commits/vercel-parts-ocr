@@ -1,0 +1,57 @@
+name: OCR regression
+
+on:
+  push:
+    branches:
+      - main
+      - fix/certificate-pdf-native-v1
+      - "work/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Run vehicle-certificate regression
+        run: npm run test:certificate
+
+      - name: Run QR speed regression
+        run: npm run test:qr-speed
+
+      - name: Run parts-slip regression
+        run: npm run test:parts
+
+      - name: Run yellow/white parts layout semantics
+        run: npm run test:parts-layout
+
+      - name: Run security regression
+        run: npm run test:security
+
+      - name: Build Next.js app
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build

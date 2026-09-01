@@ -201,7 +201,7 @@ function ensureDebug(lines) {
 }
 
 async function extract(img, debug) {
-  const source = await sourceFromImage(img), paper = detectPaper(source), t = await import("tesseract.js"), worker = await t.createWorker("jpn+eng", 1);
+  const source = await sourceFromImage(img), paper = detectPaper(source), t = await import("./lib/tesseract-local"), worker = await t.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });
   const log = [`最終紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];
   const R = async (name, box, opts = {}) => { const v = await read(worker, source, paper, box, opts); log.push(`【${name} 灰】 ${v[0] || "(空)"}`, `【${name} 白黒】 ${v[1] || "(空)"}`); return v; };
   try {

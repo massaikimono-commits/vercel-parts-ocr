@@ -1,0 +1,201 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "../supabase";
+import { safeActionError } from "../lib/client-security";
+
+type LoanerVehicle = {
+  loanerVehicleId: string;
+  displayName: string;
+  sourceType: "company_vehicle" | "rental_company";
+  sourceLabel: string;
+  providerName: string | null;
+  registrationLast4: string | null;
+  maker: string | null;
+  model: string | null;
+  operationalStatus: string;
+  reservations: Array<{
+    loanerReservationId: string;
+    status: string;
+    startsAt: string;
+    endsAt: string;
+    customerName: string | null;
+    registrationLast4: string | null;
+    reason: string | null;
+    workOrderId: string | null;
+  }>;
+};
+
+function todayJst() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone:"Asia/Tokyo", year:"numeric", month:"2-digit", day:"2-digit"
+  }).format(new Date());
+}
+
+function timeLabel(value:string) {
+  return new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(value));
+}
+
+export default function LoanerPage() {
+  const [day,setDay] = useState(todayJst());
+  const [vehicles,setVehicles] = useState<LoanerVehicle[]>([]);
+  const [counts,setCounts] = useState<any>({});
+  const [busy,setBusy] = useState(true);
+  const [message,setMessage] = useState("代車の空き状況を読み込みます。");
+  const [name,setName] = useState("");
+  const [sourceType,setSourceType] = useState<"company_vehicle"|"rental_company">("company_vehicle");
+  const [provider,setProvider] = useState("");
+  const [last4,setLast4] = useState("");
+  const [maker,setMaker] = useState("");
+  const [model,setModel] = useState("");
+
+  useEffect(()=>{ void load(); },[day]);
+
+  async function load() {
+    setBusy(true);
+    const {data,error} = await supabase.rpc("loaner_day_board",{p_day:day});
+    if(error){
+      setMessage(safeActionError("代車一覧の読み込み", error));
+    }else{
+      setVehicles((data?.vehicles || []) as LoanerVehicle[]);
+      setCounts(data?.counts || {});
+      setMessage(day+" の代車状況");
+    }
+    setBusy(false);
+  }
+
+  async function addVehicle() {
+    if(!name.trim()){
+      setMessage("代車名を入力してください。");
+      return;
+    }
+    setBusy(true);
+    const {error} = await supabase.from("loaner_vehicles").insert({
+      display_name:name.trim(),
+      source_type:sourceType,
+      provider_name:sourceType==="rental_company" ? provider.trim() || null : null,
+      registration_last4:last4.replace(/\D/g,"").slice(-4) || null,
+      maker:maker.trim() || null,
+      model:model.trim() || null,
+      operational_status:"active",
+      updated_at:new Date().toISOString(),
+    });
+    if(error){
+      setMessage(safeActionError("代車追加", error));
+      setBusy(false);
+      return;
+    }
+    setName(""); setProvider(""); setLast4(""); setMaker(""); setModel("");
+    setMessage("代車を追加しました。");
+    await load();
+  }
+
+  async function setStatus(id:string,status:string) {
+    setBusy(true);
+    const {error}=await supabase.from("loaner_vehicles").update({
+      operational_status:status,
+      updated_at:new Date().toISOString(),
+    }).eq("id",id);
+    if(error) setMessage(safeActionError("代車状態の更新", error));
+    else setMessage("代車状態を更新しました。");
+    await load();
+  }
+
+  const availableCount = useMemo(
+    ()=>vehicles.filter(v=>v.operationalStatus==="active" && !v.reservations?.length).length,
+    [vehicles]
+  );
+
+  return (
+    <main className="loanerPage">
+      <header className="top">
+        <button onClick={()=>location.assign("/")}>← メインへ</button>
+        <div><b>代車管理</b><span>自社代車・レンタカー</span></div>
+        <strong>icb</strong>
+      </header>
+
+      <section className="hero">
+        <div>
+          <div className="eyebrow">代車ボード</div>
+          <h1>{day}</h1>
+          <div className="notice">{busy?"読み込み中…":message}</div>
+        </div>
+        <div className="summary">
+          <div><small>空き</small><b>{availableCount}</b></div>
+          <div><small>予約/貸出</small><b>{counts.reservedOnDay ?? 0}</b></div>
+          <div><small>自社車</small><b>{counts.companyVehiclesActive ?? 0}</b></div>
+          <div><small>レンタカー</small><b>{counts.rentalCompanyVehiclesActive ?? 0}</b></div>
+        </div>
+      </section>
+
+      <section className="dateBar">
+        <input type="date" value={day} onChange={(e)=>setDay(e.target.value)} />
+        <button onClick={()=>setDay(todayJst())}>今日</button>
+      </section>
+
+      <section className="board">
+        {vehicles.map(v=>{
+          const available=v.operationalStatus==="active" && !(v.reservations||[]).length;
+          return (
+            <article className={`loanerCard ${available?"available":"busyCard"}`} key={v.loanerVehicleId}>
+              <div className="cardHead">
+                <div>
+                  <b>{v.displayName}</b>
+                  <span>{v.sourceLabel}{v.providerName?" / "+v.providerName:""}</span>
+                </div>
+                <strong className={available?"ok":"ng"}>{available?"空き":"使用予定あり"}</strong>
+              </div>
+              <div className="meta">
+                {v.registrationLast4 && <span>下4桁 {v.registrationLast4}</span>}
+                {(v.maker||v.model) && <span>{[v.maker,v.model].filter(Boolean).join(" ")}</span>}
+                <span>{v.operationalStatus==="active"?"稼働中":v.operationalStatus==="maintenance"?"整備中":v.operationalStatus}</span>
+              </div>
+              {(v.reservations||[]).map(r=>(
+                <div className="reservation" key={r.loanerReservationId}>
+                  <b>{timeLabel(r.startsAt)}〜{timeLabel(r.endsAt)}</b>
+                  <span>{r.customerName || "予約"}</span>
+                  {r.registrationLast4 && <small>下4桁 {r.registrationLast4}</small>}
+                  {r.reason && <small>{r.reason}</small>}
+                </div>
+              ))}
+              <div className="actions">
+                <button onClick={()=>void setStatus(v.loanerVehicleId,"active")}>稼働</button>
+                <button onClick={()=>void setStatus(v.loanerVehicleId,"maintenance")}>整備中</button>
+                <button onClick={()=>void setStatus(v.loanerVehicleId,"out_of_service")}>使用停止</button>
+              </div>
+            </article>
+          );
+        })}
+        {!vehicles.length && !busy && <div className="empty">代車がまだ登録されていません。</div>}
+      </section>
+
+      <section className="addCard">
+        <h2>代車を追加</h2>
+        <div className="grid">
+          <label>種類
+            <select value={sourceType} onChange={(e)=>setSourceType(e.target.value as any)}>
+              <option value="company_vehicle">自社代車</option>
+              <option value="rental_company">レンタカー会社</option>
+            </select>
+          </label>
+          <label>表示名<input value={name} onChange={(e)=>setName(e.target.value)} placeholder="例：N-BOX 1号車" /></label>
+          {sourceType==="rental_company" && <label>レンタカー会社<input value={provider} onChange={(e)=>setProvider(e.target.value)} /></label>}
+          <label>ナンバー下4桁<input inputMode="numeric" maxLength={4} value={last4} onChange={(e)=>setLast4(e.target.value.replace(/\D/g,"").slice(-4))} /></label>
+          <label>メーカー<input value={maker} onChange={(e)=>setMaker(e.target.value)} /></label>
+          <label>車種<input value={model} onChange={(e)=>setModel(e.target.value)} /></label>
+        </div>
+        <button className="primary" disabled={busy} onClick={()=>void addVehicle()}>＋ 代車を追加</button>
+      </section>
+
+      <style jsx global>{`
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}
+        .loanerPage{max-width:1100px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
+        .hero,.addCard{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.hero{display:flex;justify-content:space-between;gap:12px}.eyebrow{color:#2674e8;font-weight:800}.hero h1{margin:3px 0}.notice{color:#667487}.summary{display:flex;gap:7px;flex-wrap:wrap}.summary>div{background:#f6f8fb;border-radius:12px;padding:10px;min-width:80px;display:grid}.summary b{font-size:22px}.summary small{color:#78869a}
+        .dateBar{display:flex;gap:8px;margin-bottom:12px}.dateBar input,.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:10px;background:#fff}.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:14px}.loanerCard{background:#fff;border:1px solid #dbe3ee;border-radius:15px;padding:13px}.loanerCard.available{box-shadow:inset 4px 0 0 #6fb184}.loanerCard.busyCard{box-shadow:inset 4px 0 0 #d79a3d}.cardHead{display:flex;justify-content:space-between;gap:8px}.cardHead>div{display:grid}.cardHead>div span{font-size:11px;color:#6d798a}.cardHead strong{font-size:11px;border-radius:999px;padding:4px 7px;height:max-content}.cardHead .ok{background:#e9f7ef;color:#25703c}.cardHead .ng{background:#fff0db;color:#925b08}.meta{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}.meta span{font-size:10px;background:#f1f4f8;border-radius:999px;padding:3px 6px}.reservation{margin-top:8px;background:#f8fafc;border-radius:9px;padding:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}.reservation span{font-weight:800}.reservation small{color:#6c7888}.actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}.actions button{font-size:10px;padding:6px 8px}.empty{background:#fff;padding:25px;border-radius:14px;text-align:center;color:#8592a4}
+        .addCard h2{margin-top:0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.grid label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#627083}.primary{margin-top:12px;background:#2f6fe4;color:#fff;border-color:#2f6fe4}
+        @media(max-width:800px){.hero{display:block}.summary{margin-top:10px}.board{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}}@media(max-width:520px){.grid{grid-template-columns:1fr}}
+      `}</style>
+    </main>
+  );
+}

@@ -1,0 +1,8 @@
+{
+  "id": "parts-line-break-001",
+  "description": "Tesseractが価格列を改行したケース。",
+  "ocrText": "納品書\nエアクリーナーエレメント\n1 7,500\n4,200",
+  "expected": [
+    {"name":"エアクリーナーエレメント","qty":"1","retail":"7500","cost":"4200"}
+  ]
+}

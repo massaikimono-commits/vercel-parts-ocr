@@ -1,0 +1,356 @@
+"use client";
+
+import { useEffect } from "react";
+import { expectedCertificateQrCount, normalizeCertificateCanvas } from "./lib/certificate-photo-normalize";
+import { detectCertificateQrDensityCenters } from "./lib/certificate-qr-density.mjs";
+
+function hex(bytes = []) {
+  return Array.from(bytes).map((v) => Number(v).toString(16).padStart(2, "0")).join(" ").toUpperCase();
+}
+function decodeRawText(bytes = []) {
+  const raw = Uint8Array.from(bytes || []);
+  if (!raw.length) return "";
+  const candidates = [];
+  for (const encoding of ["utf-8", "shift_jis"]) {
+    try {
+      const text = new TextDecoder(encoding, { fatal: true }).decode(raw).replace(/\0/g, "").trim();
+      if (!text) continue;
+      let score = 0;
+      if (/^(?:2|K)\//.test(text)) score += 12;
+      if (text.includes("/")) score += 5;
+      if (/[一-龠ぁ-んァ-ヶ]/.test(text)) score += 2;
+      const controls = (text.match(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
+      score -= controls * 4;
+      candidates.push({ text, score });
+    } catch {}
+  }
+  return candidates.sort((a, b) => b.score - a.score)[0]?.text || "";
+}
+function isCertificateFileInput(node) {
+  if (!(node instanceof HTMLInputElement) || node.type !== "file") return false;
+  const section = node.closest("section.card");
+  return !!section?.querySelector("h2")?.textContent?.includes("車検証から読み取る");
+}
+async function sourceCanvas(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const node = new Image();
+      node.onload = () => resolve(node);
+      node.onerror = () => reject(new Error("QR解析用画像を開けませんでした"));
+      node.src = url;
+    });
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    const scale = Math.min(1, 4400 / Math.max(iw, ih));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(iw * scale));
+    canvas.height = Math.max(1, Math.round(ih * scale));
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+function cropRegion(source, x0, y0, w0, h0, mode, target) {
+  const sx = Math.max(0, Math.round(source.width * x0));
+  const sy = Math.max(0, Math.round(source.height * y0));
+  const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * w0)));
+  const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * h0)));
+  const scale = Math.max(1, Math.min(5.5, (target || 2200) / Math.max(1, sw)));
+  const pad = 36;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(sw * scale) + pad * 2;
+  canvas.height = Math.round(sh * scale) + pad * 2;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(source, sx, sy, sw, sh, pad, pad, canvas.width - pad * 2, canvas.height - pad * 2);
+  if (mode !== "color") {
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let sum = 0;
+    for (let p = 0; p < image.data.length; p += 4) {
+      const g = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+      sum += g; image.data[p] = image.data[p + 1] = image.data[p + 2] = g;
+    }
+    const avg = sum / Math.max(1, image.data.length / 4);
+    const threshold = Math.max(90, Math.min(225, avg - 8));
+    for (let p = 0; p < image.data.length; p += 4) {
+      const g = image.data[p];
+      const v = mode === "binary" ? (g < threshold ? 0 : 255) : Math.max(0, Math.min(255, Math.round((g - 128) * 2.05 + 150)));
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = v; image.data[p + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+  return canvas;
+}
+function cropPaperRegion(source, paperBounds, x0, y0, w0, h0, mode, target) {
+  const b = paperBounds && Number(paperBounds.w) > 0 && Number(paperBounds.h) > 0
+    ? paperBounds
+    : { x: 0, y: 0, w: source.width, h: source.height };
+  const sx = Math.max(0, Math.round(b.x + b.w * x0));
+  const sy = Math.max(0, Math.round(b.y + b.h * y0));
+  const sw = Math.max(1, Math.min(source.width - sx, Math.round(b.w * w0)));
+  const sh = Math.max(1, Math.min(source.height - sy, Math.round(b.h * h0)));
+  const scale = Math.max(1, Math.min(5.5, (target || 2200) / Math.max(1, sw)));
+  const pad = 36;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(sw * scale) + pad * 2;
+  canvas.height = Math.round(sh * scale) + pad * 2;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(source, sx, sy, sw, sh, pad, pad, canvas.width - pad * 2, canvas.height - pad * 2);
+  if (mode !== "color") {
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let sum = 0;
+    for (let p = 0; p < image.data.length; p += 4) {
+      const g = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+      sum += g;
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = g;
+    }
+    const avg = sum / Math.max(1, image.data.length / 4);
+    const threshold = Math.max(90, Math.min(225, avg - 8));
+    for (let p = 0; p < image.data.length; p += 4) {
+      const g = image.data[p];
+      const v = mode === "binary"
+        ? (g < threshold ? 0 : 255)
+        : Math.max(0, Math.min(255, Math.round((g - 128) * 2.05 + 150)));
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
+      image.data[p + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+  return canvas;
+}
+function qrBounds(code, width, height) {
+  const loc = code && code.location;
+  if (!loc) return null;
+  const pts = [loc.topLeftCorner, loc.topRightCorner, loc.bottomLeftCorner, loc.bottomRightCorner].filter(Boolean);
+  if (!pts.length) return null;
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const pad = Math.max(14, Math.round(Math.min(width, height) * .018));
+  return {
+    left: Math.max(0, Math.floor(Math.min(...xs) - pad)),
+    top: Math.max(0, Math.floor(Math.min(...ys) - pad)),
+    right: Math.min(width, Math.ceil(Math.max(...xs) + pad)),
+    bottom: Math.min(height, Math.ceil(Math.max(...ys) + pad)),
+    centerX: (Math.min(...xs) + Math.max(...xs)) / 2,
+  };
+}
+function decodeBand(jsQR, canvas, tag) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const found = [];
+  for (let attempt = 0; attempt < 7; attempt += 1) {
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
+    if (!result) break;
+    const binary = Array.from(result.binaryData || []);
+    const data = decodeRawText(binary) || result.data || "";
+    const b = qrBounds(result, canvas.width, canvas.height);
+    if (data || binary.length) {
+      found.push({ slot: null, scanTag: "帯域/" + tag + "/jsQR", data, binary, hex: binary.length ? hex(binary) : "", xCenter: b ? b.centerX / canvas.width : .5 });
+    }
+    if (!b) break;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(b.left, b.top, Math.max(1, b.right - b.left), Math.max(1, b.bottom - b.top));
+  }
+  return found;
+}
+async function makeReader() {
+  const browser = await import("@zxing/browser");
+  const lib = await import("@zxing/library");
+  const hints = new Map();
+  hints.set(lib.DecodeHintType.POSSIBLE_FORMATS, [lib.BarcodeFormat.QR_CODE]);
+  hints.set(lib.DecodeHintType.TRY_HARDER, true);
+  return new browser.BrowserQRCodeReader(hints);
+}
+async function decodeZxing(reader, canvas, xCenter, tag) {
+  try {
+    const result = await reader.decodeFromCanvas(canvas);
+    const raw = result?.getRawBytes?.() || result?.rawBytes || [];
+    const binary = Array.from(raw || []);
+    const data = decodeRawText(binary) || result?.getText?.() || result?.text || "";
+    if (!data && !binary.length) return null;
+    return { slot: null, scanTag: "個別/" + tag + "/ZXing", data, binary, hex: hex(binary), xCenter };
+  } catch {
+    return null;
+  }
+}
+function keyOf(item) { return item && (item.hex || item.data || ""); }
+function orderedUnique(items) {
+  const map = new Map();
+  for (const item of items || []) {
+    const key = keyOf(item);
+    if (!key || map.has(key)) continue;
+    map.set(key, item);
+  }
+  return [...map.values()]
+    .sort((a, b) => Number(a.xCenter ?? 9) - Number(b.xCenter ?? 9))
+    .map((item, slot) => ({ ...item, slot, label: "高速QR/QR" + (slot + 1) + "/" + String(item.scanTag || "") }));
+}
+function keiVersions(items) {
+  return [...new Set((items || []).map((item) => {
+    const f = String(item?.data || "").normalize("NFKC").replace(/\u3000/g, " ").split("/").map((x) => x.trim());
+    return f[0] === "K" ? f[1] : "";
+  }).filter(Boolean))].sort();
+}
+function qrDensityCenters(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return [];
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return detectCertificateQrDensityCenters(image.data, image.width, image.height)
+    .map((item) => Number(item.x))
+    .filter((x) => Number.isFinite(x) && x >= .4 && x <= .98);
+}
+function mergeCenters(primary, fallback) {
+  const out = [];
+  for (const value of [...(primary || []), ...(fallback || [])]) {
+    const x = Number(value);
+    if (!Number.isFinite(x)) continue;
+    if (out.some((known) => Math.abs(known - x) < .026)) continue;
+    out.push(x);
+  }
+  return out;
+}
+
+function showStatus(text) {
+  const host = document.getElementById("certificate-qr-debug") || document.querySelector("img.preview")?.closest("section.card");
+  if (!host) return;
+  let box = document.getElementById("certificate-qr-fast-status");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "certificate-qr-fast-status";
+    box.style.marginTop = "10px"; box.style.padding = "10px"; box.style.borderRadius = "10px";
+    box.style.background = "#eefaf2"; box.style.border = "1px solid #bfe6ce"; box.style.fontWeight = "800";
+    host.appendChild(box);
+  }
+  box.textContent = text;
+}
+async function scanFast(file) {
+  const raw = await sourceCanvas(file);
+  const normalized = normalizeCertificateCanvas(raw, 1800);
+  const source = normalized.canvas;
+  const [reader, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
+  const jsQR = jsMod.default || jsMod;
+  const started = performance.now();
+  // QRが全部拾えれば後段OCRを減らせるため、弱い写真だけ最大4.6秒までQR救済を許可する。
+  const budgetMs = 4600;
+  // 実写真では登録車5QRの横位置が撮影・用紙補正で数%ずれる。
+  // 先にQRらしい高周波領域を画像だけで探し、固定座標より優先して個別ZXingへ渡す。
+  const densityCenters = qrDensityCenters(source);
+  let found = [];
+
+  const add = (items) => {
+    found.push(...(items || []));
+    found = orderedUnique(found);
+  };
+  const runBand = async (y, mode) => {
+    const band = cropRegion(source, .34, y, .65, .21, mode, 3200);
+    try {
+      add(decodeBand(jsQR, band, "norm/y" + y + "/" + mode).map((hit) => ({
+        ...hit,
+        xCenter: .34 + hit.xCenter * .65,
+      })));
+    } finally { band.width = 1; band.height = 1; }
+  };
+  const runRawBand = async (y, mode) => {
+    const band = cropPaperRegion(raw, normalized.paper?.bounds, .33, y, .66, .22, mode, 3400);
+    try {
+      add(decodeBand(jsQR, band, "raw/y" + y + "/" + mode).map((hit) => ({
+        ...hit,
+        xCenter: .33 + hit.xCenter * .66,
+      })));
+    } finally { band.width = 1; band.height = 1; }
+  };
+  const scanSlots = async (useRaw, y, mode) => {
+    const fixedCenters = [.46, .545, .63, .715, .82, .91];
+    const centers = mergeCenters(densityCenters, fixedCenters);
+    for (const center of centers) {
+      if (performance.now() - started >= budgetMs) break;
+      if (found.some((x) => Math.abs(Number(x.xCenter) - center) < .038)) continue;
+      const c = useRaw
+        ? cropPaperRegion(raw, normalized.paper?.bounds, Math.max(0, center - .06), y, .12, .15, mode, mode === "color" ? 1250 : 1500)
+        : cropRegion(source, Math.max(0, center - .06), y, .12, .15, mode, mode === "color" ? 1250 : 1500);
+      try {
+        const hit = await decodeZxing(reader, c, center, (useRaw ? "raw/" : "norm/") + "x" + center + "/y" + y + "/" + mode);
+        if (hit) add([hit]);
+      } finally { c.width = 1; c.height = 1; }
+      const expected = expectedCertificateQrCount(found);
+      if (found.length >= expected.count) break;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  };
+
+  try {
+    await runBand(.755, "color");
+    let expected = expectedCertificateQrCount(found);
+    if (found.length < expected.count && performance.now() - started < budgetMs) await runBand(.785, "contrast");
+    expected = expectedCertificateQrCount(found);
+
+    if (found.length < expected.count && performance.now() - started < budgetMs) await scanSlots(false, .785, "color");
+    expected = expectedCertificateQrCount(found);
+    if (found.length < expected.count && performance.now() - started < budgetMs) await scanSlots(false, .805, "contrast");
+    expected = expectedCertificateQrCount(found);
+
+    if (found.length < expected.count && performance.now() - started < budgetMs) await runRawBand(.74, "color");
+    expected = expectedCertificateQrCount(found);
+    if (found.length < expected.count && performance.now() - started < budgetMs) await scanSlots(true, .765, "contrast");
+    expected = expectedCertificateQrCount(found);
+
+    if (found.length < expected.count && performance.now() - started < budgetMs) await runRawBand(.755, "binary");
+  } finally {
+    raw.width = 1;
+    raw.height = 1;
+    source.width = 1;
+    source.height = 1;
+  }
+
+  found = orderedUnique(found);
+  const expected = expectedCertificateQrCount(found);
+  return {
+    result: found,
+    elapsed: Math.round(performance.now() - started),
+    expected,
+    normalizeMode: normalized.mode,
+    normalizeConfidence: normalized.confidence,
+    densityCenters,
+  };
+}
+export default function CertificateQrFast() {
+  useEffect(() => {
+    if (!location.pathname.startsWith("/vehicle-workflow")) return;
+    let stopped = false;
+    let token = 0;
+    const onChange = (event) => {
+      const input = event.target;
+      if (!isCertificateFileInput(input)) return;
+      const file = input.files?.[0];
+      if (!file || file.type === "application/pdf") return;
+      const myToken = ++token;
+      window.__vehicleCertificateQrFastState = { running: true, token: myToken, count: 0, elapsed: 0 };
+      showStatus("高速QR解析中…");
+      void scanFast(file).then(({ result, elapsed, expected, normalizeMode, normalizeConfidence, densityCenters }) => {
+        if (stopped || myToken !== token) return;
+        window.__vehicleCertificateQr = result;
+        window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: result.length, elapsed, expected: expected.count, kind: expected.kind, densityCenters };
+        window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fast-ready", { detail: { result, elapsed, expected } }));
+        window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fallback-ready", { detail: result }));
+        const versions = keiVersions(result);
+        showStatus("高速QR: " + result.length + "/" + expected.count + "件 / " + elapsed + "ms / " + expected.label + (versions.length ? " / 軽QR " + versions.join(",") : "") + " / QR候補 " + densityCenters.length + " / 用紙補正 " + normalizeMode + " " + Math.round(normalizeConfidence * 100) + "%");
+      }).catch((e) => {
+        if (!stopped && myToken === token) {
+          window.__vehicleCertificateQrFastState = { running: false, token: myToken, count: 0, elapsed: 0, error: String(e?.message || e) };
+          window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fast-ready", { detail: { result: [], elapsed: 0, error: String(e?.message || e) } }));
+          showStatus("高速QR解析エラー: " + (e?.message || e));
+        }
+      });
+    };
+    document.addEventListener("change", onChange, true);
+    return () => { stopped = true; document.removeEventListener("change", onChange, true); };
+  }, []);
+  return null;
+}

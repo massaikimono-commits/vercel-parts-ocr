@@ -322,8 +322,8 @@ export default function CertificateMicroCellsFix() {
       try {
         const source = await sourceCanvas(img);
         const paper = detectPaper(source);
-        const t = await import("tesseract.js");
-        worker = await t.createWorker("jpn+eng", 1);
+        const t = await import("./lib/tesseract-local");
+        worker = await t.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });
         const psm = t.PSM?.SINGLE_LINE ?? "7";
 
         // 自動車検査証記録事項の値セルだけを狙う。

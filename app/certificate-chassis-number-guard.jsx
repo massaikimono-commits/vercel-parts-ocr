@@ -16,20 +16,44 @@ function modelFamily(value = "") {
   return /^[A-Z0-9]{3,8}$/.test(tail) && /[A-Z]/.test(tail) && /\d/.test(tail) ? tail : "";
 }
 
+function familyRelation(prefix = "", family = "") {
+  const p = norm(prefix).toUpperCase().replace(/\s+/g, "");
+  const f = norm(family).toUpperCase().replace(/\s+/g, "");
+  if (!p || !f) return { compatible: true, canonicalPrefix: p || f, reason: "" };
+  if (p === f) return { compatible: true, canonicalPrefix: p, reason: "" };
+
+  // 型式側だけ末尾に仕様記号が付く例: ZWE219H / ZWE219-xxxx。
+  if (f.startsWith(p)) {
+    const extra = f.slice(p.length);
+    if (/^[A-Z]{1,2}$/.test(extra)) {
+      return { compatible: true, canonicalPrefix: p, reason: "型式末尾の仕様記号を許容しました。" };
+    }
+  }
+
+  // 写真OCRで車台番号プレフィックスの先頭英字だけ欠ける例: MK53S → K53S。
+  // 型式が既に高信頼で取れている時だけ、欠けた1〜2文字を型式から復元する。
+  if (f.endsWith(p)) {
+    const missing = f.slice(0, f.length - p.length);
+    if (/^[A-Z]{1,2}$/.test(missing)) {
+      return { compatible: true, canonicalPrefix: f, reason: `車台番号先頭の欠落 ${missing} を型式から復元しました。` };
+    }
+  }
+
+  return { compatible: false, canonicalPrefix: p, reason: "" };
+}
+
 function parseChassis(value = "") {
   const text = norm(value).toUpperCase();
   const compact = text.replace(/\s+/g, "");
 
-  // 17桁VINなど。I/O/QはVINでは使わないため、そのまま厳格判定する。
   const vin = compact.match(/(?:^|[^A-Z0-9])([A-HJ-NPR-Z0-9]{11,17})(?:$|[^A-Z0-9])/i)?.[1] ||
     (/^[A-HJ-NPR-Z0-9]{11,17}$/.test(compact) ? compact : "");
   if (vin && /[A-Z]/.test(vin) && /\d/.test(vin)) {
-    return { value: vin, raw: text, suspicious: compact !== vin, kind: "VIN", prefix: "" };
+    return { value: vin, raw: text, suspicious: compact !== vin, kind: "VIN", prefix: "", suffix: "" };
   }
 
-  // 国内で一般的な「型式系プレフィックス-連番」。
   const matches = [...compact.matchAll(/([A-Z0-9]{3,8})-([0-9OQI|]{5,9})/g)];
-  if (!matches.length) return { value: "", raw: text, suspicious: Boolean(text), kind: "", prefix: "" };
+  if (!matches.length) return { value: "", raw: text, suspicious: Boolean(text), kind: "", prefix: "", suffix: "" };
 
   const m = matches[matches.length - 1];
   const prefix = m[1] || "";
@@ -38,7 +62,7 @@ function parseChassis(value = "") {
     .replace(/[I|]/g, "1");
 
   if (!/[A-Z]/.test(prefix) || !/\d/.test(prefix) || !/^\d{5,9}$/.test(suffix)) {
-    return { value: "", raw: text, suspicious: true, kind: "", prefix };
+    return { value: "", raw: text, suspicious: true, kind: "", prefix, suffix };
   }
 
   return {
@@ -47,6 +71,7 @@ function parseChassis(value = "") {
     suspicious: `${prefix}-${m[2]}` !== `${prefix}-${suffix}` || compact !== `${prefix}-${m[2]}`,
     kind: "国内形式",
     prefix,
+    suffix,
   };
 }
 
@@ -111,37 +136,44 @@ export default function CertificateChassisNumberGuard() {
       if (!input) return;
 
       const qrRaw = window.__vehicleCertificateQrPriority?.chassisNumber || "";
+      const pdfRaw = window.__vehicleCertificatePdfPriority?.chassisNumber || "";
       const current = input.value || "";
-      const source = qrRaw ? "QR" : "OCR";
-      const raw = qrRaw || current;
+      const source = qrRaw ? "QR" : pdfRaw ? "PDF" : "OCR";
+      const raw = qrRaw || pdfRaw || current;
       if (!raw) return;
 
       const parsed = parseChassis(raw);
       const family = modelFamily(findInput("型式")?.value || "");
-      const familyMismatch = !qrRaw && parsed.kind === "国内形式" && family && parsed.prefix !== family;
-      const key = `${source}|${raw}|${parsed.value}|${family}|${familyMismatch ? 1 : 0}`;
+      const relation = parsed.kind === "国内形式" ? familyRelation(parsed.prefix, family) : { compatible: true, canonicalPrefix: parsed.prefix, reason: "" };
+      const familyMismatch = source === "OCR" && parsed.kind === "国内形式" && family && !relation.compatible;
+      const canonical = parsed.kind === "国内形式" && parsed.suffix && relation.compatible && relation.canonicalPrefix
+        ? `${relation.canonicalPrefix}-${parsed.suffix}`
+        : parsed.value;
+      const key = `${source}|${raw}|${canonical}|${family}|${familyMismatch ? 1 : 0}`;
       if (key === lastKey) return;
       lastKey = key;
 
-      if (parsed.value && !familyMismatch) {
-        if (parsed.value !== current) setReactInputValue(input, parsed.value);
-        if (parsed.value !== raw || parsed.suspicious || qrRaw) {
-          const reason = parsed.kind === "国内形式" && parsed.suspicious
+      if (canonical && !familyMismatch) {
+        if (canonical !== current) setReactInputValue(input, canonical);
+        const reason = relation.reason || (source === "PDF"
+          ? "PDF文字レイヤーで構造確定した車台番号を保持しました。"
+          : parsed.kind === "国内形式" && parsed.suspicious
             ? "数字部のO/Q→0、I/|→1のみ安全補正しました。"
-            : parsed.kind === "VIN" ? "VIN形式として確認しました。" : "";
-          showDebug(raw, parsed.value, source, reason);
+            : parsed.kind === "VIN" ? "VIN形式として確認しました。" : "");
+        if (canonical !== raw || parsed.suspicious || qrRaw || pdfRaw || relation.reason) {
+          showDebug(raw, canonical, source, reason);
         }
         return;
       }
 
-      if (!qrRaw && current) {
+      if (source === "OCR" && current) {
         setReactInputValue(input, "");
         showDebug(
           raw,
           "",
           source,
           familyMismatch
-            ? `型式の車系 ${family} と一致しないため保留（空欄）にしました。`
+            ? `型式の車系 ${family} と整合しないため保留（空欄）にしました。`
             : "車台番号の形式として確定できないため保留（空欄）にしました。"
         );
       }

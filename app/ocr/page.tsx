@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { consumeOCRTransferImage } from "./transfer";
+import { validateDocumentFile } from "../lib/file-security";
 
 type Part = { id: string; name: string; qty: string; retail: string; cost: string; source?: string };
 type CropBox = { x: number; y: number; w: number; h: number };
@@ -194,15 +195,17 @@ export default function HighAccuracyOCRPage() {
   }, []);
 
   async function runOCR(file: File) {
+    const fileCheck = await validateDocumentFile(file);
+    if (!fileCheck.ok) { setMessage(fileCheck.message); return; }
     setBusy(true); setProgress(1); setParts([]); setDebugText(""); setMessage("伝票位置を補正しています…");
     if (preview) URL.revokeObjectURL(preview); setPreview(URL.createObjectURL(file));
     let worker: any = null;
     try {
-      const source = await sourceCanvas(file); const paper = detectPaperBox(source); const tesseract: any = await import("tesseract.js");
-      worker = await tesseract.createWorker("jpn+eng", 1, { logger: (m: any) => { if (m.status === "recognizing text") setProgress((old) => Math.max(old, Math.min(96, old + Math.max(1, Math.round((m.progress || 0) * 2))))); } });
+      const source = await sourceCanvas(file); const paper = detectPaperBox(source); const tesseract: any = await import("../lib/tesseract-local");
+      worker = await tesseract.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang",  logger: (m: any) => { if (m.status === "recognizing text") setProgress((old) => Math.max(old, Math.min(96, old + Math.max(1, Math.round((m.progress || 0) * 2))))); } });
       const found: Part[] = []; const logs: string[] = [`paper x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`]; const firstRowY = 0.440; const rowStep = 0.100; let emptyRows = 0;
 
-      for (let row = 0; row < 4; row += 1) {
+      for (let row = 0; row < 5; row += 1) {
         const y = firstRowY + row * rowStep; if (y >= 0.88) break;
         setMessage(`部品表 ${row + 1}行目を読み取り中…`); setProgress((old) => Math.max(old, 8 + row * 20));
         const qtyBox = relativeBox(paper, 0.432, y, 0.040, 0.070); const retailBox = relativeBox(paper, 0.480, y, 0.090, 0.070); const costBox = relativeBox(paper, 0.596, y, 0.080, 0.070); const amountBox = relativeBox(paper, 0.730, y, 0.080, 0.070);

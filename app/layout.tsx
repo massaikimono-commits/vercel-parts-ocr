@@ -1,20 +1,37 @@
 import "./globals.css";
+import AuthRouteGuard from "./auth-route-guard";
+import SessionLifetimeGuard from "./session-lifetime-guard";
 import CertificatePriorityFix from "./certificate-priority-fix";
 import CertificateEssentialFieldsFix from "./certificate-essential-fields-fix";
 import CertificateRowPriorityFix from "./certificate-row-priority-fix";
 import CertificateFuelClassificationFix from "./certificate-fuel-classification-fix";
 import CertificateChassisCorrectionFix from "./certificate-chassis-correction-fix";
 import CertificateConsistencyFix from "./certificate-consistency-fix";
+import CertificatePdfNativeReader from "./certificate-pdf-native-reader";
 import CertificatePdfBridge from "./certificate-pdf-bridge";
-import CertificateQrReader from "./certificate-qr-reader";
+import CertificateQrFast from "./certificate-qr-fast";
+import CertificateQrRescue from "./certificate-qr-rescue";
 import CertificateQrLowerSixFallback from "./certificate-qr-lower-six-fallback";
+import CertificateKeiBaseline from "./certificate-kei-baseline";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
+import CertificatePhotoRescue from "./certificate-photo-rescue";
 import CertificateFinalNativeFix from "./certificate-final-native-fix";
-import CertificateAdaptiveOcr from "./certificate-adaptive-ocr";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
-  description: "部品伝票から4項目を抽出して指定用紙へ印刷"
+  description: "部品伝票から4項目を抽出して指定用紙へ印刷",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+      "max-image-preview": "none",
+      "max-snippet": -1,
+    },
+  },
 };
 
 const photoPickerEnhancer = `
@@ -37,8 +54,8 @@ const photoPickerEnhancer = `
   });
 
   const autoLinkCurrentBatch = () => {
-    const vehicle = parse(localStorage.getItem(ACTIVE_KEY), null);
-    const before = parse(localStorage.getItem(BEFORE_KEY), null);
+    const vehicle = parse(sessionStorage.getItem(ACTIVE_KEY), null);
+    const before = parse(sessionStorage.getItem(BEFORE_KEY), null);
     const parts = parse(localStorage.getItem(PARTS_KEY), []);
     if (!vehicle || !Array.isArray(before) || !Array.isArray(parts)) return;
 
@@ -52,14 +69,14 @@ const photoPickerEnhancer = `
 
     if (changed) localStorage.setItem(PARTS_KEY, JSON.stringify(next));
     if (changed || parts.some((p) => p?.id && !beforeIds.has(p.id))) {
-      localStorage.removeItem(BEFORE_KEY);
+      sessionStorage.removeItem(BEFORE_KEY);
     }
   };
 
   const originalSetItem = Storage.prototype.setItem;
   Storage.prototype.setItem = function(key, value) {
     if (this === localStorage && key === PARTS_KEY) {
-      const vehicle = parse(localStorage.getItem(ACTIVE_KEY), null);
+      const vehicle = parse(sessionStorage.getItem(ACTIVE_KEY), null);
       const previous = parse(localStorage.getItem(PARTS_KEY), []);
       const incoming = parse(value, null);
       if (vehicle && Array.isArray(previous) && Array.isArray(incoming)) {
@@ -184,20 +201,26 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
   return (
     <html lang="ja">
       <body>
-        {children}
-        <CertificatePriorityFix />
+        <SessionLifetimeGuard />
+        <AuthRouteGuard>
+          {children}
+          <CertificatePriorityFix />
         <CertificateEssentialFieldsFix />
         <CertificateRowPriorityFix />
         <CertificateFuelClassificationFix />
         <CertificateChassisCorrectionFix />
         <CertificateConsistencyFix />
+        <CertificatePdfNativeReader />
         <CertificatePdfBridge />
-        <CertificateQrReader />
+        <CertificateQrFast />
+        <CertificateQrRescue />
         <CertificateQrLowerSixFallback />
+        <CertificateKeiBaseline />
         <CertificateQrApply />
+        <CertificatePhotoRescue />
         <CertificateFinalNativeFix />
-        <CertificateAdaptiveOcr />
-        <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
+          <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
+        </AuthRouteGuard>
       </body>
     </html>
   );

@@ -3,6 +3,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
+import HomeDashboard from "./home-dashboard";
+import { clearSensitiveLocalState, safeActionError, spreadsheetSafeCell } from "./lib/client-security";
+import { isActiveAppSession } from "./lib/auth-security";
 
 type Part = {
   id: string;
@@ -96,7 +99,7 @@ function normalizeOCR(text: string) {
     .replace(/[，、]/g, ",")
     .replace(/[‐‑‒–—―]/g, "-")
     .replace(/[｜¦]/g, "|")
-    .replace(/[ \t]+/g, " ")
+    .replace(/ +/g, " ")
     .replace(/\r/g, "");
 }
 
@@ -152,9 +155,13 @@ function findNearbyName(lines: string[], rowIndex: number) {
 
   for (let i = Math.max(0, rowIndex - 5); i <= Math.min(lines.length - 1, rowIndex + 1); i += 1) {
     if (i === rowIndex) continue;
-    const s = nameScore(lines[i]);
-    if (s > bestScore) {
-      bestScore = s;
+    const base = nameScore(lines[i]);
+    const distance = Math.abs(rowIndex - i);
+    const proximity = Math.max(0, 3 - distance * 0.6);
+    const previousBonus = i < rowIndex ? 1.5 : 0;
+    const score = base + proximity + previousBonus;
+    if (score > bestScore) {
+      bestScore = score;
       best = cleanName(lines[i]);
     }
   }
@@ -168,6 +175,33 @@ function parseOCR(text: string): Part[] {
     .filter(Boolean);
 
   const out: Part[] = [];
+
+  // タブ/パイプ区切りの旧形式は、一般OCR推測より先に確定する。
+  const structured: Part[] = [];
+  for (const line of lines) {
+    if (!/[\t|]/.test(line)) continue;
+    const c = line.split(/[\t|]+/).map((x) => x.trim()).filter(Boolean);
+    if (c.length < 4 || OCR_HEADERS.some((h) => c[0].includes(h))) continue;
+    const n = c.slice(1).filter((x) => /\d/.test(x));
+    if (n.length < 3) continue;
+    structured.push({
+      id: uid(),
+      name: c[0],
+      qty: n[0].replace(/[^\d.-]/g, ""),
+      retail: money(n[1]),
+      cost: money(n[2]),
+      source: line,
+    });
+  }
+  if (structured.length) {
+    const seen = new Set<string>();
+    return structured.filter((p) => {
+      const key = `${p.name.replace(/\s/g, "").toLowerCase()}|${p.qty}|${p.retail}|${p.cost}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
 
   // 表の1行に「個数 / 標準価格 / 単価 / 金額」が並ぶケースを優先。
   for (let i = 0; i < lines.length; i += 1) {
@@ -445,6 +479,7 @@ export default function Home() {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [authMsg, setAuthMsg] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
   const [tab, setTab] = useState<
     "vehicle" | "customerVehicle" | "ocr" | "data" | "print" | "settings"
   >("vehicle");
@@ -492,20 +527,60 @@ export default function Home() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (mounted) {
-        setSession(data.session);
+
+    const applySession = async (sess: any) => {
+      if (!mounted) return;
+
+      if (!sess) {
+        setSession(null);
         setAuthLoading(false);
+        return;
       }
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+
+      const active = await isActiveAppSession(sess);
+      if (!mounted) return;
+
+      if (!active) {
+        clearSensitiveLocalState();
+        setSession(null);
+        setAuthMsg("このアカウントは現在利用できません。");
+        setAuthLoading(false);
+        await supabase.auth.signOut();
+        return;
+      }
+
       setSession(sess);
+      setAuthMsg("");
       setAuthLoading(false);
+    };
+
+    void supabase.auth.getSession().then(({ data }) => applySession(data.session));
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+      // Authコールバックを塞がないよう、検証は次のイベントループで行う。
+      setTimeout(() => {
+        if (mounted) void applySession(sess);
+      }, 0);
     });
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const reason = sessionStorage.getItem("icb-auto-logout-reason");
+      if (reason) {
+        sessionStorage.removeItem("icb-auto-logout-reason");
+        setAuthMsg(
+          reason === "idle"
+            ? "30分間操作がなかったため自動ログアウトしました。"
+            : "セキュリティ保護のため再ログインしてください。"
+        );
+      }
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -601,7 +676,7 @@ export default function Home() {
     const { data, error } = existing
       ? await supabase.from("vehicles").update(payload).eq("id", existing).select().single()
       : await supabase.from("vehicles").insert(payload).select().single();
-    if (error) return setMsg(`車両保存エラー: ${error.message}`);
+    if (error) return setMsg(safeActionError("車両情報の保存", error));
     const saved: any = { ...normalized, id: data.id };
     setVehicles((v) => [saved, ...v.filter((x: any) => x.number !== saved.number)].slice(0, 500));
     setVehicle(saved);
@@ -625,7 +700,7 @@ export default function Home() {
     const { data, error } = customer.id
       ? await supabase.from("customers").update(payload).eq("id", customer.id).select().single()
       : await supabase.from("customers").insert(payload).select().single();
-    if (error) return setMsg(`顧客保存エラー: ${error.message}`);
+    if (error) return setMsg(safeActionError("顧客情報の保存", error));
     const saved = { ...customer, id: data.id };
     setCustomers((c) => [saved, ...c.filter((x) => x.id !== saved.id)].slice(0, 500));
     setCustomer(saved);
@@ -641,8 +716,8 @@ export default function Home() {
     try {
       const prepared = await prepareOCRImages(file);
       setProgress(8);
-      const tesseract: any = await import("tesseract.js");
-      worker = await tesseract.createWorker("jpn+eng", 1, {
+      const tesseract: any = await import("./lib/tesseract-local");
+      worker = await tesseract.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang", 
         logger: (m: any) => {
           if (m.status === "recognizing text") {
             const p = Math.round((m.progress || 0) * 42);
@@ -699,14 +774,14 @@ export default function Home() {
   }
 
   function copyTSV() {
-    const s = ["部品名称\t個数\t定価\t仕入れ", ...parts.map((p) => `${p.name}\t${p.qty}\t${p.retail}\t${p.cost}`)].join("\n");
+    const s = [["部品名称", "個数", "定価", "仕入れ"], ...parts.map((p) => [p.name, p.qty, p.retail, p.cost])].map((r) => r.map(spreadsheetSafeCell).join("\t")).join("\n");
     navigator.clipboard?.writeText(s);
     setMsg("Excel貼り付け用データをコピーしました。");
   }
 
   function csv() {
     const s = [["部品名称", "個数", "定価", "仕入れ"], ...parts.map((p) => [p.name, p.qty, p.retail, p.cost])]
-      .map((r) => r.map((x) => `"${String(x).replaceAll('"', '""')}"`).join(","))
+      .map((r) => r.map((x) => `"${spreadsheetSafeCell(x).replaceAll('"', '""')}"`).join(","))
       .join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\ufeff" + s], { type: "text/csv;charset=utf-8" }));
@@ -724,6 +799,62 @@ export default function Home() {
     r.readAsDataURL(file);
   }
 
+  async function loginWithProtection() {
+    if (loginBusy) return;
+
+    setAuthMsg("");
+    const id = loginId.trim().toLowerCase();
+    if (!id) return setAuthMsg("ログインIDを入力してください。");
+    if (!password) return setAuthMsg("パスワードを入力してください。");
+
+    setLoginBusy(true);
+    try {
+      const { data: throttleData, error: throttleError } = await supabase.rpc(
+        "check_login_throttle",
+        { p_login_id: id }
+      );
+
+      if (throttleError) {
+        setAuthMsg("ログイン保護機能を確認できませんでした。少し待ってから再試行してください。");
+        return;
+      }
+
+      const throttle = Array.isArray(throttleData) ? throttleData[0] : throttleData;
+      if (throttle?.blocked) {
+        const minutes = Math.max(1, Math.ceil(Number(throttle.retry_after_seconds || 0) / 60));
+        setAuthMsg(`短時間に複数回ログインに失敗したため、一時的に制限しています。約${minutes}分後に再試行してください。`);
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email: `${id}@icb.local`,
+        password,
+      });
+
+      if (error) {
+        await supabase.rpc("record_login_failure", { p_login_id: id });
+
+        const { data: afterFailure } = await supabase.rpc(
+          "check_login_throttle",
+          { p_login_id: id }
+        );
+        const nextThrottle = Array.isArray(afterFailure) ? afterFailure[0] : afterFailure;
+
+        if (nextThrottle?.blocked) {
+          const minutes = Math.max(1, Math.ceil(Number(nextThrottle.retry_after_seconds || 0) / 60));
+          setAuthMsg(`ログインIDまたはパスワードが違います。安全のため約${minutes}分間ログインを制限します。`);
+        } else {
+          setAuthMsg("ログインIDまたはパスワードが違います。");
+        }
+        return;
+      }
+
+      await supabase.rpc("record_login_success");
+    } finally {
+      setLoginBusy(false);
+    }
+  }
+
   const active = parts.find((p) => p.id === selected);
 
   if (authLoading) {
@@ -739,14 +870,13 @@ export default function Home() {
           <input type="text" autoCapitalize="none" autoCorrect="off" placeholder="ログインID" value={loginId} onChange={(e) => setLoginId(e.target.value)} />
           <input type="password" placeholder="パスワード" value={password} onChange={(e) => setPassword(e.target.value)} />
           <div className="actions">
-            <button className="primary" onClick={async () => {
-              setAuthMsg("");
-              const id = loginId.trim().toLowerCase();
-              if (!id) return setAuthMsg("ログインIDを入力してください。");
-              if (!password) return setAuthMsg("パスワードを入力してください。");
-              const { error } = await supabase.auth.signInWithPassword({ email: `${id}@icb.local`, password });
-              if (error) setAuthMsg("ログインIDまたはパスワードが違います。");
-            }}>ログイン</button>
+            <button
+              className="primary"
+              disabled={loginBusy}
+              onClick={() => void loginWithProtection()}
+            >
+              {loginBusy ? "確認中…" : "ログイン"}
+            </button>
           </div>
           {authMsg && <div className="notice">{authMsg}</div>}
         </section>
@@ -754,158 +884,10 @@ export default function Home() {
     );
   }
 
-  return (
-    <main>
-      <header className="header"><div className="title">icb</div><div className="desc">部品伝票OCR・車両管理・印刷</div></header>
-      <nav className="tabs">
-        {([
-          ["vehicle", "①車体番号"],
-          ["customerVehicle", "⑤顧客・車両管理"],
-          ["ocr", "②伝票OCR"],
-          ["data", "③データ"],
-          ["print", "④印刷"],
-          ["settings", "⑥印刷位置設定"],
-        ] as const).map(([id, label]) => (
-          <button key={id} className={tab === id ? "tab active" : "tab"} onClick={() => setTab(id)}>{label}</button>
-        ))}
-      </nav>
-      <div className="actions noPrint"><button onClick={async () => supabase.auth.signOut()}>ログアウト</button></div>
-      {msg && <div className="notice">{msg}</div>}
+  return <HomeDashboard onLogout={async () => {
+    await supabase.rpc("record_logout");
+    clearSensitiveLocalState();
+    await supabase.auth.signOut();
+  }} />;
 
-      {tab === "vehicle" && (
-        <section className="card">
-          <h1>車体番号</h1>
-          <input placeholder="車体番号" value={vehicle.number} onChange={(e) => setVehicle({ ...vehicle, number: e.target.value })} />
-          <input placeholder="型式" value={vehicle.model} onChange={(e) => setVehicle({ ...vehicle, model: e.target.value })} />
-          <select value={vehicle.type} onChange={(e) => setVehicle({ ...vehicle, type: e.target.value as Vehicle["type"] })}>
-            <option>EV</option><option>ガソリン</option><option>HV</option><option>その他</option>
-          </select>
-          <input inputMode="numeric" placeholder="車両重量 kg" value={vehicle.weight} onChange={(e) => setVehicle({ ...vehicle, weight: e.target.value })} />
-          <button className="primary" onClick={saveVehicle}>保存</button>
-          <hr />
-          <input placeholder="車体番号で検索" value={vehicleSearch} onChange={(e) => setVehicleSearch(e.target.value)} />
-          <div className="list">{filtered.map((v, i) => <button className="row" key={i} onClick={() => setVehicle(v)}>{v.number}　{v.model}　{v.type}</button>)}</div>
-          {!filtered.length && <div className="empty">車両未選択</div>}
-          <button onClick={() => setTab("ocr")}>次へ：伝票OCR →</button>
-        </section>
-      )}
-
-      {tab === "customerVehicle" && (
-        <section className="card">
-          <h1>顧客・車両管理</h1>
-          <p>顧客と車両を登録し、車両を顧客に紐付けます。登録番号の下4桁でも検索できます。</p>
-          <div className="manage-grid">
-            <div className="subcard">
-              <h2>顧客登録</h2>
-              <select value={customer.type} onChange={(e) => setCustomer({ ...customer, type: e.target.value as Customer["type"] })}>
-                <option value="individual">個人</option><option value="company">法人</option>
-              </select>
-              <input placeholder="顧客名" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} />
-              <input placeholder="会社名（法人の場合）" value={customer.companyName} onChange={(e) => setCustomer({ ...customer, companyName: e.target.value })} />
-              <input inputMode="tel" placeholder="電話番号" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} />
-              <input type="email" placeholder="メールアドレス" value={customer.email} onChange={(e) => setCustomer({ ...customer, email: e.target.value })} />
-              <input inputMode="numeric" placeholder="郵便番号" value={customer.postalCode} onChange={(e) => setCustomer({ ...customer, postalCode: e.target.value })} />
-              <input placeholder="住所" value={customer.address} onChange={(e) => setCustomer({ ...customer, address: e.target.value })} />
-              <textarea placeholder="備考" value={customer.notes} onChange={(e) => setCustomer({ ...customer, notes: e.target.value })} />
-              <div className="actions"><button className="primary" onClick={saveCustomer}>顧客を保存</button><button onClick={() => setCustomer({ ...emptyCustomer })}>新規</button></div>
-              <input placeholder="顧客名・会社名・電話番号で検索" value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
-              <div className="list">{customerFiltered.map((c) => <button className="row" key={c.id} onClick={() => setCustomer(c)}>{c.companyName || c.name}　{c.phone}</button>)}</div>
-            </div>
-
-            <div className="subcard">
-              <h2>車両登録</h2>
-              <input placeholder="車体番号" value={vehicle.number} onChange={(e) => setVehicle({ ...vehicle, number: e.target.value })} />
-              <input placeholder="登録番号（ナンバー）" value={vehicle.registration} onChange={(e) => setVehicle({ ...vehicle, registration: e.target.value, last4: e.target.value.replace(/\D/g, "").slice(-4) })} />
-              <input inputMode="numeric" maxLength={4} placeholder="登録番号 下4桁" value={vehicle.last4} onChange={(e) => setVehicle({ ...vehicle, last4: e.target.value.replace(/\D/g, "").slice(-4) })} />
-              <input placeholder="車台番号" value={vehicle.chassis} onChange={(e) => setVehicle({ ...vehicle, chassis: e.target.value })} />
-              <input placeholder="型式" value={vehicle.model} onChange={(e) => setVehicle({ ...vehicle, model: e.target.value })} />
-              <select value={vehicle.type} onChange={(e) => setVehicle({ ...vehicle, type: e.target.value as Vehicle["type"] })}>
-                <option>EV</option><option>ガソリン</option><option>HV</option><option>その他</option>
-              </select>
-              <input placeholder="初度登録" value={vehicle.firstRegistration} onChange={(e) => setVehicle({ ...vehicle, firstRegistration: e.target.value })} />
-              <input inputMode="numeric" placeholder="車両重量 kg" value={vehicle.weight} onChange={(e) => setVehicle({ ...vehicle, weight: e.target.value })} />
-              <select value={vehicle.customerId} onChange={(e) => setVehicle({ ...vehicle, customerId: e.target.value })}>
-                <option value="">顧客を選択</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name}</option>)}
-              </select>
-              <div className="actions"><button className="primary" onClick={saveVehicle}>車両を保存</button><button onClick={() => setVehicle({ ...emptyVehicle })}>新規</button></div>
-              <input inputMode="numeric" maxLength={4} placeholder="登録番号下4桁で検索" value={registrationSearch} onChange={(e) => setRegistrationSearch(e.target.value.replace(/\D/g, "").slice(-4))} />
-              <div className="list">{registrationFiltered.map((v) => {
-                const c = customers.find((x) => x.id === v.customerId);
-                return <button className="row" key={v.number} onClick={() => setVehicle(v)}>{v.registration || v.number}　{v.model}　{c?.companyName || c?.name || "顧客未登録"}</button>;
-              })}</div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {tab === "ocr" && (
-        <section className="card">
-          <h1>部品伝票OCR</h1>
-          <p>伝票を自動で切り出し・高コントラスト化してから、日本語＋英数字で2回読み取ります。1回の撮影から複数部品を候補抽出します。</p>
-          <input ref={fileRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && doOCR(e.target.files[0])} />
-          <button className="primary big" disabled={ocrBusy} onClick={() => fileRef.current?.click()}>{ocrBusy ? `OCR中 ${progress}%` : "📷 部品伝票を撮影・読み込む"}</button>
-          <textarea value={ocrText} onChange={(e) => setOcrText(e.target.value)} placeholder="OCRの生テキスト" />
-          <div className="actions">
-            <button onClick={() => setParts((p) => [...parseOCR(ocrText), ...p])}>OCR結果から追加</button>
-            <button onClick={() => setParts((p) => [...p, { id: uid(), name: "", qty: "1", retail: "", cost: "" }])}>＋手入力</button>
-          </div>
-          <h2>抽出データ</h2>
-          <div className="table"><table><thead><tr><th>部品名称</th><th>個数</th><th>定価</th><th>仕入れ</th><th></th></tr></thead><tbody>
-            {parts.map((p) => <tr key={p.id}>
-              <td><input value={p.name} onChange={(e) => updatePart(p.id, "name", e.target.value)} /></td>
-              <td><input inputMode="numeric" value={p.qty} onChange={(e) => updatePart(p.id, "qty", e.target.value)} /></td>
-              <td><input inputMode="decimal" value={p.retail} onChange={(e) => updatePart(p.id, "retail", e.target.value)} /></td>
-              <td><input inputMode="decimal" value={p.cost} onChange={(e) => updatePart(p.id, "cost", e.target.value)} /></td>
-              <td><button className="danger" onClick={() => setParts((x) => x.filter((y) => y.id !== p.id))}>削除</button></td>
-            </tr>)}
-          </tbody></table></div>
-          <div className="actions"><button onClick={copyTSV}>📋 Excelへコピー</button><button onClick={csv}>CSV保存</button><button className="primary" onClick={() => setTab("print")}>印刷画面へ →</button></div>
-        </section>
-      )}
-
-      {tab === "data" && (
-        <section className="card">
-          <h1>保存データ</h1>
-          <p>部品データはブラウザ内に保存されます。Excelへはタブ区切りでそのまま貼り付けできます。</p>
-          <div className="stats">部品：<b>{parts.length}</b>件　車両：<b>{vehicles.length}</b>件</div>
-          <div className="actions"><button onClick={copyTSV}>📋 Excelへコピー</button><button onClick={csv}>CSV保存</button><button onClick={() => setParts([])}>部品データ全消去</button></div>
-        </section>
-      )}
-
-      {tab === "print" && (
-        <section className="card">
-          <div className="noPrint">
-            <h1>指定用紙へ印刷</h1>
-            <p>部品出庫伝票の空欄へ、部品名称・個数・定価・仕入れだけを重ね刷りします。</p>
-            <label>印刷件数 <input type="number" min="1" max={Math.max(1, parts.length)} value={printCount} onChange={(e) => setPrintCount(Number(e.target.value))} /></label>
-            <div className="actions"><button className="primary" onClick={() => window.print()}>🖨 印刷する</button><button onClick={() => setTab("settings")}>印刷位置を調整</button></div>
-          </div>
-          <div className="sheet">{parts.slice(0, printCount).map((p, i) => <div key={p.id}>{(["name", "qty", "retail", "cost"] as const).map((f) => {
-            const b = template.fields[f];
-            return <div key={f} className={"overlay " + (f === "name" ? "name" : "")} style={{ left: `${b.x}mm`, top: `${b.y + i * 7}mm`, width: `${b.w}mm`, height: `${b.h}mm` }}>{f === "name" ? p.name : f === "qty" ? p.qty : f === "retail" ? p.retail : p.cost}</div>;
-          })}</div>)}</div>
-        </section>
-      )}
-
-      {tab === "settings" && (
-        <section className="card">
-          <h1>印刷位置設定</h1>
-          <p>実物の用紙写真をガイドとして読み込み、4項目のX/Y/W/Hをmmで調整します。</p>
-          <label className="file">📷 用紙写真を読み込む<input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && importGuide(e.target.files[0])} /></label>
-          <div className="positions">{(["name", "qty", "retail", "cost"] as const).map((f) => <div className="pos" key={f}>
-            <h3>{f === "name" ? "部品名称" : f === "qty" ? "個数" : f === "retail" ? "定価" : "仕入れ"}</h3>
-            {(["x", "y", "w", "h"] as const).map((k) => <label key={k}>{k.toUpperCase()}<input type="number" step=".5" value={template.fields[f][k]} onChange={(e) => setBox(f, k, e.target.value)} /></label>)}
-          </div>)}</div>
-          <label>位置確認する部品<select value={selected} onChange={(e) => setSelected(e.target.value)}><option value="">選択</option>{parts.map((p) => <option key={p.id} value={p.id}>{p.name || "名称未入力"}</option>)}</select></label>
-          <div className="sheet preview">
-            {guide ? <img src={guide} alt="用紙ガイド" /> : <div className="placeholder">A4用紙ガイド<br />用紙写真を読み込んでください</div>}
-            {active && <div className="overlay active" style={{ left: `${template.fields.name.x}mm`, top: `${template.fields.name.y}mm`, width: `${template.fields.name.w}mm` }}>{active.name}</div>}
-          </div>
-          <button onClick={() => setTemplate(initialTemplate)}>初期位置に戻す</button>
-        </section>
-      )}
-
-      <footer>icb / 部品伝票OCR・印刷</footer>
-    </main>
-  );
 }

@@ -285,8 +285,8 @@ function ensureDebug(lines) {
 async function readCritical(img) {
   const source = await sourceCanvas(img);
   const paper = detectPaper(source);
-  const t = await import("tesseract.js");
-  const worker = await t.createWorker("jpn+eng", 1);
+  const t = await import("./lib/tesseract-local");
+  const worker = await t.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });
   const logs = [`v3紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];
 
   try {

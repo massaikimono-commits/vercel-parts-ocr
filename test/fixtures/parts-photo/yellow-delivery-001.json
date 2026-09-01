@@ -1,0 +1,16 @@
+{
+  "id": "parts-photo-yellow-delivery-001",
+  "description": "実写真3枚から作成した匿名化グラウンドトゥルース。顧客名・取引先名・伝票番号・車両識別情報は保存しない。",
+  "captureVariants": 3,
+  "characteristics": ["90度回転", "紙のしわ", "黄変", "背景写り込み", "斜め撮影"],
+  "columnMapping": {
+    "qty": "出庫数",
+    "retail": "標準価格",
+    "cost": "単価"
+  },
+  "expected": [
+    {"name":"F/ワイパーラバー","qty":"1","retail":"870","cost":"405"},
+    {"name":"F/ワイパーラバー","qty":"1","retail":"1040","cost":"473"},
+    {"name":"キーレスデンチ","qty":"1","retail":"480","cost":"321"}
+  ]
+}

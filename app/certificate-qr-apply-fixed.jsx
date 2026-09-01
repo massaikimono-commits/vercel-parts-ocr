@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { parseRegistrationNumber } from "./lib/registration-number";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const compact = (v = "") => String(v).normalize("NFKC").replace(/\u3000/g, " ").replace(/\s+/g, " ").trim();
@@ -106,33 +107,151 @@ function qrByPosition(items, n) {
   return items.find((item) => new RegExp(`(?:^|/)QR${n}(?:/|$)`).test(String(item?.label || "")));
 }
 
-function parseRegisteredQr3(items) {
-  const q1 = qrByPosition(items, 1);
-  const q2 = qrByPosition(items, 2);
-  const q3 = qrByPosition(items, 3);
-  if (!q1 || !q2 || !q3) return null;
-  const joined = [q1, q2, q3]
-    .map((x) => String(x?.data || "").normalize("NFKC").replace(/\u3000/g, " "))
-    .join("");
-  const f = joined.split("/").map(compact);
-  if (f.length < 19 || f[0] !== "2") return null;
-  const fuelCode = String(f[18] || "").replace(/\D/g, "");
-  return {
-    kind: "registered",
-    values: {
-      inspectionExpiry: date6(f[3]),
-      firstRegistration: month4(f[4]),
-      model: compact(f[5]).replace(/\s/g, "").toUpperCase(),
-      frontFrontAxleWeightKg: axle(f[6]),
-      frontRearAxleWeightKg: axleOrDash(f[7]),
-      rearFrontAxleWeightKg: axleOrDash(f[8]),
-      rearRearAxleWeightKg: axle(f[9]),
-      fuel: fuelMap[fuelCode] || "",
-    },
-    versions: ["登録車QR3"],
-  };
+function registrationFromQr2(value) {
+  const raw = String(value || "").normalize("NFKC").replace(/\u3000/g, " ");
+  const chars = Array.from(raw);
+  if (chars.length >= 12) {
+    const region = chars.slice(0, 4).join("").trim();
+    const cls = chars.slice(4, 7).join("").trim();
+    const kana = chars.slice(7, 8).join("").trim();
+    const serial = chars.slice(8, 12).join("").trim();
+    const parsed = parseRegistrationNumber([region, cls, kana, serial].filter(Boolean).join(" "));
+    if (parsed) return parsed.canonical;
+  }
+  const parsed = parseRegistrationNumber(raw);
+  return parsed?.canonical || "";
 }
 
+function registeredItemText(item) {
+  return String(item?.data || "").normalize("NFKC").replace(/\u3000/g, " ");
+}
+
+function validChassis(value) {
+  const s = cleanAscii(value);
+  return /^[A-Z0-9]{2,10}-[A-Z0-9]{4,12}$/.test(s) ? s : "";
+}
+
+function validEngine(value) {
+  const s = cleanAscii(value);
+  if (!/^[A-Z0-9]{2,8}(?:-[A-Z0-9]{1,10})?$/.test(s)) return "";
+  if (/^\*(?:FUMEI|SHISAKU|KUMITATE)/.test(s)) return "";
+  return s;
+}
+
+function validModel(value) {
+  const s = cleanAscii(value);
+  if (!/^(?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{3,14}$/.test(s)) return "";
+  if (/^\*(?:SHISAKU|KUMITATE|FUMEI)/.test(s)) return "";
+  return s;
+}
+
+function parseRegisteredIdentityText(text) {
+  const f = String(text || "").split("/").map((x) => String(x || "").trim());
+  if (f[0] !== "2" || f.length < 2) return {};
+  const out = {};
+  const registration = registrationFromQr2(f[1]);
+  if (registration) out.registrationNumber = registration;
+
+  // 登録番号を持つ右側QRは、後半QRが未取得でも読めた値だけ即採用する。
+  if (registration) {
+    for (let i = 2; i < f.length; i += 1) {
+      const chassis = validChassis(f[i]);
+      if (!chassis) continue;
+      out.chassisNumber = chassis;
+      const engine = validEngine(f[i + 1]);
+      if (engine) out.engineModel = engine;
+      break;
+    }
+  }
+  return out;
+}
+
+function parseRegisteredSpecText(text) {
+  const f = String(text || "").split("/").map((x) => String(x || "").trim());
+  if (f[0] !== "2") return {};
+  const out = {};
+
+  // 登録車QRの版差を固定indexで決め打ちせず、
+  // 「有効期限6桁 → 初度年月4桁 → 型式」の並びを基準に探す。
+  let modelIndex = -1;
+  for (let i = 1; i + 2 < f.length; i += 1) {
+    const expiry = date6(f[i]);
+    const first = month4(f[i + 1]);
+    const model = validModel(f[i + 2]);
+    if (!expiry || !first || !model) continue;
+    out.inspectionExpiry = expiry;
+    out.firstRegistration = first;
+    out.model = model;
+    modelIndex = i + 2;
+    break;
+  }
+  if (modelIndex < 0) return out;
+
+  // 型式より前にある9桁の型式指定/類別連結値が読めていれば採用。
+  for (let i = modelIndex - 1; i >= 1; i -= 1) {
+    const s = String(f[i] || "").replace(/\D/g, "");
+    if (/^\d{9}$/.test(s)) {
+      splitDesignation(s, out);
+      break;
+    }
+  }
+
+  const ff = axleOrDash(f[modelIndex + 1]);
+  const fr = axleOrDash(f[modelIndex + 2]);
+  const rf = axleOrDash(f[modelIndex + 3]);
+  const rr = axleOrDash(f[modelIndex + 4]);
+  if (ff) out.frontFrontAxleWeightKg = ff;
+  if (fr) out.frontRearAxleWeightKg = fr;
+  if (rf) out.rearFrontAxleWeightKg = rf;
+  if (rr) out.rearRearAxleWeightKg = rr;
+
+  // 現行登録車QRでは燃料コードは型式から13フィールド後。
+  const fuelCode = String(f[modelIndex + 13] || "").replace(/\D/g, "");
+  if (fuelMap[fuelCode]) out.fuel = fuelMap[fuelCode];
+  return out;
+}
+
+function registeredCandidateTexts(items) {
+  const ordered = [...(items || [])].sort((a, b) => Number(a?.xCenter ?? a?.slot ?? 99) - Number(b?.xCenter ?? b?.slot ?? 99));
+  const texts = ordered.map(registeredItemText).filter(Boolean);
+  const out = [...texts];
+  // Structured Appendの途中片しか読めていない時でも、取得済みの連続片だけ連結して解析する。
+  for (let width = 2; width <= Math.min(5, texts.length); width += 1) {
+    for (let i = 0; i + width <= texts.length; i += 1) out.push(texts.slice(i, i + width).join(""));
+  }
+  return [...new Set(out)];
+}
+
+function parseRegistered(items) {
+  const values = {};
+  const versions = new Set();
+  for (const text of registeredCandidateTexts(items)) {
+    const identity = parseRegisteredIdentityText(text);
+    const spec = parseRegisteredSpecText(text);
+    for (const [key, value] of Object.entries({ ...spec, ...identity })) {
+      if (typeof value === "string" && value.trim() && !values[key]) values[key] = value.trim();
+    }
+    if (Object.keys(identity).length) versions.add("登録車QR-identity");
+    if (Object.keys(spec).length) versions.add("登録車QR-spec");
+  }
+
+  // 既存の位置ラベルが正しく揃ったケースも最後に補助利用する。
+  const q4 = qrByPosition(items, 4);
+  const q5 = qrByPosition(items, 5);
+  if (q4 && q5) {
+    const identity = parseRegisteredIdentityText(registeredItemText(q4) + registeredItemText(q5));
+    for (const [key, value] of Object.entries(identity)) if (value && !values[key]) values[key] = value;
+  }
+  const q1 = qrByPosition(items, 1), q2 = qrByPosition(items, 2), q3 = qrByPosition(items, 3);
+  if (q1 && q2 && q3) {
+    const spec = parseRegisteredSpecText(registeredItemText(q1) + registeredItemText(q2) + registeredItemText(q3));
+    for (const [key, value] of Object.entries(spec)) if (value && !values[key]) values[key] = value;
+  }
+
+  return Object.keys(values).length
+    ? { kind: "registered", values, versions: [...versions] }
+    : null;
+}
 function keiCode(items, codeNumber) {
   return items.find((item) => {
     const f = qrFields(item);
@@ -235,7 +354,7 @@ function parseKei(items) {
 function parseAnyQr(items) {
   const kei = parseKei(items);
   if (kei) return kei;
-  return parseRegisteredQr3(items);
+  return parseRegistered(items);
 }
 
 function isCertificateFileInput(node) {

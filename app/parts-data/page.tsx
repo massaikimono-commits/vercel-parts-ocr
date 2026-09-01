@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { spreadsheetSafeCell } from "../lib/client-security";
 
 type Part = {
   id: string;
@@ -43,12 +44,12 @@ function readParts(): Part[] {
 }
 
 function readActive(): ActiveVehicle | null {
-  try { return JSON.parse(localStorage.getItem(ACTIVE_KEY) || "null"); } catch { return null; }
+  try { return JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null"); } catch { return null; }
 }
 
 function readBeforeIds() {
   try {
-    const x = JSON.parse(localStorage.getItem(BEFORE_KEY) || "[]");
+    const x = JSON.parse(sessionStorage.getItem(BEFORE_KEY) || "[]");
     return new Set(Array.isArray(x) ? x : []);
   } catch { return new Set<string>(); }
 }
@@ -103,7 +104,7 @@ export default function PartsDataPage() {
       linkedAt: new Date().toISOString(),
     } : p);
     persist(next);
-    localStorage.removeItem(BEFORE_KEY);
+    sessionStorage.removeItem(BEFORE_KEY);
     setBeforeIds(new Set());
     setMessage(`${ids.length}件を ${activeVehicle.registration || activeVehicle.number || "選択車両"} に紐付けました。`);
   }
@@ -124,7 +125,7 @@ export default function PartsDataPage() {
       ["車両", "車体番号", "部品名称", "個数", "定価", "仕入れ"],
       ...visible.map((p) => [p.registration || "", p.vehicleNumber || "", p.name, p.qty, p.retail, p.cost]),
     ];
-    await navigator.clipboard?.writeText(rows.map((r) => r.join("\t")).join("\n"));
+    await navigator.clipboard?.writeText(rows.map((r) => r.map(spreadsheetSafeCell).join("\t")).join("\n"));
     setMessage("表示中の部品データをExcel貼り付け用にコピーしました。");
   }
 
@@ -133,7 +134,7 @@ export default function PartsDataPage() {
       ["車両", "車体番号", "部品名称", "個数", "定価", "仕入れ"],
       ...visible.map((p) => [p.registration || "", p.vehicleNumber || "", p.name, p.qty, p.retail, p.cost]),
     ];
-    const csv = rows.map((r) => r.map((v) => `"${String(v || "").replaceAll('"','""')}"`).join(",")).join("\n");
+    const csv = rows.map((r) => r.map((v) => `"${spreadsheetSafeCell(v).replaceAll('"','""')}"`).join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
     a.download = "vehicle-parts.csv";

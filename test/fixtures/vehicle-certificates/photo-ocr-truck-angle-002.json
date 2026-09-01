@@ -1,0 +1,28 @@
+{
+  "id":"photo-ocr-truck-angle-002",
+  "description":"普通貨物写真の斜め撮影を想定し、登録番号分離・ダッシュ揺れ・見出し間隔揺れを加えた匿名化ケース。",
+  "inputType":"photo-ocr-simulated",
+  "rows":[
+    "車 両 情 報 作成日付:平成 16年 4月 23日",
+    "自 動 車 登 録 番 号 又 は 車 両 番 号 登録年月日／交付年月日 初度登録年月 自動車の種別 用途 自家用・事業用の別 車 体 の 形 状",
+    "大阪 1 0 0 さ 1 2 3 4 平成 16年 4月 27日 平成 16年 4月 普通 貨物 自家用 キャブ オーバ",
+    "車 名 乗車定員 最大積載量 車両重量 車両総重量",
+    "いすゞ 3人 2000kg 3820kg 5985kg",
+    "車 台 番 号 長さ 幅 高さ 前前軸重 前後軸重 後前軸重 後後軸重",
+    "NPR81L—1234567 616cm 214cm 215cm 1850kg -kg -kg 1970kg",
+    "型 式 原動機の型式 総排気量又は定格出力 燃料の種類 型式指定番号 類別区分番号",
+    "KR—NPR81LAV 4HL1 4.77 L 軽油",
+    "使用者の氏名又は名称 テスト運輸株式会社",
+    "使 用 者 の 住 所 大阪府テスト市1丁目2番3号 [00000 0000]",
+    "使用の本拠の位置",
+    "有効期間の満了する日",
+    "令和 9年 4月 26日"
+  ],
+  "expected":{
+    "recordDate":"平成16年4月23日","registrationNumber":"大阪 100 さ 1234","registrationDate":"平成16年4月27日","firstRegistration":"平成16年4月",
+    "vehicleClass":"普通","purpose":"貨物","privateBusiness":"自家用","bodyShape":"キャブオーバ","vehicleName":"いすゞ","seatingCapacity":"3","maxPayloadKg":"2000",
+    "vehicleWeightKg":"3820","grossVehicleWeightKg":"5985","chassisNumber":"NPR81L-1234567","lengthCm":"616","widthCm":"214","heightCm":"215",
+    "frontFrontAxleWeightKg":"1850","frontRearAxleWeightKg":"-","rearFrontAxleWeightKg":"-","rearRearAxleWeightKg":"1970","model":"KR-NPR81LAV","engineModel":"4HL1",
+    "displacementOrRatedOutput":"4.77 L","fuel":"軽油","userName":"テスト運輸株式会社","userAddress":"大阪府テスト市1丁目2番3号","inspectionExpiry":"令和9年4月26日"
+  }
+}

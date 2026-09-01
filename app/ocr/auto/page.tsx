@@ -3,6 +3,7 @@
 
 import { useRef, useState } from "react";
 import { saveOCRTransferImage } from "../transfer";
+import { validateDocumentFile } from "../../lib/file-security";
 
 type Mode = "dedicated" | "general" | "unknown" | "";
 type CropBox = { x: number; y: number; w: number; h: number };
@@ -189,7 +190,7 @@ function classify(text: string): { mode: Mode; reason: string; auto: boolean } {
 
   const genericHeaders = [
     "部品名称", "部品名", "品名", "商品名", "名称",
-    "個数", "数量", "定価", "希望小売価格", "売価",
+    "個数", "数量", "定価", "単価", "希望小売価格", "売価",
     "仕入れ", "仕入", "原価", "仕切", "仕切価格",
   ];
   const headerHits = genericHeaders.filter((x) => t.includes(normalize(x)));
@@ -241,6 +242,8 @@ export default function AutoOCRPage() {
   const [message, setMessage] = useState("伝票を1回選ぶだけで、専用OCRか汎用OCRかを自動判定します。");
 
   async function detect(file: File) {
+    const fileCheck = await validateDocumentFile(file);
+    if (!fileCheck.ok) { setMessage(fileCheck.message); return; }
     setBusy(true);
     setProgress(1);
     setMode("");
@@ -255,8 +258,8 @@ export default function AutoOCRPage() {
     try {
       await saveOCRTransferImage(file);
       const image = await prepareForDetection(file);
-      const tesseract: any = await import("tesseract.js");
-      worker = await tesseract.createWorker("jpn+eng", 1, {
+      const tesseract: any = await import("../../lib/tesseract-local");
+      worker = await tesseract.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang", 
         logger: (m: any) => {
           if (m.status === "recognizing text") setProgress(Math.max(1, Math.min(94, Math.round((m.progress || 0) * 80) + 5)));
         },

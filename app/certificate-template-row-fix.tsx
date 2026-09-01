@@ -56,7 +56,7 @@ export default function CertificateTemplateRowFix(){
   useEffect(()=>{
     if(location.pathname!=="/vehicle-workflow-v2")return;
     let last="",timer:ReturnType<typeof setTimeout>|null=null,worker:any=null,dead=false;
-    const run=async(srcKey:string)=>{const img=document.querySelector("img.preview") as HTMLImageElement|null;if(!img?.src||img.src!==srcKey)return;const v:Values={};try{const src=await sourceCanvas(img),p=paperBox(src),t:any=await import("tesseract.js");worker=await t.createWorker("jpn+eng",1);const one=t.PSM?.SINGLE_LINE??"7",sparse=t.PSM?.SPARSE_TEXT??"11",block=t.PSM?.SINGLE_BLOCK??"6";
+    const run=async(srcKey:string)=>{const img=document.querySelector("img.preview") as HTMLImageElement|null;if(!img?.src||img.src!==srcKey)return;const v:Values={};try{const src=await sourceCanvas(img),p=paperBox(src),t:any=await import("./lib/tesseract-local");worker=await t.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });const one=t.PSM?.SINGLE_LINE??"7",sparse=t.PSM?.SPARSE_TEXT??"11",block=t.PSM?.SINGLE_BLOCK??"6";
       const record=await read(worker,crop(src,p,.64,.100,.34,.070),sparse);
       const registration=await read(worker,crop(src,p,.20,.155,.60,.040),one);
       const ch=await read(worker,crop(src,p,.15,.188,.55,.040),one,"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ");

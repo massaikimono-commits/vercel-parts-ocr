@@ -159,8 +159,8 @@ function mode(items) {
 async function targetedRead(file) {
   const source = await canvasFromFile(file);
   const paper = detectPaper(source);
-  const t = await import("tesseract.js");
-  const worker = await t.createWorker("jpn+eng", 1);
+  const t = await import("./lib/tesseract-local");
+  const worker = await t.createWorker("jpn+eng", 1, { workerPath: "/tesseract/worker.min.js", corePath: "/tesseract/core", langPath: "/tesseract/lang" });
   const dateCandidates = [], bodyCandidates = [], dateRaws = [], bodyRaws = [];
 
   // 本体OCRと同じ用紙比率を基準に、対象セルだけを狭く再読込。

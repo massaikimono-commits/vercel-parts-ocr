@@ -1,0 +1,80 @@
+name: App core build check
+
+on:
+  push:
+    branches:
+      - work/app-core-v1
+    paths:
+      - "app/**"
+      - "scripts/**"
+      - "package.json"
+      - "next.config.mjs"
+      - "tsconfig.json"
+      - ".github/workflows/app-core-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Keep OCR tuning out of app core
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+          if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="${after}^"
+          fi
+          changed="$(git diff --name-only "$before" "$after")"
+          forbidden="$(printf '%s\n' "$changed" | grep -E '^(app/certificate-|app/lib/certificate-|scripts/(qr-|.*certificate)|\.github/workflows/vehicle-certificate-regression\.yml$)' || true)"
+          if [[ -n "$forbidden" ]]; then
+            echo "OCR tuning files must be changed on the dedicated OCR branch, not work/app-core-v1:"
+            printf '%s\n' "$forbidden"
+            exit 1
+          fi
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Run OCR regression checks
+        run: |
+          npm run test:certificate
+          npm run test:parts
+
+      - name: Run record regression checks
+        run: |
+          npm run test:inspection
+          npm run test:record-types
+          npm run test:workshop-record-types
+
+      - name: Run schedule and daily report regression checks
+        run: |
+          npm run test:schedule-print
+          npm run test:schedule-print-layout
+          npm run test:daily-report-template
+          npm run test:daily-report-allocation
+
+      - name: Build Next.js app
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build

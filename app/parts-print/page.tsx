@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
+import { validateDocumentFile } from "../lib/file-security";
 
 type Part = {
   id: string;
@@ -137,7 +138,9 @@ export default function PartsPrintPage() {
     setLayout((old) => ({ ...old, [field]: { ...old[field], [key]: value } }));
   }
 
-  function loadGuide(file: File) {
+  async function loadGuide(file: File) {
+    const fileCheck = await validateDocumentFile(file);
+    if (!fileCheck.ok) { setMessage(fileCheck.message); return; }
     if (guide) URL.revokeObjectURL(guide);
     setGuide(URL.createObjectURL(file));
     setMessage("用紙写真をガイド表示しました。写真は印刷されません。");
@@ -235,7 +238,7 @@ export default function PartsPrintPage() {
         <p>まず初期位置で試し刷りし、上下左右のズレだけmm単位で合わせます。</p>
         <label className="fileButton">
           🖼 用紙写真をガイド表示
-          <input hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && loadGuide(e.target.files[0])} />
+          <input hidden type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) void loadGuide(f); }} />
         </label>
 
         <div className="settingsGrid">

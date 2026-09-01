@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
+import { safeActionError } from "../lib/client-security";
 
 type Customer = {
   id: string;
@@ -215,7 +216,7 @@ export default function CustomerVehiclesPage() {
       setCloudParts(cloud);
 
       try {
-        const active = JSON.parse(localStorage.getItem(ACTIVE_KEY) || "null");
+        const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null");
         const found = vehicleList.find((v) => v.id === active?.id || v.number === active?.number);
         if (found) {
           setSelectedVehicleId(found.id);
@@ -229,7 +230,7 @@ export default function CustomerVehiclesPage() {
           : `顧客 ${customerList.length}件・車両 ${vehicleList.length}台を読み込みました。`
       );
     } catch (error: any) {
-      setMessage(`読み込みエラー: ${error?.message || error}`);
+      setMessage(safeActionError("顧客・車両情報の読み込み", error));
     } finally {
       setBusy(false);
     }
@@ -272,7 +273,7 @@ export default function CustomerVehiclesPage() {
     setSelectedVehicleId(v.id);
     setLinkCustomerId(v.customerId || "");
     setCustomerEditing(false);
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify({
+    sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
       id: v.id,
       number: v.number,
       registration: v.registration,
@@ -287,7 +288,7 @@ export default function CustomerVehiclesPage() {
     if (!selectedVehicle) return;
     selectVehicle(selectedVehicle);
     const before = readLocalParts().map((p) => p.id).filter(Boolean);
-    localStorage.setItem("parts-before-ocr-ids", JSON.stringify(before));
+    sessionStorage.setItem("parts-before-ocr-ids", JSON.stringify(before));
     location.assign("/ocr/auto");
   }
 
@@ -375,7 +376,7 @@ export default function CustomerVehiclesPage() {
       setCustomerEditing(false);
       setMessage(`${customerLabel(normalized)} を保存し、この車両へ紐付けました。`);
     } catch (error: any) {
-      setMessage(`顧客保存エラー: ${error?.message || error}`);
+      setMessage(safeActionError("顧客情報の保存", error));
     } finally {
       setSavingCustomer(false);
     }
@@ -393,7 +394,7 @@ export default function CustomerVehiclesPage() {
       const customer = customers.find((c) => c.id === linkCustomerId);
       setMessage(`${customer ? customerLabel(customer) : "選択した顧客"} をこの車両へ紐付けました。`);
     } catch (error: any) {
-      setMessage(`顧客紐付けエラー: ${error?.message || error}`);
+      setMessage(safeActionError("顧客と車両の紐付け", error));
     }
   }
 
@@ -457,6 +458,7 @@ export default function CustomerVehiclesPage() {
             <div className="actions">
               <button className="primary" onClick={startOCR}>📷 この車両で伝票OCR</button>
               <button onClick={openParts}>③ 部品データ</button>
+              <button onClick={() => location.assign("/schedule")}>📅 入出庫予定</button>
               <button onClick={() => location.assign("/vehicle-workflow")}>車両情報を編集</button>
             </div>
           </section>
