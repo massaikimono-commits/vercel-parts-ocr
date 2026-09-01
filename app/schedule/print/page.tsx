@@ -71,6 +71,15 @@ function jstTime(value: string | null) {
   return new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
 }
 
+function stayDayCountForReport(work: WorkOrder, day: string) {
+  if (!work.checked_in_at) return null;
+  const checkedInDay = jstDay(new Date(work.checked_in_at));
+  const start = new Date(`${checkedInDay}T00:00:00+09:00`).getTime();
+  const reportDay = new Date(`${day}T00:00:00+09:00`).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(reportDay) || reportDay < start) return null;
+  return Math.floor((reportDay - start) / 86400000) + 1;
+}
+
 function regionStyle(region: DailyReportRegion) {
   return {
     left: `${region.x * 100}%`,
@@ -160,10 +169,12 @@ export default function DailyReportPrintPage() {
   }
 
   function workLine(work: WorkOrder, prefix = "") {
+    const stayDays = stayDayCountForReport(work, day);
+    const stayAge = stayDays ? ` 入庫:${stayDays}日目` : "";
     const completion = work.expected_completion_date ? ` 完成:${work.expected_completion_date}` : "";
     const stay = work.stay_reason ? ` ${work.stay_reason}` : "";
     const deliveryDay = work.planned_delivery_date ? ` 納車:${work.planned_delivery_date}` : "";
-    return `${prefix}${customerForVehicle(work.vehicle_id)} ${last4ForVehicle(work.vehicle_id)} ${work.reason}${stay}${completion}${deliveryDay}`.trim();
+    return `${prefix}${customerForVehicle(work.vehicle_id)} ${last4ForVehicle(work.vehicle_id)} ${work.reason}${stayAge}${stay}${completion}${deliveryDay}`.trim();
   }
 
   return (
