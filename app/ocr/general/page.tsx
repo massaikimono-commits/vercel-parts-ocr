@@ -359,7 +359,7 @@ export default function GeneralOCRPage() {
       const source = await sourceCanvas(file);
       const paper = detectPaper(source);
       const enhanced = await makeEnhanced(source, paper);
-      const tesseract: any = await import("tesseract.js");
+      const tesseract: any = await import("../../lib/tesseract-local");
       worker = await tesseract.createWorker("jpn+eng", 1, { logger: (m: any) => { if (m.status === "recognizing text") setProgress(Math.max(5, Math.round((m.progress || 0) * 95))); } });
       await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: tesseract.PSM?.AUTO ?? "3", user_defined_dpi: "300" });
       const result = await worker.recognize(enhanced, {}, { text: true, tsv: true });
