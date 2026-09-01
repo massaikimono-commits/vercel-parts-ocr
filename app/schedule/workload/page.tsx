@@ -83,6 +83,13 @@ export default function WorkloadPage() {
   const [message, setMessage] = useState("担当者の負荷を読み込みます。");
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const worker = params.get("worker");
+    const filter = params.get("filter");
+    if (worker) setSelectedWorker(worker);
+    if (filter && ["all","unfinished","notStarted","inProgress","urgent","completedWaiting","staying"].includes(filter)) {
+      setSelectedFilter(filter as WorkFilter);
+    }
     void load();
   }, []);
 

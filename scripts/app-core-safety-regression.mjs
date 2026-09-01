@@ -54,6 +54,11 @@ assert(!workload.includes('href="/work-complete"') && !workload.includes('href="
 assert(scheduleSearch.includes('.normalize("NFKC")'), "schedule search must normalize full-width input");
 assert(scheduleSearch.includes("searchDigits"), "schedule search must normalize phone/last4 digits before querying");
 assert(scheduleSearch.includes("全角数字・全角英数字"), "schedule search must tell staff normalized input is supported");
+assert(home.includes("openTodayWork"), "mobile home work cards must open the matching schedule work");
+assert(schedule.includes("focusWorkId") && schedule.includes("data-work-id"), "daily schedule must support focused work navigation");
+assert(schedule.includes("focusedWork"), "focused work must be visually obvious");
+assert(workload.includes('params.get("worker")') && workload.includes('params.get("filter")'), "workload page must accept direct worker/state filters");
+assert(home.includes("openWorkload(row.name)"), "desktop home staff load cards must open the actionable workload board");
 assert(sql.includes("create_schedule_registration_v2"), "DB safety manifest must track atomic registration");
 assert(sql.includes("reschedule_schedule_entry_v2"), "DB safety manifest must track atomic reschedule");
 assert(sql.includes("loaner vehicle is already reserved for this period"), "DB safety manifest must track loaner conflict guard");

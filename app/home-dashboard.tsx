@@ -173,6 +173,18 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     location.assign("/schedule/new?day=" + day);
   }
 
+  function openTodayWork(workId: string | undefined) {
+    if (!workId) return openDay(todayJst());
+    location.assign("/schedule?day=" + todayJst() + "&focus=" + encodeURIComponent(workId));
+  }
+
+  function openWorkload(worker?: string) {
+    const params = new URLSearchParams();
+    if (worker) params.set("worker", worker);
+    params.set("filter", "unfinished");
+    location.assign("/schedule/workload?" + params.toString());
+  }
+
   const todayCountLabel = busy ? "…" : loadError ? "確認要" : todayRows.length + "件";
   const todayStatusLabel = busy
     ? "読み込み中"
@@ -212,7 +224,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <div className="progressBox">
             <div className="progressTitle">いま作業中 <strong>{inProgressRows.length}件</strong></div>
             {inProgressRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
-              <button key={work?.id || entry.id} className="progressRow" onClick={() => openDay(todayJst())}>
+              <button key={work?.id || entry.id} className="progressRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="progressDot">中</span>
                 <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
@@ -230,7 +242,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <div className="unfinishedBox">
             <div className="unfinishedTitle">作業未実施 <strong>{unfinished.length}件</strong></div>
             {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => (
-              <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openDay(todayJst())}>
+              <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="statusDot">未</span>
                 <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b><small>下4桁 {last4(vehicle)}　{work?.reason || ""}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
@@ -249,7 +261,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <div className="completedBox">
             <div className="completedTitle">作業完了 <strong>{completedRows.length}件</strong></div>
             {completedRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
-              <button key={work?.id || entry.id} className="completedRow" onClick={() => openDay(todayJst())}>
+              <button key={work?.id || entry.id} className="completedRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="completedDot">済</span>
                 <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
               </button>
@@ -286,11 +298,11 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <div className="homeWorkload" aria-label="作業担当者の負荷">
             <div className="homeWorkloadHead">
               <div><b>作業担当者の負荷</b><small>急ぎ案件を優先し、未完了・作業中の偏りを確認</small></div>
-              <button onClick={() => openDay(todayJst())}>1日のスケジュールで詳しく見る</button>
+              <button onClick={() => openWorkload()}>負荷表で詳しく見る</button>
             </div>
             <div className="homeWorkloadGrid">
               {workerLoad.slice(0, 6).map((row) => (
-                <button key={row.name} className={`${row.name === "担当未設定" ? "homeWorker unassigned" : "homeWorker"}${row.urgent > 0 ? " urgent" : ""}`} onClick={() => openDay(todayJst())}>
+                <button key={row.name} className={`${row.name === "担当未設定" ? "homeWorker unassigned" : "homeWorker"}${row.urgent > 0 ? " urgent" : ""}`} onClick={() => openWorkload(row.name)}>
                   <b>{row.name}{row.urgent > 0 && <em className="urgentBadge">急ぎ {row.urgent}</em>}</b>
                   <span>未完了 <strong>{row.total}</strong>台</span>
                   <small>未実施 {row.pending}・作業中 {row.running}</small>
