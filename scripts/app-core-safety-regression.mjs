@@ -59,6 +59,9 @@ assert(schedule.includes("focusWorkId") && schedule.includes("data-work-id"), "d
 assert(schedule.includes("focusedWork"), "focused work must be visually obvious");
 assert(workload.includes('params.get("worker")') && workload.includes('params.get("filter")'), "workload page must accept direct worker/state filters");
 assert(home.includes("openWorkload(row.name)"), "desktop home staff load cards must open the actionable workload board");
+assert(workload.includes('supabase.rpc("set_work_order_worker"'), "workload board must reuse the existing staff assignment RPC");
+assert(workload.includes("担当変更"), "workload detail must allow staff assignment without a separate menu");
+assert(workload.includes('worker_staff_id'), "workload staff assignment must preserve the selected staff id");
 assert(sql.includes("create_schedule_registration_v2"), "DB safety manifest must track atomic registration");
 assert(sql.includes("reschedule_schedule_entry_v2"), "DB safety manifest must track atomic reschedule");
 assert(sql.includes("loaner vehicle is already reserved for this period"), "DB safety manifest must track loaner conflict guard");

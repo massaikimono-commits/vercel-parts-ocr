@@ -8,6 +8,7 @@ type WorkOrder = {
   id: string;
   vehicle_id: string;
   worker_name: string | null;
+  worker_staff_id: string | null;
   status: string;
   work_completed: boolean;
   checked_in_at: string | null;
@@ -35,6 +36,11 @@ type Customer = {
   name: string;
   company_name: string | null;
   schedule_display_name: string | null;
+};
+
+type StaffMember = {
+  id: string;
+  display_name: string;
 };
 
 type WorkFilter = "all" | "unfinished" | "notStarted" | "inProgress" | "urgent" | "completedWaiting" | "staying";
@@ -77,6 +83,8 @@ export default function WorkloadPage() {
   const [scheduleLinks, setScheduleLinks] = useState<ScheduleLink[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [assigningWorkId, setAssigningWorkId] = useState("");
   const [selectedWorker, setSelectedWorker] = useState<string>("全担当");
   const [selectedFilter, setSelectedFilter] = useState<WorkFilter>("unfinished");
   const [busy, setBusy] = useState(true);
@@ -99,13 +107,21 @@ export default function WorkloadPage() {
     try {
       const { data, error } = await supabase
         .from("work_orders")
-        .select("id,vehicle_id,worker_name,status,work_completed,checked_in_at,checked_out_at,reason,is_urgent")
+        .select("id,vehicle_id,worker_name,worker_staff_id,status,work_completed,checked_in_at,checked_out_at,reason,is_urgent")
         .is("checked_out_at", null)
         .neq("status", "cancelled")
         .limit(500);
       if (error) throw error;
       const nextWorks = (data || []) as WorkOrder[];
       setWorks(nextWorks);
+
+      const { data: staffData, error: staffError } = await supabase
+        .from("staff_members")
+        .select("id,display_name")
+        .eq("is_active", true)
+        .order("display_name", { ascending: true });
+      if (staffError) throw staffError;
+      setStaffMembers((staffData || []) as StaffMember[]);
 
       const workIds = nextWorks.map((work) => work.id);
       const vehicleIds = [...new Set(nextWorks.map((work) => work.vehicle_id).filter(Boolean))];
@@ -148,6 +164,7 @@ export default function WorkloadPage() {
       setScheduleLinks([]);
       setVehicles([]);
       setCustomers([]);
+      setStaffMembers([]);
       setMessage("負荷表の読み込みエラー: " + (error?.message || error));
     } finally {
       setBusy(false);
@@ -277,6 +294,32 @@ export default function WorkloadPage() {
     requestAnimationFrame(() => document.getElementById("workload-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
+  async function assignWorker(workId: string, staffId: string) {
+    if (!staffId || assigningWorkId) return;
+    const staff = staffMembers.find((member) => member.id === staffId);
+    if (!staff) return;
+
+    setAssigningWorkId(workId);
+    try {
+      const { data, error } = await supabase.rpc("set_work_order_worker", {
+        p_work_order_id: workId,
+        p_staff_id: staffId,
+        p_actor: "workload",
+      });
+      if (error) throw error;
+      setWorks((current) => current.map((work) => work.id === workId ? {
+        ...work,
+        worker_staff_id: staffId,
+        worker_name: data?.workerName || staff.display_name,
+      } : work));
+      setMessage(`担当を ${data?.workerName || staff.display_name} に変更しました。`);
+    } catch (error: any) {
+      setMessage("担当変更エラー: " + (error?.message || error));
+    } finally {
+      setAssigningWorkId("");
+    }
+  }
+
   return (
     <main className="loadPage">
       <header className="top">
@@ -375,6 +418,19 @@ export default function WorkloadPage() {
                   {stayDays !== null && <span className={stayDays >= 3 ? "stayWarn" : ""}>入庫 {stayDays}日</span>}
                 </div>
                 <div className="workActions">
+                  <label className="assignWorker">
+                    <span>担当変更</span>
+                    <select
+                      value={work.worker_staff_id || ""}
+                      disabled={assigningWorkId === work.id}
+                      onChange={(event) => void assignWorker(work.id, event.target.value)}
+                    >
+                      <option value="">{work.worker_name?.trim() ? `現在: ${work.worker_name}` : "担当を選択"}</option>
+                      {staffMembers.map((staff) => (
+                        <option key={staff.id} value={staff.id}>{staff.display_name}</option>
+                      ))}
+                    </select>
+                  </label>
                   {schedule ? (
                     <button onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(schedule.id))}>予約を開く</button>
                   ) : (
@@ -393,11 +449,11 @@ export default function WorkloadPage() {
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button{font:inherit}
         .loadPage{max-width:1180px;margin:0 auto;padding:16px 14px 50px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}.top button,.reload{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
-        .hero{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px}.eyebrow{color:#2674e8;font-weight:800}.hero h1{font-size:28px;margin:3px 0}.hero p{margin:0;color:#6d798a}.summary{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin:10px 0}.summary>div,.summary>button{background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:13px;display:grid;gap:4px;text-align:left;color:inherit}.summary>button{cursor:pointer}.summary>button:hover{border-color:#8eb5ef}.summary .unfinishedSummary{border-color:#c8d9f2;background:#f7fbff}.summary span{font-size:12px;color:#687587}.summary b{font-size:26px}.unassignedAlert{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:0 0 10px;padding:12px 14px;border:1px solid #f2c99e;border-radius:14px;background:#fff8f2;color:#8b4b19}.unassignedAlert>div:first-child{display:grid;gap:3px}.unassignedAlert span{font-size:12px;color:#8b684c}.unassignedActions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.unassignedAlert strong{white-space:nowrap;border-radius:999px;padding:6px 10px;background:#fff0f0;color:#b02a2a}.unassignedAlert button{border:1px solid #e2aa76;background:#fff;color:#a25417;border-radius:10px;padding:7px 9px;font-weight:900}.tableCard{background:#fff;border:1px solid #d9e0ea;border-radius:18px;overflow:hidden}.tableHead,.loadRow{display:grid;grid-template-columns:minmax(160px,1.5fr) repeat(8,minmax(70px,.6fr));gap:8px;align-items:center;padding:11px 14px}.tableHead{background:#f7f9fc;color:#657184;font-size:11px;font-weight:900}.tableHead span:not(:first-child),.loadRow span,.loadRow strong,.loadRow .metricButton{text-align:center}.loadRow{border-top:1px solid #edf0f4}.workerOpen,.metricButton{border:0;background:transparent;color:inherit;font-weight:900;padding:5px 7px;border-radius:9px;cursor:pointer}.workerOpen{text-align:left;font-size:15px}.workerOpen:hover,.metricButton:hover{background:#edf4ff;color:#1f5cae}.loadRow span,.loadRow strong,.loadRow .metricButton{border-radius:999px;padding:5px 7px;font-weight:900}.loadRow .unfinished{background:#edf4ff;color:#1f5cae}.loadRow .warn{background:#fff4d8;color:#8a5a00}.loadRow .progress{background:#eaf3ff;color:#245ca8}.loadRow .urgent{background:#fff0f0;color:#b02a2a}.loadRow .stay{background:#eef7ed;color:#356d31}.loadRow .stayAge{background:#fff4d8;color:#8a5a00}.loadRow.unassigned{background:#fff8f2}.loadRow.unassigned .workerOpen{color:#a25417}.detailCard{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:14px;margin-top:10px}.detailHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.detailHead>div:first-child{display:grid}.detailHead span{font-size:11px;color:#687587}.detailHead h2{margin:2px 0;font-size:20px}.detailFilters{display:flex;gap:5px;flex-wrap:wrap}.detailFilters button,.workActions button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:9px;padding:7px 9px;font-weight:800}.detailFilters button.active{background:#2674e8;color:#fff;border-color:#2674e8}.workCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.workCard{border:1px solid #e0e6ef;border-radius:13px;padding:11px;display:grid;gap:8px}.workCard.urgentWork{border-color:#efb3b3;background:#fffafa}.workMain{display:grid}.workMain>b{font-size:16px}.workMain span{font-size:12px;color:#687587}.workMeta{display:flex;gap:5px;flex-wrap:wrap}.workMeta span{font-size:10px;background:#f1f4f8;border-radius:999px;padding:4px 6px}.workMeta .urgentTag{background:#fff0f0;color:#b02a2a;font-weight:900}.workMeta .stayWarn{background:#fff4d8;color:#8a5a00;font-weight:900}.workActions{display:flex;justify-content:flex-end}.detailEmpty{grid-column:1/-1}.empty{padding:28px;text-align:center;color:#8b97a7}.hint{font-size:12px;color:#78869a;margin-top:8px}
+        .hero{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px}.eyebrow{color:#2674e8;font-weight:800}.hero h1{font-size:28px;margin:3px 0}.hero p{margin:0;color:#6d798a}.summary{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin:10px 0}.summary>div,.summary>button{background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:13px;display:grid;gap:4px;text-align:left;color:inherit}.summary>button{cursor:pointer}.summary>button:hover{border-color:#8eb5ef}.summary .unfinishedSummary{border-color:#c8d9f2;background:#f7fbff}.summary span{font-size:12px;color:#687587}.summary b{font-size:26px}.unassignedAlert{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:0 0 10px;padding:12px 14px;border:1px solid #f2c99e;border-radius:14px;background:#fff8f2;color:#8b4b19}.unassignedAlert>div:first-child{display:grid;gap:3px}.unassignedAlert span{font-size:12px;color:#8b684c}.unassignedActions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.unassignedAlert strong{white-space:nowrap;border-radius:999px;padding:6px 10px;background:#fff0f0;color:#b02a2a}.unassignedAlert button{border:1px solid #e2aa76;background:#fff;color:#a25417;border-radius:10px;padding:7px 9px;font-weight:900}.tableCard{background:#fff;border:1px solid #d9e0ea;border-radius:18px;overflow:hidden}.tableHead,.loadRow{display:grid;grid-template-columns:minmax(160px,1.5fr) repeat(8,minmax(70px,.6fr));gap:8px;align-items:center;padding:11px 14px}.tableHead{background:#f7f9fc;color:#657184;font-size:11px;font-weight:900}.tableHead span:not(:first-child),.loadRow span,.loadRow strong,.loadRow .metricButton{text-align:center}.loadRow{border-top:1px solid #edf0f4}.workerOpen,.metricButton{border:0;background:transparent;color:inherit;font-weight:900;padding:5px 7px;border-radius:9px;cursor:pointer}.workerOpen{text-align:left;font-size:15px}.workerOpen:hover,.metricButton:hover{background:#edf4ff;color:#1f5cae}.loadRow span,.loadRow strong,.loadRow .metricButton{border-radius:999px;padding:5px 7px;font-weight:900}.loadRow .unfinished{background:#edf4ff;color:#1f5cae}.loadRow .warn{background:#fff4d8;color:#8a5a00}.loadRow .progress{background:#eaf3ff;color:#245ca8}.loadRow .urgent{background:#fff0f0;color:#b02a2a}.loadRow .stay{background:#eef7ed;color:#356d31}.loadRow .stayAge{background:#fff4d8;color:#8a5a00}.loadRow.unassigned{background:#fff8f2}.loadRow.unassigned .workerOpen{color:#a25417}.detailCard{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:14px;margin-top:10px}.detailHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.detailHead>div:first-child{display:grid}.detailHead span{font-size:11px;color:#687587}.detailHead h2{margin:2px 0;font-size:20px}.detailFilters{display:flex;gap:5px;flex-wrap:wrap}.detailFilters button,.workActions button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:9px;padding:7px 9px;font-weight:800}.detailFilters button.active{background:#2674e8;color:#fff;border-color:#2674e8}.workCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.workCard{border:1px solid #e0e6ef;border-radius:13px;padding:11px;display:grid;gap:8px}.workCard.urgentWork{border-color:#efb3b3;background:#fffafa}.workMain{display:grid}.workMain>b{font-size:16px}.workMain span{font-size:12px;color:#687587}.workMeta{display:flex;gap:5px;flex-wrap:wrap}.workMeta span{font-size:10px;background:#f1f4f8;border-radius:999px;padding:4px 6px}.workMeta .urgentTag{background:#fff0f0;color:#b02a2a;font-weight:900}.workMeta .stayWarn{background:#fff4d8;color:#8a5a00;font-weight:900}.workActions{display:flex;justify-content:space-between;align-items:end;gap:8px}.assignWorker{display:grid;gap:3px;min-width:170px}.assignWorker span{font-size:10px;color:#687587;font-weight:800}.assignWorker select{border:1px solid #ccd7e5;border-radius:9px;padding:7px;background:#fff;color:#172033}.detailEmpty{grid-column:1/-1}.empty{padding:28px;text-align:center;color:#8b97a7}.hint{font-size:12px;color:#78869a;margin-top:8px}
         @media(max-width:900px){.summary{grid-template-columns:repeat(4,1fr)}}
         @media(max-width:650px){
           .hero{display:block}.reload{margin-top:12px;width:100%}.summary{grid-template-columns:1fr 1fr}.unassignedAlert{align-items:flex-start}.hero h1{font-size:24px}
-          .tableCard{border:0;background:transparent;overflow:visible;display:grid;gap:10px}.tableHead{display:none}.loadRow{min-width:0;grid-template-columns:1fr 1fr;gap:8px;padding:14px;background:#fff;border:1px solid #d9e0ea;border-radius:16px}.loadRow:first-of-type{border-top:1px solid #d9e0ea}.workerOpen{grid-column:1/-1;font-size:17px;padding-bottom:8px;border-bottom:1px solid #edf0f4}.loadRow span,.loadRow strong,.loadRow .metricButton{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;text-align:right;border-radius:10px;padding:8px 10px;min-height:42px}.loadRow span::before,.loadRow strong::before,.loadRow .metricButton::before{font-size:11px;color:#718096;font-weight:800;text-align:left}.loadRow .metricButton:nth-child(2)::before{content:"未完了"}.loadRow .metricButton:nth-child(3)::before{content:"未実施"}.loadRow .metricButton:nth-child(4)::before{content:"作業中"}.loadRow .metricButton:nth-child(5)::before{content:"急ぎ"}.loadRow .metricButton:nth-child(6)::before{content:"完了待ち"}.loadRow .metricButton:nth-child(7)::before{content:"入庫中"}.loadRow span:nth-child(8)::before{content:"最長滞留"}.loadRow strong:nth-child(9)::before{content:"合計"}.loadRow.unassigned{border-color:#f2c99e}.detailHead{display:grid}.workCards{grid-template-columns:1fr}.detailFilters{display:grid;grid-template-columns:repeat(2,1fr)}.detailFilters button{width:100%}.empty{background:#fff;border:1px solid #d9e0ea;border-radius:16px}
+          .tableCard{border:0;background:transparent;overflow:visible;display:grid;gap:10px}.tableHead{display:none}.loadRow{min-width:0;grid-template-columns:1fr 1fr;gap:8px;padding:14px;background:#fff;border:1px solid #d9e0ea;border-radius:16px}.loadRow:first-of-type{border-top:1px solid #d9e0ea}.workerOpen{grid-column:1/-1;font-size:17px;padding-bottom:8px;border-bottom:1px solid #edf0f4}.loadRow span,.loadRow strong,.loadRow .metricButton{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;text-align:right;border-radius:10px;padding:8px 10px;min-height:42px}.loadRow span::before,.loadRow strong::before,.loadRow .metricButton::before{font-size:11px;color:#718096;font-weight:800;text-align:left}.loadRow .metricButton:nth-child(2)::before{content:"未完了"}.loadRow .metricButton:nth-child(3)::before{content:"未実施"}.loadRow .metricButton:nth-child(4)::before{content:"作業中"}.loadRow .metricButton:nth-child(5)::before{content:"急ぎ"}.loadRow .metricButton:nth-child(6)::before{content:"完了待ち"}.loadRow .metricButton:nth-child(7)::before{content:"入庫中"}.loadRow span:nth-child(8)::before{content:"最長滞留"}.loadRow strong:nth-child(9)::before{content:"合計"}.loadRow.unassigned{border-color:#f2c99e}.detailHead{display:grid}.workCards{grid-template-columns:1fr}.workActions{display:grid;grid-template-columns:1fr}.assignWorker{min-width:0}.workActions>button{width:100%}.detailFilters{display:grid;grid-template-columns:repeat(2,1fr)}.detailFilters button{width:100%}.empty{background:#fff;border:1px solid #d9e0ea;border-radius:16px}
         }
       `}</style>
     </main>
