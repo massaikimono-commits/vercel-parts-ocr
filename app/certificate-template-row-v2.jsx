@@ -277,7 +277,7 @@ function ensureDebug(lines) {
 async function readTemplate(img, debug) {
   const source = await sourceCanvas(img);
   const paper = detectPaper(source);
-  const t = await import("tesseract.js");
+  const t = await import("./lib/tesseract-local");
   const worker = await t.createWorker("jpn+eng", 1);
   const logs = [`v2紙範囲 x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`];
   try {
