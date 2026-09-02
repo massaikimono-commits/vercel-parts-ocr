@@ -95,10 +95,65 @@ export function detectCertificateQrDensityCenters(rgba, width, height, options =
   }
   local.sort((a, b) => b.score - a.score);
 
+  const normalizedX = (item) => Math.max(0, Math.min(1, (item.sx * step) / w));
+
+  // Vehicle certificates use a small set of stable QR layouts. When footer
+  // text/barcode noise produces extra local maxima, recover the complete real
+  // layout from all candidates before applying the generic strongest-peaks
+  // fallback. This keeps a distractor from crowding out a lower-scoring real QR.
+  const knownLayouts = [
+    [0.485, 0.574, 0.658, 0.744, 0.829, 0.911],
+    [0.511, 0.567, 0.617, 0.733, 0.789],
+    [0.538, 0.598, 0.651, 0.789, 0.853],
+    [0.703, 0.928],
+  ];
+  const layoutTolerance = 0.03;
+  let layoutMatch = null;
+
+  if (maxScore >= 0.05) {
+    for (const layout of knownLayouts) {
+      const used = new Set();
+      const matched = [];
+      let complete = true;
+
+      for (const expectedX of layout) {
+        let bestIndex = -1;
+        let bestScore = -1;
+        for (let i = 0; i < local.length; i += 1) {
+          if (used.has(i)) continue;
+          const item = local[i];
+          if (Math.abs(normalizedX(item) - expectedX) > layoutTolerance) continue;
+          if (item.score > bestScore) {
+            bestIndex = i;
+            bestScore = item.score;
+          }
+        }
+        if (bestIndex < 0) {
+          complete = false;
+          break;
+        }
+        used.add(bestIndex);
+        matched.push(local[bestIndex]);
+      }
+
+      if (!complete) continue;
+      const score = layout.length * 1000 + matched.reduce((sum, item) => sum + item.score, 0);
+      if (!layoutMatch || score > layoutMatch.score) {
+        layoutMatch = { score, matched };
+      }
+    }
+  }
+
+  if (layoutMatch) {
+    return layoutMatch.matched
+      .sort((a, b) => a.sx - b.sx)
+      .map((item) => ({
+        x: normalizedX(item),
+        score: Number(item.score.toFixed(4)),
+      }));
+  }
+
   const minDistance = Math.max(4, Math.round((w * 0.035) / step));
-  // Japanese vehicle certificates use at most six QR symbols. Keeping more
-  // candidates only gives nearby text/barcode noise a chance to crowd the
-  // decoder crop list, so cap strong layouts at the real document maximum.
   const maxCenters = maxScore < 0.05 ? 3 : 6;
   const selected = [];
   for (const item of local) {
@@ -110,7 +165,7 @@ export function detectCertificateQrDensityCenters(rgba, width, height, options =
   return selected
     .sort((a, b) => a.sx - b.sx)
     .map((item) => ({
-      x: Math.max(0, Math.min(1, (item.sx * step) / w)),
+      x: normalizedX(item),
       score: Number(item.score.toFixed(4)),
     }));
 }
