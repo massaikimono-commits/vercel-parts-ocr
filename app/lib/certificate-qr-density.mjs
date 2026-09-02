@@ -137,9 +137,23 @@ export function detectCertificateQrDensityCenters(rgba, width, height, options =
       }
 
       if (!complete) continue;
-      const score = layout.length * 1000 + matched.reduce((sum, item) => sum + item.score, 0);
-      if (!layoutMatch || score > layoutMatch.score) {
-        layoutMatch = { score, matched };
+      const averageError =
+        matched.reduce(
+          (sum, item, index) => sum + Math.abs(normalizedX(item) - layout[index]),
+          0
+        ) / layout.length;
+      const averageQuality =
+        matched.reduce((sum, item) => sum + item.score, 0) / layout.length;
+
+      if (
+        !layoutMatch ||
+        averageError < layoutMatch.averageError - 0.001 ||
+        (
+          Math.abs(averageError - layoutMatch.averageError) <= 0.001 &&
+          averageQuality > layoutMatch.averageQuality
+        )
+      ) {
+        layoutMatch = { averageError, averageQuality, matched };
       }
     }
   }
