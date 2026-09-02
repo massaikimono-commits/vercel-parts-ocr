@@ -59,8 +59,8 @@ if (actual.length > targets.length + 1) {
   throw new Error(`perspective-photo: too many QR candidates (${actual.length}); expected at most ${targets.length + 1}`);
 }
 for (const target of targets) {
-  if (!actual.some((item) => Math.abs(item.x - target.x) <= 0.025)) {
-    throw new Error(`perspective-photo: missed QR center ${target.x}; actual=${actual.map((item) => item.x).join(",")}`);
+  if (!actual.some((item) => Math.abs(item.x - target.x) <= 0.025 && Math.abs(item.y - target.y) <= 0.025)) {
+    throw new Error(`perspective-photo: missed QR center (${target.x},${target.y}); actual=${actual.map((item) => `(${item.x},${item.y})`).join(",")}`);
   }
 }
 if (averageMs > 750) {
