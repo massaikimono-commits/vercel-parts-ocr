@@ -96,7 +96,10 @@ export function detectCertificateQrDensityCenters(rgba, width, height, options =
   local.sort((a, b) => b.score - a.score);
 
   const minDistance = Math.max(4, Math.round((w * 0.035) / step));
-  const maxCenters = maxScore < 0.05 ? 3 : 8;
+  // Japanese vehicle certificates use at most six QR symbols. Keeping more
+  // candidates only gives nearby text/barcode noise a chance to crowd the
+  // decoder crop list, so cap strong layouts at the real document maximum.
+  const maxCenters = maxScore < 0.05 ? 3 : 6;
   const selected = [];
   for (const item of local) {
     if (selected.some((picked) => Math.abs(picked.sx - item.sx) < minDistance)) continue;
