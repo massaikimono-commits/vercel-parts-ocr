@@ -1,0 +1,17 @@
+{
+  "id": "parts-photo-yellow-delivery-composite-002",
+  "description": "匿名合成回帰。黄色納品書が白い部品一覧の上に重なり、斜め撮影・赤線・手書き・背景文字の写り込みが同時にある実運用条件を再現する。実伝票の顧客名・取引先名・伝票番号・車両識別情報・実部品データは保存しない。",
+  "captureVariants": 3,
+  "characteristics": ["黄色伝票", "白い部品一覧との重なり", "斜め撮影", "台形歪み", "赤線", "手書き", "背景文字の写り込み", "紙のしわ"],
+  "columnMapping": {
+    "qty": "出庫数",
+    "retail": "標準価格",
+    "cost": "単価"
+  },
+  "expected": [
+    {"name":"テスト部品A","qty":"1","retail":"12000","cost":"7200"},
+    {"name":"テスト部品B","qty":"1","retail":"3600","cost":"2900"},
+    {"name":"テスト部品C","qty":"2","retail":"500","cost":"320"},
+    {"name":"テスト部品D","qty":"1","retail":"700","cost":"560"}
+  ]
+}

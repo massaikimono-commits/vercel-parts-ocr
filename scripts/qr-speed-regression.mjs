@@ -1,11 +1,11 @@
 import { performance } from "node:perf_hooks";
 import { detectCertificateQrDensityCenters } from "../app/lib/certificate-qr-density.mjs";
 
-function syntheticQrImage(width, height, centers, yCenter = 0.90) {
+function syntheticQrImage(width, height, centers, yCenter = 0.90, sizeScale = 1) {
   const rgba = new Uint8ClampedArray(width * height * 4);
   rgba.fill(255);
-  const size = Math.max(42, Math.round(width * 0.052));
-  const cell = Math.max(3, Math.floor(size / 13));
+  const size = Math.max(32, Math.round(width * 0.052 * sizeScale));
+  const cell = Math.max(2, Math.floor(size / 13));
   const cy = Math.floor(height * yCenter);
   for (const center of centers) {
     const cx = Math.round(width * center);
@@ -36,13 +36,48 @@ const cases = [
   { name: "registered-five-left", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.90 },
   { name: "registered-five-right", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.90 },
   { name: "legacy-two", expected: 2, centers: [0.703, 0.928], yCenter: 0.90 },
+  // Photo distance changes apparent QR size even after page normalization. Keep
+  // density targeting stable for both smaller and larger symbols without touching
+  // production thresholds.
+  { name: "photo-small-qr", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.90, sizeScale: 0.78 },
+  { name: "photo-large-qr", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.90, sizeScale: 1.28 },
+  // Distance and handheld vertical framing can vary at the same time. Pin the
+  // combined cases near both vertical scan boundaries to catch compound drops.
+  { name: "photo-small-qr-upper-edge", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.815, sizeScale: 0.78 },
+  { name: "photo-large-qr-lower-edge", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.97, sizeScale: 1.28 },
+  // Distance, size and horizontal framing can compound in handheld photos too.
+  // Pin opposite scan-window corners without widening production thresholds.
+  { name: "photo-small-qr-upper-left-corner", expected: 1, centers: [0.435], yCenter: 0.815, sizeScale: 0.78 },
+  { name: "photo-large-qr-lower-right-corner", expected: 1, centers: [0.965], yCenter: 0.97, sizeScale: 1.28 },
   // Photo captures can shift the normalized certificate vertically. Keep the
   // density detector effective near both ends of its lower-page scan band.
   { name: "photo-shift-up", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.84 },
+  // The production scan starts at 80% page height. A handheld photo can place
+  // QR symbols just inside that edge, so keep a synthetic near-boundary target.
+  { name: "photo-shift-up-edge", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.815 },
   { name: "photo-shift-down", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.955 },
-  // A QR-like patch elsewhere on a photographed page must not expand the scan
-  // area or create a false candidate. This pins the lower-page-only fast path.
+  // Stronger downward framing still occurs in handheld photos. Pin useful QR
+  // targeting close to the lower scan edge without widening the production band.
+  { name: "photo-shift-down-edge", expected: 5, centers: [0.538, 0.598, 0.651, 0.789, 0.853], yCenter: 0.97 },
+  // Horizontal framing can push symbols close to either side of the active scan window.
+  // Keep these fully synthetic so no certificate content or personal data is stored.
+  { name: "photo-shift-left-edge", expected: 1, centers: [0.435], yCenter: 0.90 },
+  { name: "photo-shift-right-edge", expected: 1, centers: [0.965], yCenter: 0.90 },
+  // Handheld framing can combine horizontal and vertical shifts. Pin all four
+  // extreme in-window corners so boundary interactions cannot drop targets.
+  { name: "photo-shift-upper-left-corner", expected: 1, centers: [0.435], yCenter: 0.815 },
+  { name: "photo-shift-upper-right-corner", expected: 1, centers: [0.965], yCenter: 0.815 },
+  { name: "photo-shift-lower-left-corner", expected: 1, centers: [0.435], yCenter: 0.97 },
+  { name: "photo-shift-lower-right-corner", expected: 1, centers: [0.965], yCenter: 0.97 },
+  // QR-like patches outside the lower/right scan window must not expand the
+  // search area or create false candidates. These pin both scan boundaries.
   { name: "upper-page-decoy", expected: 0, centers: [0.72], yCenter: 0.50 },
+  { name: "upper-boundary-decoy", expected: 0, centers: [0.72], yCenter: 0.77 },
+  { name: "lower-left-decoy", expected: 0, centers: [0.22], yCenter: 0.90 },
+  // Pin the left edge of the lower/right scan window. Keep the synthetic patch
+  // fully before the 40% boundary so the regression tests the window itself,
+  // rather than a patch whose pixels physically extend into the scan region.
+  { name: "lower-left-boundary-decoy", expected: 0, centers: [0.37], yCenter: 0.90 },
 ];
 
 const runs = 4;
@@ -51,7 +86,7 @@ const maxAverageMs = 750;
 const results = [];
 
 for (const test of cases) {
-  const rgba = syntheticQrImage(width, height, test.centers, test.yCenter);
+  const rgba = syntheticQrImage(width, height, test.centers, test.yCenter, test.sizeScale ?? 1);
 
   // Warm-up keeps the budget focused on steady-state detector cost, not Node startup/JIT.
   detectCertificateQrDensityCenters(rgba, width, height);
