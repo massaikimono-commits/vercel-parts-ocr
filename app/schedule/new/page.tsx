@@ -23,6 +23,7 @@ type ExternalVendor = {
 type TimeOption = {
   key: string;
   label: string;
+  displayLabel?: string;
   group?: string;
   mode: "exact" | "morning" | "unspecified";
   startsAt: string;
@@ -746,7 +747,7 @@ export default function ScheduleNewPage() {
                         onClick={() => setSelectedTimeKey(x.key)}
                         title={detail || (state === "open" ? "空いています" : "確認が必要です")}
                       >
-                        <span>{mark}</span><b>{x.label}</b>
+                        <span>{mark}</span><b>{x.displayLabel || x.label}</b>
                       </button>
                     );
                   })}
