@@ -209,8 +209,12 @@ export default function HighAccuracyOCRPage() {
         const y = firstRowY + row * rowStep; if (y >= 0.88) break;
         setMessage(`部品表 ${row + 1}行目を読み取り中…`); setProgress((old) => Math.max(old, 8 + row * 20));
         const qtyBox = relativeBox(paper, 0.432, y, 0.040, 0.070); const retailBox = relativeBox(paper, 0.480, y, 0.090, 0.070); const costBox = relativeBox(paper, 0.596, y, 0.080, 0.070); const amountBox = relativeBox(paper, 0.730, y, 0.080, 0.070);
-        const nameRead = await readName(worker, tesseract, source, paper, y); const qtyRead = await readNumber(worker, tesseract, source, qtyBox, 99, true); const retailRead = await readNumber(worker, tesseract, source, retailBox, 2000000); const costRead = await readNumber(worker, tesseract, source, costBox, 2000000); const amountRead = await readNumber(worker, tesseract, source, amountBox, 2000000);
-        let qty = qtyRead.value; if (!qty && (retailRead.value || costRead.value || amountRead.value)) qty = "1"; if (Number(qty) > 20 && (retailRead.value || costRead.value)) qty = "1";
+        const nameRead = await readName(worker, tesseract, source, paper, y); const qtyRead = await readNumber(worker, tesseract, source, qtyBox, 99, true); const retailRead = await readNumber(worker, tesseract, source, retailBox, 2000000); const costRead = await readNumber(worker, tesseract, source, costBox, 2000000);
+        let qty = qtyRead.value; if (!qty && (retailRead.value || costRead.value)) qty = "1"; if (Number(qty) > 20 && (retailRead.value || costRead.value)) qty = "1";
+        const needsAmountFallback = !costRead.value && Boolean(retailRead.value) && (!qtyRead.value || qtyRead.value === "1");
+        const amountRead = needsAmountFallback
+          ? await readNumber(worker, tesseract, source, amountBox, 2000000)
+          : { value: "", texts: [] };
         const retail = retailRead.value; const cost = chooseCost(costRead, amountRead, qty);
         logs.push(`【${row + 1}行目】\nboxY=${y.toFixed(3)}\n名称候補1: ${nameRead.texts[0]?.trim() || ""}\n名称候補2: ${nameRead.texts[1]?.trim() || ""}\n名称候補3: ${nameRead.texts[2]?.trim() || ""}\n品番候補: ${nameRead.supplierCode || ""}\n辞書一致: ${nameRead.dictionaryHit ? "YES" : "NO"}\n名称採用: ${nameRead.name}\n個数: ${qtyRead.texts.map((x) => x.trim()).join(" / ")} => ${qty}\n定価: ${retailRead.texts.map((x) => x.trim()).join(" / ")} => ${retail}\n仕入れ: ${costRead.texts.map((x) => x.trim()).join(" / ")} => ${cost}\n金額補助: ${amountRead.texts.map((x) => x.trim()).join(" / ")} => ${amountRead.value}`);
         const strongName = nameScore(nameRead.name) >= 8 || nameRead.dictionaryHit; const retailOk = Number(retail || 0) >= 100; const costOk = Number(cost || 0) >= 100; const isRealPartRow = (retailOk && costOk) || (strongName && (retailOk || costOk));

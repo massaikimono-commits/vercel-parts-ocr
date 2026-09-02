@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:certificate && npm run test:certificate-v2-overrides && npm run test:parts && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:schedule-work-state && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:daily-report-secondary && npm run test:qr-speed && npm run test:parts-layout && npm run test:paper-sizes && npm run test:security && npm run test:app-core-safety && next build",
+    "build": "npm run test:certificate && npm run test:certificate-v2-overrides && npm run test:parts && npm run test:parts-pass-budget && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:schedule-work-state && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:daily-report-secondary && npm run test:qr-speed && npm run test:parts-layout && npm run test:paper-sizes && npm run test:security && npm run test:app-core-safety && next build",
     "start": "next start",
     "test:certificate": "node scripts/vehicle-certificate-regression.mjs",
     "test:parts": "node scripts/parts-slip-regression.mjs",
@@ -26,7 +26,8 @@
     "prepare:tesseract": "node scripts/prepare-tesseract-assets.mjs",
     "postinstall": "node scripts/prepare-tesseract-assets.mjs",
     "predev": "node scripts/prepare-tesseract-assets.mjs",
-    "test:certificate-v2-overrides": "node scripts/certificate-v2-no-legacy-overrides-regression.mjs"
+    "test:certificate-v2-overrides": "node scripts/certificate-v2-no-legacy-overrides-regression.mjs",
+    "test:parts-pass-budget": "node scripts/parts-ocr-pass-budget-regression.mjs"
   },
   "dependencies": {
     "next": "16.3.4",

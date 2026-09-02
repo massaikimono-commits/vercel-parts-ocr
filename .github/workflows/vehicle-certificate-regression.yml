@@ -56,6 +56,9 @@ jobs:
       - name: Run parts-slip regression
         run: npm run test:parts
 
+      - name: Run parts OCR pass-budget regression
+        run: npm run test:parts-pass-budget
+
       - name: Run yellow/white parts layout semantics
         run: npm run test:parts-layout
 
