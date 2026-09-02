@@ -132,7 +132,10 @@ export default function ScheduleEditPage(){
     setOptions(opts);
     const current=timeKey(base.starts_at);
     const sameDay=dateKey(base.starts_at)===targetDay;
-    const match=sameDay ? opts.find(x=>x.label===current) : null;
+    const match=sameDay
+      ? opts.find(x => x.mode === base.print_time_mode && timeKey(x.startsAt) === current)
+        || opts.find(x => timeKey(x.startsAt) === current)
+      : null;
     setSelected(match?.key || opts[0]?.key || "");
   }
 
