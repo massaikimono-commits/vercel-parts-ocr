@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:certificate && npm run test:certificate-v2-overrides && npm run test:parts && npm run test:parts-pass-budget && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:schedule-work-state && npm run test:schedule-existing-vehicle && npm run test:schedule-desktop-density && npm run test:schedule-report-layout && npm run test:schedule-pickup-rules && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:daily-report-secondary && npm run test:qr-speed && npm run test:parts-layout && npm run test:paper-sizes && npm run test:security && npm run test:app-core-safety && next build",
+    "build": "npm run test:certificate && npm run test:certificate-v2-overrides && npm run test:parts && npm run test:parts-pass-budget && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:schedule-work-state && npm run test:schedule-existing-vehicle && npm run test:schedule-desktop-density && npm run test:schedule-report-layout && npm run test:schedule-pickup-rules && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:daily-report-secondary && npm run test:qr-speed && npm run test:parts-layout && npm run test:paper-sizes && npm run test:security && npm run test:app-core-safety && npm run test:lease-contract-foundation && next build",
     "start": "next start",
     "test:certificate": "node scripts/vehicle-certificate-regression.mjs",
     "test:parts": "node scripts/parts-slip-regression.mjs",
@@ -31,7 +31,8 @@
     "test:schedule-existing-vehicle": "node scripts/schedule-existing-vehicle-selection-regression.mjs",
     "test:schedule-desktop-density": "node scripts/schedule-desktop-density-regression.mjs",
     "test:schedule-report-layout": "node scripts/schedule-daily-report-screen-layout-regression.mjs",
-    "test:schedule-pickup-rules": "node scripts/schedule-pickup-capacity-regression.mjs"
+    "test:schedule-pickup-rules": "node scripts/schedule-pickup-capacity-regression.mjs",
+    "test:lease-contract-foundation": "node scripts/lease-contract-foundation-regression.mjs"
   },
   "dependencies": {
     "next": "16.3.4",
