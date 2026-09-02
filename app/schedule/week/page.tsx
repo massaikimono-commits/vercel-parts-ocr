@@ -262,6 +262,13 @@ export default function WeeklySchedulePage() {
     return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
   }
 
+  function workState(work: WorkOrder | null) {
+    if (!work) return null;
+    if (work.work_completed || work.status === "completed") return { className: "completed", label: "作業完了" };
+    if (work.status === "in_progress") return { className: "running", label: "作業中" };
+    return { className: "pending", label: "作業未実施" };
+  }
+
   function overlapInfo(dayRows: Array<{entry: ScheduleEntry}>) {
     let count = 0;
     const ids = new Set<string>();
@@ -459,23 +466,27 @@ export default function WeeklySchedulePage() {
 
               <div className="dayRows">
                 {!dayRows.length && <div className="empty">予定なし</div>}
-                {dayRows.map(({ entry, work, vehicle, customer }) => (
-                  <button type="button" className={`weekRow ${work?.is_urgent ? "urgent" : ""} ${overlap.ids.has(entry.id) ? "overlapping" : ""}`} key={entry.id} onClick={() => editEntry(entry.id)} aria-label={`${customerName(customer)}の予約を変更`}>
-                    <div className="rowTop">
-                      <b>{dailyReportTimeLabel(entry)}</b>
-                      <span>{ENTRY_LABEL[entry.entry_type]}{work?.reason ? "・" + work.reason : ""}</span>
-                    </div>
-                    <div className="rowCustomer">{customerName(customer)}</div>
-                    <div className="rowMeta">
-                      {last4(vehicle) && <span>{last4(vehicle)}</span>}
-                      {work?.worker_name && <span>担当 {work.worker_name}</span>}
-                      {work?.needs_loaner && <span className="loaner">代車</span>}
-                      {work?.is_urgent && <span className="urgentTag">急ぎ</span>}
-                      {overlap.ids.has(entry.id) && <span className="overlapTag">時間重複</span>}
-                    </div>
-                    <div className="rowEditHint">タップして予約変更</div>
-                  </button>
-                ))}
+                {dayRows.map(({ entry, work, vehicle, customer }) => {
+                  const state = workState(work);
+                  return (
+                    <button type="button" className={`weekRow ${work?.is_urgent ? "urgent" : ""} ${overlap.ids.has(entry.id) ? "overlapping" : ""}`} key={entry.id} onClick={() => editEntry(entry.id)} aria-label={`${customerName(customer)}の予約を変更`}>
+                      <div className="rowTop">
+                        <b>{dailyReportTimeLabel(entry)}</b>
+                        <span>{ENTRY_LABEL[entry.entry_type]}{work?.reason ? "・" + work.reason : ""}</span>
+                      </div>
+                      <div className="rowCustomer">{customerName(customer)}</div>
+                      <div className="rowMeta">
+                        {last4(vehicle) && <span>{last4(vehicle)}</span>}
+                        {state && <span className={`workStateTag ${state.className}`}>{state.label}</span>}
+                        {work?.worker_name && <span>担当 {work.worker_name}</span>}
+                        {work?.needs_loaner && <span className="loaner">代車</span>}
+                        {work?.is_urgent && <span className="urgentTag">急ぎ</span>}
+                        {overlap.ids.has(entry.id) && <span className="overlapTag">時間重複</span>}
+                      </div>
+                      <div className="rowEditHint">タップして予約変更</div>
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="dayActions">
@@ -487,7 +498,7 @@ export default function WeeklySchedulePage() {
         })}
       </section>
 
-      <div className="hint">横にスクロールすると1週間を続けて確認できます。上部サマリーと「要確認日のみ表示」で問題日を先に確認でき、予約カードをタップすると空き確認付きの予約変更へ直接進めます。</div>
+      <div className="hint">横にスクロールすると1週間を続けて確認できます。作業未実施・作業中・作業完了も予約カード内で確認できます。上部サマリーと「要確認日のみ表示」で問題日を先に確認でき、予約カードをタップすると空き確認付きの予約変更へ直接進めます。</div>
 
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}
@@ -498,7 +509,7 @@ export default function WeeklySchedulePage() {
         .attentionBar{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:10px 12px;margin-bottom:10px}.attentionBar>div:first-child{display:grid;gap:2px}.attentionBar span{font-size:11px;color:#68768a}.attentionActions{display:flex;gap:7px;flex-wrap:wrap}.attentionActions button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:10px;padding:8px 10px;font-weight:800}.attentionActions .activeFilter{background:#2674e8;color:#fff;border-color:#2674e8}.attentionActions button:disabled{opacity:.45}.noAttention{grid-column:1/-1;background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:24px;text-align:center;color:#68768a}.weekBoard{display:grid;grid-template-columns:repeat(7,minmax(170px,1fr));gap:8px;align-items:stretch;overflow-x:auto;padding-bottom:6px}.weekBoard.attentionOnly{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));overflow-x:visible}.dayColumn{min-width:170px;background:#fff;border:1px solid #d9e0ea;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:590px}.dayColumn.today{outline:3px solid #2674e8;outline-offset:-2px}.dayColumn.dayClosed{background:#f5f6f8}
         .dayHead{border:0;background:#f7f9fc;padding:11px 10px;display:flex;justify-content:space-between;align-items:center;width:100%;font-weight:900;color:#172033}.dayHead span{font-size:16px}.dayHead b{font-size:12px;background:#e8eef7;border-radius:999px;padding:3px 7px}
         .availability{margin:8px;border-radius:10px;padding:8px;display:grid;gap:2px}.availability b{font-size:13px}.availability small{font-size:10px;line-height:1.45}.availability.open{background:#edf8f0;color:#236c3b}.availability.tight{background:#fff7e8;color:#8a5a08}.availability.full{background:#fdeeee;color:#9c3434}.availability.over{background:#ffe7e7;color:#a32121;border:2px solid #ef9a9a}.availability.closed{background:#eceff3;color:#657180}.availability.unknown{background:#f4f6f8;color:#798596}.overlapWarn{margin:0 8px 8px;background:#fff0db;color:#8b5609;border-radius:9px;padding:7px;font-size:10px;font-weight:900}
-        .dayRows{padding:0 8px 8px;display:grid;gap:6px;align-content:start;flex:1}.weekRow{border:1px solid #e0e6ef;border-radius:10px;padding:8px;background:#fff;width:100%;color:inherit;text-align:left;cursor:pointer}.weekRow:hover,.weekRow:focus-visible{border-color:#8eb5ef;box-shadow:0 0 0 2px rgba(38,116,232,.12);outline:none}.weekRow.urgent{border-color:#e8aa58;box-shadow:inset 3px 0 0 #e8aa58}.weekRow.overlapping{border-color:#e58b8b;background:#fff8f8}.rowTop{display:flex;justify-content:space-between;gap:5px;align-items:center}.rowTop b{font-size:14px}.rowTop span{font-size:11px;color:#5c6878;text-align:right}.rowCustomer{font-weight:900;font-size:14px;margin-top:4px;line-height:1.25}.rowMeta{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rowMeta span{font-size:9px;background:#f1f4f8;border-radius:999px;padding:3px 5px}.rowMeta .loaner{background:#eaf3ff;color:#245ca8}.rowMeta .urgentTag{background:#fff0db;color:#995b00}.rowMeta .overlapTag{background:#ffe7e7;color:#a32121;font-weight:900}.rowEditHint{font-size:9px;color:#2674e8;font-weight:800;text-align:right;margin-top:5px}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
+        .dayRows{padding:0 8px 8px;display:grid;gap:6px;align-content:start;flex:1}.weekRow{border:1px solid #e0e6ef;border-radius:10px;padding:8px;background:#fff;width:100%;color:inherit;text-align:left;cursor:pointer}.weekRow:hover,.weekRow:focus-visible{border-color:#8eb5ef;box-shadow:0 0 0 2px rgba(38,116,232,.12);outline:none}.weekRow.urgent{border-color:#e8aa58;box-shadow:inset 3px 0 0 #e8aa58}.weekRow.overlapping{border-color:#e58b8b;background:#fff8f8}.rowTop{display:flex;justify-content:space-between;gap:5px;align-items:center}.rowTop b{font-size:14px}.rowTop span{font-size:11px;color:#5c6878;text-align:right}.rowCustomer{font-weight:900;font-size:14px;margin-top:4px;line-height:1.25}.rowMeta{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rowMeta span{font-size:9px;background:#f1f4f8;border-radius:999px;padding:3px 5px}.rowMeta .workStateTag{font-weight:900}.rowMeta .workStateTag.pending{background:#eef1f5;color:#556273}.rowMeta .workStateTag.running{background:#fff1cf;color:#875a00}.rowMeta .workStateTag.completed{background:#e5f6e9;color:#287443}.rowMeta .loaner{background:#eaf3ff;color:#245ca8}.rowMeta .urgentTag{background:#fff0db;color:#995b00}.rowMeta .overlapTag{background:#ffe7e7;color:#a32121;font-weight:900}.rowEditHint{font-size:9px;color:#2674e8;font-weight:800;text-align:right;margin-top:5px}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
         .dayActions{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:8px;border-top:1px solid #edf0f4}.dayActions button{font-size:10px;padding:7px 5px}.dayActions .register{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.hint{font-size:12px;color:#78869a;margin-top:8px}
         @media(max-width:900px){.weekHero{display:block}.weekNav{margin-top:12px}.weekSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.attentionBar{display:grid}.weekBoard{grid-template-columns:repeat(7,220px)}.weekBoard.attentionOnly{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.dayColumn{min-width:220px;min-height:520px}}
       `}</style>
