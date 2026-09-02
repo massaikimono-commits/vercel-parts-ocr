@@ -52,11 +52,12 @@ for (let y = distractorTop; y < distractorTop + distractorHeight; y += 1) {
 }
 
 // Add a second, visually different footer distractor: a compact sparse
-// text/label-sized block close to the QR band. Keeping it narrower than a long
-// banner avoids manufacturing several independent QR-like peaks from one label.
+// text/label-sized block close to the QR band. Keep it below roughly one
+// detector separation window so one printed label does not manufacture two
+// independent QR-like peaks in the synthetic fixture.
 const textLeft = Math.round(width * 0.845);
 const textTop = Math.round(height * 0.878);
-const textWidth = Math.round(width * 0.055);
+const textWidth = Math.round(width * 0.050);
 const textHeight = Math.round(height * 0.040);
 for (let y = textTop; y < textTop + textHeight; y += 1) {
   for (let x = textLeft; x < textLeft + textWidth; x += 1) {
