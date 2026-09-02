@@ -129,7 +129,8 @@ begin
 
     select coalesce(jsonb_agg(jsonb_build_object(
       'key','exact_' || replace(x.val,':',''),
-      'label',
+      'label',x.val,
+      'displayLabel',
         case
           when extract(minute from x.val::time)=0
             then to_char(x.val::time,'FMHH24') || '時まで'
@@ -151,6 +152,7 @@ begin
       v_options := v_options || jsonb_build_array(jsonb_build_object(
         'key','morning_unspecified',
         'label',coalesce(v_rules->>'morning_unspecified_label','A中'),
+        'displayLabel',coalesce(v_rules->>'morning_unspecified_label','A中'),
         'group','morning',
         'mode','morning',
         'startsAt',(p_day::timestamp + time '09:00') at time zone 'Asia/Tokyo',
@@ -169,6 +171,7 @@ begin
       v_options := v_options || jsonb_build_array(jsonb_build_object(
         'key','afternoon_unspecified',
         'label',coalesce(v_rules->>'afternoon_unspecified_label','午後'),
+        'displayLabel',coalesce(v_rules->>'afternoon_unspecified_label','午後'),
         'group','afternoon',
         'mode','unspecified',
         'startsAt',v_start_ts,
@@ -190,16 +193,17 @@ begin
     while v_t<=v_end loop
       v_start_ts := (p_day::timestamp + v_t) at time zone 'Asia/Tokyo';
       v_end_ts := v_start_ts + make_interval(mins=>v_duration);
-      v_label := case
-        when extract(minute from v_t)=0
-          then to_char(v_t,'FMHH24') || '時まで'
-        else to_char(v_t,'FMHH24') || '時' || to_char(v_t,'MI') || '分まで'
-      end;
-      v_key := 'exact_' || replace(to_char(v_t,'HH24:MI'),':','');
+      v_label := to_char(v_t,'HH24:MI');
+      v_key := 'exact_' || replace(v_label,':','');
 
       v_options := v_options || jsonb_build_array(jsonb_build_object(
         'key',v_key,
         'label',v_label,
+        'displayLabel',case
+          when extract(minute from v_t)=0
+            then to_char(v_t,'FMHH24') || '時まで'
+          else to_char(v_t,'FMHH24') || '時' || to_char(v_t,'MI') || '分まで'
+        end,
         'group','afternoon',
         'mode','exact',
         'startsAt',v_start_ts,
@@ -214,6 +218,7 @@ begin
       v_options := v_options || jsonb_build_array(jsonb_build_object(
         'key','unspecified',
         'label',coalesce(v_rules->>'unspecified_label','中'),
+        'displayLabel',coalesce(v_rules->>'unspecified_label','中'),
         'group','unspecified',
         'mode','unspecified',
         'startsAt',(p_day::timestamp + time '13:00') at time zone 'Asia/Tokyo',
