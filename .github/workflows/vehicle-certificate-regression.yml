@@ -50,3 +50,6 @@ jobs:
 
       - name: Run yellow/white parts layout semantics
         run: npm run test:parts-layout
+
+      - name: Run white parts wrapped-name regression
+        run: node scripts/parts-white-wrap-regression.mjs
