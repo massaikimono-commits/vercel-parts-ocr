@@ -406,6 +406,9 @@ function showStatus(parsed, state = "") {
 export default function CertificateQrApplyFixed() {
   useEffect(() => {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
+    const fastWorkflow =
+      location.pathname === "/vehicle-workflow-v2" ||
+      location.pathname === "/vehicle-workflow-fast";
     let stopped = false;
     let sendBudget = 0;
     let sentCount = 0;
