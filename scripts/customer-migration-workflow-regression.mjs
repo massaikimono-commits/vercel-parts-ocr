@@ -34,11 +34,14 @@ expect(bulk, 'multiple', "bulk PDF UI");
 expect(bulk, "parseVehicleCertificatePdfNative", "bulk PDF UI");
 expect(bulk, "import_vehicle_certificates_batch_v1", "bulk PDF UI");
 expect(bulk, "要確認", "bulk PDF review");
+expect(bulk, "customerType", "bulk PDF customer type");
 expect(bulk, "同じ車両と思われるPDF", "bulk PDF duplicate guard");
 
 expect(importSql, "import_vehicle_certificates_batch_v1", "bulk import sql");
 expect(importSql, "jsonb_array_length(p_items) > 200", "bulk import sql limit");
 expect(importSql, "bulk_pdf_import", "bulk import sql source marker");
+expect(importSql, "v_customer_type", "bulk import customer type");
+expect(importSql, "customer that also has no address", "bulk import customer match safety");
 expect(importSql, "auth.uid() is null", "bulk import sql auth");
 expect(importSql, "grant execute", "bulk import sql grant");
 
