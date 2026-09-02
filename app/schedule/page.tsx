@@ -568,7 +568,7 @@ export default function SchedulePage() {
       <header className="top noPrint"><button onClick={() => location.assign("/")}>← メインへ</button><strong>icb</strong></header>
 
       <section className="card hero">
-        <div><div className="eyebrow">1日のスケジュール</div><h1>{dateLabel(day)}</h1><div className="notice">{busy ? "予定を読み込み中…" : message}</div></div>
+        <div><div className="eyebrow">1日の予定</div><h1>{dateLabel(day)}</h1><div className="notice">{busy ? "予定を読み込み中…" : message}</div></div>
         <div className="summary">
           <div><small>午前</small><b>{morningCount}</b></div>
           <div><small>午後</small><b>{afternoonCount}</b></div>
@@ -583,7 +583,7 @@ export default function SchedulePage() {
           <button onClick={() => setDay(addDay(day, 1))}>明日 →</button>
         </div>
         <input className="datePicker" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
-        <button onClick={() => location.assign(`/schedule/week?day=${day}`)}>1週間の予定検索</button>
+        <button onClick={() => location.assign(`/schedule/week?day=${day}`)}>1週間のスケジュール</button>
         <button className="newEntry" onClick={() => location.assign(`/schedule/new?day=${day}`)}>＋ 予定を登録</button>
         <label className="layoutControl">配置<select value={columnLayout} onChange={(e) => changeColumnLayout(e.target.value as ColumnLayout)}><option value="delivery-left">納車を左</option><option value="delivery-right">納車を右</option></select></label>
         <label className="layoutControl">作業状態<select value={completionPosition} onChange={(e) => changeCompletionPosition(e.target.value as CompletionPosition)}><option value="name">名前の横</option><option value="meta">詳細欄</option></select></label>
