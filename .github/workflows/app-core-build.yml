@@ -71,6 +71,7 @@ jobs:
           npm run test:schedule-print
           npm run test:schedule-print-layout
           npm run test:schedule-work-state
+          npm run test:schedule-existing-vehicle
           npm run test:daily-report-template
           npm run test:daily-report-allocation
           npm run test:daily-report-print-model
