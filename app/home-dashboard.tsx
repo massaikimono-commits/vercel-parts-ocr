@@ -71,16 +71,14 @@ function jstBounds(day: string) {
 }
 
 function addDays(day: string, delta: number) {
-  const d = new Date(day + "T00:00:00+09:00");
+  const d = new Date(day + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + delta);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(d);
+  return d.toISOString().slice(0, 10);
 }
 
 function mondayOf(day: string) {
-  const d = new Date(day + "T00:00:00+09:00");
-  const dow = d.getDay();
+  const d = new Date(day + "T00:00:00Z");
+  const dow = d.getUTCDay();
   return addDays(day, dow === 0 ? -6 : 1 - dow);
 }
 
