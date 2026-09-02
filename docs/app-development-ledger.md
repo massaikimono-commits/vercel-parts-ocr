@@ -44,6 +44,7 @@ Business rules include:
 - vehicle-inspection AM cap 4, warn on 5th; PM uncapped,
 - annual business-calendar input,
 - delivery date/time can be registered together with intake and changed later.
+- schedule registration can search registered customer/vehicle data by customer name, company, phone, registration, plate last4, chassis, maker, or model; selecting a result reuses the existing customer/vehicle IDs instead of creating duplicates.
 
 ### Daily schedule print
 
@@ -117,6 +118,7 @@ Recent main includes:
 - QR distractor/noise correction,
 - vehicle-certificate v2 legacy-override cleanup,
 - parts OCR redundant-pass reduction.
+- schedule registration selection from existing registered customer/vehicle records.
 
 At the time this ledger was created, main baseline is:
 `7d5848ed78bc146bc22c0ff3f0c19fe8f6382adf`.
