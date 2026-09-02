@@ -51,10 +51,10 @@ for (let y = distractorTop; y < distractorTop + distractorHeight; y += 1) {
   }
 }
 
-// Add a second, visually different footer distractor: sparse text-like rows
-// close to the QR band. Real photographed certificates can contain labels,
-// stamps, or small printed annotations here. They must not inflate the QR
-// candidate list or make detection exceed the performance budget.
+// Add a second, visually different footer distractor: sparse text-like glyphs
+// close to the QR band. Keep the strokes intentionally non-checkerboard-like
+// so this represents labels/stamps/annotations rather than another synthetic
+// QR. It should exercise precision without manufacturing multiple fake QRs.
 const textLeft = Math.round(width * 0.845);
 const textTop = Math.round(height * 0.878);
 const textWidth = Math.round(width * 0.105);
@@ -63,10 +63,13 @@ for (let y = textTop; y < textTop + textHeight; y += 1) {
   for (let x = textLeft; x < textLeft + textWidth; x += 1) {
     const rx = x - textLeft;
     const ry = y - textTop;
-    const glyphStroke = (rx % 13 < 2 && ry % 9 < 7) || (ry % 11 < 2 && rx % 17 < 11);
-    if (!glyphStroke) continue;
+    const gx = rx % 19;
+    const gy = ry % 14;
+    const verticalStroke = gx < 2 && gy >= 3 && gy <= 10;
+    const horizontalStroke = (gy === 3 || gy === 10) && gx >= 2 && gx <= 10;
+    if (!verticalStroke && !horizontalStroke) continue;
     const p = (y * width + x) * 4;
-    rgba[p] = rgba[p + 1] = rgba[p + 2] = 188;
+    rgba[p] = rgba[p + 1] = rgba[p + 2] = 196;
   }
 }
 
