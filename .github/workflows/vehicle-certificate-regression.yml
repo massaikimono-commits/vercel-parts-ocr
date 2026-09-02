@@ -74,8 +74,8 @@ jobs:
       - name: Run customer migration workflow regression
         run: npm run test:customer-migration-workflow
 
-      - name: Build Next.js app
+      - name: Run full Vercel-equivalent build
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
-        run: npx next build
+        run: npm run build
