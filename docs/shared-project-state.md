@@ -48,7 +48,10 @@ Normal development must not deploy automatically.
 - Preview #4 is confirmed at commit `6a9155e`.
 - GitHub `main` is newer than that preview; do not claim recent main changes are visible there.
 - Netlify production deployments are currently paused by the credit limit. Support case: #1103777.
-- Vercel Git auto-deploy remains disabled; use only a deliberate test deployment when capacity is available.
+- As of 2026-09-02, new Netlify Deploy Previews are also blocked/canceled by the same account credit pause; the dashboard showed Deploy Preview = Canceled and Trigger deploy disabled.
+- PR #43 (`Create latest private Netlify preview`) is prepared from latest main for the next deliberate Preview only. It must remain unmerged as a Preview entry point.
+- Do not make further Netlify deploy attempts while the account is credit-paused. Wait for Support to restore capacity or explicitly confirm deploys can resume, then run one deliberate Private Preview and verify the Netlify Private gate before real customer data use.
+- Vercel Git auto-deploy remains disabled; use only a deliberate synthetic/anonymized test deployment when capacity is available.
 
 ## Netlify credit incident
 
