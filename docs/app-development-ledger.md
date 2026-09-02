@@ -204,3 +204,14 @@ Before an app-development chat finishes a batch:
 - Added schedule workflow UX regression and CI coverage.
 - PR #51 merged: `95df8e5eb0ab6c0417913ae0dc84442853040008`.
 - Hosting deployment intentionally not run.
+
+### 2026-09-03 — Customer cleanup and migration efficiency batch
+- Added safe customer record deletion while retaining linked vehicle/work/schedule history.
+- Added same-customer multi-vehicle schedule selection and atomic batch registration RPC source.
+- Added multi-PDF vehicle-certificate migration page with review-before-import.
+- Added atomic bulk customer/vehicle import RPC source and duplicate matching safeguards.
+- Removed the native PDF reader's jsDelivr PDF.js worker dependency in favor of the bundled local worker.
+- Added customer migration workflow regression; full CI/build passed.
+- SQL was validated in a rolled-back transaction only; new RPCs remain unapplied to live Supabase.
+- PR #53 merged: `52ebc1612b003031137925736304dfbbf9e6f555`.
+- Hosting deployment intentionally not run.
