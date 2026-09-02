@@ -102,6 +102,10 @@ function looksLikeDieselModel(value: string) {
 
 export default function CertificateFuelClassificationFix() {
   useEffect(() => {
+    // The v2/fast workflow owns certificate field selection itself. Do not let
+    // this legacy DOM heuristic overwrite QR/OCR fuel values after recognition.
+    if (location.pathname === "/vehicle-workflow-v2" || location.pathname === "/vehicle-workflow-fast") return;
+
     let running = false;
 
     const run = () => {

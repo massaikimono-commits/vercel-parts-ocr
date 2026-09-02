@@ -38,6 +38,9 @@ jobs:
       - name: Run vehicle-certificate regression
         run: npm run test:certificate
 
+      - name: Run certificate v2 legacy-override regression
+        run: npm run test:certificate-v2-overrides
+
       - name: Run QR speed regression
         run: npm run test:qr-speed
 

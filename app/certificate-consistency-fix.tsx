@@ -7,6 +7,9 @@ const AUTH_EVENT = "vehicle-certificate-authoritative";
 export default function CertificateConsistencyFix() {
   useEffect(() => {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
+    // v2/fast already performs one final QR-preferred merge. Re-sending the
+    // same patch every 350ms after OCR can only create stale-value races.
+    if (location.pathname === "/vehicle-workflow-v2" || location.pathname === "/vehicle-workflow-fast") return;
 
     let postOcrPushes = 0;
     let wasBusy = false;
