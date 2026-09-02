@@ -145,7 +145,7 @@ export default function WeeklySchedulePage() {
   const [capacities, setCapacities] = useState<Record<string, Capacity | null>>({});
   const [calendar, setCalendar] = useState<Record<string, CalendarDay>>({});
   const [busy, setBusy] = useState(true);
-  const [message, setMessage] = useState("1週間の予定を読み込みます。");
+  const [message, setMessage] = useState("1週間のスケジュールを読み込みます。");
   const [attentionOnly, setAttentionOnly] = useState(false);
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -166,7 +166,7 @@ export default function WeeklySchedulePage() {
 
   async function loadWeek() {
     setBusy(true);
-    setMessage("1週間の予定を読み込み中…");
+    setMessage("1週間のスケジュールを読み込み中…");
     const endExclusive = addDays(weekStart, 7);
 
     try {
@@ -431,13 +431,13 @@ export default function WeeklySchedulePage() {
     <main className="weekPage">
       <header className="top">
         <button onClick={() => location.assign("/")}>← メインへ</button>
-        <div><b>予定検索</b><span>1週間表示</span></div>
+        <div><b>スケジュール</b><span>1週間表示</span></div>
         <strong>icb</strong>
       </header>
 
       <section className="weekHero">
         <div>
-          <div className="eyebrow">週間予定検索</div>
+          <div className="eyebrow">1週間のスケジュール</div>
           <h1>{weekTitle(weekStart)}</h1>
           <p>{busy ? "読み込み中…" : message}</p>
         </div>
