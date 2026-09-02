@@ -6,11 +6,15 @@ This repository must fail closed: normal development commits must not automatica
 
 1. **Netlify**
    - Normal commits must be skipped.
-   - A Netlify deployment is allowed only when the release commit explicitly contains `[deploy netlify]`.
-   - Never add the marker to routine development, refactor, test, merge, or documentation commits.
+   - Production may deploy only when the release commit explicitly contains `[deploy netlify production]`.
+   - Deploy Preview may deploy only when the release commit explicitly contains `[deploy netlify preview]`.
+   - Branch deploys stay disabled by default.
+   - Never add either release marker to routine development, refactor, test, merge, or documentation commits.
+   - `netlify.toml` syntax is validated in CI so an invalid configuration cannot silently become the next release configuration.
 
 2. **Vercel**
    - Git-triggered deployments must remain disabled with `git.deploymentEnabled=false`.
+   - The ignored-build guard must remain present as a second lock.
    - Vercel deployment is manual/explicit only.
 
 3. **GitHub Actions**
@@ -22,7 +26,8 @@ This repository must fail closed: normal development commits must not automatica
    - Run regression tests and production build before any release.
    - Do not deploy simply because code changed.
    - Create at most the explicitly approved deployment for the current test/release batch.
-   - Netlify production release requires explicit user approval before using the release marker.
+   - Netlify production release requires explicit user approval before using `[deploy netlify production]`.
+   - Netlify Preview release requires an intentional preview test decision before using `[deploy netlify preview]`.
 
 5. **Safety changes**
    - Any change that weakens or removes these locks must be handled as a dedicated safety change and must not be bundled into ordinary feature work.
