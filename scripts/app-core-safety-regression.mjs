@@ -35,6 +35,12 @@ assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
 assert(!inspectionPrint.includes("printAndMark"), "print must not pre-mark printed");
 assert(home.includes("checked_out_at"), "home workload must exclude checked-out work");
+assert(home.includes('className="mobileToday"'), "mobile home must keep today-first responsive section");
+assert(home.includes('className="desktopMain"'), "desktop home must keep its dedicated responsive section");
+assert(home.includes("作業未実施") && home.includes("作業中") && home.includes("作業完了"), "mobile home must keep the three work-state summaries visible");
+assert(home.includes("予定登録") && home.includes("今日の予定"), "desktop home must keep registration and today schedule as the two main actions");
+assert(home.includes("予定の日付検索") && home.includes("この週の予定を見る"), "desktop home must keep day and week schedule search");
+assert(!home.includes('href="/work-complete"') && !home.includes('href="/delivery-complete"'), "home must not introduce standalone work/delivery completion menus");
 assert(schedule.includes("work_completed_at"), "daily schedule must evaluate completion by selected day");
 assert(schedule.includes("checkedOutAt !== null && checkedOutAt <= endOfDay"), "historical daily schedule must keep later checkouts");
 assert(reportPrint.includes("workCompletedOnReportDay"), "daily report completion mark must use selected-day semantics");
