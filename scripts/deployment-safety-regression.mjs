@@ -13,12 +13,25 @@ if (!fs.existsSync(netlifyPath)) {
   fail("netlify.toml is missing.");
 } else {
   const netlify = fs.readFileSync(netlifyPath, "utf8");
-  const requiredNetlifyGate =
-    "ignore = \"git log -1 --pretty=%B | grep -Fq \\\'[deploy netlify]\\\' && exit 1 || exit 0\"";
 
-  if (!netlify.includes(requiredNetlifyGate)) {
+  const requiredNetlifyLines = [
+    'ignore = "exit 0"',
+    '[context.production]',
+    "ignore = \"git log -1 --pretty=%B | grep -Fq '[deploy netlify production]' && exit 1 || exit 0\"",
+    '[context.deploy-preview]',
+    "ignore = \"git log -1 --pretty=%B | grep -Fq '[deploy netlify preview]' && exit 1 || exit 0\"",
+    '[context.branch-deploy]',
+  ];
+
+  for (const requiredLine of requiredNetlifyLines) {
+    if (!netlify.includes(requiredLine)) {
+      fail(`Netlify deployment lock is missing or changed: ${requiredLine}`);
+    }
+  }
+
+  if (netlify.includes("[deploy netlify]'")) {
     fail(
-      "Netlify explicit-release gate is missing or changed. Normal commits must remain skipped unless [deploy netlify] is explicitly present."
+      "Bare [deploy netlify] marker must not be used. Preview and production must have separate explicit markers."
     );
   }
 }
@@ -86,6 +99,8 @@ if (errors.length > 0) {
 }
 
 console.log("Deployment safety check passed.");
-console.log("- Netlify requires explicit [deploy netlify] release marker.");
+console.log("- Netlify production requires [deploy netlify production].");
+console.log("- Netlify preview requires [deploy netlify preview].");
+console.log("- Netlify branch deploys remain skipped.");
 console.log("- Vercel Git auto-deploy is disabled.");
 console.log("- No direct Netlify/Vercel deploy command exists in GitHub Actions.");
