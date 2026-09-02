@@ -2,31 +2,42 @@ import fs from "node:fs";
 
 const day = fs.readFileSync("app/schedule/page.tsx", "utf8");
 const week = fs.readFileSync("app/schedule/week/page.tsx", "utf8");
+const printPage = fs.readFileSync("app/schedule/print/page.tsx", "utf8");
 
 const failures = [];
 
 for (const expected of [
   'className="deliveryColumn"',
   'className="inboundColumn"',
-  '.periodSection .columns{grid-template-columns:minmax(0,1fr) minmax(0,1fr)',
-  '.periodSection .deliveryColumn{grid-column:1;grid-row:1}',
-  '.periodSection .inboundColumn{grid-column:2;grid-row:1}',
-  '@media print{',
-  '@page{size:A3 portrait',
+  ".periodSection .columns{grid-template-columns:minmax(0,1fr) minmax(0,1fr)",
+  ".periodSection .deliveryColumn{grid-column:1;grid-row:1}",
+  ".periodSection .inboundColumn{grid-column:2;grid-row:1}",
+  "@media print{",
 ]) {
   if (!day.includes(expected)) failures.push("day schedule missing: " + expected);
 }
 
+if (!day.includes("/schedule/print?day=")) {
+  failures.push("day schedule missing dedicated print-page route");
+}
+
 for (const expected of [
-  'prepareDailyReportSection',
-  'function prepareWeekDaySection',
+  "@page{size:A3 portrait",
+  ".sheet{width:297mm;height:420mm",
+]) {
+  if (!printPage.includes(expected)) failures.push("dedicated print page missing: " + expected);
+}
+
+for (const expected of [
+  "prepareDailyReportSection",
+  "function prepareWeekDaySection",
   'const morningReport = prepareWeekDaySection(dayRows, "morning")',
   'const afternoonReport = prepareWeekDaySection(dayRows, "afternoon")',
   'className="miniColumns"',
   'className="miniColumn deliveryMini"',
   'className="miniColumn inboundMini"',
-  'grid-template-columns:minmax(0,1fr) minmax(0,1fr)',
-  'scroll-snap-type:x mandatory',
+  "grid-template-columns:minmax(0,1fr) minmax(0,1fr)",
+  "scroll-snap-type:x mandatory",
 ]) {
   if (!week.includes(expected)) failures.push("week schedule missing: " + expected);
 }
@@ -40,4 +51,5 @@ if (failures.length) {
 console.log("PASS daily-report screen layout regression");
 console.log("- mobile one-day schedule keeps delivery left and inbound right");
 console.log("- weekly days use morning/afternoon daily-report sections");
-console.log("- A3 one-day print remains present and separate");
+console.log("- day schedule routes printing to the dedicated print page");
+console.log("- A3 one-day print remains present on the dedicated print page");
