@@ -1,4 +1,4 @@
 [build]
   command = "npm run build"
   publish = ".next"
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF app public package.json next.config.mjs tsconfig.json netlify.toml"
+  ignore = "git log -1 --pretty=%B | grep -Fq \'[deploy netlify]\' && exit 1 || exit 0"
