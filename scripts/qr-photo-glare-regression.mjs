@@ -44,11 +44,12 @@ for (let p = 0; p < rgba.length; p += 4) {
 }
 for (const target of targets) paintQr(rgba, target);
 
-// Simulate a narrow reflected-light streak through the lower QR row. Keep this
-// intentionally mild: it guards photo robustness without pretending to model
-// severe damage or requiring changes to production detection thresholds.
-const glareLeft = Math.round(width * 0.645);
-const glareRight = glareLeft + 8;
+// Simulate a narrow reflected-light streak crossing the center of one QR in
+// the lower row. Keep this intentionally mild: it guards photo robustness
+// without pretending to model severe damage or changing production thresholds.
+const glareCenterX = Math.round(width * targets[2].x);
+const glareLeft = glareCenterX - 2;
+const glareRight = glareCenterX + 2;
 const glareTop = Math.round(height * 0.84);
 const glareBottom = Math.round(height * 0.95);
 for (let y = glareTop; y < glareBottom; y += 1) {
