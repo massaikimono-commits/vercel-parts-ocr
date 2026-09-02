@@ -78,6 +78,7 @@ begin
     if v_existing_vehicle_id is not null then
       v_skipped := v_skipped + 1;
       v_results := v_results || jsonb_build_array(jsonb_build_object(
+        'rowKey', v_item->>'rowKey',
         'fileName', v_item->>'fileName',
         'status', 'skipped_existing',
         'vehicleId', v_existing_vehicle_id
@@ -180,6 +181,7 @@ begin
 
     v_inserted := v_inserted + 1;
     v_results := v_results || jsonb_build_array(jsonb_build_object(
+      'rowKey', v_item->>'rowKey',
       'fileName', v_item->>'fileName',
       'status', 'inserted',
       'customerId', v_customer_id,
