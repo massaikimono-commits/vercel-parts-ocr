@@ -40,10 +40,12 @@ if (!fs.existsSync(vercelPath)) {
       );
     }
 
-    if (
-      typeof vercel.ignoreCommand !== "string" ||
-      !vercel.ignoreCommand.includes("[deploy]")
-    ) {
+    const normalizedIgnoreCommand =
+      typeof vercel.ignoreCommand === "string"
+        ? vercel.ignoreCommand.replace(/\\/g, "")
+        : "";
+
+    if (!normalizedIgnoreCommand.includes("[deploy]")) {
       fail(
         "Vercel ignored-build guard is missing. Manual release commits must remain explicit."
       );
