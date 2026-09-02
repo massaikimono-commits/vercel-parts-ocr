@@ -80,7 +80,9 @@ function findNearbyName(lines, rowIndex) {
     const distance = Math.abs(rowIndex - i);
     const proximity = Math.max(0, 3 - distance * 0.6);
     const previousBonus = i < rowIndex ? 1.5 : 0;
-    const score = base + proximity + previousBonus;
+    // OCRの金額行は通常、対応する品名の直後に来る。離れた高得点の旧行より直前行を優先する。
+    const adjacentBonus = i === rowIndex - 1 ? 3 : 0;
+    const score = base + proximity + previousBonus + adjacentBonus;
     if (score > bestScore) {
       bestScore = score;
       best = cleanName(lines[i]);
