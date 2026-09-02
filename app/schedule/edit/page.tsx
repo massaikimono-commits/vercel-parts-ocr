@@ -225,15 +225,12 @@ export default function ScheduleEditPage(){
   }
 
   async function cancelReservation(){
-    if(!entry || !cancelReason.trim()){
-      setMessage("取消理由を入力してください。");
-      return;
-    }
+    if(!entry) return;
     setBusy(true);
     try{
       const {data,error}=await supabase.rpc("cancel_schedule_entry_v1",{
         p_entry_id:entry.id,
-        p_reason:cancelReason.trim(),
+        p_reason:cancelReason.trim() || null,
         p_actor:"schedule-edit",
       });
       if(error) throw error;
@@ -313,12 +310,12 @@ export default function ScheduleEditPage(){
           <section className="cancelBox">
             <b>予約取消の確認</b>
             <p>同じ作業に紐づく入庫・納車予定と代車予約もまとめて更新します。この操作は元に戻せません。</p>
-            <label>取消理由（必須）
-              <textarea value={cancelReason} onChange={(e)=>setCancelReason(e.target.value)} placeholder="例：お客様都合、日程再調整" />
+            <label>取消理由（任意）
+              <textarea value={cancelReason} onChange={(e)=>setCancelReason(e.target.value)} placeholder="必要な場合だけ入力：お客様都合、日程再調整など" />
             </label>
             <div className="cancelActions">
               <button type="button" disabled={busy} onClick={()=>{setShowCancel(false);setCancelReason("");}}>戻る</button>
-              <button type="button" className="danger" disabled={busy||!cancelReason.trim()} onClick={()=>void cancelReservation()}>取消を確定</button>
+              <button type="button" className="danger" disabled={busy} onClick={()=>void cancelReservation()}>取消を確定</button>
             </div>
           </section>}
       </>}

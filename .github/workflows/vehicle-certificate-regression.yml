@@ -68,6 +68,9 @@ jobs:
       - name: Run security regression
         run: npm run test:security
 
+      - name: Run schedule workflow UX regression
+        run: npm run test:schedule-workflow-ux
+
       - name: Build Next.js app
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co

@@ -153,7 +153,7 @@ export default function ScheduleNewPage() {
   const [pickupCapacity, setPickupCapacity] = useState<PickupCapacity | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
-  const [message, setMessage] = useState("入出庫予定を登録します。");
+  const [message, setMessage] = useState("お客様・車両を選んでから、入庫内容と日時を登録します。");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [hardErrors, setHardErrors] = useState<string[]>([]);
   const [duplicateCustomers, setDuplicateCustomers] = useState<DuplicateCustomerCandidate[]>([]);
@@ -633,7 +633,7 @@ export default function ScheduleNewPage() {
   return (
     <main className="page">
       <header className="top">
-        <button onClick={() => location.assign(`/schedule?day=${day}`)}>← 予定一覧へ</button>
+        <button onClick={() => location.assign(`/schedule?day=${day}`)}>← スケジュールへ</button>
         <strong>icb</strong>
       </header>
 
@@ -705,9 +705,72 @@ export default function ScheduleNewPage() {
       )}
 
       <section className="card">
-        <h2>① 日時と区分</h2>
+        <h2>① お客様・車両</h2>
+        <div style={{margin:"12px 0 16px",padding:"14px",border:"1px solid #c9d8ee",borderRadius:14,background:"#f8fbff"}}>
+          <b style={{display:"block",marginBottom:6}}>登録済みのお客様・車両から選ぶ</b>
+          <div style={{color:"#607086",fontSize:13,lineHeight:1.6,marginBottom:10}}>
+            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。該当がなければ下で新規入力します。
+          </div>
+          <input
+            value={registeredSearch}
+            onChange={(e) => setRegisteredSearch(e.target.value)}
+            placeholder="例：1234 / 山田 / 090 / 車台番号"
+            style={{width:"100%",marginBottom:10}}
+          />
+          {registeredVehiclesLoading ? (
+            <div className="notice">登録済み車両を読み込み中…</div>
+          ) : !filteredRegisteredVehicles.length ? (
+            <div className="notice">一致する登録済み車両がありません。</div>
+          ) : (
+            <div style={{display:"grid",gap:8,maxHeight:320,overflow:"auto"}}>
+              {filteredRegisteredVehicles.map((row) => (
+                <button
+                  type="button"
+                  key={row.vehicleId}
+                  onClick={() => selectRegisteredVehicle(row)}
+                  style={{
+                    textAlign:"left",
+                    border: existingVehicleId === row.vehicleId ? "2px solid #2f6fe4" : "1px solid #ccd7e5",
+                    background: existingVehicleId === row.vehicleId ? "#eef4ff" : "#fff",
+                    color:"#172033",
+                    display:"grid",
+                    gap:3,
+                  }}
+                >
+                  <b>{row.customerName || row.companyName || "お客様未紐付け"}</b>
+                  <span>{row.registrationNumber || ("下4桁 " + (row.registrationLast4 || "----"))}　{[row.maker,row.model].filter(Boolean).join(" ")}</span>
+                  <small style={{color:"#69778a"}}>{[row.phone, row.chassisNumber].filter(Boolean).join(" / ")}</small>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="grid">
-          <label>日付<input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label>
+          <label>顧客区分
+            <select value={customerType} onChange={(e) => setCustomerType(e.target.value as "individual" | "company")}>
+              <option value="individual">個人</option><option value="company">法人</option>
+            </select>
+          </label>
+          <label>お客様名<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
+          <label>会社名<input value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></label>
+          <label>予定表表示名<input value={scheduleDisplayName} onChange={(e) => setScheduleDisplayName(e.target.value)} placeholder="短い表示名・任意" /></label>
+          <label>電話番号<input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
+          <label>登録番号<input value={registrationNumber} onChange={(e) => {
+            const value = e.target.value;
+            setRegistrationNumber(value);
+            const last = value.match(/(\d{4})(?!.*\d)/)?.[1];
+            if (last) setRegistrationLast4(last);
+          }} /></label>
+          <label>ナンバー下4桁<input inputMode="numeric" maxLength={4} value={registrationLast4} onChange={(e) => setRegistrationLast4(e.target.value.replace(/\D/g, "").slice(-4))} /></label>
+          <label>メーカー<input value={maker} onChange={(e) => setMaker(e.target.value)} /></label>
+          <label>型式<input value={model} onChange={(e) => setModel(e.target.value)} /></label>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>② 入庫内容</h2>
+        <div className="grid">
           <label>区分
             <select value={entryType} onChange={(e) => setEntryType(e.target.value as EntryType)}>
               <option value="pickup">引き取り</option>
@@ -721,6 +784,55 @@ export default function ScheduleNewPage() {
               <option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option>
             </select>
           </label>
+          {(reason === "点検" || reason === "車検") && (
+            <label>点検区分
+              <select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}>
+                <option value="">未指定</option>
+                <option value="schedule">通常予定</option>
+                <option value="legal_6m">法定6ヶ月</option>
+                <option value="legal_12m">法定12ヶ月</option>
+              </select>
+            </label>
+          )}
+          <label>作業担当
+            <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
+              <option value="">未選択</option>
+              {staffMembers.map((staff) => (
+                <option key={staff.id} value={staff.id}>{staff.short_name || staff.display_name}</option>
+              ))}
+            </select>
+          </label>
+          {reason === "板金塗装" && (
+            <>
+              <label>外注先
+                <select value={vendorId} onChange={(e) => { setVendorId(e.target.value); if (e.target.value) setVendorName(""); }}>
+                  <option value="">未選択 / 直接入力</option>
+                  {vendors.map((vendor) => (
+                    <option key={vendor.id} value={vendor.id}>{vendor.short_name || vendor.display_name}</option>
+                  ))}
+                </select>
+              </label>
+              {!vendorId && (
+                <label>外注先名（直接入力）
+                  <input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：○○鈑金" />
+                </label>
+              )}
+            </>
+          )}
+          <div className="flagBox">
+            <label className="switch"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />急ぎ</label>
+            <label className="switch"><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} />代車あり</label>
+            <button type="button" onClick={() => location.assign("/settings/staff")}>社員名を管理</button>
+            {reason === "板金塗装" && <button type="button" onClick={() => location.assign("/settings/vendors")}>外注先を管理</button>}
+          </div>
+          <label className="wide">備考<textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>③ 日時</h2>
+        <div className="grid">
+          <label>日付<input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label>
 
           {entryType !== "onsite_repair" ? (
             <div className="wide availabilityBlock">
@@ -764,118 +876,12 @@ export default function ScheduleNewPage() {
               </label>
             </>
           )}
-
-          {(reason === "点検" || reason === "車検") && (
-            <label>点検区分
-              <select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}>
-                <option value="">未指定</option>
-                <option value="schedule">通常予定</option>
-                <option value="legal_6m">法定6ヶ月</option>
-                <option value="legal_12m">法定12ヶ月</option>
-              </select>
-            </label>
-          )}
-        </div>
-      </section>
-
-      <section className="card">
-        <h2>② お客様・車両</h2>
-        <div style={{margin:"12px 0 16px",padding:"14px",border:"1px solid #c9d8ee",borderRadius:14,background:"#f8fbff"}}>
-          <b style={{display:"block",marginBottom:6}}>登録済みの車検証・車両情報から選ぶ</b>
-          <div style={{color:"#607086",fontSize:13,lineHeight:1.6,marginBottom:10}}>
-            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。
-          </div>
-          <input
-            value={registeredSearch}
-            onChange={(e) => setRegisteredSearch(e.target.value)}
-            placeholder="例：1234 / 山田 / 090 / 車台番号"
-            style={{width:"100%",marginBottom:10}}
-          />
-          {registeredVehiclesLoading ? (
-            <div className="notice">登録済み車両を読み込み中…</div>
-          ) : !filteredRegisteredVehicles.length ? (
-            <div className="notice">一致する登録済み車両がありません。</div>
-          ) : (
-            <div style={{display:"grid",gap:8,maxHeight:320,overflow:"auto"}}>
-              {filteredRegisteredVehicles.map((row) => (
-                <button
-                  type="button"
-                  key={row.vehicleId}
-                  onClick={() => selectRegisteredVehicle(row)}
-                  style={{
-                    textAlign:"left",
-                    border: existingVehicleId === row.vehicleId ? "2px solid #2f6fe4" : "1px solid #ccd7e5",
-                    background: existingVehicleId === row.vehicleId ? "#eef4ff" : "#fff",
-                    color:"#172033",
-                    display:"grid",
-                    gap:3,
-                  }}
-                >
-                  <b>{row.customerName || row.companyName || "お客様未紐付け"}</b>
-                  <span>{row.registrationNumber || ("下4桁 " + (row.registrationLast4 || "----"))}　{[row.maker,row.model].filter(Boolean).join(" ")}</span>
-                  <small style={{color:"#69778a"}}>{[row.phone, row.chassisNumber].filter(Boolean).join(" / ")}</small>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="grid">
-          <label>顧客区分
-            <select value={customerType} onChange={(e) => setCustomerType(e.target.value as "individual" | "company")}>
-              <option value="individual">個人</option><option value="company">法人</option>
-            </select>
-          </label>
-          <label>お客様名<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
-          <label>会社名<input value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></label>
-          <label>予定表表示名<input value={scheduleDisplayName} onChange={(e) => setScheduleDisplayName(e.target.value)} placeholder="短い表示名・任意" /></label>
-          <label>電話番号<input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
-          <label>登録番号<input value={registrationNumber} onChange={(e) => {
-            const value = e.target.value;
-            setRegistrationNumber(value);
-            const last = value.match(/(\d{4})(?!.*\d)/)?.[1];
-            if (last) setRegistrationLast4(last);
-          }} /></label>
-          <label>ナンバー下4桁<input inputMode="numeric" maxLength={4} value={registrationLast4} onChange={(e) => setRegistrationLast4(e.target.value.replace(/\D/g, "").slice(-4))} /></label>
-          <label>メーカー<input value={maker} onChange={(e) => setMaker(e.target.value)} /></label>
-          <label>型式<input value={model} onChange={(e) => setModel(e.target.value)} /></label>
-          <label>作業担当
-            <select value={staffId} onChange={(e) => setStaffId(e.target.value)}>
-              <option value="">未選択</option>
-              {staffMembers.map((staff) => (
-                <option key={staff.id} value={staff.id}>{staff.short_name || staff.display_name}</option>
-              ))}
-            </select>
-          </label>
-          {reason === "板金塗装" && (
-            <>
-              <label>外注先
-                <select value={vendorId} onChange={(e) => { setVendorId(e.target.value); if (e.target.value) setVendorName(""); }}>
-                  <option value="">未選択 / 直接入力</option>
-                  {vendors.map((vendor) => (
-                    <option key={vendor.id} value={vendor.id}>{vendor.short_name || vendor.display_name}</option>
-                  ))}
-                </select>
-              </label>
-              {!vendorId && (
-                <label>外注先名（直接入力）
-                  <input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：○○鈑金" />
-                </label>
-              )}
-            </>
-          )}
-          <div className="flagBox">
-            <label className="switch"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />急ぎ</label>
-            <label className="switch"><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} />代車あり</label>
-            <button type="button" onClick={() => location.assign("/settings/staff")}>社員名を管理</button>
-            {reason === "板金塗装" && <button type="button" onClick={() => location.assign("/settings/vendors")}>外注先を管理</button>}
-          </div>
-          <label className="wide">備考<textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>
       </section>
 
       {entryType !== "delivery" && (
         <section className="card">
-          <h2>③ 納車予定</h2>
+          <h2>④ 納車予定</h2>
           <label className="switch">
             <input type="checkbox" checked={addDelivery} onChange={(e) => setAddDelivery(e.target.checked)} />
             入庫予定と同時に納車予定も登録する
