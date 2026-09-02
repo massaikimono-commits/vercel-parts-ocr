@@ -14,6 +14,7 @@ declare
   v_vehicle_id uuid;
   v_customer_name text;
   v_customer_address text;
+  v_customer_type text;
   v_registration text;
   v_last4 text;
   v_chassis text;
@@ -47,6 +48,7 @@ begin
     v_vehicle_id := null;
     v_customer_name := nullif(btrim(v_item->>'customerName'), '');
     v_customer_address := nullif(btrim(v_item->>'customerAddress'), '');
+    v_customer_type := case when v_item->>'customerType' = 'company' then 'company' else 'individual' end;
     v_registration := nullif(btrim(v_item->>'registrationNumber'), '');
     v_last4 := nullif(btrim(v_item->>'registrationLast4'), '');
     v_chassis := nullif(btrim(v_item->>'chassisNumber'), '');
@@ -62,32 +64,42 @@ begin
       raise exception 'registration or chassis number is required at item %', v_index;
     end if;
 
-    -- Exact normalized customer match. Address is used when available so same names
-    -- at different addresses do not get merged accidentally.
-    select c.id into v_customer_id
-    from public.customers c
-    where lower(regexp_replace(coalesce(c.name, ''), '[[:space:]　]+', '', 'g'))
-          = lower(regexp_replace(v_customer_name, '[[:space:]　]+', '', 'g'))
-      and (
-        v_customer_address is null
-        or lower(regexp_replace(coalesce(c.address, ''), '[[:space:]　]+', '', 'g'))
-           = lower(regexp_replace(v_customer_address, '[[:space:]　]+', '', 'g'))
-      )
-    order by
-      case when v_customer_address is not null
-             and lower(regexp_replace(coalesce(c.address, ''), '[[:space:]　]+', '', 'g'))
-                 = lower(regexp_replace(v_customer_address, '[[:space:]　]+', '', 'g'))
-           then 0 else 1 end,
-      c.created_at
-    limit 1
-    for update;
+    -- Exact normalized customer match. When the PDF has an address we require
+    -- name + address. When address is missing we only reuse an existing same-name
+    -- customer that also has no address, avoiding accidental merges of common names.
+    if v_customer_address is not null then
+      select c.id into v_customer_id
+      from public.customers c
+      where lower(regexp_replace(coalesce(c.name, ''), '[[:space:]　]+', '', 'g'))
+            = lower(regexp_replace(v_customer_name, '[[:space:]　]+', '', 'g'))
+        and lower(regexp_replace(coalesce(c.address, ''), '[[:space:]　]+', '', 'g'))
+            = lower(regexp_replace(v_customer_address, '[[:space:]　]+', '', 'g'))
+      order by c.created_at
+      limit 1
+      for update;
+    else
+      select c.id into v_customer_id
+      from public.customers c
+      where lower(regexp_replace(coalesce(c.name, ''), '[[:space:]　]+', '', 'g'))
+            = lower(regexp_replace(v_customer_name, '[[:space:]　]+', '', 'g'))
+        and nullif(btrim(coalesce(c.address, '')), '') is null
+      order by c.created_at
+      limit 1
+      for update;
+    end if;
 
     if v_customer_id is null then
       insert into public.customers(
-        customer_type, name, address, is_provisional, created_from, updated_at
+        customer_type, name, company_name, address, is_provisional, created_from, updated_at
       )
       values(
-        'individual', v_customer_name, v_customer_address, false, 'bulk_pdf_import', now()
+        v_customer_type,
+        v_customer_name,
+        case when v_customer_type = 'company' then v_customer_name else null end,
+        v_customer_address,
+        false,
+        'bulk_pdf_import',
+        now()
       )
       returning id into v_customer_id;
       v_created_customers := v_created_customers + 1;
