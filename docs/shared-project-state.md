@@ -118,3 +118,12 @@ Always identify three states separately:
 - Both new SQL files were syntax/schema checked against the live Supabase schema inside `BEGIN ... ROLLBACK`; the test succeeded and a follow-up query confirmed neither new function was left installed.
 - IMPORTANT: the two new Supabase RPCs are NOT live yet. Apply them before deploying the UI that calls them.
 - No Vercel or Netlify deployment was performed for this batch.
+
+## Customer migration safety hardening 2026-09-03
+
+- Bulk PDF migration now preserves individual/company customer type in the review UI and import payload.
+- Customer reuse is fail-safer: when an address is available, name + address must match; when the PDF has no address, only an existing same-name customer that also has no address can be reused.
+- Imported rows are marked as saved in the UI after successful registration.
+- PR #56 merged as `ae7f015b278e6ecf0cde3616cccb291c1a639100`; regression and Next.js build passed.
+- New batch RPC SQL remains source-only and unapplied to live Supabase until the user is ready for the next activation/deploy step.
+- No Vercel or Netlify deployment was run for this batch.
