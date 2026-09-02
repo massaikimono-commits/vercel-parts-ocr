@@ -1,0 +1,37 @@
+{
+  "id": "parts-photo-white-list-occluded-002",
+  "description": "匿名合成回帰。白い部品一覧の下部が別紙で部分的に隠れ、斜め撮影・台形歪み・回転・背景文字の写り込みがある条件を再現する。実写真・個人名・車両識別情報・実部品データは保存しない。",
+  "captureVariants": 3,
+  "characteristics": [
+    "白い部品一覧",
+    "部分的な紙の重なり",
+    "斜め撮影",
+    "台形歪み",
+    "回転",
+    "背景文字の写り込み",
+    "表形式",
+    "部品名称の折返し"
+  ],
+  "sourceColumns": [
+    "部品名称",
+    "数量",
+    "単価",
+    "計"
+  ],
+  "expectedSourceRows": [
+    {"name":"テスト部品A","qty":"1","unitPrice":"1500","lineTotal":"1500"},
+    {"name":"テスト部品B","qty":"2","unitPrice":"2400","lineTotal":"4800"},
+    {"name":"テスト部品C","qty":"4","unitPrice":"900","lineTotal":"3600"}
+  ],
+  "columnMapping": {
+    "qty": "数量",
+    "retail": "単価",
+    "cost": ""
+  },
+  "expected": [
+    {"name":"テスト部品A","qty":"1","retail":"1500","cost":""},
+    {"name":"テスト部品B","qty":"2","retail":"2400","cost":""},
+    {"name":"テスト部品C","qty":"4","retail":"900","cost":""}
+  ],
+  "notes": "見えている行だけを対象にし、隠れた行や背景側の別帳票を部品行として混入させない。単価は定価として扱い、仕入れは空欄とする。"
+}
