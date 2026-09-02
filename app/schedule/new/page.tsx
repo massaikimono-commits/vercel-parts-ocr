@@ -165,6 +165,7 @@ export default function ScheduleNewPage() {
   const [registeredSearch, setRegisteredSearch] = useState("");
   const [registeredVehicles, setRegisteredVehicles] = useState<RegisteredVehicleOption[]>([]);
   const [registeredVehiclesLoading, setRegisteredVehiclesLoading] = useState(false);
+  const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("day");
