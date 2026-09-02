@@ -452,6 +452,12 @@ export default function CertificateQrApplyFixed() {
         showStatus(parsed, "OCR完了待ち");
         return;
       }
+      if (fastWorkflow) {
+        // vehicle-workflow-v2/fast reads __vehicleCertificateQrPriority during
+        // OCR and performs its own single final authoritative merge.
+        showStatus(parsed, "QR優先値を本体高速OCRへ共有済み");
+        return;
+      }
       if (sendBudget > 0) {
         window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: values }));
         sendBudget -= 1;
