@@ -120,6 +120,8 @@ Recent main includes:
 - parts OCR redundant-pass reduction.
 - schedule registration selection from existing registered customer/vehicle records.
 - desktop daily schedule view is compacted for higher information density; mobile layout and A3 one-day print remain separate and unchanged by this screen-only density pass.
+- mobile one-day schedule now keeps the daily-report placement standard: delivery left, pickup/customer-visit/mobile-service right, morning above afternoon.
+- weekly schedule now renders each day as a compact daily-report layout with morning/afternoon sections and delivery/inbound columns instead of one flat vertical list; mobile week view snaps horizontally day-by-day.
 
 At the time this ledger was created, main baseline is:
 `7d5848ed78bc146bc22c0ff3f0c19fe8f6382adf`.
