@@ -137,6 +137,8 @@ At the time this ledger was created, main baseline is:
 Supabase already contains the newer cancellation/reschedule/loaner-board functions even though the currently available Netlify UI is older.
 Therefore "database live" and "UI live" must be reported separately.
 
+As of 2026-09-02, the refined pickup scheduling rules are also database-live: morning pickup limit 10, afternoon pickup option, and backward-compatible deadline display metadata for pickup/delivery time choices. The latest UI code that renders the deadline labels is source-only until the next deliberate deployment.
+
 ## Security / operations
 
 Already integrated or discussed:
