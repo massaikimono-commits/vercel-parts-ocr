@@ -1,7 +1,7 @@
 # Shared Project State
 
 Last updated: 2026-09-02
-Canonical main baseline at creation: `7d5848ed78bc146bc22c0ff3f0c19fe8f6382adf`
+Latest integrated feature baseline before this state sync: `5c86b7c76401d3bfa814f21536dc772a60bf1815`
 
 ## Purpose
 
@@ -47,7 +47,8 @@ Normal development must not deploy automatically.
 - Netlify Deploy Preview #4: `https://deploy-preview-4--icb-vehicle-app.netlify.app`
 - Preview #4 is confirmed at commit `6a9155e`.
 - GitHub `main` is newer than that preview; do not claim recent main changes are visible there.
-- Netlify production deployments are currently paused by the credit limit. Support case: #1103777.
+- Netlify credit exhaustion currently blocks new Production deploys and also cancels new Deploy Previews; Trigger deploy is disabled. Support case: #1103777.
+- PR #43 is retained as the prepared latest-main Preview trigger, but it cannot build until Netlify restores deployment capacity. Do not repeatedly retrigger it while the account is paused.
 - Vercel Git auto-deploy remains disabled; use only a deliberate test deployment when capacity is available.
 
 ## Netlify credit incident
@@ -68,6 +69,9 @@ Known live RPCs include:
 - `cancel_schedule_entry_v1(uuid,text,text)`
 - `reschedule_schedule_entry_v2(...)`
 - `loaner_day_board(date)`
+- `lease_rental_eligibility(uuid,text,timestamptz,timestamptz,timestamptz)`
+
+`lease_maintenance_contracts` is database-live for vehicle-linked lease contract history; its RLS is enabled, anonymous CRUD is unavailable, and its rental eligibility RPC is not executable by anon. Current loaner assignment is deliberately not connected to that eligibility RPC until real contract PDFs are validated and contract data is populated.
 
 Checked customer/vehicle/schedule/work/loaner/OCR/parts tables have RLS enabled; anonymous CRUD was not available on the checked tables. Security advisor warnings around selected SECURITY DEFINER/auth-token functions still require dedicated review rather than mass changes.
 

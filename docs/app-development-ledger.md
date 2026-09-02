@@ -140,8 +140,8 @@ Recent main includes:
 - refined pickup capacity/deadline rules: morning pickup cap 10, afternoon pickup option, and deadline wording for pickup/delivery exact times.
 - lease-maintenance contract foundation: vehicle-linked contract history, evidence/review states, contract expiry handling, and a fail-closed rental-company eligibility helper; assignment enforcement remains intentionally disconnected until real PDFs are validated.
 
-At the time this ledger was created, main baseline is:
-`7d5848ed78bc146bc22c0ff3f0c19fe8f6382adf`.
+Latest integrated feature baseline before this ledger-only sync:
+`5c86b7c76401d3bfa814f21536dc772a60bf1815`.
 
 ## Database state
 
@@ -149,6 +149,8 @@ Supabase already contains the newer cancellation/reschedule/loaner-board functio
 Therefore "database live" and "UI live" must be reported separately.
 
 As of 2026-09-02, the refined pickup scheduling rules are also database-live: morning pickup limit 10, afternoon pickup option, and backward-compatible deadline display metadata for pickup/delivery time choices. The latest UI code that renders the deadline labels is source-only until the next deliberate deployment.
+
+The lease-maintenance contract foundation is also database-live: `lease_maintenance_contracts` has RLS, anon CRUD is unavailable, and `lease_rental_eligibility(...)` is authenticated/service-role only. Current loaner assignment remains intentionally unchanged until sample PDFs are validated.
 
 ## Security / operations
 
