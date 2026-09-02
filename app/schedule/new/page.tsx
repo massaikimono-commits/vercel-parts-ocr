@@ -46,6 +46,12 @@ type Capacity = {
   morning_inspection_warning_reached: boolean;
 };
 
+type PickupCapacity = {
+  morning_pickup_count: number;
+  morning_pickup_limit: number;
+  morning_pickup_over: boolean;
+};
+
 type DuplicateCustomerCandidate = {
   customerId: string;
   displayName: string;
@@ -143,6 +149,7 @@ export default function ScheduleNewPage() {
   const [deliveryTimeKey, setDeliveryTimeKey] = useState("");
 
   const [capacity, setCapacity] = useState<Capacity | null>(null);
+  const [pickupCapacity, setPickupCapacity] = useState<PickupCapacity | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [message, setMessage] = useState("入出庫予定を登録します。");
@@ -258,13 +265,21 @@ export default function ScheduleNewPage() {
   }
 
   async function loadCapacity() {
-    const { data, error } = await supabase.rpc("schedule_capacity", { p_day: day });
-    if (error) {
-      setMessage(safeActionError("空き状況の読み込み", error));
+    const [capacityResult, pickupResult] = await Promise.all([
+      supabase.rpc("schedule_capacity", { p_day: day }),
+      supabase.rpc("schedule_pickup_capacity", { p_day: day }),
+    ]);
+    if (capacityResult.error) {
+      setMessage(safeActionError("空き状況の読み込み", capacityResult.error));
       return;
     }
-    const row = Array.isArray(data) ? data[0] : data;
+    if (pickupResult.error) {
+      setMessage(safeActionError("引取上限の読み込み", pickupResult.error));
+      return;
+    }
+    const row = Array.isArray(capacityResult.data) ? capacityResult.data[0] : capacityResult.data;
     setCapacity((row || null) as Capacity | null);
+    setPickupCapacity((pickupResult.data || null) as PickupCapacity | null);
   }
 
   async function loadMainOptions() {
@@ -612,6 +627,7 @@ export default function ScheduleNewPage() {
   const capMorning = capacity ? `${capacity.morning_count}/${capacity.morning_total_limit}` : "-";
   const capAfternoon = capacity ? `${capacity.afternoon_count}/${capacity.afternoon_total_limit}` : "-";
   const capInspection = capacity ? `${capacity.morning_inspection_count}/${capacity.morning_inspection_warning}` : "-";
+  const capMorningPickup = pickupCapacity ? `${pickupCapacity.morning_pickup_count}/${pickupCapacity.morning_pickup_limit}` : "-";
 
   return (
     <main className="page">
@@ -626,6 +642,7 @@ export default function ScheduleNewPage() {
         <div className="notice">{message}</div>
 
         <div className="capacity">
+          <div><small>午前 引取</small><b>{capMorningPickup}</b></div>
           <div><small>午前 入庫系</small><b>{capMorning}</b></div>
           <div><small>午後 入庫系</small><b>{capAfternoon}</b></div>
           <div><small>午前 車検</small><b>{capInspection}</b></div>
@@ -894,7 +911,7 @@ export default function ScheduleNewPage() {
         button,input,select,textarea{font:inherit}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:11px 14px;font-weight:800}
         .card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:34px;margin:4px 0 10px}h2{margin:0 0 14px}
         .notice{background:#edf7ef;border:1px solid #c2e5cb;border-radius:12px;padding:12px 14px;color:#3c5944}
-        .capacity{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.capacity>div{background:#f6f8fb;border-radius:12px;padding:12px;display:grid}.capacity b{font-size:24px}.capacity small{color:#78869a}
+        .capacity{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.capacity>div{background:#f6f8fb;border-radius:12px;padding:12px;display:grid}.capacity b{font-size:24px}.capacity small{color:#78869a}
         .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
         .availabilityBlock{display:grid;gap:10px}.availabilityTitle{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;color:#5c6878}.legend{font-size:12px;font-weight:800}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.openDot{background:#4f9c68}.warnDot{background:#d69a36}.blockedDot{background:#9aa5b3}.availabilityLoading{background:#f7f9fc;border-radius:12px;padding:14px;color:#78869a}.timeGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.timeSlot{display:flex;gap:5px;justify-content:center;align-items:center;padding:10px 7px;border-radius:12px}.timeSlot.open{background:#f2fbf5;border-color:#9bceb0;color:#236c3b}.timeSlot.warning{background:#fff8ea;border-color:#e5bd73;color:#8a5a08}.timeSlot.blocked{background:#f1f3f6;border-color:#d5dbe3;color:#8a95a3;opacity:.7}.timeSlot.selected{outline:3px solid #2674e8;outline-offset:1px}.timeSlot:disabled{cursor:not-allowed}
         input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
@@ -903,7 +920,7 @@ export default function ScheduleNewPage() {
         .errors,.warnings{margin-top:12px;border-radius:12px;padding:13px 14px;line-height:1.7}.errors{background:#fff0f0;border:1px solid #efbcbc;color:#8f2f2f}.warnings{background:#fff8df;border:1px solid #ecd98d;color:#6d5912}.warnings button{margin-top:8px;background:#fff}
         .footnote{color:#6f7c8e;line-height:1.6;margin-bottom:0}
         @media(max-width:650px){
-          .grid{grid-template-columns:1fr}.grid .wide{grid-column:auto}.capacity{grid-template-columns:1fr 1fr}.capacity>div:last-child{grid-column:1/-1}
+          .grid{grid-template-columns:1fr}.grid .wide{grid-column:auto}.capacity{grid-template-columns:1fr 1fr}
           .availabilityTitle{align-items:flex-start}.legend{line-height:1.8}
           .timeGrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
           .timeSlot{min-height:54px;padding:10px 6px;white-space:nowrap;gap:4px}
