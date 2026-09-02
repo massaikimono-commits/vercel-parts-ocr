@@ -1,7 +1,16 @@
 [build]
   command = "npm run build"
   publish = ".next"
-  ignore = "git log -1 --pretty=%B | grep -Fq \'[deploy netlify]\' && exit 1 || exit 0"
+  ignore = "exit 0"
+
+[context.production]
+  ignore = "git log -1 --pretty=%B | grep -Fq '[deploy netlify production]' && exit 1 || exit 0"
+
+[context.deploy-preview]
+  ignore = "git log -1 --pretty=%B | grep -Fq '[deploy netlify preview]' && exit 1 || exit 0"
+
+[context.branch-deploy]
+  ignore = "exit 0"
 
 [[headers]]
   for = "/*"
