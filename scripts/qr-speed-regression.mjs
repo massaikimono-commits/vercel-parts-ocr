@@ -49,6 +49,10 @@ const cases = [
   // Pin opposite scan-window corners without widening production thresholds.
   { name: "photo-small-qr-upper-left-corner", expected: 1, centers: [0.435], yCenter: 0.815, sizeScale: 0.78 },
   { name: "photo-large-qr-lower-right-corner", expected: 1, centers: [0.965], yCenter: 0.97, sizeScale: 1.28 },
+  // Complement the diagonal corner pair so small symbols near the lower/right
+  // boundary and large symbols near the upper/left boundary are also pinned.
+  { name: "photo-small-qr-lower-right-corner", expected: 1, centers: [0.965], yCenter: 0.97, sizeScale: 0.78 },
+  { name: "photo-large-qr-upper-left-corner", expected: 1, centers: [0.435], yCenter: 0.815, sizeScale: 1.28 },
   // Photo captures can shift the normalized certificate vertically. Keep the
   // density detector effective near both ends of its lower-page scan band.
   { name: "photo-shift-up", expected: 5, centers: [0.511, 0.567, 0.617, 0.733, 0.789], yCenter: 0.84 },
