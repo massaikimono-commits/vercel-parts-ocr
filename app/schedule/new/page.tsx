@@ -401,9 +401,10 @@ export default function ScheduleNewPage() {
     return list.slice(0, 20);
   }, [registeredSearch, registeredVehicles]);
 
-  function selectRegisteredVehicle(row: RegisteredVehicleOption) {
+  function applyRegisteredVehicle(row: RegisteredVehicleOption, nextIds: string[]) {
     const last4 = row.registrationLast4 || row.registrationNumber.match(/(\\d{4})(?!.*\\d)/)?.[1] || "";
-    setExistingVehicleId(row.vehicleId);
+    setSelectedVehicleIds(nextIds);
+    setExistingVehicleId(nextIds.length === 1 ? nextIds[0] : "");
     setExistingCustomerId(row.customerId || "");
     setCustomerType(row.customerType);
     setCustomerName(row.customerName || row.companyName);
@@ -424,10 +425,48 @@ export default function ScheduleNewPage() {
       registrationNumber: row.registrationNumber,
       registrationLast4: last4,
     }));
-    setRegisteredSearch("");
-    setMessage(row.customerId
-      ? "登録済みのお客様・車両を予定へ反映しました。日時と内容を確認して登録してください。"
-      : "登録済み車両を反映しました。お客様情報が未紐付けのため、必要な項目を入力してください。");
+  }
+
+  function toggleRegisteredVehicle(row: RegisteredVehicleOption) {
+    if (!row.customerId) {
+      applyRegisteredVehicle(row, [row.vehicleId]);
+      setMessage("この車両はお客様未紐付けのため、単独登録として必要な顧客情報を入力してください。");
+      return;
+    }
+
+    if (selectedVehicleIds.includes(row.vehicleId)) {
+      const nextIds = selectedVehicleIds.filter((id) => id !== row.vehicleId);
+      const nextPrimary = registeredVehicles.find((vehicle) => vehicle.vehicleId === nextIds[0]);
+      if (nextPrimary) {
+        applyRegisteredVehicle(nextPrimary, nextIds);
+        setMessage(nextIds.length > 1
+          ? `同じお客様の車両を ${nextIds.length}台選択しています。`
+          : "登録済みのお客様・車両を予定へ反映しました。");
+      } else {
+        setSelectedVehicleIds([]);
+        setExistingVehicleId("");
+        setExistingCustomerId("");
+        setMessage("車両の選択を解除しました。");
+      }
+      return;
+    }
+
+    const selectedRows = selectedVehicleIds
+      .map((id) => registeredVehicles.find((vehicle) => vehicle.vehicleId === id))
+      .filter(Boolean) as RegisteredVehicleOption[];
+    const currentCustomerId = selectedRows[0]?.customerId || "";
+
+    if (selectedVehicleIds.length > 0 && currentCustomerId !== row.customerId) {
+      applyRegisteredVehicle(row, [row.vehicleId]);
+      setMessage("別のお客様を選択したため、車両選択を切り替えました。同じお客様の車両は続けて複数台選べます。");
+      return;
+    }
+
+    const nextIds = [...selectedVehicleIds, row.vehicleId];
+    applyRegisteredVehicle(row, nextIds);
+    setMessage(nextIds.length > 1
+      ? `同じお客様の車両を ${nextIds.length}台選択しました。共通の入庫内容・日時でまとめて登録できます。`
+      : "登録済みのお客様・車両を予定へ反映しました。続けて同じお客様の別車両も選択できます。");
   }
 
   async function checkDuplicateRegistration() {
