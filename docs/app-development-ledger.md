@@ -119,6 +119,7 @@ Recent main includes:
 - vehicle-certificate v2 legacy-override cleanup,
 - parts OCR redundant-pass reduction.
 - schedule registration selection from existing registered customer/vehicle records.
+- desktop daily schedule view is compacted for higher information density; mobile layout and A3 one-day print remain separate and unchanged by this screen-only density pass.
 
 At the time this ledger was created, main baseline is:
 `7d5848ed78bc146bc22c0ff3f0c19fe8f6382adf`.
