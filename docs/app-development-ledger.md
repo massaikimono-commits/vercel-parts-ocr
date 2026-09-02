@@ -44,6 +44,11 @@ Business rules include:
 - vehicle-inspection AM cap 4, warn on 5th; PM uncapped,
 - annual business-calendar input,
 - delivery date/time can be registered together with intake and changed later.
+- morning pickup has its own limit of 10 entries; exact pickup deadlines and A中 both count toward the same 10 (for example, one 9時まで pickup plus one A中 pickup counts as 2).
+- pickup choices include 9時まで / 10時まで / 11時まで / A中 in the morning and an afternoon period option.
+- exact pickup and delivery times are operational deadlines, so user-facing labels use 「〜時まで」 / 「〜時〜分まで」 rather than plain clock-time wording.
+- pickup entries may share the same deadline/placeholder without triggering the generic same-type overlap warning; capacity rules still apply.
+
 - schedule registration can search registered customer/vehicle data by customer name, company, phone, registration, plate last4, chassis, maker, or model; selecting a result reuses the existing customer/vehicle IDs instead of creating duplicates.
 
 ### Daily schedule print
@@ -122,6 +127,7 @@ Recent main includes:
 - desktop daily schedule view is compacted for higher information density; mobile layout and A3 one-day print remain separate and unchanged by this screen-only density pass.
 - mobile one-day schedule now keeps the daily-report placement standard: delivery left, pickup/customer-visit/mobile-service right, morning above afternoon.
 - weekly schedule now renders each day as a compact daily-report layout with morning/afternoon sections and delivery/inbound columns instead of one flat vertical list; mobile week view snaps horizontally day-by-day.
+- refined pickup capacity/deadline rules: morning pickup cap 10, afternoon pickup option, and deadline wording for pickup/delivery exact times.
 
 At the time this ledger was created, main baseline is:
 `7d5848ed78bc146bc22c0ff3f0c19fe8f6382adf`.
