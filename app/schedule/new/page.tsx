@@ -553,13 +553,76 @@ export default function ScheduleNewPage() {
       setHardErrors(["お客様名を入力してください。"]);
       return;
     }
-    if (!registrationNumber.trim() && !registrationLast4.trim()) {
+    if (selectedVehicleIds.length <= 1 && !registrationNumber.trim() && !registrationLast4.trim()) {
       setHardErrors(["登録番号またはナンバー下4桁を入力してください。"]);
       return;
     }
 
     setBusy(true);
     try {
+      if (selectedVehicleIds.length > 1) {
+        const selectedRows = selectedVehicleIds
+          .map((id) => registeredVehicles.find((vehicle) => vehicle.vehicleId === id))
+          .filter(Boolean) as RegisteredVehicleOption[];
+        const customerIds = [...new Set(selectedRows.map((row) => row.customerId).filter(Boolean))];
+        if (selectedRows.length !== selectedVehicleIds.length || customerIds.length !== 1) {
+          setHardErrors(["複数台登録は、同じお客様に紐づく登録済み車両だけを選択してください。"]);
+          return;
+        }
+
+        const check = await preflight();
+        if (!check.allowed || check.hardErrors.length) {
+          setHardErrors(check.hardErrors.length ? check.hardErrors : ["この時間は登録できません。"]);
+          setMessage("登録できない条件があります。内容を確認してください。");
+          return;
+        }
+        if (check.overrideRequired && !allowOverride) {
+          setWarnings(check.warnings);
+          setMessage("警告があります。内容を確認してから登録してください。");
+          return;
+        }
+
+        const { data, error } = await supabase.rpc("create_schedule_registration_batch_v1", {
+          p_vehicle_ids: selectedVehicleIds,
+          p_entry_type: entryType,
+          p_reason: reason,
+          p_starts_at: check.main.startsAt,
+          p_ends_at: check.main.endsAt,
+          p_staff_id: staffId || null,
+          p_notes: notes.trim() || null,
+          p_inspection_schedule_type: inspectionScheduleType || null,
+          p_print_time_mode: check.main.printMode,
+          p_is_urgent: isUrgent,
+          p_needs_loaner: needsLoaner,
+          p_vendor_id: reason === "板金塗装" ? (vendorId || null) : null,
+          p_vendor_name: reason === "板金塗装" ? (vendorName.trim() || null) : null,
+          p_add_delivery: addDelivery && entryType !== "delivery",
+          p_delivery_starts_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
+          p_delivery_ends_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
+          p_delivery_print_time_mode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
+          p_allow_warning_override: allowOverride,
+        });
+        if (error) throw error;
+
+        const batchHardErrors = Array.isArray(data?.hardErrors) ? data.hardErrors.map(String) : [];
+        const batchWarnings = Array.isArray(data?.warnings) ? data.warnings.map(String) : [];
+        if (batchHardErrors.length || data?.allowed === false) {
+          setHardErrors(batchHardErrors.length ? batchHardErrors : ["複数台の一括登録を完了できませんでした。"]);
+          setMessage("複数台のうち登録できない条件があります。1台も登録せずに止めました。");
+          return;
+        }
+        if (data?.overrideRequired && !allowOverride) {
+          setWarnings(batchWarnings);
+          setMessage("複数台登録に警告があります。内容を確認してください。");
+          return;
+        }
+        if (!data?.batchCreated) throw new Error("複数台の予定を登録できませんでした。");
+
+        setMessage(`${selectedVehicleIds.length}台の予定をまとめて登録しました。1日の予定へ戻ります。`);
+        window.setTimeout(() => location.assign(`/schedule?day=${day}`), 450);
+        return;
+      }
+
       const fp = duplicateFingerprint();
       const decisionIsCurrent = duplicateDecisionFingerprint === fp;
       const selectedCustomerForSubmit = decisionIsCurrent ? existingCustomerId : "";
@@ -656,7 +719,7 @@ export default function ScheduleNewPage() {
         if (assignmentError) throw assignmentError;
       }
 
-      setMessage("予定を登録しました。1日のスケジュールへ戻ります。");
+      setMessage("予定を登録しました。1日の予定へ戻ります。");
       window.setTimeout(() => location.assign(`/schedule?day=${day}`), 350);
     } catch (error: any) {
       setMessage(safeActionError("予定登録", error));
