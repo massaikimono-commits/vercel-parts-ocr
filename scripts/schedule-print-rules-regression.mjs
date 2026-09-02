@@ -22,17 +22,24 @@ function isMorningJst(value) {
 function printTimeLabel(row) {
   if (row.print_time_label_override) return row.print_time_label_override;
   if (row.print_time_mode === "exact") {
-    return new Intl.DateTimeFormat("ja-JP", {
+    const parts = new Intl.DateTimeFormat("ja-JP", {
       timeZone: "Asia/Tokyo",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
-    }).format(new Date(row.starts_at));
+    }).formatToParts(new Date(row.starts_at));
+    const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
+    const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
+    if (row.entry_type === "pickup" || row.entry_type === "delivery") {
+      return minute === 0 ? `${hour}時まで` : `${hour}時${minute}分まで`;
+    }
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   }
   if (
     row.entry_type === "pickup"
     && (row.print_time_mode === "morning" || (row.print_time_mode === "unspecified" && isMorningJst(row.starts_at)))
   ) return "A中";
+  if (row.entry_type === "pickup" && row.print_time_mode === "unspecified") return "午後";
   if (row.entry_type === "delivery" && row.print_time_mode === "unspecified") return "中";
   return row.print_time_mode === "morning" ? "午前" : "時間未定";
 }
@@ -80,9 +87,11 @@ assert.deepEqual(stackForPrint(["13:00", "14:00", "15:00"], "afternoon"), ["15:0
 
 assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "morning", print_time_label_override: null }), "A中", "午前中の引取・時間指定なしはA中");
 assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T01:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "A中", "午前帯に置かれた引取・時間未定もA中");
-assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T05:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "時間未定", "午後の引取・時間未定はA中にしない");
+assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T05:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "午後", "午後の引取・時間未定は午後表示");
 assert.equal(printTimeLabel({ entry_type: "delivery", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "中", "納車・時間指定なしは中");
 assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "morning", print_time_label_override: "AM" }), "AM", "明示上書きが最優先");
+assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "exact", print_time_label_override: null }), "9時まで", "引取の時間指定は期限表示");
+assert.equal(printTimeLabel({ entry_type: "delivery", starts_at: "2026-08-29T04:30:00.000Z", print_time_mode: "exact", print_time_label_override: null }), "13時30分まで", "午後納車の時間指定も期限表示");
 assert.equal(printTimeLabel({ entry_type: "customer_visit", starts_at: "2026-08-29T00:30:00.000Z", print_time_mode: "exact", print_time_label_override: null }), "09:30", "時刻指定はJST HH:mm");
 
 console.log("schedule print rule regression: ok");

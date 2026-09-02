@@ -31,17 +31,24 @@ function isMorningJst(value: string) {
 export function dailyReportTimeLabel(row: DailyReportEntryLike) {
   if (row.print_time_label_override) return row.print_time_label_override;
   if (row.print_time_mode === "exact") {
-    return new Intl.DateTimeFormat("ja-JP", {
+    const parts = new Intl.DateTimeFormat("ja-JP", {
       timeZone: "Asia/Tokyo",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
-    }).format(new Date(row.starts_at));
+    }).formatToParts(new Date(row.starts_at));
+    const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
+    const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
+    if (row.entry_type === "pickup" || row.entry_type === "delivery") {
+      return minute === 0 ? `${hour}時まで` : `${hour}時${minute}分まで`;
+    }
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   }
   if (
     row.entry_type === "pickup"
     && (row.print_time_mode === "morning" || (row.print_time_mode === "unspecified" && isMorningJst(row.starts_at)))
   ) return "A中";
+  if (row.entry_type === "pickup" && row.print_time_mode === "unspecified") return "午後";
   if (row.entry_type === "delivery" && row.print_time_mode === "unspecified") return "中";
   return row.print_time_mode === "morning" ? "午前" : "時間未定";
 }
