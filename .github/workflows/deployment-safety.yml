@@ -16,5 +16,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Validate Netlify TOML syntax
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+
+          with pathlib.Path("netlify.toml").open("rb") as f:
+              tomllib.load(f)
+
+          print("netlify.toml syntax is valid.")
+          PY
+
       - name: Verify deployment locks
         run: node scripts/deployment-safety-regression.mjs
