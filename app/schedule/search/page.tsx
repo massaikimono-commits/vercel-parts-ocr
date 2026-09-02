@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
 
 type Customer = {
@@ -128,8 +128,8 @@ export default function ScheduleSearchPage() {
   const [message, setMessage] = useState("お客様名・電話番号・ナンバー下4桁で検索できます。");
   const [range, setRange] = useState<SearchRange>("future");
 
-  async function search(nextRange: SearchRange = range) {
-    const q = normalizeSearchInput(query);
+  async function search(nextRange: SearchRange = range, rawQuery: string = query) {
+    const q = normalizeSearchInput(rawQuery);
     setRange(nextRange);
     if (!q) {
       setRows([]);
@@ -274,6 +274,15 @@ export default function ScheduleSearchPage() {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    const initialQuery = new URLSearchParams(window.location.search).get("q");
+    if (!initialQuery) return;
+    setQuery(initialQuery);
+    void search("future", initialQuery);
+    // URLの初期検索は初回表示時だけ実行する。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const grouped = useMemo(() => {
     const groups = new Map<string, SearchRow[]>();
