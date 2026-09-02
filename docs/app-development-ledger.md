@@ -73,6 +73,16 @@ Recent app-core source includes:
 - loaner period sync when schedule changes,
 - workload/schedule search improvements.
 
+### Lease maintenance contracts
+
+- Lease-maintenance contract terms are stored separately from vehicle-certificate fields and inspection-record print fields, linked by vehicle ID.
+- Preserve contract history instead of overwriting old contracts; original one-page PDF can be linked through `vehicle_documents`.
+- Extraction states use explicit `yes / no / not_stated / needs_review`; absence of wording must never be silently treated as `no`.
+- Initial target fields: substitute-car rider, eligible work types, start-day condition, duration limit, inspection intervals, battery, summer tires, winter tires, tire storage, oil special interval, tire maker restriction, contract period, evidence excerpts.
+- Expired/missing/unreviewed contracts must surface as `契約期限経過・要確認` / review-needed rather than being treated as current.
+- Company courtesy vehicles remain selectable regardless of rental-company coverage. Rental-company vehicles will later be gated by effective contract terms.
+- Foundation includes a fail-closed rental eligibility helper, but current loaner assignment behavior is deliberately not changed until sample PDFs are validated and contract data is populated.
+
 ### Reservation cancellation
 
 Integrated practical-test batch includes:
@@ -128,6 +138,7 @@ Recent main includes:
 - mobile one-day schedule now keeps the daily-report placement standard: delivery left, pickup/customer-visit/mobile-service right, morning above afternoon.
 - weekly schedule now renders each day as a compact daily-report layout with morning/afternoon sections and delivery/inbound columns instead of one flat vertical list; mobile week view snaps horizontally day-by-day.
 - refined pickup capacity/deadline rules: morning pickup cap 10, afternoon pickup option, and deadline wording for pickup/delivery exact times.
+- lease-maintenance contract foundation: vehicle-linked contract history, evidence/review states, contract expiry handling, and a fail-closed rental-company eligibility helper; assignment enforcement remains intentionally disconnected until real PDFs are validated.
 
 At the time this ledger was created, main baseline is:
 `7d5848ed78bc146bc22c0ff3f0c19fe8f6382adf`.
