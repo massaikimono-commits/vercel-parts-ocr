@@ -195,3 +195,12 @@ Before an app-development chat finishes a batch:
 3. merge only after green,
 4. update this ledger when behavior/decision/state changed,
 5. state whether the change is source-only, database-live, preview-live, or production-live.
+
+### 2026-09-03 — Schedule workflow UX batch
+- Top page changed to weekly-schedule-first.
+- Day/week naming cleaned up to reduce duplicated meaning.
+- Reservation registration reordered to customer/vehicle first, then work type, then date/time.
+- Cancellation reason made optional; blank cancellation reason is allowed.
+- Added schedule workflow UX regression and CI coverage.
+- PR #51 merged: `95df8e5eb0ab6c0417913ae0dc84442853040008`.
+- Hosting deployment intentionally not run.
