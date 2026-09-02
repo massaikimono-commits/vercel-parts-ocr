@@ -8,6 +8,7 @@ import { safeActionError } from "../../lib/client-security";
 type TimeOption = {
   key:string;
   label:string;
+  displayLabel?:string;
   mode:"exact"|"morning"|"unspecified";
   startsAt:string;
   endsAt:string;
@@ -160,7 +161,7 @@ export default function ScheduleEditPage(){
   const targetSummary=useMemo(()=>{
     if(!entry||!day) return "";
     if(entry.entry_type==="onsite_repair") return `${day} ${timeKey(entry.starts_at)}`;
-    return selectedOption ? `${day} ${selectedOption.label}` : `${day} 時間候補なし`;
+    return selectedOption ? `${day} ${selectedOption.displayLabel || selectedOption.label}` : `${day} 時間候補なし`;
   },[day,entry,selectedOption]);
 
   async function save(override=false){
@@ -263,7 +264,7 @@ export default function ScheduleEditPage(){
           {entry.entry_type!=="onsite_repair" && <label>変更時間
             <select value={selected} onChange={(e)=>changeTime(e.target.value)}>
               {!options.length && <option value="">候補なし</option>}
-              {options.map(x=><option key={x.key} value={x.key}>{x.label}</option>)}
+              {options.map(x=><option key={x.key} value={x.key}>{x.displayLabel || x.label}</option>)}
             </select>
           </label>}
         </div>
