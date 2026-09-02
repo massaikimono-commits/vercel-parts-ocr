@@ -51,6 +51,13 @@ type SecurityAlert = {
   message: string;
 };
 
+const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
+  delivery: "納車",
+  pickup: "引取",
+  customer_visit: "来社",
+  onsite_repair: "出張",
+};
+
 function todayJst() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
@@ -63,6 +70,32 @@ function jstBounds(day: string) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+function addDays(day: string, delta: number) {
+  const d = new Date(day + "T00:00:00+09:00");
+  d.setUTCDate(d.getUTCDate() + delta);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+}
+
+function mondayOf(day: string) {
+  const d = new Date(day + "T00:00:00+09:00");
+  const dow = d.getDay();
+  return addDays(day, dow === 0 ? -6 : 1 - dow);
+}
+
+function dateKey(value: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date(value));
+}
+
+function shortDayLabel(day: string) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "UTC", month: "numeric", day: "numeric", weekday: "short",
+  }).format(new Date(day + "T00:00:00Z"));
+}
+
 function timeLabel(value: string) {
   return new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false,
@@ -71,6 +104,7 @@ function timeLabel(value: string) {
 
 export default function HomeDashboard({ onLogout }: { onLogout: () => void | Promise<unknown> }) {
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
+  const [weekEntries, setWeekEntries] = useState<ScheduleEntry[]>([]);
   const [works, setWorks] = useState<WorkOrder[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -95,16 +129,21 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   async function loadToday() {
     setBusy(true);
     setLoadError("");
-    const bounds = jstBounds(todayJst());
-    const [entryRes, workRes, vehicleRes, customerRes] = await Promise.all([
+    const today = todayJst();
+    const bounds = jstBounds(today);
+    const weekStart = mondayOf(today);
+    const weekEnd = addDays(weekStart, 7);
+    const [entryRes, weekEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
+      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", new Date(weekStart + "T00:00:00+09:00").toISOString()).lt("starts_at", new Date(weekEnd + "T00:00:00+09:00").toISOString()).order("starts_at", { ascending: true }),
       supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
     ]);
-    const firstError = [entryRes.error, workRes.error, vehicleRes.error, customerRes.error].find(Boolean);
-    if (firstError) setLoadError("今日の予定を取得できません。1日のスケジュールで再確認してください。");
+    const firstError = [entryRes.error, weekEntryRes.error, workRes.error, vehicleRes.error, customerRes.error].find(Boolean);
+    if (firstError) setLoadError("スケジュールを取得できません。詳細画面で再確認してください。");
     if (!entryRes.error) setEntries((entryRes.data || []) as ScheduleEntry[]);
+    if (!weekEntryRes.error) setWeekEntries((weekEntryRes.data || []) as ScheduleEntry[]);
     if (!workRes.error) setWorks((workRes.data || []) as WorkOrder[]);
     if (!vehicleRes.error) setVehicles((vehicleRes.data || []) as Vehicle[]);
     if (!customerRes.error) setCustomers((customerRes.data || []) as Customer[]);
@@ -121,6 +160,25 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     const customer = vehicle && vehicle.customer_id ? customerMap.get(vehicle.customer_id) || null : null;
     return { entry, work, vehicle, customer };
   }), [entries, workMap, vehicleMap, customerMap]);
+
+  const currentWeekDays = useMemo(() => {
+    const start = mondayOf(todayJst());
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  }, []);
+
+  const weekRowsByDay = useMemo(() => {
+    const grouped = new Map<string, Array<{ entry: ScheduleEntry; work: WorkOrder | null; vehicle: Vehicle | null; customer: Customer | null }>>();
+    for (const entry of weekEntries) {
+      const work = entry.work_order_id ? workMap.get(entry.work_order_id) || null : null;
+      const vehicle = entry.vehicle_id ? vehicleMap.get(entry.vehicle_id) || null : null;
+      const customer = vehicle?.customer_id ? customerMap.get(vehicle.customer_id) || null : null;
+      const key = dateKey(entry.starts_at);
+      const rows = grouped.get(key) || [];
+      rows.push({ entry, work, vehicle, customer });
+      grouped.set(key, rows);
+    }
+    return grouped;
+  }, [weekEntries, workMap, vehicleMap, customerMap]);
 
   const statusCounts = useMemo(() => {
     const uniqueWorks = new Map<string, WorkOrder>();
@@ -216,7 +274,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   const todayStatusLabel = busy
     ? "読み込み中"
     : loadError
-      ? "状態は1日のスケジュールで確認"
+      ? "状態は1日の予定で確認"
       : `未実施 ${statusCounts.pending}・作業中 ${statusCounts.inProgress}・完了 ${statusCounts.completed}`;
 
   return (
@@ -251,6 +309,46 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         </section>
       )}
 
+      <section className="homeWeek" aria-label="今週のスケジュール">
+        <div className="homeWeekHead">
+          <div>
+            <span>メインスケジュール</span>
+            <h2>1週間のスケジュール</h2>
+            <small>今週を常に確認。日付をタップすると1日の予定を開きます。</small>
+          </div>
+          <div className="homeWeekActions">
+            <button onClick={() => location.assign("/schedule/week")}>週全体を開く</button>
+            <button className="weekPrimary" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
+          </div>
+        </div>
+        <div className="homeWeekGrid">
+          {currentWeekDays.map((day) => {
+            const rows = weekRowsByDay.get(day) || [];
+            const isToday = day === todayJst();
+            return (
+              <article key={day} className={isToday ? "homeWeekDay today" : "homeWeekDay"}>
+                <button className="homeWeekDayHead" onClick={() => openDay(day)}>
+                  <b>{shortDayLabel(day)}</b><span>{rows.length}件</span>
+                </button>
+                <div className="homeWeekRows">
+                  {busy ? <div className="homeWeekEmpty">読込中…</div> : rows.length === 0 ? (
+                    <div className="homeWeekEmpty">予定なし</div>
+                  ) : rows.slice(0, 7).map(({ entry, work, vehicle, customer }) => (
+                    <button key={entry.id} className="homeWeekRow" onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
+                      <b>{timeLabel(entry.starts_at)} {ENTRY_LABEL[entry.entry_type]}</b>
+                      <span>{customerName(customer)}　{last4(vehicle)}</span>
+                      <small>{work?.reason || ""}{work?.worker_name ? "　担当 " + work.worker_name : ""}</small>
+                    </button>
+                  ))}
+                  {rows.length > 7 && <button className="homeWeekMore" onClick={() => openDay(day)}>ほか {rows.length - 7}件</button>}
+                </div>
+                <button className="homeWeekAdd" onClick={() => registerDay(day)}>＋ この日に登録</button>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="mobileToday">
         <button className="heroToday" onClick={() => openDay(todayJst())}>
           <span>今日の予定</span>
@@ -284,7 +382,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             ))}
             {inProgressRows.length > 3 && (
               <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
-                ほか {inProgressRows.length - 3}件も作業中　→ 1日のスケジュールで確認
+                ほか {inProgressRows.length - 3}件も作業中　→ 1日の予定で確認
               </button>
             )}
           </div>
@@ -303,7 +401,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             ))}
             {unfinished.length > 5 && (
               <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
-                ほか {unfinished.length - 5}件も未完了　→ 1日のスケジュールで確認
+                ほか {unfinished.length - 5}件も未完了　→ 1日の予定で確認
               </button>
             )}
           </div>
@@ -320,7 +418,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             ))}
             {completedRows.length > 3 && (
               <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
-                ほか {completedRows.length - 3}件も完了　→ 1日のスケジュールで確認
+                ほか {completedRows.length - 3}件も完了　→ 1日の予定で確認
               </button>
             )}
           </div>
@@ -328,9 +426,9 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
 
         <div className="mobileActions">
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
-          <button className="scheduleAction" onClick={() => openDay(todayJst())}>1日のスケジュール</button>
+          <button className="scheduleAction" onClick={() => openDay(todayJst())}>1日の予定</button>
           <button onClick={() => location.assign("/schedule/search")}>名前・電話・下4桁で予定検索</button>
-          <button onClick={() => location.assign("/schedule/week")}>1週間の予定検索</button>
+          <button onClick={() => location.assign("/schedule/week")}>1週間のスケジュール</button>
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票読取</button>
           <button onClick={() => location.assign("/inspection/select")}>記録簿作成</button>
           <button onClick={() => location.assign("/vehicle-workflow")}>車検証読取</button>
@@ -366,7 +464,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         )}
 
         <div className="dateSearch">
-          <div><b>予定の日付検索</b><small>見たい日を選んで1日のスケジュールを開く</small></div>
+          <div><b>予定の日付検索</b><small>見たい日を選んで1日の予定を開く</small></div>
           <input type="date" value={searchDay} onChange={(e) => setSearchDay(e.target.value)} />
           <button disabled={!searchDay} onClick={() => openDay(searchDay)}>この日の予定を見る</button>
           <button disabled={!searchDay} onClick={() => location.assign("/schedule/week?day=" + searchDay)}>この週の予定を見る</button>
@@ -385,6 +483,9 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       </section>
 
       <style jsx global>{`
+        .homeWeek{margin-bottom:14px;background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:14px}
+        .homeWeekHead{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}.homeWeekHead>div:first-child{display:grid;gap:2px}.homeWeekHead span{font-size:12px;color:#2674e8;font-weight:900}.homeWeekHead h2{margin:0;font-size:22px}.homeWeekHead small{color:#718096}.homeWeekActions{display:flex;gap:7px;flex-wrap:wrap}.homeWeekActions .weekPrimary{background:#2674e8;color:#fff;border-color:#2674e8}
+        .homeWeekGrid{display:grid;grid-template-columns:repeat(7,minmax(180px,1fr));gap:7px;overflow-x:auto;padding-bottom:4px}.homeWeekDay{min-width:180px;border:1px solid #dce4ef;border-radius:13px;overflow:hidden;background:#fff;display:flex;flex-direction:column}.homeWeekDay.today{outline:3px solid #2674e8;outline-offset:-2px}.homeWeekDayHead{border:0;border-radius:0;background:#f5f8fc;color:#172033;padding:9px;display:flex;justify-content:space-between}.homeWeekDayHead span{font-size:11px;color:#657386}.homeWeekRows{padding:5px;display:grid;gap:4px;min-height:150px}.homeWeekRow{border:1px solid #e2e8f0;background:#fff;color:#172033;border-radius:8px;padding:6px;text-align:left;display:grid;gap:1px}.homeWeekRow b{font-size:10px}.homeWeekRow span{font-size:11px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.homeWeekRow small{font-size:9px;color:#738095;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.homeWeekEmpty{padding:18px 4px;text-align:center;color:#9aa5b3;font-size:11px}.homeWeekMore,.homeWeekAdd{font-size:10px;padding:6px}.homeWeekMore{border:0}.homeWeekAdd{margin:5px;background:#f8fbff}
         .todayStatusGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
         .statusTile{min-width:0;padding:12px 6px;display:grid;grid-template-columns:1fr auto auto;gap:4px;align-items:end;text-align:left;border-width:2px}
         .statusTile span{grid-column:1/-1;font-size:12px;font-weight:900;white-space:nowrap}
