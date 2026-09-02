@@ -1,0 +1,20 @@
+name: Deployment safety guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  deployment-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify deployment locks
+        run: node scripts/deployment-safety-regression.mjs
