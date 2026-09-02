@@ -56,6 +56,11 @@ type CalendarDay = {
   label: string | null;
 };
 
+type LoanerReservation = {
+  work_order_id: string | null;
+  status: string;
+};
+
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   delivery: "納車",
   pickup: "引取",
@@ -125,6 +130,7 @@ export default function WeeklySchedulePage() {
   const [works, setWorks] = useState<WorkOrder[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loanerAssignedWorkIds, setLoanerAssignedWorkIds] = useState<string[]>([]);
   const [capacities, setCapacities] = useState<Record<string, Capacity | null>>({});
   const [calendar, setCalendar] = useState<Record<string, CalendarDay>>({});
   const [busy, setBusy] = useState(true);
@@ -182,13 +188,25 @@ export default function WeeklySchedulePage() {
       const workIds = [...new Set(nextEntries.map((x) => x.work_order_id).filter(Boolean))] as string[];
 
       let nextWorks: WorkOrder[] = [];
+      let nextLoanerAssignedWorkIds: string[] = [];
       if (workIds.length) {
-        const { data, error } = await supabase
-          .from("work_orders")
-          .select("id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name")
-          .in("id", workIds);
-        if (error) throw error;
-        nextWorks = (data || []) as WorkOrder[];
+        const [workRes, loanerRes] = await Promise.all([
+          supabase
+            .from("work_orders")
+            .select("id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name")
+            .in("id", workIds),
+          supabase
+            .from("loaner_reservations")
+            .select("work_order_id,status")
+            .in("work_order_id", workIds)
+            .in("status", ["reserved", "checked_out"]),
+        ]);
+        if (workRes.error) throw workRes.error;
+        if (loanerRes.error) throw loanerRes.error;
+        nextWorks = (workRes.data || []) as WorkOrder[];
+        nextLoanerAssignedWorkIds = [...new Set(((loanerRes.data || []) as LoanerReservation[])
+          .map((x) => x.work_order_id)
+          .filter(Boolean))] as string[];
       }
 
       const vehicleIds = [...new Set([
@@ -221,6 +239,7 @@ export default function WeeklySchedulePage() {
       setWorks(nextWorks);
       setVehicles(nextVehicles);
       setCustomers(nextCustomers);
+      setLoanerAssignedWorkIds(nextLoanerAssignedWorkIds);
       setCapacities(Object.fromEntries(capacityRows));
       setCalendar(Object.fromEntries(((calendarRes.data || []) as CalendarDay[]).map((x) => [x.business_date, x])));
       setMessage(weekTitle(weekStart) + " の予定を表示しています。");
@@ -234,6 +253,7 @@ export default function WeeklySchedulePage() {
   const workMap = useMemo(() => new Map(works.map((x) => [x.id, x])), [works]);
   const vehicleMap = useMemo(() => new Map(vehicles.map((x) => [x.id, x])), [vehicles]);
   const customerMap = useMemo(() => new Map(customers.map((x) => [x.id, x])), [customers]);
+  const loanerAssignedSet = useMemo(() => new Set(loanerAssignedWorkIds), [loanerAssignedWorkIds]);
 
   const rowsByDay = useMemo(() => {
     const out: Record<string, Array<{
@@ -372,8 +392,10 @@ export default function WeeklySchedulePage() {
       inspectionRemaining += Math.max(0, inspectionRaw);
     }
 
-    return { overlapDays, overbookedDays, morningRemaining, afternoonRemaining, inspectionRemaining, unknownDays };
-  }, [weekDays, rowsByDay, capacities, calendar]);
+    const loanerNeeds = works.filter((work) => work.needs_loaner);
+    const loanerUnassigned = loanerNeeds.filter((work) => !loanerAssignedSet.has(work.id)).length;
+    return { overlapDays, overbookedDays, morningRemaining, afternoonRemaining, inspectionRemaining, unknownDays, loanerNeeds: loanerNeeds.length, loanerUnassigned };
+  }, [weekDays, rowsByDay, capacities, calendar, works, loanerAssignedSet]);
 
   const attentionDays = useMemo(() => {
     return weekDays.filter((day) => {
@@ -381,9 +403,10 @@ export default function WeeklySchedulePage() {
       if (cal && !cal.is_business_day) return false;
       const overlap = overlapInfo(rowsByDay[day] || []).count > 0;
       const capacityClass = capacitySummary(day).className;
-      return overlap || capacityClass === "over" || capacityClass === "full" || capacityClass === "tight";
+      const hasUnassignedLoaner = (rowsByDay[day] || []).some(({ work }) => work?.needs_loaner && !loanerAssignedSet.has(work.id));
+      return overlap || hasUnassignedLoaner || capacityClass === "over" || capacityClass === "full" || capacityClass === "tight";
     });
-  }, [weekDays, rowsByDay, capacities, calendar]);
+  }, [weekDays, rowsByDay, capacities, calendar, loanerAssignedSet]);
 
   const visibleWeekDays = attentionOnly ? attentionDays : weekDays;
   const firstAttentionDay = attentionDays[0] || null;
@@ -420,13 +443,14 @@ export default function WeeklySchedulePage() {
         <div><span>週間予定</span><b>{entries.length}件</b></div>
         <div className={weekStats.overlapDays > 0 ? "summaryWarn" : ""}><span>時間重複</span><b>{weekStats.overlapDays}日</b></div>
         <div className={weekStats.overbookedDays > 0 ? "summaryDanger" : ""}><span>取りすぎ</span><b>{weekStats.overbookedDays}日</b></div>
+        <div className={weekStats.loanerUnassigned > 0 ? "summaryDanger" : ""}><span>代車未割当</span><b>{weekStats.loanerUnassigned}件</b><small>必要 {weekStats.loanerNeeds}件</small></div>
         <div><span>週間の残り枠</span><b>午前 {weekStats.morningRemaining} / 午後 {weekStats.afternoonRemaining}</b><small>車検午前 {weekStats.inspectionRemaining}{weekStats.unknownDays > 0 ? `　未確認 ${weekStats.unknownDays}日` : ""}</small></div>
       </section>
 
       <section className="attentionBar" aria-label="週間予定の要確認日">
         <div>
           <b>要確認 {attentionDays.length}日</b>
-          <span>時間重複・取りすぎ・上限・残り少のある日だけ確認できます。</span>
+          <span>時間重複・取りすぎ・上限・残り少・代車未割当のある日だけ確認できます。</span>
         </div>
         <div className="attentionActions">
           <button
@@ -444,7 +468,7 @@ export default function WeeklySchedulePage() {
 
       <section className={`weekBoard ${attentionOnly ? "attentionOnly" : ""}`}>
         {attentionOnly && visibleWeekDays.length === 0 && (
-          <div className="noAttention">この週は時間重複・取りすぎ・上限・残り少の要確認日はありません。</div>
+          <div className="noAttention">この週は時間重複・取りすぎ・上限・残り少・代車未割当の要確認日はありません。</div>
         )}
         {visibleWeekDays.map((day) => {
           const dayRows = rowsByDay[day] || [];
@@ -468,8 +492,9 @@ export default function WeeklySchedulePage() {
                 {!dayRows.length && <div className="empty">予定なし</div>}
                 {dayRows.map(({ entry, work, vehicle, customer }) => {
                   const state = workState(work);
+                  const loanerAssigned = Boolean(work && loanerAssignedSet.has(work.id));
                   return (
-                    <button type="button" className={`weekRow ${work?.is_urgent ? "urgent" : ""} ${overlap.ids.has(entry.id) ? "overlapping" : ""}`} key={entry.id} onClick={() => editEntry(entry.id)} aria-label={`${customerName(customer)}の予約を変更`}>
+                    <button type="button" className={`weekRow ${work?.is_urgent ? "urgent" : ""} ${overlap.ids.has(entry.id) ? "overlapping" : ""} ${work?.needs_loaner && !loanerAssigned ? "loanerAttention" : ""}`} key={entry.id} onClick={() => editEntry(entry.id)} aria-label={`${customerName(customer)}の予約を変更`}>
                       <div className="rowTop">
                         <b>{dailyReportTimeLabel(entry)}</b>
                         <span>{ENTRY_LABEL[entry.entry_type]}{work?.reason ? "・" + work.reason : ""}</span>
@@ -479,7 +504,8 @@ export default function WeeklySchedulePage() {
                         {last4(vehicle) && <span>{last4(vehicle)}</span>}
                         {state && <span className={`workStateTag ${state.className}`}>{state.label}</span>}
                         {work?.worker_name && <span>担当 {work.worker_name}</span>}
-                        {work?.needs_loaner && <span className="loaner">代車</span>}
+                        {work?.needs_loaner && loanerAssigned && <span className="loanerAssigned">代車割当済</span>}
+                        {work?.needs_loaner && !loanerAssigned && <span className="loanerMissing">代車未割当</span>}
                         {work?.is_urgent && <span className="urgentTag">急ぎ</span>}
                         {overlap.ids.has(entry.id) && <span className="overlapTag">時間重複</span>}
                       </div>
@@ -498,18 +524,18 @@ export default function WeeklySchedulePage() {
         })}
       </section>
 
-      <div className="hint">横にスクロールすると1週間を続けて確認できます。作業未実施・作業中・作業完了も予約カード内で確認できます。上部サマリーと「要確認日のみ表示」で問題日を先に確認でき、予約カードをタップすると空き確認付きの予約変更へ直接進めます。</div>
+      <div className="hint">横にスクロールすると1週間を続けて確認できます。作業未実施・作業中・作業完了と代車の割当状態も予約カード内で確認できます。上部サマリーと「要確認日のみ表示」で問題日を先に確認でき、予約カードをタップすると空き確認付きの予約変更へ直接進めます。</div>
 
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}
         .weekPage{max-width:1600px;margin:0 auto;padding:16px 14px 50px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.top>div{display:grid;text-align:center}.top>div span{font-size:12px;color:#78869a}.top button,.weekNav button,.jumpBar button,.dayActions button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
         .weekHero{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:18px 20px;display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:10px}.eyebrow{color:#2674e8;font-weight:800}.weekHero h1{font-size:28px;margin:3px 0}.weekHero p{margin:0;color:#6d798a}.weekNav{display:flex;gap:7px;flex-wrap:wrap}
         .jumpBar{display:flex;gap:8px;align-items:end;background:#fff;border:1px solid #d9e0ea;border-radius:16px;padding:11px 14px;margin-bottom:10px}.jumpBar label{display:grid;gap:4px;font-size:12px;font-weight:800;color:#637084}.jumpBar input{border:1px solid #cbd6e3;border-radius:9px;padding:8px 10px;background:#fff}
-        .weekSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.weekSummary>div{background:#fff;border:1px solid #d9e0ea;border-radius:13px;padding:10px 12px;display:grid;gap:2px}.weekSummary span{font-size:11px;color:#68768a;font-weight:800}.weekSummary b{font-size:17px}.weekSummary small{font-size:10px;color:#68768a}.weekSummary .summaryWarn{background:#fff7e8;border-color:#edc780}.weekSummary .summaryDanger{background:#ffecec;border-color:#efaaaa;color:#9f2525}
+        .weekSummary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}.weekSummary>div{background:#fff;border:1px solid #d9e0ea;border-radius:13px;padding:10px 12px;display:grid;gap:2px}.weekSummary span{font-size:11px;color:#68768a;font-weight:800}.weekSummary b{font-size:17px}.weekSummary small{font-size:10px;color:#68768a}.weekSummary .summaryWarn{background:#fff7e8;border-color:#edc780}.weekSummary .summaryDanger{background:#ffecec;border-color:#efaaaa;color:#9f2525}
         .attentionBar{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:10px 12px;margin-bottom:10px}.attentionBar>div:first-child{display:grid;gap:2px}.attentionBar span{font-size:11px;color:#68768a}.attentionActions{display:flex;gap:7px;flex-wrap:wrap}.attentionActions button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:10px;padding:8px 10px;font-weight:800}.attentionActions .activeFilter{background:#2674e8;color:#fff;border-color:#2674e8}.attentionActions button:disabled{opacity:.45}.noAttention{grid-column:1/-1;background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:24px;text-align:center;color:#68768a}.weekBoard{display:grid;grid-template-columns:repeat(7,minmax(170px,1fr));gap:8px;align-items:stretch;overflow-x:auto;padding-bottom:6px}.weekBoard.attentionOnly{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));overflow-x:visible}.dayColumn{min-width:170px;background:#fff;border:1px solid #d9e0ea;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:590px}.dayColumn.today{outline:3px solid #2674e8;outline-offset:-2px}.dayColumn.dayClosed{background:#f5f6f8}
         .dayHead{border:0;background:#f7f9fc;padding:11px 10px;display:flex;justify-content:space-between;align-items:center;width:100%;font-weight:900;color:#172033}.dayHead span{font-size:16px}.dayHead b{font-size:12px;background:#e8eef7;border-radius:999px;padding:3px 7px}
         .availability{margin:8px;border-radius:10px;padding:8px;display:grid;gap:2px}.availability b{font-size:13px}.availability small{font-size:10px;line-height:1.45}.availability.open{background:#edf8f0;color:#236c3b}.availability.tight{background:#fff7e8;color:#8a5a08}.availability.full{background:#fdeeee;color:#9c3434}.availability.over{background:#ffe7e7;color:#a32121;border:2px solid #ef9a9a}.availability.closed{background:#eceff3;color:#657180}.availability.unknown{background:#f4f6f8;color:#798596}.overlapWarn{margin:0 8px 8px;background:#fff0db;color:#8b5609;border-radius:9px;padding:7px;font-size:10px;font-weight:900}
-        .dayRows{padding:0 8px 8px;display:grid;gap:6px;align-content:start;flex:1}.weekRow{border:1px solid #e0e6ef;border-radius:10px;padding:8px;background:#fff;width:100%;color:inherit;text-align:left;cursor:pointer}.weekRow:hover,.weekRow:focus-visible{border-color:#8eb5ef;box-shadow:0 0 0 2px rgba(38,116,232,.12);outline:none}.weekRow.urgent{border-color:#e8aa58;box-shadow:inset 3px 0 0 #e8aa58}.weekRow.overlapping{border-color:#e58b8b;background:#fff8f8}.rowTop{display:flex;justify-content:space-between;gap:5px;align-items:center}.rowTop b{font-size:14px}.rowTop span{font-size:11px;color:#5c6878;text-align:right}.rowCustomer{font-weight:900;font-size:14px;margin-top:4px;line-height:1.25}.rowMeta{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rowMeta span{font-size:9px;background:#f1f4f8;border-radius:999px;padding:3px 5px}.rowMeta .workStateTag{font-weight:900}.rowMeta .workStateTag.pending{background:#eef1f5;color:#556273}.rowMeta .workStateTag.running{background:#fff1cf;color:#875a00}.rowMeta .workStateTag.completed{background:#e5f6e9;color:#287443}.rowMeta .loaner{background:#eaf3ff;color:#245ca8}.rowMeta .urgentTag{background:#fff0db;color:#995b00}.rowMeta .overlapTag{background:#ffe7e7;color:#a32121;font-weight:900}.rowEditHint{font-size:9px;color:#2674e8;font-weight:800;text-align:right;margin-top:5px}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
+        .dayRows{padding:0 8px 8px;display:grid;gap:6px;align-content:start;flex:1}.weekRow{border:1px solid #e0e6ef;border-radius:10px;padding:8px;background:#fff;width:100%;color:inherit;text-align:left;cursor:pointer}.weekRow:hover,.weekRow:focus-visible{border-color:#8eb5ef;box-shadow:0 0 0 2px rgba(38,116,232,.12);outline:none}.weekRow.urgent{border-color:#e8aa58;box-shadow:inset 3px 0 0 #e8aa58}.weekRow.overlapping{border-color:#e58b8b;background:#fff8f8}.weekRow.loanerAttention{box-shadow:inset 3px 0 0 #d34a4a}.rowTop{display:flex;justify-content:space-between;gap:5px;align-items:center}.rowTop b{font-size:14px}.rowTop span{font-size:11px;color:#5c6878;text-align:right}.rowCustomer{font-weight:900;font-size:14px;margin-top:4px;line-height:1.25}.rowMeta{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.rowMeta span{font-size:9px;background:#f1f4f8;border-radius:999px;padding:3px 5px}.rowMeta .workStateTag{font-weight:900}.rowMeta .workStateTag.pending{background:#eef1f5;color:#556273}.rowMeta .workStateTag.running{background:#fff1cf;color:#875a00}.rowMeta .workStateTag.completed{background:#e5f6e9;color:#287443}.rowMeta .loanerAssigned{background:#e5f6e9;color:#287443;font-weight:900}.rowMeta .loanerMissing{background:#ffe7e7;color:#a32121;font-weight:900}.rowMeta .urgentTag{background:#fff0db;color:#995b00}.rowMeta .overlapTag{background:#ffe7e7;color:#a32121;font-weight:900}.rowEditHint{font-size:9px;color:#2674e8;font-weight:800;text-align:right;margin-top:5px}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
         .dayActions{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:8px;border-top:1px solid #edf0f4}.dayActions button{font-size:10px;padding:7px 5px}.dayActions .register{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.hint{font-size:12px;color:#78869a;margin-top:8px}
         @media(max-width:900px){.weekHero{display:block}.weekNav{margin-top:12px}.weekSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.attentionBar{display:grid}.weekBoard{grid-template-columns:repeat(7,220px)}.weekBoard.attentionOnly{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.dayColumn{min-width:220px;min-height:520px}}
       `}</style>
