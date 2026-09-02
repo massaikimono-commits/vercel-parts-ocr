@@ -43,7 +43,7 @@
     "@supabase/supabase-js": "^2.54.0",
     "jspdf": "4.2.1",
     "jsqr": "^1.4.0",
-    "@zxing/browser": "^0.1.5",
+    "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.21.3",
     "pdfjs-dist": "^4.10.38",
     "tesseract.js-core": "5.1.1",
