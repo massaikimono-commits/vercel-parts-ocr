@@ -131,6 +131,7 @@ export default function CustomerVehiclesPage() {
   const [customerForm, setCustomerForm] = useState<CustomerForm>(blankCustomer);
   const [linkCustomerId, setLinkCustomerId] = useState("");
   const [savingCustomer, setSavingCustomer] = useState(false);
+  const [deletingCustomer, setDeletingCustomer] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -398,6 +399,35 @@ export default function CustomerVehiclesPage() {
     }
   }
 
+  async function deleteSelectedCustomer() {
+    if (!selectedCustomer || deletingCustomer) return;
+    const label = customerLabel(selectedCustomer);
+    const linkedCount = vehicles.filter((v) => v.customerId === selectedCustomer.id).length;
+    const ok = window.confirm(
+      `${label} の顧客情報を削除しますか？\n\n紐づく車両 ${linkedCount}台・予定・作業履歴は削除せず、顧客だけを削除します。車両は「顧客未割り当て」になります。`
+    );
+    if (!ok) return;
+
+    setDeletingCustomer(true);
+    try {
+      const { error } = await supabase.from("customers").delete().eq("id", selectedCustomer.id);
+      if (error) throw error;
+
+      setCustomers((prev) => prev.filter((customer) => customer.id !== selectedCustomer.id));
+      setVehicles((prev) => prev.map((vehicle) =>
+        vehicle.customerId === selectedCustomer.id ? { ...vehicle, customerId: "" } : vehicle
+      ));
+      setLinkCustomerId("");
+      setCustomerEditing(false);
+      setCustomerForm(blankCustomer);
+      setMessage(`${label} の顧客情報を削除しました。車両・予定・作業履歴は残しています。`);
+    } catch (error: any) {
+      setMessage(safeActionError("顧客情報の削除", error));
+    } finally {
+      setDeletingCustomer(false);
+    }
+  }
+
   const totalHistory = selectedCloudParts.length + selectedLocalParts.length;
 
   return (
@@ -484,7 +514,21 @@ export default function CustomerVehiclesPage() {
                 <div className="actions">
                   {selectedCustomer && <button onClick={() => beginEditCustomer(selectedCustomer)}>顧客情報を編集</button>}
                   <button onClick={() => beginEditCustomer(null)}>＋ 新規顧客を登録</button>
+                  {selectedCustomer && (
+                    <button
+                      className="danger"
+                      disabled={deletingCustomer}
+                      onClick={() => void deleteSelectedCustomer()}
+                    >
+                      {deletingCustomer ? "削除中…" : "顧客情報を削除"}
+                    </button>
+                  )}
                 </div>
+                {selectedCustomer && (
+                  <p className="deleteNote">
+                    顧客を削除しても、紐づく車両・予定・作業履歴は残り、車両は顧客未割り当てになります。
+                  </p>
+                )}
 
                 {!!customers.length && (
                   <div className="linkBox">
