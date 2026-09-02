@@ -7,7 +7,7 @@ import { safeActionError } from "../../lib/client-security";
 import { validateDocumentFile } from "../../lib/file-security";
 import { parseVehicleCertificatePdfNative } from "../../certificate-pdf-native-reader-v2";
 
-type CandidateStatus = "ready" | "review" | "error";
+type CandidateStatus = "ready" | "review" | "error" | "saved";
 
 type Candidate = {
   id: string;
@@ -16,6 +16,7 @@ type Candidate = {
   status: CandidateStatus;
   message: string;
   patch: Record<string, string>;
+  customerType: "individual" | "company";
   customerName: string;
   customerAddress: string;
   registrationNumber: string;
@@ -61,6 +62,10 @@ function fuelType(value: string) {
 function integerString(value: string) {
   const n = Number(String(value || "").replace(/[^\d.-]/g, ""));
   return Number.isFinite(n) && n >= 0 ? String(Math.trunc(n)) : "";
+}
+
+function inferredCustomerType(value: string): "individual" | "company" {
+  return /株式会社|有限会社|合同会社|合資会社|合名会社|㈱|\(株\)|（株）/.test(value) ? "company" : "individual";
 }
 
 function candidateKey(candidate: Candidate) {
@@ -109,6 +114,7 @@ export default function CustomerVehicleBulkImportPage() {
           status: "error",
           message: check.ok ? "PDFを選択してください。" : check.message,
           patch: {},
+          customerType: "individual",
           customerName: "",
           customerAddress: "",
           registrationNumber: "",
@@ -138,6 +144,7 @@ export default function CustomerVehicleBulkImportPage() {
             ? `直接取得 ${parsed?.totalCount || 0}項目 / ${parsed?.pageCount || 1}ページ中${parsed?.pageNumber || 1}ページ目`
             : "必要項目が不足しています。お客様名・登録番号/車台番号を確認して補完してください。",
           patch,
+          customerType: inferredCustomerType(customerName),
           customerName,
           customerAddress,
           registrationNumber,
@@ -153,6 +160,7 @@ export default function CustomerVehicleBulkImportPage() {
           status: "error",
           message: error?.message || "PDFを解析できませんでした。",
           patch: {},
+          customerType: "individual",
           customerName: "",
           customerAddress: "",
           registrationNumber: "",
@@ -213,6 +221,7 @@ export default function CustomerVehicleBulkImportPage() {
     try {
       const items = selected.map((row) => ({
         fileName: row.fileName,
+        customerType: row.customerType,
         customerName: row.customerName.trim(),
         customerAddress: row.customerAddress.trim() || null,
         registrationNumber: row.registrationNumber.trim() || null,
@@ -247,7 +256,7 @@ export default function CustomerVehicleBulkImportPage() {
       setMessage(
         `${data?.itemCount || selected.length}件を登録しました。新規顧客 ${data?.createdCustomers || 0}件・新規車両 ${data?.insertedVehicles || 0}台・既存車両更新 ${data?.updatedVehicles || 0}台。`
       );
-      setCandidates((old) => old.map((row) => row.selected ? { ...row, selected: false, message: "登録済み" } : row));
+      setCandidates((old) => old.map((row) => row.selected ? { ...row, selected: false, status: "saved" as const, message: "登録済み" } : row));
     } catch (error: any) {
       setMessage(safeActionError("PDF一括登録", error));
     } finally {
@@ -307,22 +316,32 @@ export default function CustomerVehicleBulkImportPage() {
                   <input
                     type="checkbox"
                     checked={row.selected}
-                    disabled={row.status === "error"}
+                    disabled={row.status === "error" || row.status === "saved"}
                     onChange={(event) => updateCandidate(row.id, { selected: event.target.checked })}
                   />
                   登録する
                 </label>
-                <span className="status">{row.status === "ready" ? "登録候補" : row.status === "review" ? "要確認" : "エラー"}</span>
+                <span className="status">{row.status === "ready" ? "登録候補" : row.status === "review" ? "要確認" : row.status === "saved" ? "登録済み" : "エラー"}</span>
               </div>
 
               <h2>{row.fileName}</h2>
               <p className="rowMessage">{row.message}</p>
 
               <div className="grid">
+                <label>顧客区分
+                  <select
+                    value={row.customerType}
+                    disabled={row.status === "error" || row.status === "saved"}
+                    onChange={(event) => updateCandidate(row.id, { customerType: event.target.value as "individual" | "company" })}
+                  >
+                    <option value="individual">個人</option>
+                    <option value="company">法人</option>
+                  </select>
+                </label>
                 <label>お客様名
                   <input
                     value={row.customerName}
-                    disabled={row.status === "error"}
+                    disabled={row.status === "error" || row.status === "saved"}
                     onChange={(event) => updateCandidate(row.id, { customerName: event.target.value })}
                     onBlur={() => markCandidateAfterEdit(row.id)}
                   />
@@ -330,14 +349,14 @@ export default function CustomerVehicleBulkImportPage() {
                 <label>住所
                   <input
                     value={row.customerAddress}
-                    disabled={row.status === "error"}
+                    disabled={row.status === "error" || row.status === "saved"}
                     onChange={(event) => updateCandidate(row.id, { customerAddress: event.target.value })}
                   />
                 </label>
                 <label>登録番号
                   <input
                     value={row.registrationNumber}
-                    disabled={row.status === "error"}
+                    disabled={row.status === "error" || row.status === "saved"}
                     onChange={(event) => updateCandidate(row.id, { registrationNumber: event.target.value })}
                     onBlur={() => markCandidateAfterEdit(row.id)}
                   />
@@ -345,16 +364,16 @@ export default function CustomerVehicleBulkImportPage() {
                 <label>車台番号
                   <input
                     value={row.chassisNumber}
-                    disabled={row.status === "error"}
+                    disabled={row.status === "error" || row.status === "saved"}
                     onChange={(event) => updateCandidate(row.id, { chassisNumber: event.target.value })}
                     onBlur={() => markCandidateAfterEdit(row.id)}
                   />
                 </label>
                 <label>メーカー
-                  <input value={row.maker} disabled={row.status === "error"} onChange={(event) => updateCandidate(row.id, { maker: event.target.value })} />
+                  <input value={row.maker} disabled={row.status === "error" || row.status === "saved"} onChange={(event) => updateCandidate(row.id, { maker: event.target.value })} />
                 </label>
                 <label>型式
-                  <input value={row.model} disabled={row.status === "error"} onChange={(event) => updateCandidate(row.id, { model: event.target.value })} />
+                  <input value={row.model} disabled={row.status === "error" || row.status === "saved"} onChange={(event) => updateCandidate(row.id, { model: event.target.value })} />
                 </label>
               </div>
             </article>
@@ -379,8 +398,8 @@ export default function CustomerVehicleBulkImportPage() {
         .hidden{display:none}.actions{display:flex;gap:9px;flex-wrap:wrap}.actions button{flex:1 1 260px}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4}
         .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.summary>div{background:#f7f9fc;border-radius:12px;padding:10px;display:grid}.summary small{color:#718096}.summary b{font-size:24px}
         .list{display:grid;gap:12px}.candidate{margin-bottom:0}.candidate.ready{border-color:#b8dcc4}.candidate.review{border-color:#e5c277}.candidate.error{border-color:#e5b0aa;background:#fff9f8}
-        .candidateHead{display:flex;justify-content:space-between;align-items:center}.selectCheck{display:flex;gap:7px;align-items:center;font-weight:800}.selectCheck input{width:auto}.status{font-size:12px;font-weight:900;border-radius:999px;padding:5px 9px;background:#f0f3f7}.candidate.ready .status{background:#eaf7ee;color:#24713d}.candidate.review .status{background:#fff6df;color:#87610c}.candidate.error .status{background:#ffeceb;color:#a13b32}
-        .candidate h2{font-size:18px;margin:10px 0 4px;word-break:break-all}.rowMessage{margin:0 0 12px!important;font-size:13px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.grid label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#607086}.grid input{width:100%;border:1px solid #cbd6e3;border-radius:10px;padding:10px;color:#172033;background:#fff}
+        .candidateHead{display:flex;justify-content:space-between;align-items:center}.selectCheck{display:flex;gap:7px;align-items:center;font-weight:800}.selectCheck input{width:auto}.status{font-size:12px;font-weight:900;border-radius:999px;padding:5px 9px;background:#f0f3f7}.candidate.ready .status{background:#eaf7ee;color:#24713d}.candidate.review .status{background:#fff6df;color:#87610c}.candidate.error .status{background:#ffeceb;color:#a13b32}.candidate.saved{border-color:#b8dcc4;background:#f8fcf9}.candidate.saved .status{background:#eaf7ee;color:#24713d}
+        .candidate h2{font-size:18px;margin:10px 0 4px;word-break:break-all}.rowMessage{margin:0 0 12px!important;font-size:13px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.grid label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#607086}.grid input,.grid select{width:100%;border:1px solid #cbd6e3;border-radius:10px;padding:10px;color:#172033;background:#fff}
         .caution{background:#fffdf6;border-color:#eadca6}.caution p{margin-bottom:0}
         @media(max-width:650px){.grid{grid-template-columns:1fr}.summary{grid-template-columns:1fr 1fr 1fr}.card{padding:16px}.page{padding-left:10px;padding-right:10px}.card h1{font-size:25px}}
       `}</style>
