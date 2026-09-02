@@ -75,6 +75,16 @@ Known live RPCs include:
 
 Checked customer/vehicle/schedule/work/loaner/OCR/parts tables have RLS enabled; anonymous CRUD was not available on the checked tables. Security advisor warnings around selected SECURITY DEFINER/auth-token functions still require dedicated review rather than mass changes.
 
+## Vercel manual deploy check 2026-09-03
+
+- User explicitly authorized exactly one manual Vercel deploy to check whether the previous limit had cleared.
+- One Preview deployment was created: `dpl_uTg42gvMzcMFDAKfh4Ek8aGefB1S`.
+- It reached BUILDING, so Vercel was no longer blocking deployment creation at the previous quota/limit gate.
+- The build then failed in `schedule-desktop-density-regression.mjs`, not because of Vercel quota.
+- Cause: the regression still expected A3 `@page` CSS in `app/schedule/page.tsx`, while printing had already moved to the dedicated `app/schedule/print/page.tsx`, where A3 portrait remains configured.
+- The regression was corrected and merged to main as `130d56e317d632760ee007aff8be6c55e704f847`; GitHub regression/build passed.
+- No second Vercel deployment was attempted because the user authorized one deploy only.
+
 ## Release principle
 
 A green GitHub main means "source ready", not "live".
