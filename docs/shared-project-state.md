@@ -103,3 +103,18 @@ Always identify three states separately:
 - Regression coverage added: `scripts/schedule-workflow-ux-regression.mjs` and CI step.
 - PR #51 merged as `95df8e5eb0ab6c0417913ae0dc84442853040008`.
 - No Vercel or Netlify deployment was triggered for this change; deploy only after explicit user approval.
+
+## Customer cleanup / multi-vehicle reservation / bulk PDF migration 2026-09-03
+
+- PR #53 merged to main as `52ebc1612b003031137925736304dfbbf9e6f555`.
+- Customer management now supports deleting the customer record itself. The UI explicitly preserves linked vehicles, schedules and work history; vehicles become unassigned customers through the existing FK `ON DELETE SET NULL`.
+- Reservation registration supports selecting multiple registered vehicles belonging to the same customer and registering them with shared work type/date/time.
+- Atomic batch scheduling RPC source added: `database/create-schedule-registration-batch-v1.sql`. It rolls back the whole batch if any selected vehicle cannot be registered.
+- Bulk migration screen added: `/customer-vehicles/bulk-import`. It accepts multiple vehicle-certificate PDFs, parses native PDF text, shows review/edit rows, then imports selected rows in one batch.
+- Bulk import RPC source added: `database/import-vehicle-certificates-batch-v1.sql`. Existing vehicles are matched by chassis/registration; exact normalized customer name/address matching avoids unsafe merges.
+- Image-only / insufficient-text PDFs are not auto-imported by the bulk screen; they stop at review/error for manual handling.
+- Native PDF.js worker in `certificate-pdf-native-reader-v2.jsx` was changed from external jsDelivr to the bundled local worker.
+- New regression: `scripts/customer-migration-workflow-regression.mjs`; CI, security regression and Next.js build passed.
+- Both new SQL files were syntax/schema checked against the live Supabase schema inside `BEGIN ... ROLLBACK`; the test succeeded and a follow-up query confirmed neither new function was left installed.
+- IMPORTANT: the two new Supabase RPCs are NOT live yet. Apply them before deploying the UI that calls them.
+- No Vercel or Netlify deployment was performed for this batch.
