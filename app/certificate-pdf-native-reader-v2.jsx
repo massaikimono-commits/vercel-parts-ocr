@@ -7,6 +7,7 @@ const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
 const QR_PRIORITY_KEY = "__vehicleCertificateQrPriority";
 const OWN_PASS = "pdfNativeV2PassThrough";
 const V1_PASS = "pdfNativePassThrough";
+const PDF_WORKER_SRC = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
 
 const LABELS = {
   registrationNumber: ["自動車登録番号又は車両番号", "自動車登録番号", "車両番号"],
@@ -239,7 +240,7 @@ function parseNativeV2(tokens) {
 
 async function loadPdfJs() {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  if (!pdfjs.GlobalWorkerOptions.workerSrc) pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  if (!pdfjs.GlobalWorkerOptions.workerSrc) pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
   return pdfjs;
 }
 async function pageTokens(page) {
@@ -271,6 +272,27 @@ async function hasQr(canvas) {
   } catch {}
   return false;
 }
+export async function parseVehicleCertificatePdfNative(file) {
+  const pdfjs = await loadPdfJs();
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  try {
+    const chosen = await choosePage(pdf);
+    const page = await pdf.getPage(chosen.pageNumber);
+    const tokens = chosen.tokens.length ? chosen.tokens : await pageTokens(page);
+    const parsed = parseNativeV2(tokens);
+    return {
+      patch: parsed.patch,
+      confident: parsed.confident,
+      coreCount: parsed.coreCount,
+      totalCount: parsed.totalCount,
+      pageNumber: chosen.pageNumber,
+      pageCount: pdf.numPages || 1,
+    };
+  } finally {
+    await pdf.destroy?.();
+  }
+}
+
 function certificateCard() {
   return Array.from(document.querySelectorAll("section.card")).find((node) => (node.querySelector("h2")?.textContent || "").includes("車検証から")) || null;
 }
