@@ -165,6 +165,7 @@ export default function ScheduleNewPage() {
   const [registeredSearch, setRegisteredSearch] = useState("");
   const [registeredVehicles, setRegisteredVehicles] = useState<RegisteredVehicleOption[]>([]);
   const [registeredVehiclesLoading, setRegisteredVehiclesLoading] = useState(false);
+  const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("day");
@@ -400,9 +401,10 @@ export default function ScheduleNewPage() {
     return list.slice(0, 20);
   }, [registeredSearch, registeredVehicles]);
 
-  function selectRegisteredVehicle(row: RegisteredVehicleOption) {
+  function applyRegisteredVehicle(row: RegisteredVehicleOption, nextIds: string[]) {
     const last4 = row.registrationLast4 || row.registrationNumber.match(/(\\d{4})(?!.*\\d)/)?.[1] || "";
-    setExistingVehicleId(row.vehicleId);
+    setSelectedVehicleIds(nextIds);
+    setExistingVehicleId(nextIds.length === 1 ? nextIds[0] : "");
     setExistingCustomerId(row.customerId || "");
     setCustomerType(row.customerType);
     setCustomerName(row.customerName || row.companyName);
@@ -423,10 +425,48 @@ export default function ScheduleNewPage() {
       registrationNumber: row.registrationNumber,
       registrationLast4: last4,
     }));
-    setRegisteredSearch("");
-    setMessage(row.customerId
-      ? "登録済みのお客様・車両を予定へ反映しました。日時と内容を確認して登録してください。"
-      : "登録済み車両を反映しました。お客様情報が未紐付けのため、必要な項目を入力してください。");
+  }
+
+  function toggleRegisteredVehicle(row: RegisteredVehicleOption) {
+    if (!row.customerId) {
+      applyRegisteredVehicle(row, [row.vehicleId]);
+      setMessage("この車両はお客様未紐付けのため、単独登録として必要な顧客情報を入力してください。");
+      return;
+    }
+
+    if (selectedVehicleIds.includes(row.vehicleId)) {
+      const nextIds = selectedVehicleIds.filter((id) => id !== row.vehicleId);
+      const nextPrimary = registeredVehicles.find((vehicle) => vehicle.vehicleId === nextIds[0]);
+      if (nextPrimary) {
+        applyRegisteredVehicle(nextPrimary, nextIds);
+        setMessage(nextIds.length > 1
+          ? `同じお客様の車両を ${nextIds.length}台選択しています。`
+          : "登録済みのお客様・車両を予定へ反映しました。");
+      } else {
+        setSelectedVehicleIds([]);
+        setExistingVehicleId("");
+        setExistingCustomerId("");
+        setMessage("車両の選択を解除しました。");
+      }
+      return;
+    }
+
+    const selectedRows = selectedVehicleIds
+      .map((id) => registeredVehicles.find((vehicle) => vehicle.vehicleId === id))
+      .filter(Boolean) as RegisteredVehicleOption[];
+    const currentCustomerId = selectedRows[0]?.customerId || "";
+
+    if (selectedVehicleIds.length > 0 && currentCustomerId !== row.customerId) {
+      applyRegisteredVehicle(row, [row.vehicleId]);
+      setMessage("別のお客様を選択したため、車両選択を切り替えました。同じお客様の車両は続けて複数台選べます。");
+      return;
+    }
+
+    const nextIds = [...selectedVehicleIds, row.vehicleId];
+    applyRegisteredVehicle(row, nextIds);
+    setMessage(nextIds.length > 1
+      ? `同じお客様の車両を ${nextIds.length}台選択しました。共通の入庫内容・日時でまとめて登録できます。`
+      : "登録済みのお客様・車両を予定へ反映しました。続けて同じお客様の別車両も選択できます。");
   }
 
   async function checkDuplicateRegistration() {
@@ -513,13 +553,76 @@ export default function ScheduleNewPage() {
       setHardErrors(["お客様名を入力してください。"]);
       return;
     }
-    if (!registrationNumber.trim() && !registrationLast4.trim()) {
+    if (selectedVehicleIds.length <= 1 && !registrationNumber.trim() && !registrationLast4.trim()) {
       setHardErrors(["登録番号またはナンバー下4桁を入力してください。"]);
       return;
     }
 
     setBusy(true);
     try {
+      if (selectedVehicleIds.length > 1) {
+        const selectedRows = selectedVehicleIds
+          .map((id) => registeredVehicles.find((vehicle) => vehicle.vehicleId === id))
+          .filter(Boolean) as RegisteredVehicleOption[];
+        const customerIds = [...new Set(selectedRows.map((row) => row.customerId).filter(Boolean))];
+        if (selectedRows.length !== selectedVehicleIds.length || customerIds.length !== 1) {
+          setHardErrors(["複数台登録は、同じお客様に紐づく登録済み車両だけを選択してください。"]);
+          return;
+        }
+
+        const check = await preflight();
+        if (!check.allowed || check.hardErrors.length) {
+          setHardErrors(check.hardErrors.length ? check.hardErrors : ["この時間は登録できません。"]);
+          setMessage("登録できない条件があります。内容を確認してください。");
+          return;
+        }
+        if (check.overrideRequired && !allowOverride) {
+          setWarnings(check.warnings);
+          setMessage("警告があります。内容を確認してから登録してください。");
+          return;
+        }
+
+        const { data, error } = await supabase.rpc("create_schedule_registration_batch_v1", {
+          p_vehicle_ids: selectedVehicleIds,
+          p_entry_type: entryType,
+          p_reason: reason,
+          p_starts_at: check.main.startsAt,
+          p_ends_at: check.main.endsAt,
+          p_staff_id: staffId || null,
+          p_notes: notes.trim() || null,
+          p_inspection_schedule_type: inspectionScheduleType || null,
+          p_print_time_mode: check.main.printMode,
+          p_is_urgent: isUrgent,
+          p_needs_loaner: needsLoaner,
+          p_vendor_id: reason === "板金塗装" ? (vendorId || null) : null,
+          p_vendor_name: reason === "板金塗装" ? (vendorName.trim() || null) : null,
+          p_add_delivery: addDelivery && entryType !== "delivery",
+          p_delivery_starts_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
+          p_delivery_ends_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
+          p_delivery_print_time_mode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
+          p_allow_warning_override: allowOverride,
+        });
+        if (error) throw error;
+
+        const batchHardErrors = Array.isArray(data?.hardErrors) ? data.hardErrors.map(String) : [];
+        const batchWarnings = Array.isArray(data?.warnings) ? data.warnings.map(String) : [];
+        if (batchHardErrors.length || data?.allowed === false) {
+          setHardErrors(batchHardErrors.length ? batchHardErrors : ["複数台の一括登録を完了できませんでした。"]);
+          setMessage("複数台のうち登録できない条件があります。1台も登録せずに止めました。");
+          return;
+        }
+        if (data?.overrideRequired && !allowOverride) {
+          setWarnings(batchWarnings);
+          setMessage("複数台登録に警告があります。内容を確認してください。");
+          return;
+        }
+        if (!data?.batchCreated) throw new Error("複数台の予定を登録できませんでした。");
+
+        setMessage(`${selectedVehicleIds.length}台の予定をまとめて登録しました。1日の予定へ戻ります。`);
+        window.setTimeout(() => location.assign(`/schedule?day=${day}`), 450);
+        return;
+      }
+
       const fp = duplicateFingerprint();
       const decisionIsCurrent = duplicateDecisionFingerprint === fp;
       const selectedCustomerForSubmit = decisionIsCurrent ? existingCustomerId : "";
@@ -616,7 +719,7 @@ export default function ScheduleNewPage() {
         if (assignmentError) throw assignmentError;
       }
 
-      setMessage("予定を登録しました。1日のスケジュールへ戻ります。");
+      setMessage("予定を登録しました。1日の予定へ戻ります。");
       window.setTimeout(() => location.assign(`/schedule?day=${day}`), 350);
     } catch (error: any) {
       setMessage(safeActionError("予定登録", error));
@@ -671,6 +774,7 @@ export default function ScheduleNewPage() {
           <div style={{display:"grid",gap:8,marginTop:12}}>
             {duplicateVehicles.map((v) => (
               <button type="button" key={v.vehicleId} onClick={() => {
+                setSelectedVehicleIds([v.vehicleId]);
                 setExistingVehicleId(v.vehicleId);
                 setExistingCustomerId(v.customerId || "");
                 setDuplicateDecisionFingerprint(duplicateFingerprint());
@@ -682,6 +786,7 @@ export default function ScheduleNewPage() {
             ))}
             {duplicateCustomers.map((c) => (
               <button type="button" key={c.customerId} onClick={() => {
+                setSelectedVehicleIds([]);
                 setExistingVehicleId("");
                 setExistingCustomerId(c.customerId);
                 setDuplicateDecisionFingerprint(duplicateFingerprint());
@@ -692,6 +797,7 @@ export default function ScheduleNewPage() {
               </button>
             ))}
             <button type="button" onClick={() => {
+              setSelectedVehicleIds([]);
               setExistingVehicleId("");
               setExistingCustomerId("");
               setDuplicateDecisionFingerprint("");
@@ -709,7 +815,7 @@ export default function ScheduleNewPage() {
         <div style={{margin:"12px 0 16px",padding:"14px",border:"1px solid #c9d8ee",borderRadius:14,background:"#f8fbff"}}>
           <b style={{display:"block",marginBottom:6}}>登録済みのお客様・車両から選ぶ</b>
           <div style={{color:"#607086",fontSize:13,lineHeight:1.6,marginBottom:10}}>
-            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。該当がなければ下で新規入力します。
+            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。同じお客様の車両は続けて複数台選択できます。
           </div>
           <input
             value={registeredSearch}
@@ -727,11 +833,11 @@ export default function ScheduleNewPage() {
                 <button
                   type="button"
                   key={row.vehicleId}
-                  onClick={() => selectRegisteredVehicle(row)}
+                  onClick={() => toggleRegisteredVehicle(row)}
                   style={{
                     textAlign:"left",
-                    border: existingVehicleId === row.vehicleId ? "2px solid #2f6fe4" : "1px solid #ccd7e5",
-                    background: existingVehicleId === row.vehicleId ? "#eef4ff" : "#fff",
+                    border: selectedVehicleIds.includes(row.vehicleId) ? "2px solid #2f6fe4" : "1px solid #ccd7e5",
+                    background: selectedVehicleIds.includes(row.vehicleId) ? "#eef4ff" : "#fff",
                     color:"#172033",
                     display:"grid",
                     gap:3,
@@ -742,6 +848,17 @@ export default function ScheduleNewPage() {
                   <small style={{color:"#69778a"}}>{[row.phone, row.chassisNumber].filter(Boolean).join(" / ")}</small>
                 </button>
               ))}
+            </div>
+          )}
+          {selectedVehicleIds.length > 0 && (
+            <div className="selectedVehiclesSummary">
+              <b>選択中：{selectedVehicleIds.length}台</b>
+              <span>{selectedVehicleIds.length > 1 ? "共通の入庫内容・日時で一括登録します。各車両の登録番号・型式は保存済み情報を使用します。" : "同じお客様の別車両を続けて選べます。"}</span>
+              <button type="button" onClick={() => {
+                setSelectedVehicleIds([]);
+                setExistingVehicleId("");
+                setExistingCustomerId("");
+              }}>選択をクリア</button>
             </div>
           )}
         </div>
@@ -919,7 +1036,7 @@ export default function ScheduleNewPage() {
         .card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:34px;margin:4px 0 10px}h2{margin:0 0 14px}
         .notice{background:#edf7ef;border:1px solid #c2e5cb;border-radius:12px;padding:12px 14px;color:#3c5944}
         .capacity{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.capacity>div{background:#f6f8fb;border-radius:12px;padding:12px;display:grid}.capacity b{font-size:24px}.capacity small{color:#78869a}
-        .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.selectedVehiclesSummary{margin-top:10px;padding:10px 12px;border:1px solid #bfd3f3;border-radius:12px;background:#eef5ff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.selectedVehiclesSummary span{color:#53647b;font-size:12px;flex:1 1 260px}.selectedVehiclesSummary button{padding:7px 9px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
         .availabilityBlock{display:grid;gap:10px}.availabilityTitle{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;color:#5c6878}.legend{font-size:12px;font-weight:800}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.openDot{background:#4f9c68}.warnDot{background:#d69a36}.blockedDot{background:#9aa5b3}.availabilityLoading{background:#f7f9fc;border-radius:12px;padding:14px;color:#78869a}.timeGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.timeSlot{display:flex;gap:5px;justify-content:center;align-items:center;padding:10px 7px;border-radius:12px}.timeSlot.open{background:#f2fbf5;border-color:#9bceb0;color:#236c3b}.timeSlot.warning{background:#fff8ea;border-color:#e5bd73;color:#8a5a08}.timeSlot.blocked{background:#f1f3f6;border-color:#d5dbe3;color:#8a95a3;opacity:.7}.timeSlot.selected{outline:3px solid #2674e8;outline-offset:1px}.timeSlot:disabled{cursor:not-allowed}
         input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
         .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.deliveryGrid{margin-top:12px}
