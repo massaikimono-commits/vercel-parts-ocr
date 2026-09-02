@@ -70,7 +70,6 @@ begin
           = lower(regexp_replace(v_customer_name, '[[:space:]　]+', '', 'g'))
       and (
         v_customer_address is null
-        or nullif(btrim(c.address), '') is null
         or lower(regexp_replace(coalesce(c.address, ''), '[[:space:]　]+', '', 'g'))
            = lower(regexp_replace(v_customer_address, '[[:space:]　]+', '', 'g'))
       )
