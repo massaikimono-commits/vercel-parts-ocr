@@ -774,6 +774,7 @@ export default function ScheduleNewPage() {
           <div style={{display:"grid",gap:8,marginTop:12}}>
             {duplicateVehicles.map((v) => (
               <button type="button" key={v.vehicleId} onClick={() => {
+                setSelectedVehicleIds([v.vehicleId]);
                 setExistingVehicleId(v.vehicleId);
                 setExistingCustomerId(v.customerId || "");
                 setDuplicateDecisionFingerprint(duplicateFingerprint());
@@ -785,6 +786,7 @@ export default function ScheduleNewPage() {
             ))}
             {duplicateCustomers.map((c) => (
               <button type="button" key={c.customerId} onClick={() => {
+                setSelectedVehicleIds([]);
                 setExistingVehicleId("");
                 setExistingCustomerId(c.customerId);
                 setDuplicateDecisionFingerprint(duplicateFingerprint());
@@ -795,6 +797,7 @@ export default function ScheduleNewPage() {
               </button>
             ))}
             <button type="button" onClick={() => {
+              setSelectedVehicleIds([]);
               setExistingVehicleId("");
               setExistingCustomerId("");
               setDuplicateDecisionFingerprint("");
