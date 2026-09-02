@@ -93,3 +93,13 @@ Always identify three states separately:
 - source state,
 - database state,
 - deployed UI state.
+
+## Schedule UX update 2026-09-03
+
+- Top/dashboard now places the current 1-week schedule before the daily summary; week cards are always visible and link to day detail / registration.
+- Terminology clarified: detailed day view is `1日の予定`; weekly view is `1週間のスケジュール`.
+- New reservation flow order: `① お客様・車両 → ② 入庫内容 → ③ 日時 → ④ 納車予定`.
+- Schedule cancellation reason is optional in the UI. Existing Supabase cancellation RPCs already accept NULL/blank reasons, so no database migration was required.
+- Regression coverage added: `scripts/schedule-workflow-ux-regression.mjs` and CI step.
+- PR #51 merged as `95df8e5eb0ab6c0417913ae0dc84442853040008`.
+- No Vercel or Netlify deployment was triggered for this change; deploy only after explicit user approval.
