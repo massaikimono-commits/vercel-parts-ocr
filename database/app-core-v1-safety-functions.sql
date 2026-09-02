@@ -8,6 +8,11 @@
 --
 -- reschedule_schedule_entry_v2
 --   Atomic schedule change + stay reason + planned delivery date + history.
+--   Keeps an active loaner reservation aligned with inbound/delivery changes in the same transaction.
+--   Reserved loaners follow inbound schedule changes; checked-out loaners keep the actual loan start.
+--   Loaner overlap is checked under an advisory lock before schedule data is updated.
+--   Guard text: 変更後の期間は現在の代車予約と重複します。代車の空きを確認してください。
+--   Guard text: 代車割当中は納車予定日を未定に戻せません。返却予定を設定してください。
 --
 -- update_loaner_reservation_status
 --   Reactivating a reservation checks operational state and overlap first.
