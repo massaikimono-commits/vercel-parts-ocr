@@ -447,6 +447,9 @@ export default function CustomerVehiclesPage() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="お客様名 / 電話番号 / 下4桁 / 車台番号 / 型式"
         />
+        <div className="actions">
+          <button onClick={() => location.assign("/customer-vehicles/bulk-import")}>📄 複数PDFをまとめて登録</button>
+        </div>
       </section>
 
       <section className="card">
