@@ -275,15 +275,14 @@ export default function AutoOCRPage() {
       let text = result.data.text || "";
       let judged = classify(text);
 
-      // 全体OCRで専用判定できなかった場合だけ、専用帳票の重要部分を拡大して再確認。
-      if (judged.mode !== "dedicated") {
+      // 全体OCRで判定不能な時だけ、専用帳票の重要部分を拡大して再確認。
+      // 汎用表を十分な見出しで確定できている場合は、結果に使わない専用判定OCRを重ねない。
+      if (judged.mode === "unknown") {
         setMessage("専用伝票の特徴を拡大して再確認しています…");
         setProgress(82);
         const markerText = await readDedicatedMarkers(worker, tesseract, file);
         text = `${text}\n\n【専用判定用拡大OCR】\n${markerText}`;
-        const secondJudgement = classify(text);
-        if (secondJudgement.mode === "dedicated") judged = secondJudgement;
-        else if (judged.mode === "unknown") judged = secondJudgement;
+        judged = classify(text);
       }
 
       setRawText(text);
