@@ -215,3 +215,11 @@ Before an app-development chat finishes a batch:
 - SQL was validated in a rolled-back transaction only; new RPCs remain unapplied to live Supabase.
 - PR #53 merged: `52ebc1612b003031137925736304dfbbf9e6f555`.
 - Hosting deployment intentionally not run.
+
+### 2026-09-03 — Customer migration safety hardening
+- Bulk PDF customer import now keeps individual/company type instead of forcing all imported customers to individual.
+- Same-name customer matching was tightened to avoid merging addressed customers when the source PDF has no address.
+- Bulk import UI now shows a saved state after successful registration.
+- PR #56 merged: `ae7f015b278e6ecf0cde3616cccb291c1a639100`.
+- Full regression and Next.js build passed.
+- Batch RPC SQL is still not applied to live Supabase; hosting deployment also remains intentionally not run.
