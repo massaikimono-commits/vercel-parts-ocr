@@ -62,6 +62,20 @@ type DuplicateVehicleCandidate = {
   model: string | null;
   score: number;
 };
+type RegisteredVehicleOption = {
+  vehicleId: string;
+  customerId: string | null;
+  customerType: "individual" | "company";
+  customerName: string;
+  companyName: string;
+  scheduleDisplayName: string;
+  phone: string;
+  registrationNumber: string;
+  registrationLast4: string;
+  chassisNumber: string;
+  maker: string;
+  model: string;
+};
 
 const ENTRY_LABEL: Record<EntryType, string> = {
   delivery: "納車",
@@ -140,6 +154,9 @@ export default function ScheduleNewPage() {
   const [existingVehicleId, setExistingVehicleId] = useState("");
   const [duplicateDecisionFingerprint, setDuplicateDecisionFingerprint] = useState("");
   const [duplicateBypassFingerprint, setDuplicateBypassFingerprint] = useState("");
+  const [registeredSearch, setRegisteredSearch] = useState("");
+  const [registeredVehicles, setRegisteredVehicles] = useState<RegisteredVehicleOption[]>([]);
+  const [registeredVehiclesLoading, setRegisteredVehiclesLoading] = useState(false);
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("day");
@@ -166,6 +183,7 @@ export default function ScheduleNewPage() {
   useEffect(() => {
     void loadStaff();
     void loadVendors();
+    void loadRegisteredVehicles();
   }, []);
 
   async function loadStaff() {
@@ -194,6 +212,49 @@ export default function ScheduleNewPage() {
       return;
     }
     setVendors((data || []) as ExternalVendor[]);
+  }
+  async function loadRegisteredVehicles() {
+    setRegisteredVehiclesLoading(true);
+    try {
+      const [{ data: customerRows, error: customerError }, { data: vehicleRows, error: vehicleError }] = await Promise.all([
+        supabase
+          .from("customers")
+          .select("id,customer_type,name,company_name,phone,schedule_display_name")
+          .order("updated_at", { ascending: false })
+          .limit(1000),
+        supabase
+          .from("vehicles")
+          .select("id,customer_id,registration_number,registration_number_last4,chassis_number,maker,model,vehicle_number")
+          .order("updated_at", { ascending: false })
+          .limit(1000),
+      ]);
+      if (customerError) throw customerError;
+      if (vehicleError) throw vehicleError;
+
+      const customersById = new Map((customerRows || []).map((row: any) => [row.id, row]));
+      const options = (vehicleRows || []).map((vehicle: any): RegisteredVehicleOption => {
+        const customer: any = vehicle.customer_id ? customersById.get(vehicle.customer_id) : null;
+        return {
+          vehicleId: String(vehicle.id),
+          customerId: vehicle.customer_id ? String(vehicle.customer_id) : null,
+          customerType: customer?.customer_type === "company" ? "company" : "individual",
+          customerName: String(customer?.name || customer?.company_name || ""),
+          companyName: String(customer?.company_name || ""),
+          scheduleDisplayName: String(customer?.schedule_display_name || ""),
+          phone: String(customer?.phone || ""),
+          registrationNumber: String(vehicle.registration_number || ""),
+          registrationLast4: String(vehicle.registration_number_last4 || ""),
+          chassisNumber: String(vehicle.chassis_number || vehicle.vehicle_number || ""),
+          maker: String(vehicle.maker || ""),
+          model: String(vehicle.model || ""),
+        };
+      });
+      setRegisteredVehicles(options);
+    } catch (error: any) {
+      setMessage(safeActionError("登録済み車両の読み込み", error));
+    } finally {
+      setRegisteredVehiclesLoading(false);
+    }
   }
 
   async function loadCapacity() {
@@ -287,14 +348,69 @@ export default function ScheduleNewPage() {
     };
   }
 
-  function duplicateFingerprint() {
+  function makeDuplicateFingerprint(values: {
+    customerName: string;
+    companyName: string;
+    phone: string;
+    registrationNumber: string;
+    registrationLast4: string;
+  }) {
     return [
-      customerName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
-      companyName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
-      phone.normalize("NFKC").replace(/\\D/g, ""),
-      registrationNumber.normalize("NFKC").replace(/[\\s　・･-]+/g, "").toUpperCase(),
-      registrationLast4.normalize("NFKC").replace(/[^0-9A-Za-z]/g, "").toUpperCase(),
+      values.customerName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
+      values.companyName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
+      values.phone.normalize("NFKC").replace(/\\D/g, ""),
+      values.registrationNumber.normalize("NFKC").replace(/[\\s　・･-]+/g, "").toUpperCase(),
+      values.registrationLast4.normalize("NFKC").replace(/[^0-9A-Za-z]/g, "").toUpperCase(),
     ].join("|");
+  }
+
+  function duplicateFingerprint() {
+    return makeDuplicateFingerprint({ customerName, companyName, phone, registrationNumber, registrationLast4 });
+  }
+
+  const filteredRegisteredVehicles = useMemo(() => {
+    const q = registeredSearch.normalize("NFKC").trim().toLowerCase();
+    const normalizedDigits = registeredSearch.normalize("NFKC").replace(/\\D/g, "");
+    const list = !q
+      ? registeredVehicles
+      : registeredVehicles.filter((row) => {
+          const haystack = [
+            row.customerName, row.companyName, row.phone, row.registrationNumber,
+            row.registrationLast4, row.chassisNumber, row.maker, row.model,
+          ].join(" ").normalize("NFKC").toLowerCase();
+          const phoneDigits = row.phone.replace(/\\D/g, "");
+          return haystack.includes(q) || (normalizedDigits.length >= 2 && phoneDigits.includes(normalizedDigits));
+        });
+    return list.slice(0, 20);
+  }, [registeredSearch, registeredVehicles]);
+
+  function selectRegisteredVehicle(row: RegisteredVehicleOption) {
+    const last4 = row.registrationLast4 || row.registrationNumber.match(/(\\d{4})(?!.*\\d)/)?.[1] || "";
+    setExistingVehicleId(row.vehicleId);
+    setExistingCustomerId(row.customerId || "");
+    setCustomerType(row.customerType);
+    setCustomerName(row.customerName || row.companyName);
+    setCompanyName(row.companyName);
+    setPhone(row.phone);
+    setScheduleDisplayName(row.scheduleDisplayName);
+    setRegistrationNumber(row.registrationNumber);
+    setRegistrationLast4(last4);
+    setMaker(row.maker);
+    setModel(row.model);
+    setDuplicateCustomers([]);
+    setDuplicateVehicles([]);
+    setDuplicateBypassFingerprint("");
+    setDuplicateDecisionFingerprint(makeDuplicateFingerprint({
+      customerName: row.customerName || row.companyName,
+      companyName: row.companyName,
+      phone: row.phone,
+      registrationNumber: row.registrationNumber,
+      registrationLast4: last4,
+    }));
+    setRegisteredSearch("");
+    setMessage(row.customerId
+      ? "登録済みのお客様・車両を予定へ反映しました。日時と内容を確認して登録してください。"
+      : "登録済み車両を反映しました。お客様情報が未紐付けのため、必要な項目を入力してください。");
   }
 
   async function checkDuplicateRegistration() {
@@ -646,6 +762,45 @@ export default function ScheduleNewPage() {
 
       <section className="card">
         <h2>② お客様・車両</h2>
+        <div style={{margin:"12px 0 16px",padding:"14px",border:"1px solid #c9d8ee",borderRadius:14,background:"#f8fbff"}}>
+          <b style={{display:"block",marginBottom:6}}>登録済みの車検証・車両情報から選ぶ</b>
+          <div style={{color:"#607086",fontSize:13,lineHeight:1.6,marginBottom:10}}>
+            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。
+          </div>
+          <input
+            value={registeredSearch}
+            onChange={(e) => setRegisteredSearch(e.target.value)}
+            placeholder="例：1234 / 山田 / 090 / 車台番号"
+            style={{width:"100%",marginBottom:10}}
+          />
+          {registeredVehiclesLoading ? (
+            <div className="notice">登録済み車両を読み込み中…</div>
+          ) : !filteredRegisteredVehicles.length ? (
+            <div className="notice">一致する登録済み車両がありません。</div>
+          ) : (
+            <div style={{display:"grid",gap:8,maxHeight:320,overflow:"auto"}}>
+              {filteredRegisteredVehicles.map((row) => (
+                <button
+                  type="button"
+                  key={row.vehicleId}
+                  onClick={() => selectRegisteredVehicle(row)}
+                  style={{
+                    textAlign:"left",
+                    border: existingVehicleId === row.vehicleId ? "2px solid #2f6fe4" : "1px solid #ccd7e5",
+                    background: existingVehicleId === row.vehicleId ? "#eef4ff" : "#fff",
+                    color:"#172033",
+                    display:"grid",
+                    gap:3,
+                  }}
+                >
+                  <b>{row.customerName || row.companyName || "お客様未紐付け"}</b>
+                  <span>{row.registrationNumber || ("下4桁 " + (row.registrationLast4 || "----"))}　{[row.maker,row.model].filter(Boolean).join(" ")}</span>
+                  <small style={{color:"#69778a"}}>{[row.phone, row.chassisNumber].filter(Boolean).join(" / ")}</small>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="grid">
           <label>顧客区分
             <select value={customerType} onChange={(e) => setCustomerType(e.target.value as "individual" | "company")}>
