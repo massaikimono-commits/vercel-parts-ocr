@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase";
+import { dailyReportTimeLabel } from "./schedule/print-rules";
 
 type ScheduleEntry = {
   id: string;
@@ -10,6 +11,9 @@ type ScheduleEntry = {
   work_order_id: string | null;
   entry_type: "delivery" | "pickup" | "customer_visit" | "onsite_repair";
   starts_at: string;
+  ends_at: string;
+  print_time_mode: "exact" | "morning" | "unspecified";
+  print_time_label_override: string | null;
 };
 
 type WorkOrder = {
@@ -20,6 +24,7 @@ type WorkOrder = {
   is_urgent: boolean;
   needs_loaner: boolean;
   worker_name: string | null;
+  outsource_vendor_name: string | null;
   checked_out_at: string | null;
 };
 
@@ -100,6 +105,18 @@ function timeLabel(value: string) {
   }).format(new Date(value));
 }
 
+function reasonOrder(reason: string | null | undefined) {
+  if (reason === "点検") return 0;
+  if (reason === "一般整備") return 1;
+  if (reason === "板金" || reason === "板金塗装") return 2;
+  if (reason === "車検") return 3;
+  return 9;
+}
+
+function scheduleTimeLabel(entry: ScheduleEntry) {
+  return dailyReportTimeLabel(entry);
+}
+
 export default function HomeDashboard({ onLogout }: { onLogout: () => void | Promise<unknown> }) {
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [weekEntries, setWeekEntries] = useState<ScheduleEntry[]>([]);
@@ -132,9 +149,9 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     const weekStart = mondayOf(today);
     const weekEnd = addDays(weekStart, 7);
     const [entryRes, weekEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
-      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
-      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", new Date(weekStart + "T00:00:00+09:00").toISOString()).lt("starts_at", new Date(weekEnd + "T00:00:00+09:00").toISOString()).order("starts_at", { ascending: true }),
-      supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
+      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
+      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", new Date(weekStart + "T00:00:00+09:00").toISOString()).lt("starts_at", new Date(weekEnd + "T00:00:00+09:00").toISOString()).order("starts_at", { ascending: true }),
+      supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,outsource_vendor_name,checked_out_at").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
     ]);
@@ -174,6 +191,16 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       const rows = grouped.get(key) || [];
       rows.push({ entry, work, vehicle, customer });
       grouped.set(key, rows);
+    }
+    for (const [key, rows] of grouped) {
+      grouped.set(key, rows
+        .map((row, index) => ({ row, index }))
+        .sort((a, b) => {
+          const reasonDiff = reasonOrder(a.row.work?.reason) - reasonOrder(b.row.work?.reason);
+          if (reasonDiff) return reasonDiff;
+          return new Date(a.row.entry.starts_at).getTime() - new Date(b.row.entry.starts_at).getTime() || a.index - b.index;
+        })
+        .map(({ row }) => row));
     }
     return grouped;
   }, [weekEntries, workMap, vehicleMap, customerMap]);
@@ -318,6 +345,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           </div>
           <div className="homeWeekActions">
             <button onClick={() => location.assign("/schedule/week")}>週全体を開く</button>
+            <button onClick={() => location.assign("/schedule/month")}>月全体を開く</button>
             <button className="weekPrimary" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
           </div>
         </div>
@@ -339,16 +367,21 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
                       : work?.reason === "点検"
                         ? "reason-check"
                         : work?.reason === "一般整備"
-                          ? "reason-repair"
-                          : work?.reason === "板金塗装"
+                          ? (work.outsource_vendor_name ? "reason-body" : "reason-repair")
+                          : work?.reason === "板金" || work?.reason === "板金塗装"
                             ? "reason-body"
                             : "reason-none";
-                    const entryLabel = ENTRY_LABEL[entry.entry_type];
+                    const visitLabel = entry.entry_type === "customer_visit" || entry.entry_type === "onsite_repair"
+                      ? ENTRY_LABEL[entry.entry_type]
+                      : "";
                     return (
                     <button key={entry.id} className={`homeWeekRow ${reasonClass}`} onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
-                      <b>{timeLabel(entry.starts_at)}{entryLabel ? ` ${entryLabel}` : ""}</b>
-                      <span>{customerName(customer)}　{last4(vehicle)}</span>
-                      <small>{work?.reason || ""}{work?.worker_name ? "　担当 " + work.worker_name : ""}</small>
+                      <span className="homeWeekCustomer">{customerName(customer)}</span>
+                      <span className="homeWeekIdentity">
+                        <span className="homeWeekVehicle"><b>{last4(vehicle)}</b><small>{work?.reason || ""}</small></span>
+                        <span className="homeWeekTime">{visitLabel && <em>{visitLabel}</em>}<b>{scheduleTimeLabel(entry)}</b></span>
+                      </span>
+                      {work?.worker_name && <small>担当 {work.worker_name}</small>}
                     </button>
                     );
                   })}
