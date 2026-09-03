@@ -395,6 +395,10 @@ export default function ScheduleNewPage() {
     };
   }
 
+  function returnToDailyAfterCreated(delay = 350) {
+    window.setTimeout(() => location.assign(`/schedule?day=${day}`), delay);
+  }
+
   async function submit(allowOverride = false) {
     setWarnings([]);
     setHardErrors([]);
@@ -495,12 +499,13 @@ export default function ScheduleNewPage() {
         });
         if (assignmentError) {
           setMessage("予定は登録済みです。ただし外注先だけ保存できませんでした: " + assignmentError.message);
+          returnToDailyAfterCreated(900);
           return;
         }
       }
 
       setMessage("予定を登録しました。1日のスケジュールへ戻ります。");
-      window.setTimeout(() => location.assign(`/schedule?day=${day}`), 350);
+      returnToDailyAfterCreated();
     } catch (error: any) {
       setMessage(`予定登録エラー: ${error?.message || error}`);
     } finally {

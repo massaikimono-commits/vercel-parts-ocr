@@ -39,6 +39,7 @@ assert(scheduleNew.includes('.from("external_vendors")'), "schedule registration
 assert(scheduleNew.includes('supabase.rpc("set_work_order_assignment"'), "schedule registration must reuse the existing assignment RPC for external vendors");
 assert(scheduleNew.includes("自社作業なら空欄"), "schedule registration must expose optional external vendor input");
 assert(scheduleNew.includes("予定は登録済みです。ただし外注先だけ保存できませんでした"), "external vendor post-save failure must not invite duplicate schedule registration");
+assert(scheduleNew.includes("returnToDailyAfterCreated(900)"), "external vendor post-save failure must leave the registration form after the schedule itself was created");
 assert(!scheduleNew.includes('supabase.rpc("create_manual_schedule_registration"'), "legacy partial schedule RPC must not be used");
 assert(!scheduleNew.includes('.from("schedule_entries").insert({'), "delivery insert must stay inside atomic RPC");
 assert(scheduleEdit.includes('supabase.rpc("reschedule_schedule_entry_v2"'), "reschedule and stay details must be atomic");
