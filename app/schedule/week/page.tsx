@@ -26,6 +26,7 @@ type WorkOrder = {
   is_urgent: boolean;
   needs_loaner: boolean;
   worker_name: string | null;
+  outsource_vendor_name: string | null;
 };
 
 type Vehicle = {
@@ -202,7 +203,7 @@ export default function WeeklySchedulePage() {
       if (workIds.length) {
         const { data, error } = await supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name")
+          .select("id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,outsource_vendor_name")
           .in("id", workIds);
         if (error) throw error;
         nextWorks = (data || []) as WorkOrder[];
@@ -309,11 +310,13 @@ export default function WeeklySchedulePage() {
       : work?.reason === "点検"
         ? "reason-check"
         : work?.reason === "一般整備"
-          ? "reason-repair"
-          : work?.reason === "板金塗装"
+          ? (work.outsource_vendor_name ? "reason-body" : "reason-repair")
+          : work?.reason === "板金" || work?.reason === "板金塗装"
             ? "reason-body"
             : "reason-none";
-    const entryLabel = ENTRY_LABEL[entry.entry_type];
+    const visitLabel = entry.entry_type === "customer_visit" || entry.entry_type === "onsite_repair"
+      ? ENTRY_LABEL[entry.entry_type]
+      : "";
     return (
       <button
         type="button"
@@ -322,11 +325,18 @@ export default function WeeklySchedulePage() {
         onClick={() => editEntry(entry.id)}
         aria-label={`${customerName(customer)}の予約を変更`}
       >
-        <div className="miniTop"><b>{dailyReportTimeLabel(entry)}</b>{entryLabel && <span>{entryLabel}</span>}</div>
         <div className="miniCustomer">{customerName(customer)}</div>
+        <div className="miniIdentity">
+          <div className="miniVehicle">
+            <b>{last4(vehicle) || "----"}</b>
+            {work?.reason && <small>{work.reason}</small>}
+          </div>
+          <div className="miniTime">
+            {visitLabel && <span>{visitLabel}</span>}
+            <b>{dailyReportTimeLabel(entry)}</b>
+          </div>
+        </div>
         <div className="miniMeta">
-          {last4(vehicle) && <span>{last4(vehicle)}</span>}
-          {work?.reason && <span>{work.reason}</span>}
           {work?.worker_name && <span>{work.worker_name}</span>}
           {work?.needs_loaner && <span className="loaner">代車</span>}
           {work?.is_urgent && <span className="urgentTag">急ぎ</span>}
@@ -592,9 +602,9 @@ export default function WeeklySchedulePage() {
         .attentionBar{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:10px 12px;margin-bottom:10px}.attentionBar>div:first-child{display:grid;gap:2px}.attentionBar span{font-size:11px;color:#68768a}.attentionActions{display:flex;gap:7px;flex-wrap:wrap}.attentionActions button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:10px;padding:8px 10px;font-weight:800}.attentionActions .activeFilter{background:#2674e8;color:#fff;border-color:#2674e8}.attentionActions button:disabled{opacity:.45}.noAttention{grid-column:1/-1;background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:24px;text-align:center;color:#68768a}.weekBoard{display:grid;grid-template-columns:repeat(7,minmax(260px,1fr));gap:8px;align-items:stretch;overflow-x:auto;padding-bottom:6px}.weekBoard.attentionOnly{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));overflow-x:visible}.dayColumn{min-width:260px;background:#fff;border:1px solid #d9e0ea;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:590px}.dayColumn.today{outline:3px solid #2674e8;outline-offset:-2px}.dayColumn.dayClosed{background:#f5f6f8}
         .dayHead{border:0;background:#f7f9fc;padding:11px 10px;display:flex;justify-content:space-between;align-items:center;width:100%;font-weight:900;color:#172033}.dayHead span{font-size:16px}.dayHead b{font-size:12px;background:#e8eef7;border-radius:999px;padding:3px 7px}
         .availability{margin:8px;border-radius:10px;padding:8px;display:grid;gap:2px}.availability b{font-size:13px}.availability small{font-size:10px;line-height:1.45}.availability.open{background:#edf8f0;color:#236c3b}.availability.tight{background:#fff7e8;color:#8a5a08}.availability.full{background:#fdeeee;color:#9c3434}.availability.over{background:#ffe7e7;color:#a32121;border:2px solid #ef9a9a}.availability.closed{background:#eceff3;color:#657180}.availability.unknown{background:#f4f6f8;color:#798596}.overlapWarn{margin:0 8px 8px;background:#fff0db;color:#8b5609;border-radius:9px;padding:7px;font-size:10px;font-weight:900}
-        .dailyMiniReport{padding:0 7px 7px;display:grid;gap:7px;align-content:start;flex:1}.miniPeriod{border:1px solid #e4e9f1;border-radius:10px;overflow:hidden;background:#fbfcfe}.miniPeriodTitle{font-size:10px;font-weight:900;padding:4px 6px;background:#eef3f9;color:#526174}.afternoonMini .miniPeriodTitle{background:#f5f0fb}.miniColumns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1px;background:#e5eaf1}.miniColumn{min-width:0;background:#fff;padding:4px;display:grid;gap:4px;align-content:start}.miniColumnTitle{font-size:8px;font-weight:900;color:#657180;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.miniEmpty{font-size:10px;color:#a0a8b3;text-align:center;padding:7px 2px}.miniRow{border:1px solid #e0e6ef;border-radius:7px;padding:5px;background:#fff;width:100%;color:inherit;text-align:left;cursor:pointer;min-width:0}.miniRow.reason-shaken{background:#fff0f0;border-color:#e99a9a}.miniRow.reason-check{background:#eef5ff;border-color:#9dbce8}.miniRow.reason-repair{background:#fff8d8;border-color:#e4cd67}.miniRow.reason-body{background:#fff;border-color:#cfd8e3}.miniRow:hover,.miniRow:focus-visible{border-color:#8eb5ef;box-shadow:0 0 0 2px rgba(38,116,232,.12);outline:none}.miniRow.urgent{border-color:#e8aa58;box-shadow:inset 2px 0 0 #e8aa58}.miniRow.overlapping{border-color:#e58b8b;background:#fff8f8}.miniTop{display:flex;justify-content:space-between;gap:3px;align-items:center}.miniTop b{font-size:10px;white-space:nowrap}.miniTop span{font-size:8px;color:#5c6878;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.miniCustomer{font-weight:900;font-size:11px;margin-top:2px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.miniMeta{display:flex;gap:2px;flex-wrap:wrap;margin-top:3px}.miniMeta span{font-size:7px;background:#f1f4f8;border-radius:999px;padding:2px 3px;white-space:nowrap}.miniMeta .loaner{background:#eaf3ff;color:#245ca8}.miniMeta .urgentTag{background:#fff0db;color:#995b00}.miniMeta .overlapTag{background:#ffe7e7;color:#a32121;font-weight:900}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
+        .dailyMiniReport{padding:0 7px 7px;display:grid;gap:7px;align-content:start;flex:1}.miniPeriod{border:1px solid #e4e9f1;border-radius:10px;overflow:hidden;background:#fbfcfe}.miniPeriodTitle{font-size:10px;font-weight:900;padding:4px 6px;background:#eef3f9;color:#526174}.afternoonMini .miniPeriodTitle{background:#f5f0fb}.miniColumns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1px;background:#e5eaf1}.miniColumn{min-width:0;background:#fff;padding:4px;display:grid;gap:4px;align-content:start}.miniColumnTitle{font-size:8px;font-weight:900;color:#657180;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.miniEmpty{font-size:10px;color:#a0a8b3;text-align:center;padding:7px 2px}.miniRow{border:1px solid #e0e6ef;border-radius:7px;padding:5px;background:#fff;width:100%;color:inherit;text-align:left;cursor:pointer;min-width:0}.miniRow.reason-shaken{background:#fff0f0;border-color:#e99a9a}.miniRow.reason-check{background:#eef5ff;border-color:#9dbce8}.miniRow.reason-repair{background:#fff8d8;border-color:#e4cd67}.miniRow.reason-body{background:#fff;border-color:#cfd8e3}.miniRow:hover,.miniRow:focus-visible{border-color:#8eb5ef;box-shadow:0 0 0 2px rgba(38,116,232,.12);outline:none}.miniRow.urgent{border-color:#e8aa58;box-shadow:inset 2px 0 0 #e8aa58}.miniRow.overlapping{border-color:#e58b8b;background:#fff8f8}.miniCustomer{font-weight:900;font-size:11px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.miniIdentity{display:flex;justify-content:space-between;align-items:center;gap:4px;margin-top:2px}.miniVehicle{display:flex;flex-direction:column;min-width:0}.miniVehicle>b{font-size:9px;line-height:1}.miniVehicle>small{font-size:6px;line-height:1;color:#5c6878;margin-top:1px;overflow:hidden;text-overflow:ellipsis}.miniTime{display:flex;align-items:center;gap:2px;white-space:nowrap}.miniTime>span{font-size:7px;color:#5c6878;font-weight:900}.miniTime>b{font-size:9px}.miniMeta{display:flex;gap:2px;flex-wrap:wrap;margin-top:3px}.miniMeta span{font-size:7px;background:#f1f4f8;border-radius:999px;padding:2px 3px;white-space:nowrap}.miniMeta .loaner{background:#eaf3ff;color:#245ca8}.miniMeta .urgentTag{background:#fff0db;color:#995b00}.miniMeta .overlapTag{background:#ffe7e7;color:#a32121;font-weight:900}.empty{padding:18px 5px;text-align:center;color:#94a0af;font-size:12px}
         .dayActions{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:8px;border-top:1px solid #edf0f4}.dayActions button{font-size:10px;padding:7px 5px}.dayActions .register{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.hint{font-size:12px;color:#78869a;margin-top:8px}
-        @media(max-width:900px){.weekHero{display:block}.weekNav{margin-top:12px}.weekSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.attentionBar{display:grid}.weekBoard{grid-template-columns:repeat(7,minmax(88vw,88vw));scroll-snap-type:x mandatory;gap:10px}.weekBoard.attentionOnly{grid-template-columns:repeat(auto-fit,minmax(88vw,1fr))}.dayColumn{min-width:88vw;min-height:0;scroll-snap-align:start}.dailyMiniReport{padding:0 7px 7px}.miniColumnTitle{font-size:9px}.miniCustomer{font-size:12px}.miniTop b{font-size:11px}.miniTop span{font-size:9px}.miniMeta span{font-size:8px}}
+        @media(max-width:900px){.weekHero{display:block}.weekNav{margin-top:12px}.weekSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.attentionBar{display:grid}.weekBoard{grid-template-columns:repeat(7,minmax(88vw,88vw));scroll-snap-type:x mandatory;gap:10px}.weekBoard.attentionOnly{grid-template-columns:repeat(auto-fit,minmax(88vw,1fr))}.dayColumn{min-width:88vw;min-height:0;scroll-snap-align:start}.dailyMiniReport{padding:0 7px 7px}.miniColumnTitle{font-size:9px}.miniCustomer{font-size:12px}.miniVehicle>b{font-size:10px}.miniVehicle>small{font-size:7px}.miniTime>b{font-size:10px}.miniTime>span{font-size:8px}.miniMeta span{font-size:8px}}
       `}</style>
     </main>
   );
