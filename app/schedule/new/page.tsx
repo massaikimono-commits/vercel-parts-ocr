@@ -100,6 +100,12 @@ function todayJst() {
   }).format(new Date());
 }
 
+function addDays(day: string, delta: number) {
+  const d = new Date(day + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
 function jstIso(day: string, time: string) {
   return new Date(`${day}T${time}:00+09:00`).toISOString();
 }
@@ -174,8 +180,10 @@ export default function ScheduleNewPage() {
   }, []);
 
   useEffect(() => {
-    setDeliveryDay(day);
-  }, [day]);
+    const defaultDeliveryDay = reason === "車検" ? addDays(day, 1) : day;
+    setDeliveryDay(defaultDeliveryDay);
+    setDeliveryTimeKey("");
+  }, [day, reason]);
 
   useEffect(() => {
     void loadCapacity();
@@ -333,6 +341,10 @@ export default function ScheduleNewPage() {
     setDeliveryTimeKey((old) => {
       const oldOption = options.find((x) => x.key === old);
       if (oldOption && oldOption.availability !== "blocked") return old;
+      if (reason === "点検" || reason === "車検") {
+        const unspecified = options.find((x) => x.mode === "unspecified" && x.availability !== "blocked");
+        if (unspecified) return unspecified.key;
+      }
       return options.find((x) => x.availability === "open")?.key
         || options.find((x) => x.availability === "warning")?.key
         || "";
@@ -1027,7 +1039,7 @@ export default function ScheduleNewPage() {
                   {!deliveryOptions.length && <option value="">候補なし</option>}
                   {deliveryOptions.map((x) => {
                     const mark = x.availability === "blocked" ? "×" : x.availability === "warning" ? "△" : "○";
-                    return <option key={x.key} value={x.key} disabled={x.availability === "blocked"}>{mark} {x.label}</option>;
+                    return <option key={x.key} value={x.key} disabled={x.availability === "blocked"}>{mark} {x.displayLabel || x.label}</option>;
                   })}
                 </select>
               </label>
