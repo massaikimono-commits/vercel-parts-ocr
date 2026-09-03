@@ -25,13 +25,29 @@ export function repairTopHeaderText(value = "") {
     .replace(/[Bb]/g, "8");
 }
 
+function eraGregorianYear(era, yearText) {
+  const year = yearText === "元" ? 1 : Number(yearText);
+  if (!Number.isInteger(year) || year < 1 || year > 99) return 0;
+  if (era === "令和") return 2018 + year;
+  if (era === "平成") return 1988 + year;
+  if (era === "昭和") return 1925 + year;
+  return 0;
+}
+
+function isValidEraDate(era, yearText, month, day) {
+  const year = eraGregorianYear(era, yearText);
+  if (!year || month < 1 || month > 12 || day < 1) return false;
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return day <= daysInMonth;
+}
+
 export function parseTopHeaderDate(value = "") {
   const text = repairTopHeaderText(value);
   const m = text.match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/);
   if (!m) return "";
   const month = Number(m[3]);
   const day = Number(m[4]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return "";
+  if (!isValidEraDate(m[1], m[2], month, day)) return "";
   const year = m[2] === "元" ? "元" : String(Number(m[2]));
   return `${m[1]}${year}年${month}月${day}日`;
 }
