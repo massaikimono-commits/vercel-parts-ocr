@@ -151,6 +151,7 @@ export default function ScheduleNewPage() {
   const [onsiteTime, setOnsiteTime] = useState("09:00");
 
   const [addDelivery, setAddDelivery] = useState(true);
+  const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "customer_visit">("delivery");
   const [deliveryDay, setDeliveryDay] = useState(todayJst());
   const [deliveryOptions, setDeliveryOptions] = useState<TimeOption[]>([]);
   const [deliveryTimeKey, setDeliveryTimeKey] = useState("");
@@ -564,6 +565,16 @@ export default function ScheduleNewPage() {
     };
   }
 
+  async function saveDeliveryMethod(workOrderIds: string[]) {
+    const ids = workOrderIds.filter(Boolean);
+    if (!ids.length) return;
+    const { error } = await supabase.rpc("set_work_order_delivery_method_v1", {
+      p_work_order_ids: ids,
+      p_method: deliveryMethod,
+    });
+    if (error) throw error;
+  }
+
   async function submit(allowOverride = false) {
     setWarnings([]);
     setHardErrors([]);
@@ -635,6 +646,13 @@ export default function ScheduleNewPage() {
           return;
         }
         if (!data?.batchCreated) throw new Error("複数台の予定を登録できませんでした。");
+
+        if (addDelivery && entryType !== "delivery") {
+          const workOrderIds = (Array.isArray(data?.items) ? data.items : [])
+            .map((item: any) => String(item?.workOrderId || ""))
+            .filter(Boolean);
+          await saveDeliveryMethod(workOrderIds);
+        }
 
         setMessage(`${selectedVehicleIds.length}台の予定をまとめて登録しました。1日の予定へ戻ります。`);
         window.setTimeout(() => location.assign(`/schedule?day=${day}`), 450);
@@ -714,6 +732,9 @@ export default function ScheduleNewPage() {
       if (!data?.created) throw new Error("予定を登録できませんでした。");
 
       const workOrderId = data?.workOrderId;
+      if ((entryType === "delivery" || addDelivery) && workOrderId) {
+        await saveDeliveryMethod([String(workOrderId)]);
+      }
       const vehicleId = data?.vehicleId;
 
       if (workOrderId) {
@@ -918,7 +939,15 @@ export default function ScheduleNewPage() {
               <option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option>
             </select>
           </label>
-          {(reason === "点検" || reason === "車検") && (
+          {entryType === "delivery" && (
+            <label>受け渡し方法
+              <select value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value as "delivery" | "customer_visit")}>
+                <option value="delivery">納車</option>
+                <option value="customer_visit">来社</option>
+              </select>
+            </label>
+          )}
+                    {(reason === "点検" || reason === "車検") && (
             <label>点検区分
               <select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}>
                 <option value="">未指定</option>
@@ -1027,6 +1056,12 @@ export default function ScheduleNewPage() {
           </label>
           {addDelivery && (
             <div className="grid deliveryGrid">
+              <label>受け渡し方法
+                <select value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value as "delivery" | "customer_visit")}>
+                  <option value="delivery">納車</option>
+                  <option value="customer_visit">来社</option>
+                </select>
+              </label>
               <label>納車日<input type="date" value={deliveryDay} onChange={(e) => setDeliveryDay(e.target.value)} /></label>
               <label>納車時間
                 <select value={deliveryTimeKey} onChange={(e) => setDeliveryTimeKey(e.target.value)}>
