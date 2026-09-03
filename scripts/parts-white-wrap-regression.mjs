@@ -51,6 +51,15 @@ const cases = [
       { name: "匿名ガスケット セット", qty: "1", retail: "1200", cost: "" },
     ],
   },
+  {
+    // Perspective/line segmentation can leave the name on multiple OCR rows while only
+    // quantity and the single retail price survive on the following row.
+    name: "wrapped-name-values-only-row",
+    text: "部品名 数量 単価\n匿名ブレーキ\nパッド\n2 2,400\n背景メモ",
+    expected: [
+      { name: "匿名ブレーキ パッド", qty: "2", retail: "2400", cost: "" },
+    ],
+  },
 ];
 
 for (const test of cases) {
@@ -63,4 +72,4 @@ for (const test of cases) {
   }
 }
 
-console.log("PASS white photographed-list wrap regression: wrapped names, full-width digits, background text, and single-price=>定価 semantics");
+console.log("PASS white photographed-list wrap regression: wrapped names, values-only rows, full-width digits, background text, and single-price=>定価 semantics");
