@@ -30,6 +30,7 @@ const scheduleBatchSearchSql = read("database","search-schedule-vehicles-v1.sql"
 const assignmentHistorySql = read("database","set-work-order-assignment-history.sql");
 const vehicleWorkflow = read("app","vehicle-workflow","page.tsx");
 const vehicleWorkflowFast = read("app","vehicle-workflow-fast","page.tsx");
+const customerVehicles = read("app","customer-vehicles","page.tsx");
 const vehicleBulk = read("app","vehicle-workflow","bulk","page.tsx");
 const vehicleBulkPdf = read("app","lib","vehicle-bulk-pdf.ts");
 const vehicleBulkApplySql = read("database","apply-vehicle-import-batch-v1.sql");
@@ -82,6 +83,9 @@ assert(assignmentHistorySql.includes("work_order_assignment_changed"), "staff/ve
 assert(assignmentHistorySql.includes("'WORKER'"), "assignment history must use an allowed work-order change type");
 assert(vehicleWorkflow.includes("/vehicle-workflow/bulk"), "single vehicle workflow must expose bulk PDF vehicle registration");
 assert(vehicleWorkflowFast.includes("/vehicle-workflow/bulk"), "current high-accuracy vehicle workflow must expose bulk PDF vehicle registration from the normal home route");
+assert(vehicleWorkflowFast.includes("localStorage.getItem(ACTIVE_KEY)"), "current high-accuracy vehicle workflow must restore the vehicle selected from customer management");
+assert(customerVehicles.includes('location.assign("/vehicle-workflow-v2")'), "customer/vehicle management must open the current high-accuracy vehicle editor");
+assert(!customerVehicles.includes('location.assign("/vehicle-workflow")'), "customer/vehicle management must not route edits to the legacy vehicle workflow");
 assert(vehicleBulk.includes('multiple accept="application/pdf,.pdf"'), "bulk vehicle registration must allow selecting multiple PDFs");
 assert(vehicleBulk.includes("parseVehicleCertificatePdf"), "bulk vehicle registration must parse each PDF through the isolated batch parser");
 assert(vehicleBulk.includes('.from("vehicle_imports").insert({'), "bulk PDF parsing must stage results before modifying the vehicle master");
