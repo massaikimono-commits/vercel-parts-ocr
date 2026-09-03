@@ -606,6 +606,7 @@ export default function SchedulePage() {
         </div>
         <input className="datePicker" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
         <button onClick={() => location.assign(`/schedule/week?day=${day}`)}>1週間のスケジュール</button>
+        <button onClick={() => location.assign(`/schedule/month?day=${day}`)}>月全体の予定</button>
         <button className="newEntry" onClick={() => location.assign(`/schedule/new?day=${day}`)}>＋ 予定を登録</button>
         <label className="layoutControl">配置<select value={columnLayout} onChange={(e) => changeColumnLayout(e.target.value as ColumnLayout)}><option value="delivery-left">納車を左</option><option value="delivery-right">納車を右</option></select></label>
         <label className="layoutControl">作業状態<select value={completionPosition} onChange={(e) => changeCompletionPosition(e.target.value as CompletionPosition)}><option value="name">名前の横</option><option value="meta">詳細欄</option></select></label>
