@@ -97,7 +97,9 @@ export function selectDailyReportSecondaryWorks<T extends DailyReportSecondaryWo
         const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
         if (checkedOutAt !== null && checkedOutAt < end) return false;
         const value = new Date(work.planned_delivery_at).getTime();
-        return value >= start && value < end;
+        // 当日の納車は上部の「納車」欄に出るため、右下の
+        // 「納車予定車両」欄は翌日以降だけを対象にする。
+        return value >= end;
       })
       .sort((a, b) => new Date(a.planned_delivery_at || 0).getTime() - new Date(b.planned_delivery_at || 0).getTime()),
   );
