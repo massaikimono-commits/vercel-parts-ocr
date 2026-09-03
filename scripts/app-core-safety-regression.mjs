@@ -43,6 +43,10 @@ assert(!scheduleNew.includes('supabase.rpc("create_manual_schedule_registration"
 assert(!scheduleNew.includes('.from("schedule_entries").insert({'), "delivery insert must stay inside atomic RPC");
 assert(scheduleEdit.includes('supabase.rpc("reschedule_schedule_entry_v2"'), "reschedule and stay details must be atomic");
 assert(scheduleEdit.includes('supabase.rpc("cancel_schedule_entry_v1"'), "reservation cancellation must stay inside the existing schedule edit flow");
+assert(scheduleEdit.includes('opts.find(x=>x.mode===base.print_time_mode)'), "reservation edit must preserve A中/午後/中 instead of falling back to the first exact slot");
+assert(scheduleEdit.includes('setOnsiteMode("morning")') && scheduleEdit.includes('setOnsiteMode("unspecified")'), "onsite reservation edit must support exact/A中/中");
+assert(scheduleEdit.includes("flexibleTimeLabel"), "reservation edit summary must show flexible labels instead of placeholder clock times");
+assert(scheduleEdit.includes('onsiteMode==="exact" ? onsiteTime : onsiteMode==="morning" ? "09:00" : "13:00"'), "onsite flexible edit must use stable placeholder times only for storage/checking");
 assert(scheduleEdit.includes("取消理由（任意）"), "staff schedule cancellation reason must remain optional");
 assert(scheduleEdit.includes("同じ作業に紐づく入庫・納車予定もまとめて取り消します"), "cancellation UI must explain linked schedule cancellation");
 assert(scheduleEdit.includes("rentalCancellationPending"), "cancellation UI must handle rental company confirmation state");

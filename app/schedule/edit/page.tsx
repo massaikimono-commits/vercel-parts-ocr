@@ -19,7 +19,7 @@ type Entry = {
   entry_type:"delivery"|"pickup"|"customer_visit"|"onsite_repair";
   starts_at:string;
   ends_at:string;
-  print_time_mode:string;
+  print_time_mode:"exact"|"morning"|"unspecified";
 };
 
 type WorkOrder = {
@@ -36,6 +36,13 @@ function timeKey(value:string){
   return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(value));
 }
 
+function flexibleTimeLabel(entryType:Entry["entry_type"],mode:Entry["print_time_mode"],startsAt:string){
+  if(mode==="exact") return timeKey(startsAt);
+  if(entryType==="delivery") return "中";
+  if(entryType==="onsite_repair") return mode==="morning" ? "A中" : "中";
+  return mode==="morning" ? "A中" : "午後";
+}
+
 const LABEL:Record<string,string>={delivery:"納車",pickup:"引取",customer_visit:"来社",onsite_repair:"出張"};
 const STAY_REASON_SUGGESTIONS=["部品待ち","外注作業待ち","見積確認待ち","お客様連絡待ち","作業待ち"];
 
@@ -44,6 +51,8 @@ export default function ScheduleEditPage(){
   const [day,setDay]=useState("");
   const [options,setOptions]=useState<TimeOption[]>([]);
   const [selected,setSelected]=useState("");
+  const [onsiteMode,setOnsiteMode]=useState<"exact"|"morning"|"unspecified">("exact");
+  const [onsiteTime,setOnsiteTime]=useState("09:00");
   const [stayReason,setStayReason]=useState("");
   const [plannedDeliveryDate,setPlannedDeliveryDate]=useState("");
   const [originalStayReason,setOriginalStayReason]=useState("");
@@ -66,6 +75,8 @@ export default function ScheduleEditPage(){
     if(error){setMessage("予定の読み込みエラー: "+error.message);setBusy(false);return;}
     const e=data as Entry;
     setEntry(e);
+    setOnsiteMode(e.print_time_mode);
+    setOnsiteTime(timeKey(e.starts_at));
     if(e.work_order_id){
       const {data:workData,error:workError}=await supabase.from("work_orders")
         .select("id,stay_reason,planned_delivery_date")
@@ -97,9 +108,10 @@ export default function ScheduleEditPage(){
     const opts=(Array.isArray(data?.options)?data.options:[]) as TimeOption[];
     setOptions(opts);
     const current=timeKey(base.starts_at);
-    const sameDay=dateKey(base.starts_at)===targetDay;
-    const match=sameDay ? opts.find(x=>x.label===current) : null;
-    setSelected(match?.key || opts[0]?.key || "");
+    const match=base.print_time_mode==="exact"
+      ? opts.find(x=>x.mode==="exact" && x.label===current)
+      : opts.find(x=>x.mode===base.print_time_mode);
+    setSelected(match?.key || opts.find(x=>x.mode===base.print_time_mode)?.key || opts[0]?.key || "");
   }
 
   function resetWarningsForTargetChange(){
@@ -118,17 +130,34 @@ export default function ScheduleEditPage(){
     resetWarningsForTargetChange();
   }
 
+  function changeOnsiteMode(next:"exact"|"morning"|"unspecified"){
+    setOnsiteMode(next);
+    resetWarningsForTargetChange();
+  }
+
+  function changeOnsiteTime(next:string){
+    setOnsiteTime(next);
+    resetWarningsForTargetChange();
+  }
+
   const selectedOption=useMemo(()=>options.find(x=>x.key===selected)||null,[options,selected]);
-  const currentSummary=useMemo(()=>entry ? `${dateKey(entry.starts_at)} ${timeKey(entry.starts_at)}` : "",[entry]);
+  const currentSummary=useMemo(()=>entry
+    ? `${dateKey(entry.starts_at)} ${flexibleTimeLabel(entry.entry_type,entry.print_time_mode,entry.starts_at)}`
+    : "",[entry]);
   const targetSummary=useMemo(()=>{
     if(!entry||!day) return "";
-    if(entry.entry_type==="onsite_repair") return `${day} ${timeKey(entry.starts_at)}`;
+    if(entry.entry_type==="onsite_repair"){
+      const label=onsiteMode==="exact" ? onsiteTime : onsiteMode==="morning" ? "A中" : "中";
+      return `${day} ${label}`;
+    }
     return selectedOption ? `${day} ${selectedOption.label}` : `${day} 時間候補なし`;
-  },[day,entry,selectedOption]);
+  },[day,entry,onsiteMode,onsiteTime,selectedOption]);
   const hasChanges=useMemo(()=>{
     if(!entry||!day) return false;
     const scheduleChanged=entry.entry_type==="onsite_repair"
       ? day!==dateKey(entry.starts_at)
+        || onsiteMode!==entry.print_time_mode
+        || (onsiteMode==="exact" && onsiteTime!==timeKey(entry.starts_at))
       : !!selectedOption && (
           selectedOption.startsAt!==entry.starts_at ||
           selectedOption.endsAt!==entry.ends_at ||
@@ -138,7 +167,7 @@ export default function ScheduleEditPage(){
       ? stayReason.trim()!==originalStayReason.trim() || plannedDeliveryDate!==originalPlannedDeliveryDate
       : false;
     return scheduleChanged || stayChanged;
-  },[day,entry,originalPlannedDeliveryDate,originalStayReason,plannedDeliveryDate,selectedOption,stayReason]);
+  },[day,entry,onsiteMode,onsiteTime,originalPlannedDeliveryDate,originalStayReason,plannedDeliveryDate,selectedOption,stayReason]);
 
   async function cancelReservation(){
     if(!entry || busy) return;
@@ -194,11 +223,11 @@ export default function ScheduleEditPage(){
       if(selectedOption){
         startsAt=selectedOption.startsAt; endsAt=selectedOption.endsAt; mode=selectedOption.mode;
       }else{
-        const currentTime=timeKey(entry.starts_at);
         const duration=new Date(entry.ends_at).getTime()-new Date(entry.starts_at).getTime();
-        startsAt=new Date(day+"T"+currentTime+":00+09:00").toISOString();
+        const targetTime=onsiteMode==="exact" ? onsiteTime : onsiteMode==="morning" ? "09:00" : "13:00";
+        startsAt=new Date(day+"T"+targetTime+":00+09:00").toISOString();
         endsAt=new Date(new Date(startsAt).getTime()+duration).toISOString();
-        mode=entry.print_time_mode;
+        mode=onsiteMode;
       }
       const {data,error}=await supabase.rpc("reschedule_schedule_entry_v2",{
         p_entry_id:entry.id,
@@ -240,12 +269,20 @@ export default function ScheduleEditPage(){
         <div className="current">現在：<b>{currentSummary}</b></div>
         <div className="grid">
           <label>変更日<input type="date" value={day} onChange={(e)=>void changeDay(e.target.value)} /></label>
-          {entry.entry_type!=="onsite_repair" && <label>変更時間
+          {entry.entry_type!=="onsite_repair" ? <label>変更時間
             <select value={selected} onChange={(e)=>changeTime(e.target.value)}>
               {!options.length && <option value="">候補なし</option>}
               {options.map(x=><option key={x.key} value={x.key}>{x.label}</option>)}
             </select>
-          </label>}
+          </label> : <div className="onsiteEdit">
+            <b>出張時間</b>
+            <div className="onsiteModeButtons">
+              <button type="button" className={onsiteMode==="exact"?"selected":""} onClick={()=>changeOnsiteMode("exact")}>時間指定</button>
+              <button type="button" className={onsiteMode==="morning"?"selected":""} onClick={()=>changeOnsiteMode("morning")}>A中</button>
+              <button type="button" className={onsiteMode==="unspecified"?"selected":""} onClick={()=>changeOnsiteMode("unspecified")}>中</button>
+            </div>
+            {onsiteMode==="exact" && <input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e)=>changeOnsiteTime(e.target.value)} />}
+          </div>}
         </div>
         <div className="targetPreview">
           <span>変更内容</span>
@@ -287,7 +324,7 @@ export default function ScheduleEditPage(){
     </section>
     <style jsx global>{`
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}
-      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:7px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:16px}.targetPreview small{color:#627083;line-height:1.5}.changeRoute{display:grid;grid-template-columns:1fr auto 1fr;gap:9px;align-items:center}.changeRoute strong{color:#2674e8}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.primary:disabled{background:#aab5c5;border-color:#aab5c5;color:#fff}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.cancelBox{margin-top:16px;padding-top:14px;border-top:1px solid #e5eaf0}.cancelOpen{width:100%;color:#a83a3a;border-color:#e0a7a7;background:#fff}.cancelConfirm{display:grid;gap:9px;padding:13px;border:1px solid #e4adad;border-radius:13px;background:#fff7f7}.cancelConfirm>b{color:#9d2f2f}.cancelConfirm>small{color:#745f5f;line-height:1.5}.cancelConfirm label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#745f5f}.cancelConfirm input{border:1px solid #d9bcbc;border-radius:9px;padding:10px;background:#fff}.cancelActions{display:flex;justify-content:flex-end;gap:8px}.cancelDanger{background:#b63d3d;color:#fff;border-color:#b63d3d}@media(max-width:600px){.grid{grid-template-columns:1fr}.changeRoute{grid-template-columns:1fr}.changeRoute strong{transform:rotate(90deg);justify-self:start}}
+      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.onsiteEdit{display:grid;gap:6px;color:#627083}.onsiteModeButtons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.onsiteModeButtons button{padding:9px 7px}.onsiteModeButtons button.selected{background:#2674e8;color:#fff;border-color:#2674e8}.onsiteEdit input{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:7px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:16px}.targetPreview small{color:#627083;line-height:1.5}.changeRoute{display:grid;grid-template-columns:1fr auto 1fr;gap:9px;align-items:center}.changeRoute strong{color:#2674e8}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.primary:disabled{background:#aab5c5;border-color:#aab5c5;color:#fff}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.cancelBox{margin-top:16px;padding-top:14px;border-top:1px solid #e5eaf0}.cancelOpen{width:100%;color:#a83a3a;border-color:#e0a7a7;background:#fff}.cancelConfirm{display:grid;gap:9px;padding:13px;border:1px solid #e4adad;border-radius:13px;background:#fff7f7}.cancelConfirm>b{color:#9d2f2f}.cancelConfirm>small{color:#745f5f;line-height:1.5}.cancelConfirm label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#745f5f}.cancelConfirm input{border:1px solid #d9bcbc;border-radius:9px;padding:10px;background:#fff}.cancelActions{display:flex;justify-content:flex-end;gap:8px}.cancelDanger{background:#b63d3d;color:#fff;border-color:#b63d3d}@media(max-width:600px){.grid{grid-template-columns:1fr}.changeRoute{grid-template-columns:1fr}.changeRoute strong{transform:rotate(90deg);justify-self:start}}
     `}</style>
   </main>;
 }
