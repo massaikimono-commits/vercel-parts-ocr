@@ -408,7 +408,9 @@ export default function SchedulePage() {
   }
 
   function last4Label(vehicle: Vehicle | null) {
-    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
+    const raw = vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{1,4})(?!.*\d)/)?.[1] || "";
+    if (!raw) return "----";
+    return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
   }
 
   function reasonClassName(work: WorkOrder | null) {
@@ -471,7 +473,7 @@ export default function SchedulePage() {
         <div className="itemTop">
           <div>
             <div className="customerRow"><b>{customerLabel(customer)}</b>{workFlags(work)}</div>
-            <div className="sub">下4桁 {last4Label(vehicle)}　{work.reason}</div>
+            <div className="sub">{last4Label(vehicle)}　{work.reason}</div>
           </div>
           <div className="workStateSlot">{workStateControl(work)}</div>
         </div>
