@@ -39,6 +39,9 @@ jobs:
       - name: Run QR low-score 5QR cap regression
         run: node scripts/qr-photo-soft-cap-regression.mjs
 
+      - name: Run QR 5QR 3+2 layout regression
+        run: node scripts/qr-photo-3plus2-layout-regression.mjs
+
       - name: Run QR distractor precision regression
         run: node scripts/qr-photo-distractor-regression.mjs
 
