@@ -91,7 +91,7 @@ export default function BulkVehicleRegistrationPage(){
           const {data:importRow,error:insertError}=await supabase.from("vehicle_imports").insert({
             source_type:"PDF",
             source_path:file.name,
-            raw_text:parsed.rawText.slice(0,250000)||null,
+            raw_text:parsed.rawText.slice(0,80000)||null,
             parsed_fields:parsed.parsedFields,
             parse_confidence:parsed.parseConfidence,
             customer_fields:customerName?{name:customerName}:{},
@@ -148,7 +148,7 @@ export default function BulkVehicleRegistrationPage(){
             action:suggested,
             targetVehicleId,
             customerId:"",
-            include:parsed.quality!=="image_pdf",
+            include:parsed.quality==="ready",
             matchScore,
             vehicleCandidates,
             customerCandidates,
@@ -167,7 +167,7 @@ export default function BulkVehicleRegistrationPage(){
 
       setItems(nextItems);
       await loadDetails(nextItems);
-      const ready=nextItems.filter(x=>x.include&&x.action).length;
+      const ready=nextItems.filter(x=>x.quality==="ready"&&x.include&&x.action).length;
       const review=nextItems.filter(x=>x.quality!=="ready").length;
       setMessage(`${nextItems.length}件解析しました。すぐ保存候補 ${ready}件 / 要確認 ${review}件です。`);
     }finally{

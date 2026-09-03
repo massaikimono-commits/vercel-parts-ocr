@@ -85,7 +85,8 @@ assert(vehicleBulk.includes('.from("vehicle_imports").insert({'), "bulk PDF pars
 assert(vehicleBulk.includes('supabase.rpc("vehicle_import_review"') && vehicleBulk.includes('supabase.rpc("find_vehicle_import_matches"'), "bulk PDF registration must review existing-vehicle matches before save");
 assert(vehicleBulk.includes('supabase.rpc("find_customer_import_matches"'), "bulk PDF registration must offer customer match candidates without forcing a link");
 assert(vehicleBulk.includes('supabase.rpc("apply_vehicle_import_batch_v1"'), "bulk vehicle save must use the atomic reviewed-import RPC");
-assert(vehicleBulk.includes('include:parsed.quality!=="image_pdf"'), "weak image PDFs must be excluded from bulk auto-save by default");
+assert(vehicleBulk.includes('include:parsed.quality==="ready"'), "only high-confidence PDF parses may start selected for bulk save");
+assert(vehicleBulk.includes("parsed.rawText.slice(0,80000)"), "bulk PDF staging must conservatively cap raw text below the byte-sized DB limit for Japanese text");
 assert(vehicleBulk.includes("1件でも重複・入力不足があれば全件ロールバック"), "bulk vehicle UI must explain all-or-none vehicle save");
 assert(vehicleBulkPdf.includes("Math.min(pdf.numPages||1,8)"), "bulk PDF parser must search only a bounded number of pages");
 assert(vehicleBulkPdf.includes('quality:"image_pdf"'), "bulk PDF parser must explicitly flag PDFs without a useful text layer");
