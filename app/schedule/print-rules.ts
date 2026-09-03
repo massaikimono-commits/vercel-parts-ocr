@@ -71,7 +71,13 @@ export function sortDailyReportInbound<T extends DailyReportEntryLike>(rows: T[]
 }
 
 export function sortDailyReportDeliveries<T extends DailyReportEntryLike>(rows: T[]) {
-  return [...rows].sort((a, b) => timeValue(a) - timeValue(b));
+  return [...rows].sort((a, b) => {
+    const modeOrder = (row: DailyReportEntryLike) =>
+      row.print_time_mode === "exact" ? 0 : row.print_time_mode === "morning" ? 1 : 2;
+    const modeDiff = modeOrder(a) - modeOrder(b);
+    if (modeDiff) return modeDiff;
+    return timeValue(a) - timeValue(b);
+  });
 }
 
 export function stackDailyReportRows<T>(rows: T[], period: DailyReportPeriod) {
