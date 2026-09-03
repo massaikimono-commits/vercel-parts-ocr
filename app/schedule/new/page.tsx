@@ -536,12 +536,13 @@ export default function ScheduleNewPage() {
     const main = mainTimes();
     if (!main) throw new Error("時間を選択してください。");
 
-    const { data, error } = await supabase.rpc("schedule_slot_check", {
+    const { data, error } = await supabase.rpc("schedule_slot_check_v2", {
       p_entry_type: entryType,
       p_starts_at: main.startsAt,
       p_ends_at: main.endsAt,
       p_reason: reason,
       p_exclude_entry_id: null,
+      p_print_time_mode: main.printMode,
     });
     if (error) throw error;
     const mainCheck = extractWarnings(data);
@@ -552,12 +553,13 @@ export default function ScheduleNewPage() {
       if (new Date(selectedDelivery.startsAt).getTime() < new Date(main.endsAt).getTime()) {
         throw new Error("納車予定は入庫・作業予定の終了後に設定してください。");
       }
-      const { data: deliveryData, error: deliveryError } = await supabase.rpc("schedule_slot_check", {
+      const { data: deliveryData, error: deliveryError } = await supabase.rpc("schedule_slot_check_v2", {
         p_entry_type: "delivery",
         p_starts_at: selectedDelivery.startsAt,
         p_ends_at: selectedDelivery.endsAt,
         p_reason: reason,
         p_exclude_entry_id: null,
+        p_print_time_mode: selectedDelivery.mode,
       });
       if (deliveryError) throw deliveryError;
       deliveryCheck = extractWarnings(deliveryData);
