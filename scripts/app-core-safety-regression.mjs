@@ -20,6 +20,7 @@ const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.
 const flexibleDeliverySql = read("database","create-schedule-registration-v2-flexible-delivery.sql");
 const rescheduleHistorySql = read("database","reschedule-schedule-entry-v2-history-type.sql");
 const cancelHistorySql = read("database","cancel-schedule-entry-v1-history.sql");
+const customerBookingCancelHistorySql = read("database","cancel-customer-booking-by-staff-work-history.sql");
 function assert(condition, message) {
   if (!condition) {
     console.error(`app-core safety regression failed: ${message}`);
@@ -61,6 +62,11 @@ assert(cancelHistorySql.includes("v_entry.work_order_id,''OTHER''"), "cancellati
 assert(cancelHistorySql.includes("deletedScheduleEntries"), "cancellation history must record how many linked schedule entries were removed");
 assert(cancelHistorySql.includes("rentalCancellationPendingCount"), "cancellation history must preserve rental cancellation pending state");
 assert(!cancelHistorySql.toLowerCase().includes("create table"), "cancellation history fix must not add tables");
+assert(customerBookingCancelHistorySql.includes("customer_booking_cancelled_by_staff"), "staff cancellation of a web booking must also appear in common work-order history");
+assert(customerBookingCancelHistorySql.includes("b.work_order_id,''OTHER''"), "customer booking cancellation history must use an allowed work-order change type");
+assert(customerBookingCancelHistorySql.includes("bookingRequestId"), "customer booking cancellation history must preserve the booking request reference");
+assert(customerBookingCancelHistorySql.includes("vacancyId"), "customer booking cancellation history must preserve the released vacancy reference");
+assert(!customerBookingCancelHistorySql.toLowerCase().includes("create table"), "customer booking cancellation history fix must not add tables");
 assert(!scheduleEdit.includes("saveWorkDetails"), "separate stay write must not return");
 assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print must honor finalization gate");
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
