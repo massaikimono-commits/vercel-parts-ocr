@@ -22,6 +22,7 @@ type WorkOrder = {
   vehicle_id: string;
   reason: string;
   inspection_schedule_type: string | null;
+  planned_delivery_method: "delivery" | "customer_visit" | null;
   status: string;
   work_completed: boolean;
   is_urgent: boolean;
@@ -77,6 +78,11 @@ function workDisplayLabel(work: WorkOrder | null) {
   if (!work) return "";
   const inspection = inspectionScheduleLabel(work.inspection_schedule_type);
   return inspection ? `${work.reason} ${inspection}` : work.reason;
+}
+
+function entryDisplayLabel(entry: ScheduleEntry, work: WorkOrder | null) {
+  if (entry.entry_type === "delivery" && work?.planned_delivery_method === "customer_visit") return "来社";
+  return ENTRY_LABEL[entry.entry_type];
 }
 
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
@@ -217,7 +223,7 @@ export default function WeeklySchedulePage() {
       if (workIds.length) {
         const { data, error } = await supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,inspection_schedule_type,status,work_completed,is_urgent,needs_loaner,worker_name")
+          .select("id,vehicle_id,reason,inspection_schedule_type,planned_delivery_method,status,work_completed,is_urgent,needs_loaner,worker_name")
           .in("id", workIds);
         if (error) throw error;
         nextWorks = (data || []) as WorkOrder[];
@@ -309,7 +315,7 @@ export default function WeeklySchedulePage() {
         onClick={() => editEntry(entry.id)}
         aria-label={`${customerName(customer)}の予約を変更`}
       >
-        <div className="miniTop"><b>{dailyReportTimeLabel(entry)}</b><span>{ENTRY_LABEL[entry.entry_type]}</span></div>
+        <div className="miniTop"><b>{dailyReportTimeLabel(entry)}</b><span>{entryDisplayLabel(entry, work)}</span></div>
         <div className="miniCustomer">{customerName(customer)}</div>
         <div className="miniMeta">
           {last4(vehicle) && <span>{last4(vehicle)}</span>}
