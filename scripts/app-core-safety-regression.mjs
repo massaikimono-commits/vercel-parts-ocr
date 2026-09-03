@@ -34,6 +34,7 @@ const customerVehicles = read("app","customer-vehicles","page.tsx");
 const vehicleBulk = read("app","vehicle-workflow","bulk","page.tsx");
 const vehicleBulkPdf = read("app","lib","vehicle-bulk-pdf.ts");
 const vehicleBulkApplySql = read("database","apply-vehicle-import-batch-v1.sql");
+const singleVehicleSaveSql = read("database","save-vehicle-certificate-v1.sql");
 const scheduleEditAssignmentSql = read("database","update-schedule-entry-and-assignment-v1.sql");
 function assert(condition, message) {
   if (!condition) {
@@ -86,6 +87,12 @@ assert(assignmentHistorySql.includes("'WORKER'"), "assignment history must use a
 assert(vehicleWorkflow.includes("/vehicle-workflow/bulk"), "single vehicle workflow must expose bulk PDF vehicle registration");
 assert(vehicleWorkflowFast.includes("/vehicle-workflow/bulk"), "current high-accuracy vehicle workflow must expose bulk PDF vehicle registration from the normal home route");
 assert(vehicleWorkflowFast.includes("localStorage.getItem(ACTIVE_KEY)"), "current high-accuracy vehicle workflow must restore the vehicle selected from customer management");
+assert(vehicleWorkflowFast.includes('supabase.rpc("save_vehicle_certificate_v1"'), "current high-accuracy vehicle save must use the guarded single-vehicle RPC");
+assert(!vehicleWorkflowFast.includes('await supabase.from("vehicles").insert(p)'), "current high-accuracy vehicle save must not bypass duplicate protection with a direct insert");
+assert(singleVehicleSaveSql.includes("duplicateVehicleId"), "single vehicle certificate save must report an existing duplicate instead of creating one");
+assert(singleVehicleSaveSql.includes("v.id<>p_vehicle_id"), "single vehicle update must exclude only itself from duplicate identity checks");
+assert(singleVehicleSaveSql.includes("registration_last4") && singleVehicleSaveSql.includes("registration_number_last4"), "single vehicle save must keep both plate suffix columns aligned");
+assert(!singleVehicleSaveSql.toLowerCase().includes("create table"), "single vehicle duplicate protection must reuse the existing vehicle table");
 assert(customerVehicles.includes('location.assign("/vehicle-workflow-v2")'), "customer/vehicle management must open the current high-accuracy vehicle editor");
 assert(!customerVehicles.includes('location.assign("/vehicle-workflow")'), "customer/vehicle management must not route edits to the legacy vehicle workflow");
 assert(vehicleBulk.includes('multiple accept="application/pdf,.pdf"'), "bulk vehicle registration must allow selecting multiple PDFs");
