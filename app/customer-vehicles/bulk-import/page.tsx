@@ -328,16 +328,6 @@ export default function CustomerVehicleBulkImportPage() {
               <p className="rowMessage">{row.message}</p>
 
               <div className="grid">
-                <label>顧客区分
-                  <select
-                    value={row.customerType}
-                    disabled={row.status === "error" || row.status === "saved"}
-                    onChange={(event) => updateCandidate(row.id, { customerType: event.target.value as "individual" | "company" })}
-                  >
-                    <option value="individual">個人</option>
-                    <option value="company">法人</option>
-                  </select>
-                </label>
                 <label>お客様名
                   <input
                     value={row.customerName}
