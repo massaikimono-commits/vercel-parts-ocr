@@ -21,6 +21,7 @@ const flexibleDeliverySql = read("database","create-schedule-registration-v2-fle
 const rescheduleHistorySql = read("database","reschedule-schedule-entry-v2-history-type.sql");
 const cancelHistorySql = read("database","cancel-schedule-entry-v1-history.sql");
 const customerBookingCancelHistorySql = read("database","cancel-customer-booking-by-staff-work-history.sql");
+const customerBookingLinkedSchedulesSql = read("database","cancel-customer-booking-by-staff-linked-schedules.sql");
 function assert(condition, message) {
   if (!condition) {
     console.error(`app-core safety regression failed: ${message}`);
@@ -67,6 +68,9 @@ assert(customerBookingCancelHistorySql.includes("b.work_order_id,''OTHER''"), "c
 assert(customerBookingCancelHistorySql.includes("bookingRequestId"), "customer booking cancellation history must preserve the booking request reference");
 assert(customerBookingCancelHistorySql.includes("vacancyId"), "customer booking cancellation history must preserve the released vacancy reference");
 assert(!customerBookingCancelHistorySql.toLowerCase().includes("create table"), "customer booking cancellation history fix must not add tables");
+assert(customerBookingLinkedSchedulesSql.includes("delete from public.schedule_entries where work_order_id=b.work_order_id"), "staff cancellation of a customer booking must remove every schedule entry for the linked work order");
+assert(customerBookingLinkedSchedulesSql.includes("elsif b.schedule_entry_id is not null"), "customer booking cancellation must still support bookings without a work order");
+assert(!customerBookingLinkedSchedulesSql.toLowerCase().includes("create table"), "linked schedule cancellation fix must not add tables");
 assert(!scheduleEdit.includes("saveWorkDetails"), "separate stay write must not return");
 assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print must honor finalization gate");
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
