@@ -59,6 +59,13 @@ export function sortDailyReportInbound<T extends DailyReportEntryLike>(rows: T[]
     const bOrder = b.entry_type === "delivery" ? 99 : INBOUND_TYPE_ORDER[b.entry_type];
     const typeDiff = aOrder - bOrder;
     if (typeDiff) return typeDiff;
+
+    if (a.entry_type === "pickup" && b.entry_type === "pickup") {
+      const modeOrder = (row: DailyReportEntryLike) => row.print_time_mode === "exact" ? 0 : row.print_time_mode === "morning" ? 1 : 2;
+      const modeDiff = modeOrder(a) - modeOrder(b);
+      if (modeDiff) return modeDiff;
+    }
+
     return timeValue(a) - timeValue(b);
   });
 }
