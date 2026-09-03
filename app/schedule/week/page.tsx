@@ -21,6 +21,7 @@ type WorkOrder = {
   id: string;
   vehicle_id: string;
   reason: string;
+  inspection_schedule_type: string | null;
   status: string;
   work_completed: boolean;
   is_urgent: boolean;
@@ -63,6 +64,20 @@ type EnrichedWeekRow = {
   vehicle: Vehicle | null;
   customer: Customer | null;
 };
+
+function inspectionScheduleLabel(value: string | null | undefined) {
+  if (value === "schedule") return "スケ";
+  if (value === "legal_3m") return "法定3ヶ月";
+  if (value === "legal_6m") return "法定6ヶ月";
+  if (value === "legal_12m") return "法定12ヶ月";
+  return "";
+}
+
+function workDisplayLabel(work: WorkOrder | null) {
+  if (!work) return "";
+  const inspection = inspectionScheduleLabel(work.inspection_schedule_type);
+  return inspection ? `${work.reason} ${inspection}` : work.reason;
+}
 
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   delivery: "納車",
@@ -202,7 +217,7 @@ export default function WeeklySchedulePage() {
       if (workIds.length) {
         const { data, error } = await supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name")
+          .select("id,vehicle_id,reason,inspection_schedule_type,status,work_completed,is_urgent,needs_loaner,worker_name")
           .in("id", workIds);
         if (error) throw error;
         nextWorks = (data || []) as WorkOrder[];
@@ -298,7 +313,7 @@ export default function WeeklySchedulePage() {
         <div className="miniCustomer">{customerName(customer)}</div>
         <div className="miniMeta">
           {last4(vehicle) && <span>{last4(vehicle)}</span>}
-          {work?.reason && <span>{work.reason}</span>}
+          {work && <span>{workDisplayLabel(work)}</span>}
           {work?.worker_name && <span>{work.worker_name}</span>}
           {work?.needs_loaner && <span className="loaner">代車</span>}
           {work?.is_urgent && <span className="urgentTag">急ぎ</span>}
