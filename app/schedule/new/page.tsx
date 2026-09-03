@@ -119,7 +119,7 @@ function extractWarnings(check: any) {
 
 export default function ScheduleNewPage() {
   const [day, setDay] = useState(todayJst());
-  const [entryType, setEntryType] = useState<EntryType>("customer_visit");
+  const [entryType, setEntryType] = useState<EntryType>("pickup");
   const [reason, setReason] = useState<Reason>("車検");
   const [customerName, setCustomerName] = useState("");
   const [customerType, setCustomerType] = useState<"individual" | "company">("individual");
