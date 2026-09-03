@@ -503,7 +503,6 @@ export default function CustomerVehiclesPage() {
               <>
                 {selectedCustomer ? (
                   <div className="customerSummary">
-                    <div><small>区分</small><b>{selectedCustomer.type === "company" ? "法人" : "個人"}</b></div>
                     <div><small>お客様名</small><b>{selectedCustomer.name || "-"}</b></div>
                     <div><small>会社名</small><b>{selectedCustomer.companyName || "-"}</b></div>
                     <div><small>電話番号</small><b>{selectedCustomer.phone || "-"}</b></div>
@@ -548,10 +547,6 @@ export default function CustomerVehiclesPage() {
 
             {customerEditing && (
               <div className="customerForm">
-                <div className="segmented">
-                  <button className={customerForm.type === "individual" ? "active" : ""} onClick={() => setCustomerForm((f) => ({ ...f, type: "individual" }))}>個人</button>
-                  <button className={customerForm.type === "company" ? "active" : ""} onClick={() => setCustomerForm((f) => ({ ...f, type: "company" }))}>法人</button>
-                </div>
                 <label>お客様名<input value={customerForm.name} onChange={(e) => setCustomerForm((f) => ({ ...f, name: e.target.value }))} placeholder="お客様名" /></label>
                 <label>会社名<input value={customerForm.companyName} onChange={(e) => setCustomerForm((f) => ({ ...f, companyName: e.target.value }))} placeholder="会社名" /></label>
                 <label>電話番号<input value={customerForm.phone} onChange={(e) => setCustomerForm((f) => ({ ...f, phone: e.target.value }))} inputMode="tel" placeholder="電話番号" /></label>
