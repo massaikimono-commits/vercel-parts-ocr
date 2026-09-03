@@ -17,6 +17,7 @@ const scheduleSearch = read("app","schedule","search","page.tsx");
 const month = read("app","schedule","month","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.sql");
+const flexibleDeliverySql = read("database","create-schedule-registration-v2-flexible-delivery.sql");
 function assert(condition, message) {
   if (!condition) {
     console.error(`app-core safety regression failed: ${message}`);
@@ -27,7 +28,13 @@ assert(scheduleNew.includes('supabase.rpc("find_schedule_registration_duplicates
 assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_v2"'), "schedule registration must be atomic");
 assert(scheduleNew.includes("p_existing_vehicle_id"), "existing vehicle reuse must remain supported");
 assert(scheduleNew.includes("Number(x.score) >= 70"), "exact-name/company duplicate candidates must require an explicit reuse/new decision");
-assert(scheduleNew.includes("納車予定は入庫・作業予定の終了後"), "delivery must not precede inbound/work end");
+assert(scheduleNew.includes("納車予定は入庫・作業予定より前の日には設定できません"), "delivery must not precede the inbound/work day");
+assert(scheduleNew.includes('supabase.rpc("schedule_slot_check_v2"'), "schedule registration preflight must use the same print-mode-aware slot check as the final RPC");
+assert(scheduleNew.includes('p_print_time_mode: main.printMode'), "main schedule preflight must pass print-time mode");
+assert(scheduleNew.includes('p_print_time_mode: selectedDelivery.mode'), "delivery preflight must pass print-time mode");
+assert(scheduleNew.includes('setOnsiteMode("morning")') && scheduleNew.includes('setOnsiteMode("unspecified")'), "onsite registration must support exact/A中/中 modes");
+assert(scheduleNew.includes('reason === "車検" ? addDays(day, 1) : day'), "vehicle inspection delivery must default to next day while other work defaults to same day");
+assert(scheduleNew.includes('x.key === "unspecified"'), "delivery defaults must prefer the unspecified 中 option");
 assert(!scheduleNew.includes('supabase.rpc("create_manual_schedule_registration"'), "legacy partial schedule RPC must not be used");
 assert(!scheduleNew.includes('.from("schedule_entries").insert({'), "delivery insert must stay inside atomic RPC");
 assert(scheduleEdit.includes('supabase.rpc("reschedule_schedule_entry_v2"'), "reschedule and stay details must be atomic");
@@ -102,4 +109,7 @@ assert(loanerSyncSql.includes("lr.status='reserved'"), "reserved loaner starts m
 assert(loanerSyncSql.includes("e.entry_type='delivery'"), "loaner return time must follow delivery schedule changes");
 assert(loanerSyncSql.includes("loanerSynced"), "reschedule RPC must report whether a linked loaner was synchronized");
 assert(!loanerSyncSql.toLowerCase().includes("create table"), "loaner reschedule sync must not add tables");
+assert(flexibleDeliverySql.includes("p_delivery_print_time_mode"), "flexible delivery chronology must branch by print-time mode");
+assert(flexibleDeliverySql.includes("Asia/Tokyo"), "flexible delivery chronology must compare non-exact delivery by JST date");
+assert(!flexibleDeliverySql.toLowerCase().includes("create table"), "flexible delivery chronology must not add tables");
 console.log("app-core safety regression passed");

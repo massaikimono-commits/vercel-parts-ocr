@@ -42,6 +42,8 @@ export function dailyReportTimeLabel(row: DailyReportEntryLike) {
     row.entry_type === "pickup"
     && (row.print_time_mode === "morning" || (row.print_time_mode === "unspecified" && isMorningJst(row.starts_at)))
   ) return "A中";
+  if (row.entry_type === "onsite_repair" && row.print_time_mode === "morning") return "A中";
+  if (row.entry_type === "onsite_repair" && row.print_time_mode === "unspecified") return "中";
   if (row.entry_type === "delivery" && row.print_time_mode === "unspecified") return "中";
   return row.print_time_mode === "morning" ? "午前" : "時間未定";
 }

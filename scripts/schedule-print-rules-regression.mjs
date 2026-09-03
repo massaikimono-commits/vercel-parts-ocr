@@ -33,6 +33,8 @@ function printTimeLabel(row) {
     row.entry_type === "pickup"
     && (row.print_time_mode === "morning" || (row.print_time_mode === "unspecified" && isMorningJst(row.starts_at)))
   ) return "A中";
+  if (row.entry_type === "onsite_repair" && row.print_time_mode === "morning") return "A中";
+  if (row.entry_type === "onsite_repair" && row.print_time_mode === "unspecified") return "中";
   if (row.entry_type === "delivery" && row.print_time_mode === "unspecified") return "中";
   return row.print_time_mode === "morning" ? "午前" : "時間未定";
 }
@@ -82,6 +84,8 @@ assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T00:00
 assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T01:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "A中", "午前帯に置かれた引取・時間未定もA中");
 assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T05:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "時間未定", "午後の引取・時間未定はA中にしない");
 assert.equal(printTimeLabel({ entry_type: "delivery", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "中", "納車・時間指定なしは中");
+assert.equal(printTimeLabel({ entry_type: "onsite_repair", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "morning", print_time_label_override: null }), "A中", "出張の午前帯指定はA中");
+assert.equal(printTimeLabel({ entry_type: "onsite_repair", starts_at: "2026-08-29T04:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "中", "出張の午後帯指定は中");
 assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "morning", print_time_label_override: "AM" }), "AM", "明示上書きが最優先");
 assert.equal(printTimeLabel({ entry_type: "customer_visit", starts_at: "2026-08-29T00:30:00.000Z", print_time_mode: "exact", print_time_label_override: null }), "09:30", "時刻指定はJST HH:mm");
 

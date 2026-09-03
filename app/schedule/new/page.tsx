@@ -72,6 +72,16 @@ function todayJst() {
   }).format(new Date());
 }
 
+function addDays(day: string, delta: number) {
+  const d = new Date(day + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+function defaultDeliveryDay(day: string, reason: Reason) {
+  return reason === "車検" ? addDays(day, 1) : day;
+}
+
 function jstIso(day: string, time: string) {
   return new Date(`${day}T${time}:00+09:00`).toISOString();
 }
@@ -110,6 +120,7 @@ export default function ScheduleNewPage() {
   const [inspectionScheduleType, setInspectionScheduleType] = useState("");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [selectedTimeKey, setSelectedTimeKey] = useState("");
+  const [onsiteMode, setOnsiteMode] = useState<"exact" | "morning" | "unspecified">("exact");
   const [onsiteTime, setOnsiteTime] = useState("09:00");
   const [onsiteDuration, setOnsiteDuration] = useState("60");
 
@@ -133,13 +144,14 @@ export default function ScheduleNewPage() {
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("day");
-    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q) && q !== day) {
-      setDay(q);
-      setDeliveryDay(q);
-      return;
-    }
-    setDeliveryDay(day);
-  }, [day]);
+    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDay(q);
+  }, []);
+
+  useEffect(() => {
+    if (entryType === "delivery") return;
+    setDeliveryDay(defaultDeliveryDay(day, reason));
+    setDeliveryTimeKey("");
+  }, [day, reason, entryType]);
 
   useEffect(() => {
     void loadCapacity();
@@ -230,7 +242,9 @@ export default function ScheduleNewPage() {
     setDeliveryTimeKey((old) => {
       const oldOption = options.find((x) => x.key === old);
       if (oldOption && oldOption.availability !== "blocked") return old;
-      return options.find((x) => x.availability === "open")?.key
+      const unspecified = options.find((x) => x.key === "unspecified" && x.availability !== "blocked");
+      return unspecified?.key
+        || options.find((x) => x.availability === "open")?.key
         || options.find((x) => x.availability === "warning")?.key
         || "";
     });
@@ -255,11 +269,12 @@ export default function ScheduleNewPage() {
         printMode: selectedTime.mode,
       };
     }
-    const startsAt = jstIso(day, onsiteTime);
+    const placeholderTime = onsiteMode === "morning" ? "09:00" : onsiteMode === "unspecified" ? "13:00" : onsiteTime;
+    const startsAt = jstIso(day, placeholderTime);
     return {
       startsAt,
       endsAt: plusMinutes(startsAt, Math.max(30, Number(onsiteDuration) || 60)),
-      printMode: "exact" as const,
+      printMode: onsiteMode,
     };
   }
 
@@ -314,12 +329,13 @@ export default function ScheduleNewPage() {
     const main = mainTimes();
     if (!main) throw new Error("時間を選択してください。");
 
-    const { data, error } = await supabase.rpc("schedule_slot_check", {
+    const { data, error } = await supabase.rpc("schedule_slot_check_v2", {
       p_entry_type: entryType,
       p_starts_at: main.startsAt,
       p_ends_at: main.endsAt,
       p_reason: reason,
       p_exclude_entry_id: null,
+      p_print_time_mode: main.printMode,
     });
     if (error) throw error;
     const mainCheck = extractWarnings(data);
@@ -327,15 +343,19 @@ export default function ScheduleNewPage() {
     let deliveryCheck = { allowed: true, overrideRequired: false, hardErrors: [] as string[], warnings: [] as string[] };
     if (addDelivery && entryType !== "delivery") {
       if (!selectedDelivery) throw new Error("納車時間を選択してください。");
-      if (new Date(selectedDelivery.startsAt).getTime() < new Date(main.endsAt).getTime()) {
-        throw new Error("納車予定は入庫・作業予定の終了後に設定してください。");
+      const deliveryIsBeforeMain = selectedDelivery.mode === "exact"
+        ? new Date(selectedDelivery.startsAt).getTime() < new Date(main.endsAt).getTime()
+        : deliveryDay < day;
+      if (deliveryIsBeforeMain) {
+        throw new Error("納車予定は入庫・作業予定より前の日には設定できません。");
       }
-      const { data: deliveryData, error: deliveryError } = await supabase.rpc("schedule_slot_check", {
+      const { data: deliveryData, error: deliveryError } = await supabase.rpc("schedule_slot_check_v2", {
         p_entry_type: "delivery",
         p_starts_at: selectedDelivery.startsAt,
         p_ends_at: selectedDelivery.endsAt,
         p_reason: reason,
         p_exclude_entry_id: null,
+        p_print_time_mode: selectedDelivery.mode,
       });
       if (deliveryError) throw deliveryError;
       deliveryCheck = extractWarnings(deliveryData);
@@ -574,7 +594,18 @@ export default function ScheduleNewPage() {
             </div>
           ) : (
             <>
-              <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
+              <div className="wide onsiteModeBlock">
+                <b>出張時間</b>
+                <div className="onsiteModeButtons">
+                  <button type="button" className={onsiteMode === "exact" ? "selected" : ""} onClick={() => setOnsiteMode("exact")}>時間指定</button>
+                  <button type="button" className={onsiteMode === "morning" ? "selected" : ""} onClick={() => setOnsiteMode("morning")}>A中</button>
+                  <button type="button" className={onsiteMode === "unspecified" ? "selected" : ""} onClick={() => setOnsiteMode("unspecified")}>中</button>
+                </div>
+                <small>A中・中は時間帯予定として登録し、時間重複の警告対象にはしません。</small>
+              </div>
+              {onsiteMode === "exact" && (
+                <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
+              )}
               <label>作業枠
                 <select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}>
                   <option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option>
@@ -642,7 +673,11 @@ export default function ScheduleNewPage() {
             入庫予定と同時に納車予定も登録する
           </label>
           {addDelivery && (
-            <div className="grid deliveryGrid">
+            <>
+              <div className="deliveryDefaultHint">
+                基本設定：点検は当日「中」／車検は翌日「中」。必要なときだけ変更してください。
+              </div>
+              <div className="grid deliveryGrid">
               <label>納車日<input type="date" value={deliveryDay} onChange={(e) => setDeliveryDay(e.target.value)} /></label>
               <label>納車時間
                 <select value={deliveryTimeKey} onChange={(e) => setDeliveryTimeKey(e.target.value)}>
@@ -653,7 +688,8 @@ export default function ScheduleNewPage() {
                   })}
                 </select>
               </label>
-            </div>
+              </div>
+            </>
           )}
         </section>
       )}
@@ -677,7 +713,7 @@ export default function ScheduleNewPage() {
         .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
         .availabilityBlock{display:grid;gap:10px}.availabilityTitle{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;color:#5c6878}.legend{font-size:12px;font-weight:800}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.openDot{background:#4f9c68}.warnDot{background:#d69a36}.blockedDot{background:#9aa5b3}.availabilityLoading{background:#f7f9fc;border-radius:12px;padding:14px;color:#78869a}.timeGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.timeSlot{display:flex;gap:5px;justify-content:center;align-items:center;padding:10px 7px;border-radius:12px}.timeSlot.open{background:#f2fbf5;border-color:#9bceb0;color:#236c3b}.timeSlot.warning{background:#fff8ea;border-color:#e5bd73;color:#8a5a08}.timeSlot.blocked{background:#f1f3f6;border-color:#d5dbe3;color:#8a95a3;opacity:.7}.timeSlot.selected{outline:3px solid #2674e8;outline-offset:1px}.timeSlot:disabled{cursor:not-allowed}
         input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
-        .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.deliveryGrid{margin-top:12px}
+        .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.onsiteModeBlock{display:grid;gap:7px;color:#5c6878}.onsiteModeButtons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.onsiteModeButtons button{padding:10px 8px}.onsiteModeButtons button.selected{background:#2674e8;color:#fff;border-color:#2674e8}.onsiteModeBlock small{font-weight:600;color:#78869a}.deliveryDefaultHint{margin-top:10px;background:#f5f8fc;border-radius:10px;padding:9px 11px;color:#657184;font-size:12px;font-weight:700}.deliveryGrid{margin-top:10px}
         .primary{width:100%;background:#2f6fe4;border-color:#2f6fe4;color:#fff;font-size:18px;padding:16px}
         .errors,.warnings{margin-top:12px;border-radius:12px;padding:13px 14px;line-height:1.7}.errors{background:#fff0f0;border:1px solid #efbcbc;color:#8f2f2f}.warnings{background:#fff8df;border:1px solid #ecd98d;color:#6d5912}.warnings button{margin-top:8px;background:#fff}
         .footnote{color:#6f7c8e;line-height:1.6;margin-bottom:0}
