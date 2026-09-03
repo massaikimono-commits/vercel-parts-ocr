@@ -19,6 +19,7 @@ const sql = read("database","app-core-v1-safety-functions.sql");
 const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.sql");
 const flexibleDeliverySql = read("database","create-schedule-registration-v2-flexible-delivery.sql");
 const rescheduleHistorySql = read("database","reschedule-schedule-entry-v2-history-type.sql");
+const legacyRescheduleHistorySql = read("database","reschedule-schedule-entry-v1-history-type.sql");
 const cancelHistorySql = read("database","cancel-schedule-entry-v1-history.sql");
 const customerBookingCancelHistorySql = read("database","cancel-customer-booking-by-staff-work-history.sql");
 const customerBookingLinkedSchedulesSql = read("database","cancel-customer-booking-by-staff-linked-schedules.sql");
@@ -163,6 +164,9 @@ assert(loanerSyncSql.includes("'eventType','schedule_entry_rescheduled'"), "resc
 assert(!loanerSyncSql.includes("e.work_order_id,'schedule_entry_rescheduled'"), "reschedule history must not use a change type rejected by the table constraint");
 assert(rescheduleHistorySql.includes("v_new_type text := 'e.work_order_id,''OTHER'','"), "deployed DB patch must convert invalid reschedule history type");
 assert(rescheduleHistorySql.includes("eventType"), "deployed DB patch must preserve reservation-change semantics");
+assert(legacyRescheduleHistorySql.includes("v_new_type text := 'e.work_order_id,''OTHER'','"), "legacy reschedule history must use an allowed work-order change type");
+assert(legacyRescheduleHistorySql.includes("schedule_entry_rescheduled"), "legacy reschedule history must preserve the precise event name");
+assert(!legacyRescheduleHistorySql.toLowerCase().includes("create table"), "legacy reschedule history fix must not add tables");
 assert(!loanerSyncSql.toLowerCase().includes("create table"), "loaner reschedule sync must not add tables");
 assert(flexibleDeliverySql.includes("p_delivery_print_time_mode"), "flexible delivery chronology must branch by print-time mode");
 assert(flexibleDeliverySql.includes("Asia/Tokyo"), "flexible delivery chronology must compare non-exact delivery by JST date");
