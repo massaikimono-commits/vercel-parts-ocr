@@ -82,6 +82,7 @@ assert(cancellationSql.includes("update public.loaner_reservations"), "cancellat
 assert(cancellationSql.includes("rental_provider_status = 'cancellation_requested'"), "rental cancellation must remain pending until contacted");
 assert(cancellationSql.includes("revoke all on function public.cancel_schedule_entry_v1"), "cancellation RPC must not be public or anonymous");
 assert(scheduleEdit.includes('supabase.rpc("cancel_schedule_entry_v1"'), "reservation edit screen must call the cancellation RPC");
-assert(scheduleEdit.includes("取消理由（必須）"), "reservation cancellation must require a reason");
+assert(scheduleEdit.includes("取消理由（任意）"), "reservation cancellation reason must remain optional");
+assert(scheduleEdit.includes("p_reason:cancelReason.trim() || null"), "blank cancellation reasons must be sent as null");
 assert(scheduleEdit.includes("取消を確定"), "reservation cancellation must require an explicit confirmation step");
 console.log("app-core safety regression passed");
