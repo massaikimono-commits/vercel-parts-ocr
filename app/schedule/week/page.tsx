@@ -325,6 +325,7 @@ export default function WeeklySchedulePage() {
       for (let j = i + 1; j < dayRows.length; j += 1) {
         const a = dayRows[i].entry;
         const b = dayRows[j].entry;
+        if (a.print_time_mode !== "exact" || b.print_time_mode !== "exact") continue;
         if (a.entry_type !== b.entry_type) continue;
         if (new Date(a.starts_at) < new Date(b.ends_at) && new Date(a.ends_at) > new Date(b.starts_at)) {
           count += 1;
