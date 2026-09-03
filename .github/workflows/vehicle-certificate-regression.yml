@@ -57,6 +57,9 @@ jobs:
       - name: Run photo chassis precision regression
         run: node scripts/photo-chassis-precision-regression.mjs
 
+      - name: Run photo OCR skip/speed regression
+        run: node scripts/photo-ocr-skip-speed-regression.mjs
+
       - name: Run parts-slip regression
         run: npm run test:parts
 
