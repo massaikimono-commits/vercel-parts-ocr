@@ -16,6 +16,10 @@ expect(home, 'className="homeWeek"', "home");
 expect(home, "1週間のスケジュール", "home");
 expect(home, "今週を常に確認", "home");
 expect(home, 'location.assign("/schedule/week")', "home");
+expect(home, 'prepareDailyReportSection(periodRows.map(({ entry }) => entry), period)', "home weekly daily-report layout");
+expect(home, 'miniColumnTitle">納車', "home weekly daily-report layout");
+expect(home, 'miniColumnTitle">来社・引取・出張', "home weekly daily-report layout");
+expect(home, 'dailyReportTimeLabel(entry)', "home weekly daily-report labels");
 
 const homeWeekIndex = home.indexOf('className="homeWeek"');
 const mobileTodayIndex = home.indexOf('className="mobileToday"');
@@ -52,6 +56,7 @@ if (failures.length) {
 
 console.log("PASS schedule workflow UX regression");
 console.log("- home is weekly-schedule first");
+console.log("- home weekly schedule uses the same daily-report period/column/order rules");
 console.log("- registration starts with customer/vehicle, then work, then date/time");
 console.log("- cancellation reason is optional");
 console.log("- daily/weekly schedule labels are distinct and consistent");
