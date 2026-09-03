@@ -380,9 +380,9 @@ begin
     and se.ends_at>p_starts_at
     and se.entry_type=p_entry_type;
 
-  -- Pickup rows can legitimately share the same deadline or placeholder
-  -- (for example 9時まで + A中), so do not treat same-type overlap as a slot conflict.
-  if v_conflicts>0 and p_entry_type<>'pickup' then
+  -- Pickup deadlines/placeholders and deliveries can legitimately overlap.
+  -- Same-time delivery is expected operationally, so neither type creates a slot warning.
+  if v_conflicts>0 and p_entry_type not in ('pickup','delivery') then
     v_warnings := v_warnings || jsonb_build_array('同じ区分の予定が重複しています');
     v_override_required := true;
   end if;
