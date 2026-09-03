@@ -73,6 +73,12 @@ function defaultDeliveryDay(day:string,reason:Reason){
   return reason==="車検" ? addDays(day,1) : day;
 }
 
+function daysBetween(fromDay:string,toDay:string){
+  const from=new Date(fromDay+"T00:00:00Z").getTime();
+  const to=new Date(toDay+"T00:00:00Z").getTime();
+  return Math.round((to-from)/(24*60*60*1000));
+}
+
 function jstIso(day:string,time:string){
   return new Date(`${day}T${time}:00+09:00`).toISOString();
 }
@@ -258,6 +264,52 @@ export default function BulkSchedulePage(){
     }
   }
 
+  async function changeCommonDay(nextDay:string){
+    if(!nextDay || nextDay===day) return;
+    const delta=daysBetween(day,nextDay);
+    const shifted=selected.map(item=>({
+      ...item,
+      timeKey:item.entryType==="onsite_repair" ? item.timeKey : "",
+      deliveryDay:item.addDelivery && item.entryType!=="delivery"
+        ? addDays(item.deliveryDay,delta)
+        : item.deliveryDay,
+      deliveryTimeKey:"",
+    }));
+    setDay(nextDay);
+    setSelected(shifted);
+    setWarnings([]);
+    setHardErrors([]);
+    if(!shifted.length){
+      setMessage("共通日付を変更しました。");
+      return;
+    }
+
+    setBusy(true);
+    try{
+      const refreshed:SelectedItem[]=[];
+      for(const item of shifted){
+        let timeKey=item.timeKey;
+        let deliveryTimeKey=item.deliveryTimeKey;
+
+        if(item.entryType!=="onsite_repair"){
+          const opts=await loadOptions(nextDay,item.entryType,item.reason);
+          timeKey=defaultOption(opts)?.key||"";
+        }
+        if(item.addDelivery && item.entryType!=="delivery"){
+          const opts=await loadOptions(item.deliveryDay,"delivery",item.reason);
+          deliveryTimeKey=defaultOption(opts,true)?.key||"";
+        }
+        refreshed.push({...item,timeKey,deliveryTimeKey});
+      }
+      setSelected(refreshed);
+      setMessage(`共通日付を${nextDay}へ変更し、${refreshed.length}台の時間候補を新しい日に更新しました。`);
+    }catch(error:any){
+      setMessage("日付変更後の時間候補更新エラー: "+(error?.message||error));
+    }finally{
+      setBusy(false);
+    }
+  }
+
   async function applyDefaults(){
     setBusy(true);
     try{
@@ -400,7 +452,7 @@ export default function BulkSchedulePage(){
     </header>
 
     <section className="card">
-      <div className="headRow"><div><div className="eyebrow">共通日付</div><h1>{day}</h1></div><input type="date" value={day} onChange={(e)=>setDay(e.target.value)} /></div>
+      <div className="headRow"><div><div className="eyebrow">共通日付</div><h1>{day}</h1></div><input type="date" value={day} onChange={(e)=>void changeCommonDay(e.target.value)} /></div>
       <div className="notice">{busy?"処理中…":message}</div>
       {!!hardErrors.length && <div className="errors"><b>登録できません</b>{hardErrors.map((x,i)=><div key={i}>・{x}</div>)}</div>}
       {!!warnings.length && <div className="warnings"><b>確認が必要</b>{warnings.map((x,i)=><div key={i}>・{x}</div>)}<button disabled={busy} onClick={()=>void submit(true)}>警告を確認して全台登録</button></div>}

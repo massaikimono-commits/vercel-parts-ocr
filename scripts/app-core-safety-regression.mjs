@@ -64,6 +64,9 @@ assert(scheduleBulk.includes('supabase.rpc("search_schedule_vehicles_v1"'), "bul
 assert(scheduleBulk.includes('supabase.rpc("create_schedule_registration_batch_v1"'), "bulk schedule registration must use the atomic batch RPC");
 assert(scheduleBulk.includes("検索を変えても選択済み車両は保持"), "bulk schedule registration must keep selections across different-customer searches");
 assert(scheduleBulk.includes("1台でも登録不可なら全台ロールバック"), "bulk schedule UI must explain all-or-none behavior");
+assert(scheduleBulk.includes("changeCommonDay") && scheduleBulk.includes("daysBetween(day,nextDay)"), "bulk schedule date changes must refresh selected vehicles instead of retaining old-day slots");
+assert(scheduleBulk.includes("addDays(item.deliveryDay,delta)"), "bulk schedule date changes must preserve each vehicle's delivery-day offset");
+assert(scheduleBulk.includes("時間候補を新しい日に更新しました"), "bulk schedule must confirm that selected vehicle slots were refreshed after a date change");
 assert(scheduleBulk.includes("defaultDeliveryDay(day,item.reason)") || scheduleBulk.includes("defaultDeliveryDay(day,defaultReason)"), "bulk schedule must keep inspection/shaken delivery defaults");
 assert(scheduleBatchSql.includes("create_schedule_registration_v2"), "batch schedule RPC must reuse the guarded single-registration RPC");
 assert(scheduleBatchSql.includes("exception") && scheduleBatchSql.includes("batch_item_failed"), "batch schedule RPC must roll back the entire batch on any item failure");
