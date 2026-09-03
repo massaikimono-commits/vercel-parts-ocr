@@ -160,11 +160,14 @@ export default function BulkVehicleRegistrationPage(){
           });
         }catch(error:any){
           if(stagedImportId){
-            await supabase.from("vehicle_imports").update({
+            const {error:reviewMarkError}=await supabase.from("vehicle_imports").update({
               status:"NEEDS_REVIEW",
               resolution_action:null,
               updated_at:new Date().toISOString(),
-            }).eq("id",stagedImportId).catch(()=>null);
+            }).eq("id",stagedImportId);
+            if(reviewMarkError){
+              console.error("取込データを要確認へ更新できませんでした",reviewMarkError);
+            }
           }
           nextItems.push({
             importId:stagedImportId,
