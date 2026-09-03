@@ -20,6 +20,7 @@ type WorkOrder = {
   id: string;
   reason: string;
   inspection_schedule_type: string | null;
+  planned_delivery_method: "delivery" | "customer_visit" | null;
   status: string;
   work_completed: boolean;
   is_urgent: boolean;
@@ -68,6 +69,11 @@ function workDisplayLabel(work: WorkOrder | null) {
   if (!work) return "";
   const inspection = inspectionScheduleLabel(work.inspection_schedule_type);
   return inspection ? `${work.reason} ${inspection}` : work.reason;
+}
+
+function entryDisplayLabel(entry: ScheduleEntry, work: WorkOrder | null) {
+  if (entry.entry_type === "delivery" && work?.planned_delivery_method === "customer_visit") return "来社";
+  return ENTRY_LABEL[entry.entry_type];
 }
 
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
@@ -160,7 +166,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     const [entryRes, weekEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", new Date(weekStart + "T00:00:00+09:00").toISOString()).lt("starts_at", new Date(weekEnd + "T00:00:00+09:00").toISOString()).order("starts_at", { ascending: true }),
-      supabase.from("work_orders").select("id,reason,inspection_schedule_type,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
+      supabase.from("work_orders").select("id,reason,inspection_schedule_type,planned_delivery_method,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
     ]);
@@ -374,7 +380,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
                               <button key={entry.id} className="homeWeekRow miniRow type-delivery" onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
                                 <b>{customerName(customer)}</b>
                                 <span>{last4(vehicle)}　{workDisplayLabel(work)}</span>
-                                <small>{ENTRY_LABEL[entry.entry_type]} {dailyReportTimeLabel(entry)}</small>
+                                <small>{entryDisplayLabel(entry, work)} {dailyReportTimeLabel(entry)}</small>
                               </button>
                             ))}
                           </div>
@@ -385,7 +391,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
                               <button key={entry.id} className={`homeWeekRow miniRow type-${entry.entry_type}`} onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
                                 <b>{customerName(customer)}</b>
                                 <span>{last4(vehicle)}　{workDisplayLabel(work)}</span>
-                                <small>{ENTRY_LABEL[entry.entry_type]} {dailyReportTimeLabel(entry)}</small>
+                                <small>{entryDisplayLabel(entry, work)} {dailyReportTimeLabel(entry)}</small>
                               </button>
                             ))}
                           </div>
