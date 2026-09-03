@@ -96,7 +96,11 @@ export function detectCertificateQrDensityCenters(rgba, width, height, options =
   local.sort((a, b) => b.score - a.score);
 
   const minDistance = Math.max(4, Math.round((w * 0.035) / step));
-  const maxCenters = maxScore < 0.05 ? 3 : 8;
+  // Real iPhone photos can soften the QR row enough that maxScore stays below
+  // 0.05. Capping that case at 3 candidates makes a 5QR certificate impossible
+  // to recover even when all symbols are present, so keep enough candidates for
+  // both 5QR and 6QR layouts and let the decoder/deduper reject false positives.
+  const maxCenters = 8;
   const selected = [];
   for (const item of local) {
     if (selected.some((picked) => Math.abs(picked.sx - item.sx) < minDistance)) continue;
