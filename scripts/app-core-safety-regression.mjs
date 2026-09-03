@@ -24,6 +24,10 @@ const legacyRescheduleHistorySql = read("database","reschedule-schedule-entry-v1
 const cancelHistorySql = read("database","cancel-schedule-entry-v1-history.sql");
 const customerBookingCancelHistorySql = read("database","cancel-customer-booking-by-staff-work-history.sql");
 const customerBookingLinkedSchedulesSql = read("database","cancel-customer-booking-by-staff-linked-schedules.sql");
+const scheduleBulk = read("app","schedule","new","bulk","page.tsx");
+const scheduleBatchSql = read("database","create-schedule-registration-batch-v1.sql");
+const scheduleBatchSearchSql = read("database","search-schedule-vehicles-v1.sql");
+const assignmentHistorySql = read("database","set-work-order-assignment-history.sql");
 function assert(condition, message) {
   if (!condition) {
     console.error(`app-core safety regression failed: ${message}`);
@@ -51,6 +55,22 @@ assert(scheduleNew.includes("予定は登録済みです。ただし外注先だ
 assert(scheduleNew.includes("returnToDailyAfterCreated(900)"), "external vendor post-save failure must leave the registration form after the schedule itself was created");
 assert(!scheduleNew.includes('supabase.rpc("create_manual_schedule_registration"'), "legacy partial schedule RPC must not be used");
 assert(!scheduleNew.includes('.from("schedule_entries").insert({'), "delivery insert must stay inside atomic RPC");
+assert(scheduleNew.includes("/schedule/new/bulk?day="), "single schedule registration must expose multi-vehicle registration");
+assert(scheduleBulk.includes('supabase.rpc("search_schedule_vehicles_v1"'), "bulk schedule registration must search across existing vehicles/customers");
+assert(scheduleBulk.includes('supabase.rpc("create_schedule_registration_batch_v1"'), "bulk schedule registration must use the atomic batch RPC");
+assert(scheduleBulk.includes("検索を変えても選択済み車両は保持"), "bulk schedule registration must keep selections across different-customer searches");
+assert(scheduleBulk.includes("1台でも登録不可なら全台ロールバック"), "bulk schedule UI must explain all-or-none behavior");
+assert(scheduleBulk.includes("defaultDeliveryDay(day,item.reason)") || scheduleBulk.includes("defaultDeliveryDay(day,defaultReason)"), "bulk schedule must keep inspection/shaken delivery defaults");
+assert(scheduleBatchSql.includes("create_schedule_registration_v2"), "batch schedule RPC must reuse the guarded single-registration RPC");
+assert(scheduleBatchSql.includes("exception") && scheduleBatchSql.includes("batch_item_failed"), "batch schedule RPC must roll back the entire batch on any item failure");
+assert(scheduleBatchSql.includes("jsonb_array_length(p_items) > 50"), "batch schedule RPC must cap accidental oversized submissions");
+assert(scheduleBatchSql.includes("set_work_order_assignment"), "batch schedule RPC must keep staff/vendor assignment inside the same transaction");
+assert(!scheduleBatchSql.toLowerCase().includes("create table"), "batch schedule registration must not add tables");
+assert(scheduleBatchSearchSql.includes("search_schedule_vehicles_v1"), "batch vehicle picker search RPC must remain versioned");
+assert(scheduleBatchSearchSql.includes("regexp_replace(coalesce(c.phone"), "batch vehicle picker must normalize phone digits");
+assert(!scheduleBatchSearchSql.toLowerCase().includes("create table"), "batch vehicle picker must not add tables");
+assert(assignmentHistorySql.includes("work_order_assignment_changed"), "staff/vendor assignment changes must be recorded in work-order history");
+assert(assignmentHistorySql.includes("'WORKER'"), "assignment history must use an allowed work-order change type");
 assert(scheduleEdit.includes('supabase.rpc("reschedule_schedule_entry_v2"'), "reschedule and stay details must be atomic");
 assert(scheduleEdit.includes('supabase.rpc("cancel_schedule_entry_v1"'), "reservation cancellation must stay inside the existing schedule edit flow");
 assert(scheduleEdit.includes('opts.find(x=>x.mode===base.print_time_mode)'), "reservation edit must preserve A中/午後/中 instead of falling back to the first exact slot");

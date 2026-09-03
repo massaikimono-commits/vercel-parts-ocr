@@ -528,7 +528,10 @@ export default function ScheduleNewPage() {
 
       <section className="card">
         <div className="eyebrow">入出庫予定登録</div>
-        <h1>予定を追加</h1>
+        <div className="titleRow">
+          <h1>予定を追加</h1>
+          <button type="button" className="bulkLink" onClick={() => location.assign(`/schedule/new/bulk?day=${day}`)}>複数台まとめて登録</button>
+        </div>
         <div className="notice">{message}</div>
 
         <div className="capacity">
@@ -776,7 +779,7 @@ export default function ScheduleNewPage() {
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
         .page{max-width:920px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
         button,input,select,textarea{font:inherit}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:11px 14px;font-weight:800}
-        .card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:34px;margin:4px 0 10px}h2{margin:0 0 14px}
+        .card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.eyebrow{font-weight:800;color:#2674e8}.titleRow{display:flex;align-items:center;justify-content:space-between;gap:10px}.titleRow h1{margin-right:auto}.bulkLink{background:#eef5ff;border-color:#9fc1f2;white-space:nowrap}h1{font-size:34px;margin:4px 0 10px}h2{margin:0 0 14px}
         .notice{background:#edf7ef;border:1px solid #c2e5cb;border-radius:12px;padding:12px 14px;color:#3c5944}
         .capacity{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.capacity>div{background:#f6f8fb;border-radius:12px;padding:12px;display:grid}.capacity b{font-size:24px}.capacity small{color:#78869a}
         .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
