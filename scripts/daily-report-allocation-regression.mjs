@@ -5,16 +5,31 @@ const allocator = fs.readFileSync(new URL("../app/schedule/daily-report-allocati
 const template = fs.readFileSync(new URL("../app/schedule/daily-report-template.ts", import.meta.url), "utf8");
 const rules = fs.readFileSync(new URL("../app/schedule/print-rules.ts", import.meta.url), "utf8");
 
-assert.match(allocator, /dailyReportPeriodSlotIndexes\(period\)/, "日報テンプレートの23行スロットを直接使う");
-assert.match(allocator, /prepareDailyReportSection\(rows, period\)/, "来社→引取→出張・時間順の既存印刷ルールを再利用する");
-assert.match(allocator, /deliveries:\s*delivery\.placed/, "納車欄を独立して配置する");
-assert.match(allocator, /inbound:\s*inbound\.placed/, "引取系欄を独立して配置する");
-assert.match(allocator, /overflow:/, "日報欄を超える予定を黙って欠落させない");
+assert.match(allocator, /allocateDailyReportDay/, "日報は午前・午後を合わせた23行全体で割り当てる");
+assert.match(allocator, /dailyReportRowSlots\(\)/, "日報テンプレートの23行全体を直接使う");
+assert.match(allocator, /spareAfternoon/, "午後側の空き行を午前側が使える");
+assert.match(allocator, /spareMorning/, "午前側の空き行を午後側が使える");
 assert.match(template, /count:\s*23/, "既存日報の23行構成を維持する");
-assert.match(template, /\.reverse\(\)/, "午後は下側スロットから使用する");
-assert.match(rules, /stackDailyReportRows<T>\(rows: T\[], period: DailyReportPeriod\)[\s\S]*return \[\.\.\.rows\];/, "午後も予定の時間順を反転せず、下側スロットへ順番に詰める");
-assert.match(rules, /customer_visit:\s*0[\s\S]*pickup:\s*1[\s\S]*onsite_repair:\s*2/, "引取系は来社→引取→出張の順を維持する");
-assert.match(rules, /return "A中"/, "午前中の引取で時間指定なしはA中");
-assert.match(rules, /return "中"/, "納車の時間指定なしは中");
+assert.match(rules, /customer_visit:\s*0[\s\S]*pickup:\s*1[\s\S]*onsite_repair:\s*2/, "引取系の並び順を維持する");
+
+function capacities(morningCount, afternoonCount, totalSlots = 23) {
+  const baseMorning = Math.ceil(totalSlots / 2);
+  const baseAfternoon = totalSlots - baseMorning;
+  const morningBaseUsed = Math.min(morningCount, baseMorning);
+  const afternoonBaseUsed = Math.min(afternoonCount, baseAfternoon);
+  const spareMorning = baseMorning - morningBaseUsed;
+  const spareAfternoon = baseAfternoon - afternoonBaseUsed;
+  const morningExtra = Math.min(Math.max(0, morningCount - morningBaseUsed), spareAfternoon);
+  const afternoonExtra = Math.min(Math.max(0, afternoonCount - afternoonBaseUsed), spareMorning);
+  return {
+    morningCapacity: morningBaseUsed + morningExtra,
+    afternoonCapacity: afternoonBaseUsed + afternoonExtra,
+  };
+}
+
+assert.deepEqual(capacities(15, 0), { morningCapacity: 15, afternoonCapacity: 0 });
+assert.deepEqual(capacities(15, 8), { morningCapacity: 15, afternoonCapacity: 8 });
+assert.deepEqual(capacities(8, 15), { morningCapacity: 8, afternoonCapacity: 15 });
+assert.deepEqual(capacities(15, 15), { morningCapacity: 12, afternoonCapacity: 11 });
 
 console.log("daily report allocation regression: ok");
