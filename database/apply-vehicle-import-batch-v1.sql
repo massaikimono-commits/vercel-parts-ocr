@@ -1,5 +1,6 @@
 -- Deployed to the existing Supabase project on 2026-09-04.
 -- Atomic bulk vehicle import apply for reviewed PDF imports.
+-- Includes create/update identity-collision guards.
 
 CREATE OR REPLACE FUNCTION public.apply_vehicle_import_batch_v1(p_items jsonb, p_actor text DEFAULT NULL::text)
  RETURNS jsonb
@@ -164,6 +165,30 @@ begin
         if not found then
           v_failed_index:=v_index;
           v_failed_result:=jsonb_build_object('hardErrors',jsonb_build_array('更新対象の既存車両が見つかりません。'));
+          raise exception 'vehicle_batch_item_failed';
+        end if;
+
+        v_duplicate_vehicle_id := null;
+        select v.id into v_duplicate_vehicle_id
+        from public.vehicles v
+        where v.id<>v_target_vehicle_id
+          and (
+            (v_chassis is not null and lower(coalesce(v.chassis_number,''))=lower(v_chassis))
+            or (
+              v_registration is not null
+              and regexp_replace(coalesce(v.registration_number,''),'[[:space:]・･-]','','g')
+                = regexp_replace(v_registration,'[[:space:]・･-]','','g')
+            )
+          )
+        order by v.created_at desc
+        limit 1;
+
+        if v_duplicate_vehicle_id is not null then
+          v_failed_index:=v_index;
+          v_failed_result:=jsonb_build_object(
+            'hardErrors',jsonb_build_array('更新後の登録番号または車台番号が別の既存車両と重複します。更新対象を確認してください。'),
+            'duplicateVehicleId',v_duplicate_vehicle_id
+          );
           raise exception 'vehicle_batch_item_failed';
         end if;
 

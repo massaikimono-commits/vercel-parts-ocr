@@ -102,6 +102,8 @@ assert(vehicleBulkPdf.includes('quality:"image_pdf"'), "bulk PDF parser must exp
 assert(vehicleBulkPdf.includes("registration_number") && vehicleBulkPdf.includes("chassis_number") && vehicleBulkPdf.includes("model_code"), "bulk PDF parser must require core certificate identity fields");
 assert(vehicleBulkApplySql.includes("vehicle_batch_item_failed"), "bulk vehicle apply must roll back all changes when any reviewed import fails");
 assert(vehicleBulkApplySql.includes("duplicateVehicleId"), "bulk vehicle apply must block exact duplicate registration/chassis creates");
+assert(vehicleBulkApplySql.includes("v.id<>v_target_vehicle_id"), "bulk vehicle updates must exclude only their own row when checking identity collisions");
+assert(vehicleBulkApplySql.includes("更新後の登録番号または車台番号が別の既存車両と重複します"), "bulk vehicle updates must stop cross-vehicle registration/chassis collisions");
 assert(vehicleBulkApplySql.includes("CREATE_VEHICLE") && vehicleBulkApplySql.includes("UPDATE_EXISTING"), "bulk vehicle apply must support reviewed create/update decisions");
 assert(vehicleBulkApplySql.includes("jsonb_array_length(p_items)>100"), "bulk vehicle apply must cap accidental oversized submissions");
 assert(vehicleBulkApplySql.includes("vehicle_pdf_batch"), "bulk-created vehicles must record their source");
