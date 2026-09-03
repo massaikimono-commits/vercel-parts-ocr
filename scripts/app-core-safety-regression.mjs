@@ -36,6 +36,9 @@ assert(scheduleNew.includes('p_print_time_mode: selectedDelivery.mode'), "delive
 assert(scheduleNew.includes('setOnsiteMode("morning")') && scheduleNew.includes('setOnsiteMode("unspecified")'), "onsite registration must support exact/A中/中 modes");
 assert(scheduleNew.includes('reason === "車検" ? addDays(day, 1) : day'), "vehicle inspection delivery must default to next day while other work defaults to same day");
 assert(scheduleNew.includes('x.key === "unspecified"'), "delivery defaults must prefer the unspecified 中 option");
+assert(scheduleNew.includes("inboundAddDeliveryPreference"), "schedule registration must remember the user's add-delivery choice across entry-type switches");
+assert(scheduleNew.includes("inboundAddDeliveryPreference.current = e.target.checked"), "manual add-delivery choice must update the remembered preference");
+assert(scheduleNew.includes("setAddDelivery(inboundAddDeliveryPreference.current)"), "returning from delivery-only mode must restore the previous inbound add-delivery choice");
 assert(scheduleNew.includes('.from("external_vendors")'), "schedule registration must reuse the external vendor master");
 assert(scheduleNew.includes('supabase.rpc("set_work_order_assignment"'), "schedule registration must reuse the existing assignment RPC for external vendors");
 assert(scheduleNew.includes("自社作業なら空欄"), "schedule registration must expose optional external vendor input");

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../supabase";
 
 type EntryType = "delivery" | "pickup" | "customer_visit" | "onsite_repair";
@@ -133,6 +133,7 @@ export default function ScheduleNewPage() {
   const [onsiteDuration, setOnsiteDuration] = useState("60");
 
   const [addDelivery, setAddDelivery] = useState(true);
+  const inboundAddDeliveryPreference = useRef(true);
   const [deliveryDay, setDeliveryDay] = useState(todayJst());
   const [deliveryOptions, setDeliveryOptions] = useState<TimeOption[]>([]);
   const [deliveryTimeKey, setDeliveryTimeKey] = useState("");
@@ -171,6 +172,7 @@ export default function ScheduleNewPage() {
       setAddDelivery(false);
       return;
     }
+    setAddDelivery(inboundAddDeliveryPreference.current);
     void loadDeliveryOptions();
   }, [deliveryDay, entryType, reason]);
 
@@ -733,7 +735,10 @@ export default function ScheduleNewPage() {
         <section className="card">
           <h2>③ 納車予定</h2>
           <label className="switch">
-            <input type="checkbox" checked={addDelivery} onChange={(e) => setAddDelivery(e.target.checked)} />
+            <input type="checkbox" checked={addDelivery} onChange={(e) => {
+              inboundAddDeliveryPreference.current = e.target.checked;
+              setAddDelivery(e.target.checked);
+            }} />
             入庫予定と同時に納車予定も登録する
           </label>
           {addDelivery && (
