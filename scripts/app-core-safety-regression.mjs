@@ -28,6 +28,10 @@ const scheduleBulk = read("app","schedule","new","bulk","page.tsx");
 const scheduleBatchSql = read("database","create-schedule-registration-batch-v1.sql");
 const scheduleBatchSearchSql = read("database","search-schedule-vehicles-v1.sql");
 const assignmentHistorySql = read("database","set-work-order-assignment-history.sql");
+const vehicleWorkflow = read("app","vehicle-workflow","page.tsx");
+const vehicleBulk = read("app","vehicle-workflow","bulk","page.tsx");
+const vehicleBulkPdf = read("app","lib","vehicle-bulk-pdf.ts");
+const vehicleBulkApplySql = read("database","apply-vehicle-import-batch-v1.sql");
 function assert(condition, message) {
   if (!condition) {
     console.error(`app-core safety regression failed: ${message}`);
@@ -71,6 +75,24 @@ assert(scheduleBatchSearchSql.includes("regexp_replace(coalesce(c.phone"), "batc
 assert(!scheduleBatchSearchSql.toLowerCase().includes("create table"), "batch vehicle picker must not add tables");
 assert(assignmentHistorySql.includes("work_order_assignment_changed"), "staff/vendor assignment changes must be recorded in work-order history");
 assert(assignmentHistorySql.includes("'WORKER'"), "assignment history must use an allowed work-order change type");
+assert(vehicleWorkflow.includes("/vehicle-workflow/bulk"), "single vehicle workflow must expose bulk PDF vehicle registration");
+assert(vehicleBulk.includes('multiple accept="application/pdf,.pdf"'), "bulk vehicle registration must allow selecting multiple PDFs");
+assert(vehicleBulk.includes("parseVehicleCertificatePdf"), "bulk vehicle registration must parse each PDF through the isolated batch parser");
+assert(vehicleBulk.includes('.from("vehicle_imports").insert({'), "bulk PDF parsing must stage results before modifying the vehicle master");
+assert(vehicleBulk.includes('supabase.rpc("vehicle_import_review"') && vehicleBulk.includes('supabase.rpc("find_vehicle_import_matches"'), "bulk PDF registration must review existing-vehicle matches before save");
+assert(vehicleBulk.includes('supabase.rpc("find_customer_import_matches"'), "bulk PDF registration must offer customer match candidates without forcing a link");
+assert(vehicleBulk.includes('supabase.rpc("apply_vehicle_import_batch_v1"'), "bulk vehicle save must use the atomic reviewed-import RPC");
+assert(vehicleBulk.includes('include:parsed.quality!=="image_pdf"'), "weak image PDFs must be excluded from bulk auto-save by default");
+assert(vehicleBulk.includes("1件でも重複・入力不足があれば全件ロールバック"), "bulk vehicle UI must explain all-or-none vehicle save");
+assert(vehicleBulkPdf.includes("Math.min(pdf.numPages||1,8)"), "bulk PDF parser must search only a bounded number of pages");
+assert(vehicleBulkPdf.includes('quality:"image_pdf"'), "bulk PDF parser must explicitly flag PDFs without a useful text layer");
+assert(vehicleBulkPdf.includes("registration_number") && vehicleBulkPdf.includes("chassis_number") && vehicleBulkPdf.includes("model_code"), "bulk PDF parser must require core certificate identity fields");
+assert(vehicleBulkApplySql.includes("vehicle_batch_item_failed"), "bulk vehicle apply must roll back all changes when any reviewed import fails");
+assert(vehicleBulkApplySql.includes("duplicateVehicleId"), "bulk vehicle apply must block exact duplicate registration/chassis creates");
+assert(vehicleBulkApplySql.includes("CREATE_VEHICLE") && vehicleBulkApplySql.includes("UPDATE_EXISTING"), "bulk vehicle apply must support reviewed create/update decisions");
+assert(vehicleBulkApplySql.includes("jsonb_array_length(p_items)>100"), "bulk vehicle apply must cap accidental oversized submissions");
+assert(vehicleBulkApplySql.includes("vehicle_pdf_batch"), "bulk-created vehicles must record their source");
+assert(!vehicleBulkApplySql.toLowerCase().includes("create table"), "bulk vehicle import must reuse existing import/vehicle tables");
 assert(scheduleEdit.includes('supabase.rpc("reschedule_schedule_entry_v2"'), "reschedule and stay details must be atomic");
 assert(scheduleEdit.includes('supabase.rpc("cancel_schedule_entry_v1"'), "reservation cancellation must stay inside the existing schedule edit flow");
 assert(scheduleEdit.includes('opts.find(x=>x.mode===base.print_time_mode)'), "reservation edit must preserve A中/午後/中 instead of falling back to the first exact slot");
