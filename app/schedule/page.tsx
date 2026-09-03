@@ -434,7 +434,9 @@ export default function SchedulePage() {
   }
 
   function last4Label(vehicle: Vehicle | null) {
-    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
+    const raw = vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
+    if (!raw) return "----";
+    return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
   }
 
   function workFlags(work: WorkOrder | null) {
