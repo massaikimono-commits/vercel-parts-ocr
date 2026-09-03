@@ -141,6 +141,7 @@ export default function ScheduleNewPage() {
   const [inspectionScheduleType, setInspectionScheduleType] = useState("");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [selectedTimeKey, setSelectedTimeKey] = useState("");
+  const [onsiteTimeMode, setOnsiteTimeMode] = useState<"exact" | "morning" | "unspecified">("exact");
   const [onsiteTime, setOnsiteTime] = useState("09:00");
   const [onsiteDuration, setOnsiteDuration] = useState("60");
 
@@ -357,11 +358,17 @@ export default function ScheduleNewPage() {
         printMode: selectedTime.mode,
       };
     }
-    const startsAt = jstIso(day, onsiteTime);
+    const duration = Math.max(30, Number(onsiteDuration) || 60);
+    const startTime = onsiteTimeMode === "morning"
+      ? "09:00"
+      : onsiteTimeMode === "unspecified"
+        ? "13:00"
+        : onsiteTime;
+    const startsAt = jstIso(day, startTime);
     return {
       startsAt,
-      endsAt: plusMinutes(startsAt, Math.max(30, Number(onsiteDuration) || 60)),
-      printMode: "exact" as const,
+      endsAt: plusMinutes(startsAt, duration),
+      printMode: onsiteTimeMode,
     };
   }
 
@@ -985,7 +992,16 @@ export default function ScheduleNewPage() {
             </div>
           ) : (
             <>
-              <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
+              <label>出張時間
+                <select value={onsiteTimeMode} onChange={(e) => setOnsiteTimeMode(e.target.value as "exact" | "morning" | "unspecified")}>
+                  <option value="exact">時間指定</option>
+                  <option value="morning">A中</option>
+                  <option value="unspecified">中（午後）</option>
+                </select>
+              </label>
+              {onsiteTimeMode === "exact" && (
+                <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
+              )}
               <label>作業枠
                 <select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}>
                   <option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option>
