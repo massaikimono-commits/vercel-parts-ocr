@@ -149,7 +149,6 @@ export default function ScheduleNewPage() {
   const [selectedTimeKey, setSelectedTimeKey] = useState("");
   const [onsiteTimeMode, setOnsiteTimeMode] = useState<"exact" | "morning" | "unspecified">("exact");
   const [onsiteTime, setOnsiteTime] = useState("09:00");
-  const [onsiteDuration, setOnsiteDuration] = useState("60");
 
   const [addDelivery, setAddDelivery] = useState(true);
   const [deliveryDay, setDeliveryDay] = useState(todayJst());
@@ -370,7 +369,7 @@ export default function ScheduleNewPage() {
         printMode: selectedTime.mode,
       };
     }
-    const duration = Math.max(30, Number(onsiteDuration) || 60);
+    const duration = 60;
     const startTime = onsiteTimeMode === "morning"
       ? "09:00"
       : onsiteTimeMode === "unspecified"
@@ -1014,11 +1013,6 @@ export default function ScheduleNewPage() {
               {onsiteTimeMode === "exact" && (
                 <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
               )}
-              <label>作業枠
-                <select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}>
-                  <option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option>
-                </select>
-              </label>
             </>
           )}
         </div>
