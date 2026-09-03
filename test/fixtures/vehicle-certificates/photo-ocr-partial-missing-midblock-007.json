@@ -1,0 +1,34 @@
+{
+  "id": "photo-ocr-partial-missing-midblock-007",
+  "description": "写真OCRで中央の車両諸元ブロック（車名・定員・重量・寸法・軸重）が未取得でも、上段の登録情報と下段の型式・原動機・使用者・満了日を誤補完せず保持する匿名化回帰ケース。実車・実顧客を特定できる値は保存しない。",
+  "inputType": "photo-ocr-simulated-partial",
+  "rows": [
+    "自動車登録番号又は車両番号   登録年月日/交付年月日   初度登録年月/初度検査年月   自動車の種別   用途   自家用・事業用の別   車体の形状",
+    "札幌 500 て 4321   令和8年8月20日   令和4年6月   普通   乗用   自家用   箱型",
+    "型 式   原 動 機 の 型 式   総排気量又は定格出力   燃 料 の 種 類   型式指定番号   類別区分番号",
+    "5BA-TEST01   ENG-TEST   1.20 L   ガソリン   29999   0007",
+    "使用者の氏名又は名称   テスト車両管理株式会社",
+    "使 用 者 の 住 所   北海道札幌市中央区テスト2丁目3番4号   [00000 0000]",
+    "使用の本拠の位置",
+    "有効期間の満了する日   車検期間",
+    "令和9年8月20日   2年"
+  ],
+  "expected": {
+    "registrationNumber": "札幌 500 て 4321",
+    "registrationDate": "令和8年8月20日",
+    "firstRegistration": "令和4年6月",
+    "vehicleClass": "普通",
+    "purpose": "乗用",
+    "privateBusiness": "自家用",
+    "bodyShape": "箱型",
+    "model": "5BA-TEST01",
+    "engineModel": "ENG-TEST",
+    "displacementOrRatedOutput": "1.20 L",
+    "fuel": "ガソリン",
+    "modelDesignationNumber": "29999",
+    "classificationNumber": "0007",
+    "userName": "テスト車両管理株式会社",
+    "userAddress": "北海道札幌市中央区テスト2丁目3番4号",
+    "inspectionExpiry": "令和9年8月20日"
+  }
+}
