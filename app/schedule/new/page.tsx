@@ -825,6 +825,10 @@ export default function ScheduleNewPage() {
             お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。同じお客様の車両は続けて複数台選択できます。
           </div>
           <input
+            lang="ja"
+            inputMode="text"
+            autoCapitalize="none"
+            spellCheck={false}
             value={registeredSearch}
             onChange={(e) => setRegisteredSearch(e.target.value)}
             placeholder="例：1234 / 山田 / 090 / 車台番号"
@@ -871,9 +875,9 @@ export default function ScheduleNewPage() {
         </div>
 
         <div className="grid">
-          <label>お客様名<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
-          <label>会社名<input value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></label>
-          <label>予定表表示名<input value={scheduleDisplayName} onChange={(e) => setScheduleDisplayName(e.target.value)} placeholder="短い表示名・任意" /></label>
+          <label>お客様名<input lang="ja" inputMode="text" autoCapitalize="none" spellCheck={false} autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
+          <label>会社名<input lang="ja" inputMode="text" autoCapitalize="none" spellCheck={false} autoComplete="organization" value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></label>
+          <label>予定表表示名<input lang="ja" inputMode="text" autoCapitalize="none" spellCheck={false} value={scheduleDisplayName} onChange={(e) => setScheduleDisplayName(e.target.value)} placeholder="短い表示名・任意" /></label>
           <label>電話番号<input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
           <label>登録番号<input value={registrationNumber} onChange={(e) => {
             const value = e.target.value;
