@@ -116,5 +116,6 @@ export function dailyReportPeriodSlotIndexes(period: "morning" | "afternoon") {
   const slots = dailyReportRowSlots();
   const midpoint = Math.ceil(slots.length / 2);
   if (period === "morning") return slots.slice(0, midpoint).map((slot) => slot.index);
-  return slots.slice(midpoint).map((slot) => slot.index).reverse();
+  // 午後は下側の枠を使い、ブロック内は上→下の順。
+  return slots.slice(midpoint).map((slot) => slot.index);
 }
