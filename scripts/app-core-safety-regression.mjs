@@ -18,6 +18,7 @@ const month = read("app","schedule","month","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.sql");
 const flexibleDeliverySql = read("database","create-schedule-registration-v2-flexible-delivery.sql");
+const rescheduleHistorySql = read("database","reschedule-schedule-entry-v2-history-type.sql");
 function assert(condition, message) {
   if (!condition) {
     console.error(`app-core safety regression failed: ${message}`);
@@ -129,6 +130,11 @@ assert(loanerSyncSql.includes("other.id<>lr.id"), "loaner reschedule sync must e
 assert(loanerSyncSql.includes("lr.status='reserved'"), "reserved loaner starts must follow inbound schedule changes");
 assert(loanerSyncSql.includes("e.entry_type='delivery'"), "loaner return time must follow delivery schedule changes");
 assert(loanerSyncSql.includes("loanerSynced"), "reschedule RPC must report whether a linked loaner was synchronized");
+assert(loanerSyncSql.includes("e.work_order_id,'OTHER'"), "reschedule history must use a change type allowed by work_order_schedule_changes");
+assert(loanerSyncSql.includes("'eventType','schedule_entry_rescheduled'"), "reschedule history must preserve the precise event name inside JSON");
+assert(!loanerSyncSql.includes("e.work_order_id,'schedule_entry_rescheduled'"), "reschedule history must not use a change type rejected by the table constraint");
+assert(rescheduleHistorySql.includes("v_new_type text := 'e.work_order_id,''OTHER'','"), "deployed DB patch must convert invalid reschedule history type");
+assert(rescheduleHistorySql.includes("eventType"), "deployed DB patch must preserve reservation-change semantics");
 assert(!loanerSyncSql.toLowerCase().includes("create table"), "loaner reschedule sync must not add tables");
 assert(flexibleDeliverySql.includes("p_delivery_print_time_mode"), "flexible delivery chronology must branch by print-time mode");
 assert(flexibleDeliverySql.includes("Asia/Tokyo"), "flexible delivery chronology must compare non-exact delivery by JST date");

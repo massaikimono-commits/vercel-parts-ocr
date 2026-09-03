@@ -153,8 +153,9 @@ begin
       work_order_id,change_type,old_value,new_value,changed_by
     )
     values(
-      e.work_order_id,'schedule_entry_rescheduled',
+      e.work_order_id,'OTHER',
       jsonb_build_object(
+        'eventType','schedule_entry_rescheduled',
         'scheduleEntryId',e.id,'entryType',e.entry_type,
         'startsAt',e.starts_at,'endsAt',e.ends_at,'printTimeMode',e.print_time_mode,
         'loanerReservationId',case when v_has_loaner then lr.id else null end,
@@ -162,6 +163,7 @@ begin
         'loanerEndsAt',case when v_has_loaner then lr.ends_at else null end
       ),
       jsonb_build_object(
+        'eventType','schedule_entry_rescheduled',
         'scheduleEntryId',e.id,'entryType',e.entry_type,
         'startsAt',p_starts_at,'endsAt',p_ends_at,
         'printTimeMode',coalesce(nullif(btrim(p_print_time_mode),''),e.print_time_mode),
