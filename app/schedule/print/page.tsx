@@ -79,22 +79,35 @@ function jstTime(value: string | null) {
   return new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
 }
 
-function shortDate(value: string | null) {
+function shortDay(value: string | null) {
   if (!value) return "";
   const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return value;
-  return `${Number(m[2])}/${Number(m[3])}`;
+  return String(Number(m[3]));
+}
+
+function compactDeliveryTime(value: string) {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(value));
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
+  return minute === 0 ? `${hour}時` : `${hour}時${minute}分`;
 }
 
 function dueLabel(entry: PreviewEntry) {
   if (entry.plannedDeliveryAt) {
-    const d = new Date(entry.plannedDeliveryAt);
-    const date = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric" }).format(d);
-    const time = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
-    return `${date} ${time}`;
+    const day = new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      day: "numeric",
+    }).format(new Date(entry.plannedDeliveryAt));
+    return `${day} ${compactDeliveryTime(entry.plannedDeliveryAt)}`;
   }
-  if (entry.plannedDeliveryDate) return shortDate(entry.plannedDeliveryDate);
-  if (entry.expectedCompletionDate) return shortDate(entry.expectedCompletionDate);
+  if (entry.plannedDeliveryDate) return `${shortDay(entry.plannedDeliveryDate)} 中`;
+  if (entry.expectedCompletionDate) return `${shortDay(entry.expectedCompletionDate)} 中`;
   return "";
 }
 
@@ -197,7 +210,18 @@ export default function DailyReportPrintPage() {
   const model = useMemo(() => buildDailyReportPreviewModel(morning, afternoon), [morning, afternoon]);
   const slots = dailyReportRowSlots();
   const messages = useMemo(() => collectDailyReportMessages(entries), [entries]);
-  const secondary = useMemo(() => selectDailyReportSecondaryWorks(workOrders, day), [workOrders, day]);
+  const deliveryVehicleIds = useMemo(
+    () => new Set(
+      enriched
+        .filter((entry) => entry.entry_type === "delivery" && entry.vehicle_id)
+        .map((entry) => entry.vehicle_id as string),
+    ),
+    [enriched],
+  );
+  const secondary = useMemo(
+    () => selectDailyReportSecondaryWorks(workOrders, day, deliveryVehicleIds),
+    [workOrders, day, deliveryVehicleIds],
+  );
 
   function customerForVehicle(vehicleId: string) {
     const vehicle = vehicleMap.get(vehicleId);
@@ -249,9 +273,9 @@ export default function DailyReportPrintPage() {
   function workLine(work: WorkOrder, prefix = "") {
     const stayDays = stayDayCountForReport(work, day);
     const stayAge = stayDays ? ` 入庫:${stayDays}日目` : "";
-    const completion = work.expected_completion_date ? ` 完成:${work.expected_completion_date}` : "";
+    const completion = work.expected_completion_date ? ` 完成:${shortDay(work.expected_completion_date)}` : "";
     const stay = work.stay_reason ? ` ${work.stay_reason}` : "";
-    const deliveryDay = work.planned_delivery_date ? ` 納車:${work.planned_delivery_date}` : "";
+    const deliveryDay = work.planned_delivery_date ? ` 納車:${shortDay(work.planned_delivery_date)} 中` : "";
     const worker = work.worker_name ? ` 担当:${work.worker_name}` : "";
     const vendor = work.outsource_vendor_name ? ` 外注:${work.outsource_vendor_name}` : "";
     return `${prefix}${customerForVehicle(work.vehicle_id)} ${last4ForVehicle(work.vehicle_id)} ${work.reason}${worker}${vendor}${stayAge}${stay}${completion}${deliveryDay}`.trim();
@@ -290,7 +314,12 @@ export default function DailyReportPrintPage() {
           {secondary.bodyShopVehicles.map((work) => <div key={work.id}>{workLine(work)}</div>)}
         </div>
         <div className="secondary planned" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.plannedDeliveries)}>
-          {secondary.plannedDeliveries.map((work) => <div key={work.id}>{workLine(work, `${jstTime(work.planned_delivery_at)} `)}</div>)}
+          {secondary.plannedDeliveries.map((work) => {
+            const planned = work.planned_delivery_at
+              ? `${new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", day: "numeric" }).format(new Date(work.planned_delivery_at))} ${compactDeliveryTime(work.planned_delivery_at)} `
+              : "";
+            return <div key={work.id}>{workLine(work, planned)}</div>;
+          })}
         </div>
 
         {!backgroundUrl && <div className="placeholder">既成の日報用紙へ重ね印刷<br /><small>画面上は位置確認用／印刷時は文字だけ出力</small></div>}
