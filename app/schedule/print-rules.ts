@@ -19,6 +19,13 @@ function timeValue(row: Pick<DailyReportEntryLike, "starts_at">) {
   return new Date(row.starts_at).getTime();
 }
 
+function pickupModeOrder(row: DailyReportEntryLike) {
+  if (row.entry_type !== "pickup") return 0;
+  if (row.print_time_mode === "exact") return 0;
+  if (row.print_time_mode === "morning") return 1;
+  return 2;
+}
+
 function isMorningJst(value: string) {
   const hour = Number(new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Tokyo",
@@ -50,6 +57,8 @@ export function dailyReportTimeLabel(row: DailyReportEntryLike) {
   ) return "A中";
   if (row.entry_type === "pickup" && row.print_time_mode === "unspecified") return "午後";
   if (row.entry_type === "delivery" && row.print_time_mode === "unspecified") return "中";
+  if (row.entry_type === "onsite_repair" && row.print_time_mode === "morning") return "A中";
+  if (row.entry_type === "onsite_repair" && row.print_time_mode === "unspecified") return "中";
   return row.print_time_mode === "morning" ? "午前" : "時間未定";
 }
 
@@ -59,6 +68,10 @@ export function sortDailyReportInbound<T extends DailyReportEntryLike>(rows: T[]
     const bOrder = b.entry_type === "delivery" ? 99 : INBOUND_TYPE_ORDER[b.entry_type];
     const typeDiff = aOrder - bOrder;
     if (typeDiff) return typeDiff;
+    if (a.entry_type === "pickup" && b.entry_type === "pickup") {
+      const modeDiff = pickupModeOrder(a) - pickupModeOrder(b);
+      if (modeDiff) return modeDiff;
+    }
     return timeValue(a) - timeValue(b);
   });
 }
