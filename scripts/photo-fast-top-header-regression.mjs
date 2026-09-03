@@ -12,6 +12,9 @@ assert.equal(direct.documentNumber, "1234567890123");
 
 assert.equal(parseTopHeaderDate("記録年月日 今和 8年 9月 3日"), "令和8年9月3日");
 assert.equal(parseTopHeaderDate("令和8年19月3日"), "");
+assert.equal(parseTopHeaderDate("令和8年2月31日"), "");
+assert.equal(parseTopHeaderDate("令和2年2月29日"), "令和2年2月29日");
+assert.equal(parseTopHeaderDate("令和3年2月29日"), "");
 assert.equal(parseTopHeaderDocumentNumber("記録事項番号 1234 5678 90123"), "1234567890123");
 assert.equal(parseTopHeaderDocumentNumber("123456789012"), "");
 
