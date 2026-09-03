@@ -100,6 +100,7 @@ assert(schedule.includes("openVehicleFromCard"), "daily schedule cards must open
 assert(schedule.includes("outsource_vendor_name"), "daily schedule must distinguish outsourced general repair");
 assert(schedule.includes("reasonShaken") && schedule.includes("reasonInspection") && schedule.includes("reasonGeneral") && schedule.includes("reasonBodywork"), "daily schedule must preserve intake reason color classes");
 assert(schedule.includes("grid-template-columns:minmax(0,1fr) minmax(0,1fr)"), "mobile daily schedule must keep delivery/inbound in two report-style columns");
+assert(reportPrint.includes("dailyReportTimeLabel"), "daily report must share flexible schedule labels with the daily/weekly/monthly views");
 assert(workload.includes('params.get("worker")') && workload.includes('params.get("filter")'), "workload page must accept direct worker/state filters");
 assert(home.includes("openWorkload(row.name)"), "desktop home staff load cards must open the actionable workload board");
 assert(workload.includes('supabase.rpc("set_work_order_worker"'), "workload board must reuse the existing staff assignment RPC");

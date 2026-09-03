@@ -10,6 +10,11 @@ function timeValue(row) {
   return new Date(row.starts_at).getTime();
 }
 
+function inboundModeOrder(row) {
+  if (row.entry_type !== "pickup") return 0;
+  return row.print_time_mode === "exact" ? 0 : 1;
+}
+
 function isMorningJst(value) {
   const hour = Number(new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Tokyo",
@@ -33,6 +38,9 @@ function printTimeLabel(row) {
     row.entry_type === "pickup"
     && (row.print_time_mode === "morning" || (row.print_time_mode === "unspecified" && isMorningJst(row.starts_at)))
   ) return "A中";
+  if (row.entry_type === "pickup" && row.print_time_mode === "unspecified") return "午後";
+  if (row.entry_type === "customer_visit" && row.print_time_mode === "morning") return "A中";
+  if (row.entry_type === "customer_visit" && row.print_time_mode === "unspecified") return "午後";
   if (row.entry_type === "onsite_repair" && row.print_time_mode === "morning") return "A中";
   if (row.entry_type === "onsite_repair" && row.print_time_mode === "unspecified") return "中";
   if (row.entry_type === "delivery" && row.print_time_mode === "unspecified") return "中";
@@ -43,6 +51,8 @@ function sortInbound(rows) {
   return [...rows].sort((a, b) => {
     const typeDiff = (TYPE_ORDER[a.entry_type] ?? 99) - (TYPE_ORDER[b.entry_type] ?? 99);
     if (typeDiff) return typeDiff;
+    const modeDiff = inboundModeOrder(a) - inboundModeOrder(b);
+    if (modeDiff) return modeDiff;
     return timeValue(a) - timeValue(b);
   });
 }
@@ -82,11 +92,20 @@ assert.deepEqual(stackForPrint(["13:00", "14:00", "15:00"], "afternoon"), ["15:0
 
 assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "morning", print_time_label_override: null }), "A中", "午前中の引取・時間指定なしはA中");
 assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T01:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "A中", "午前帯に置かれた引取・時間未定もA中");
-assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T05:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "時間未定", "午後の引取・時間未定はA中にしない");
+assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T05:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "午後", "午後の引取・時間指定なしは午後表示");
 assert.equal(printTimeLabel({ entry_type: "delivery", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "中", "納車・時間指定なしは中");
 assert.equal(printTimeLabel({ entry_type: "onsite_repair", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "morning", print_time_label_override: null }), "A中", "出張の午前帯指定はA中");
 assert.equal(printTimeLabel({ entry_type: "onsite_repair", starts_at: "2026-08-29T04:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "中", "出張の午後帯指定は中");
 assert.equal(printTimeLabel({ entry_type: "pickup", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "morning", print_time_label_override: "AM" }), "AM", "明示上書きが最優先");
 assert.equal(printTimeLabel({ entry_type: "customer_visit", starts_at: "2026-08-29T00:30:00.000Z", print_time_mode: "exact", print_time_label_override: null }), "09:30", "時刻指定はJST HH:mm");
+assert.equal(printTimeLabel({ entry_type: "customer_visit", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "morning", print_time_label_override: null }), "A中", "来社の午前帯指定はA中");
+assert.equal(printTimeLabel({ entry_type: "customer_visit", starts_at: "2026-08-29T04:00:00.000Z", print_time_mode: "unspecified", print_time_label_override: null }), "午後", "来社の午後帯指定は午後");
+
+const pickupMixed = [
+  { id: "p-a", entry_type: "pickup", starts_at: "2026-08-29T00:00:00.000Z", print_time_mode: "morning", print_time_label_override: null },
+  { id: "p-11", entry_type: "pickup", starts_at: "2026-08-29T02:00:00.000Z", print_time_mode: "exact", print_time_label_override: null },
+  { id: "p-10", entry_type: "pickup", starts_at: "2026-08-29T01:00:00.000Z", print_time_mode: "exact", print_time_label_override: null },
+];
+assert.deepEqual(sortInbound(pickupMixed).map((x) => x.id), ["p-10", "p-11", "p-a"], "引取は時間指定を先に時間順、その後A中/午後");
 
 console.log("schedule print rule regression: ok");
