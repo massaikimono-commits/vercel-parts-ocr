@@ -331,6 +331,7 @@ export default function WeeklySchedulePage() {
         const a = dayRows[i].entry;
         const b = dayRows[j].entry;
         if (a.entry_type !== b.entry_type) continue;
+        if (a.entry_type === "pickup" || a.entry_type === "delivery") continue;
         if (new Date(a.starts_at) < new Date(b.ends_at) && new Date(a.ends_at) > new Date(b.starts_at)) {
           count += 1;
           ids.add(a.id);
