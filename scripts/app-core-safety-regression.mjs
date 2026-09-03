@@ -91,6 +91,9 @@ assert(vehicleWorkflowFast.includes('supabase.rpc("save_vehicle_certificate_v1"'
 assert(!vehicleWorkflowFast.includes('await supabase.from("vehicles").insert(p)'), "current high-accuracy vehicle save must not bypass duplicate protection with a direct insert");
 assert(singleVehicleSaveSql.includes("duplicateVehicleId"), "single vehicle certificate save must report an existing duplicate instead of creating one");
 assert(singleVehicleSaveSql.includes("v.id<>p_vehicle_id"), "single vehicle update must exclude only itself from duplicate identity checks");
+assert(singleVehicleSaveSql.includes("pg_advisory_xact_lock") && singleVehicleSaveSql.includes("vehicle-reg:") && singleVehicleSaveSql.includes("vehicle-chassis:"), "single vehicle saves must serialize identical registration/chassis identities to prevent concurrent duplicate inserts");
+assert(vehicleWorkflowFast.includes("[saving,setSaving]=useState(false)"), "current vehicle editor must track save-in-progress state");
+assert(vehicleWorkflowFast.includes("if(saving)return;") && vehicleWorkflowFast.includes('saving?"保存中…":"車両を保存"'), "vehicle save button must reject double-submit while a save is running");
 assert(singleVehicleSaveSql.includes("registration_last4") && singleVehicleSaveSql.includes("registration_number_last4"), "single vehicle save must keep both plate suffix columns aligned");
 assert(!singleVehicleSaveSql.toLowerCase().includes("create table"), "single vehicle duplicate protection must reuse the existing vehicle table");
 assert(customerVehicles.includes('location.assign("/vehicle-workflow-v2")'), "customer/vehicle management must open the current high-accuracy vehicle editor");

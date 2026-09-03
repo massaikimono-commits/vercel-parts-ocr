@@ -1,5 +1,6 @@
 -- Deployed to the existing Supabase project on 2026-09-04.
 -- Guarded single-vehicle certificate save with duplicate identity protection.
+-- Serializes identical registration/chassis saves inside the transaction.
 
 CREATE OR REPLACE FUNCTION public.save_vehicle_certificate_v1(p_vehicle_id uuid, p_payload jsonb, p_actor text DEFAULT NULL::text)
  RETURNS jsonb
@@ -38,6 +39,16 @@ begin
       'saved',false,
       'hardErrors',jsonb_build_array('登録番号または車台番号を確認してください。')
     );
+  end if;
+
+  if v_registration is not null then
+    perform pg_advisory_xact_lock(hashtextextended(
+      'vehicle-reg:' || regexp_replace(v_registration,'[[:space:]・･-]','','g'),
+      0
+    ));
+  end if;
+  if v_chassis is not null then
+    perform pg_advisory_xact_lock(hashtextextended('vehicle-chassis:' || lower(v_chassis),0));
   end if;
 
   select v.id into v_duplicate_id
