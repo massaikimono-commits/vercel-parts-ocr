@@ -13,6 +13,12 @@ type StaffMember = {
   short_name: string | null;
 };
 
+type ExternalVendor = {
+  id: string;
+  display_name: string;
+  short_name: string | null;
+};
+
 type TimeOption = {
   key: string;
   label: string;
@@ -113,7 +119,9 @@ export default function ScheduleNewPage() {
   const [maker, setMaker] = useState("");
   const [model, setModel] = useState("");
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [externalVendors, setExternalVendors] = useState<ExternalVendor[]>([]);
   const [staffId, setStaffId] = useState("");
+  const [outsourceVendorName, setOutsourceVendorName] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
   const [needsLoaner, setNeedsLoaner] = useState(false);
   const [notes, setNotes] = useState("");
@@ -167,21 +175,38 @@ export default function ScheduleNewPage() {
   }, [deliveryDay, entryType, reason]);
 
   useEffect(() => {
-    void loadStaff();
+    void loadAssignmentMasters();
   }, []);
 
-  async function loadStaff() {
-    const { data, error } = await supabase
-      .from("staff_members")
-      .select("id,display_name,short_name")
-      .eq("is_active", true)
-      .order("display_order", { ascending: true })
-      .order("display_name", { ascending: true });
-    if (error) {
-      setMessage(`社員一覧の読み込みエラー: ${error.message}`);
+  useEffect(() => {
+    if (reason !== "一般整備" && reason !== "板金塗装") setOutsourceVendorName("");
+  }, [reason]);
+
+  async function loadAssignmentMasters() {
+    const [staffRes, vendorRes] = await Promise.all([
+      supabase
+        .from("staff_members")
+        .select("id,display_name,short_name")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true })
+        .order("display_name", { ascending: true }),
+      supabase
+        .from("external_vendors")
+        .select("id,display_name,short_name")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true })
+        .order("display_name", { ascending: true }),
+    ]);
+    if (staffRes.error) {
+      setMessage(`社員一覧の読み込みエラー: ${staffRes.error.message}`);
       return;
     }
-    setStaffMembers((data || []) as StaffMember[]);
+    if (vendorRes.error) {
+      setMessage(`外注先一覧の読み込みエラー: ${vendorRes.error.message}`);
+      return;
+    }
+    setStaffMembers((staffRes.data || []) as StaffMember[]);
+    setExternalVendors((vendorRes.data || []) as ExternalVendor[]);
   }
 
   async function loadCapacity() {
@@ -456,6 +481,24 @@ export default function ScheduleNewPage() {
       }
       if (!data?.created) throw new Error("予定を登録できませんでした。");
 
+      const vendorText = outsourceVendorName.trim();
+      if (vendorText && data?.workOrderId) {
+        const matchedVendor = externalVendors.find((vendor) =>
+          vendor.display_name === vendorText || vendor.short_name === vendorText
+        ) || null;
+        const { error: assignmentError } = await supabase.rpc("set_work_order_assignment", {
+          p_work_order_id: data.workOrderId,
+          p_staff_id: staffId || null,
+          p_vendor_id: matchedVendor?.id || null,
+          p_vendor_name: matchedVendor ? null : vendorText,
+          p_actor: "schedule-registration",
+        });
+        if (assignmentError) {
+          setMessage("予定は登録済みです。ただし外注先だけ保存できませんでした: " + assignmentError.message);
+          return;
+        }
+      }
+
       setMessage("予定を登録しました。1日のスケジュールへ戻ります。");
       window.setTimeout(() => location.assign(`/schedule?day=${day}`), 350);
     } catch (error: any) {
@@ -656,6 +699,22 @@ export default function ScheduleNewPage() {
               ))}
             </select>
           </label>
+          {(reason === "一般整備" || reason === "板金塗装") && (
+            <label>外注先
+              <input
+                list="external-vendor-options"
+                value={outsourceVendorName}
+                onChange={(e) => setOutsourceVendorName(e.target.value)}
+                placeholder="自社作業なら空欄"
+              />
+              <datalist id="external-vendor-options">
+                {externalVendors.map((vendor) => (
+                  <option key={vendor.id} value={vendor.display_name}>{vendor.short_name || vendor.display_name}</option>
+                ))}
+              </datalist>
+              <small className="fieldHint">登録済み外注先を選択、または外注先名を直接入力できます。</small>
+            </label>
+          )}
           <div className="flagBox">
             <label className="switch"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />急ぎ</label>
             <label className="switch"><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} />代車あり</label>
@@ -712,7 +771,7 @@ export default function ScheduleNewPage() {
         .capacity{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.capacity>div{background:#f6f8fb;border-radius:12px;padding:12px;display:grid}.capacity b{font-size:24px}.capacity small{color:#78869a}
         .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
         .availabilityBlock{display:grid;gap:10px}.availabilityTitle{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;color:#5c6878}.legend{font-size:12px;font-weight:800}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.openDot{background:#4f9c68}.warnDot{background:#d69a36}.blockedDot{background:#9aa5b3}.availabilityLoading{background:#f7f9fc;border-radius:12px;padding:14px;color:#78869a}.timeGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.timeSlot{display:flex;gap:5px;justify-content:center;align-items:center;padding:10px 7px;border-radius:12px}.timeSlot.open{background:#f2fbf5;border-color:#9bceb0;color:#236c3b}.timeSlot.warning{background:#fff8ea;border-color:#e5bd73;color:#8a5a08}.timeSlot.blocked{background:#f1f3f6;border-color:#d5dbe3;color:#8a95a3;opacity:.7}.timeSlot.selected{outline:3px solid #2674e8;outline-offset:1px}.timeSlot:disabled{cursor:not-allowed}
-        input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
+        input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}.fieldHint{font-size:11px;font-weight:600;color:#78869a}
         .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.onsiteModeBlock{display:grid;gap:7px;color:#5c6878}.onsiteModeButtons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.onsiteModeButtons button{padding:10px 8px}.onsiteModeButtons button.selected{background:#2674e8;color:#fff;border-color:#2674e8}.onsiteModeBlock small{font-weight:600;color:#78869a}.deliveryDefaultHint{margin-top:10px;background:#f5f8fc;border-radius:10px;padding:9px 11px;color:#657184;font-size:12px;font-weight:700}.deliveryGrid{margin-top:10px}
         .primary{width:100%;background:#2f6fe4;border-color:#2f6fe4;color:#fff;font-size:18px;padding:16px}
         .errors,.warnings{margin-top:12px;border-radius:12px;padding:13px 14px;line-height:1.7}.errors{background:#fff0f0;border:1px solid #efbcbc;color:#8f2f2f}.warnings{background:#fff8df;border:1px solid #ecd98d;color:#6d5912}.warnings button{margin-top:8px;background:#fff}
