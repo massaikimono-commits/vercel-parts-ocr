@@ -34,7 +34,7 @@ expect(bulk, 'multiple', "bulk PDF UI");
 expect(bulk, "parseVehicleCertificatePdfNative", "bulk PDF UI");
 expect(bulk, "import_vehicle_certificates_batch_v1", "bulk PDF UI");
 expect(bulk, "要確認", "bulk PDF review");
-expect(bulk, "customerType", "bulk PDF customer type");
+if (bulk.includes("顧客区分") || bulk.includes(">個人<") || bulk.includes(">法人<")) failures.push("bulk PDF UI: personal/company selector must stay hidden");
 expect(bulk, "同じ車両と思われるPDF", "bulk PDF duplicate guard");
 
 expect(importSql, "import_vehicle_certificates_batch_v1", "bulk import sql");
@@ -60,3 +60,4 @@ console.log("- customer records can be removed without deleting vehicle/work his
 console.log("- one customer can schedule multiple existing vehicles atomically");
 console.log("- multiple native-text vehicle-certificate PDFs can be reviewed and bulk imported");
 console.log("- bulk workflows remain authenticated and bounded");
+console.log("- personal/company classification stays internal and is not shown as a required customer field");
