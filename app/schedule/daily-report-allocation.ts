@@ -58,7 +58,10 @@ function placeDayColumn<T extends DailyReportEntryLike>(morningRows: T[], aftern
     .slice(0, morningCapacity)
     .map((entry, index) => ({ entry, slotIndex: slots[index] }));
 
-  const afternoonSlots = slots.slice(slots.length - afternoonCapacity).reverse();
+  // 午後は「下詰め」だが、占有した下側ブロックの中では
+  // 上から下へ表示順を維持する。
+  // これにより「時間指定が上、A中/中などの幅指定が下」になる。
+  const afternoonSlots = slots.slice(slots.length - afternoonCapacity);
   const afternoonPlaced = afternoonRows
     .slice(0, afternoonCapacity)
     .map((entry, index) => ({ entry, slotIndex: afternoonSlots[index] }));
