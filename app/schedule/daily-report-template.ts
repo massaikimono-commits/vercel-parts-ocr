@@ -65,6 +65,34 @@ export const DAILY_REPORT_TEMPLATE = {
     },
   },
 
+  lowerColumns: {
+    stayingVehicles: {
+      worker: 0.10,
+      customer: 0.30,
+      vehicle: 0.40,
+      checkIn: 0.10,
+      due: 0.10,
+    },
+    bodyShopVehicles: {
+      factory: 0.125,
+      customer: 0.375,
+      vehicle: 0.25,
+      checkIn: 0.125,
+      due: 0.125,
+    },
+    plannedDeliveries: {
+      customer: 0.419355,
+      vehicle: 0.322581,
+      due: 0.258064,
+    },
+  },
+
+  secondaryRows: {
+    stayingVehicles: 11,
+    bodyShopVehicles: 11,
+    plannedDeliveries: 17,
+  },
+
   rows: {
     count: 23,
     // Row 1 starts at 125.28 pt. Row 23 starts at 832.80 pt.
