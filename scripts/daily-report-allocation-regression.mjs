@@ -14,7 +14,10 @@ assert.match(template, /count:\s*23/, "既存日報の23行構成を維持する
 assert.match(template, /\.reverse\(\)/, "午後は下側スロットから使用する");
 assert.match(rules, /stackDailyReportRows<T>\(rows: T\[], period: DailyReportPeriod\)[\s\S]*return \[\.\.\.rows\];/, "午後も予定の時間順を反転せず、下側スロットへ順番に詰める");
 assert.match(rules, /customer_visit:\s*0[\s\S]*pickup:\s*1[\s\S]*onsite_repair:\s*2/, "引取系は来社→引取→出張の順を維持する");
-assert.match(rules, /return "A中"/, "午前中の引取で時間指定なしはA中");
+assert.match(rules, /pickupModeOrder/, "引取は時間指定をA中・午後枠より先に並べる");
+assert.match(rules, /modeDiff = pickupModeOrder\(a\) - pickupModeOrder\(b\)/, "引取内で時間指定→A中→午後枠の順を適用する");
+assert.match(rules, /return "A中"/, "午前中の引取または出張で時間指定なしはA中");
+assert.match(rules, /row\.entry_type === "onsite_repair"[\s\S]*row\.print_time_mode === "unspecified"[\s\S]*return "中"/, "午後まとめ指定の出張は中と表示する");
 assert.match(rules, /return "中"/, "納車の時間指定なしは中");
 
 console.log("daily report allocation regression: ok");
