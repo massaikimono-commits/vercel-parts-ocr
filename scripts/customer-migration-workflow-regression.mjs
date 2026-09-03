@@ -60,4 +60,8 @@ console.log("- customer records can be removed without deleting vehicle/work his
 console.log("- one customer can schedule multiple existing vehicles atomically");
 console.log("- multiple native-text vehicle-certificate PDFs can be reviewed and bulk imported");
 console.log("- bulk workflows remain authenticated and bounded");
+expect(customerVehicles, 'lang="ja" inputMode="text"', "customer Japanese text input");
+expect(schedule, 'lang="ja"', "schedule Japanese text input");
+expect(bulk, 'lang="ja"', "bulk import Japanese text input");
 console.log("- personal/company classification stays internal and is not shown as a required customer field");
+console.log("- customer/name/address text fields are marked for Japanese text input without numeric/latin-only keyboard hints");
