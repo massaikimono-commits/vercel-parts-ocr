@@ -108,6 +108,17 @@ function plusMinutes(iso: string, minutes: number) {
   return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString();
 }
 
+function addDay(day: string, delta: number) {
+  const d = new Date(`${day}T00:00:00+09:00`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
 function extractWarnings(check: any) {
   return {
     allowed: Boolean(check?.allowed),
@@ -141,6 +152,7 @@ export default function ScheduleNewPage() {
   const [inspectionScheduleType, setInspectionScheduleType] = useState("");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [selectedTimeKey, setSelectedTimeKey] = useState("");
+  const [onsiteMode, setOnsiteMode] = useState<"exact" | "morning" | "unspecified">("exact");
   const [onsiteTime, setOnsiteTime] = useState("09:00");
   const [onsiteDuration, setOnsiteDuration] = useState("60");
 
@@ -173,8 +185,8 @@ export default function ScheduleNewPage() {
   }, []);
 
   useEffect(() => {
-    setDeliveryDay(day);
-  }, [day]);
+    setDeliveryDay(reason === "車検" ? addDay(day, 1) : day);
+  }, [day, reason]);
 
   useEffect(() => {
     void loadCapacity();
@@ -355,6 +367,20 @@ export default function ScheduleNewPage() {
         startsAt: selectedTime.startsAt,
         endsAt: selectedTime.endsAt,
         printMode: selectedTime.mode,
+      };
+    }
+    if (onsiteMode === "morning") {
+      return {
+        startsAt: jstIso(day, "08:30"),
+        endsAt: jstIso(day, "12:00"),
+        printMode: "morning" as const,
+      };
+    }
+    if (onsiteMode === "unspecified") {
+      return {
+        startsAt: jstIso(day, "13:00"),
+        endsAt: jstIso(day, "17:00"),
+        printMode: "unspecified" as const,
       };
     }
     const startsAt = jstIso(day, onsiteTime);
@@ -594,8 +620,8 @@ export default function ScheduleNewPage() {
           p_print_time_mode: check.main.printMode,
           p_is_urgent: isUrgent,
           p_needs_loaner: needsLoaner,
-          p_vendor_id: reason === "板金塗装" ? (vendorId || null) : null,
-          p_vendor_name: reason === "板金塗装" ? (vendorName.trim() || null) : null,
+          p_vendor_id: (reason === "板金塗装" || reason === "一般整備") ? (vendorId || null) : null,
+          p_vendor_name: (reason === "板金塗装" || reason === "一般整備") ? (vendorName.trim() || null) : null,
           p_add_delivery: addDelivery && entryType !== "delivery",
           p_delivery_starts_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
           p_delivery_ends_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
@@ -712,8 +738,8 @@ export default function ScheduleNewPage() {
         const { error: assignmentError } = await supabase.rpc("set_work_order_assignment", {
           p_work_order_id: workOrderId,
           p_staff_id: staffId || null,
-          p_vendor_id: reason === "板金塗装" ? (vendorId || null) : null,
-          p_vendor_name: reason === "板金塗装" ? (vendorName.trim() || null) : null,
+          p_vendor_id: (reason === "板金塗装" || reason === "一般整備") ? (vendorId || null) : null,
+          p_vendor_name: (reason === "板金塗装" || reason === "一般整備") ? (vendorName.trim() || null) : null,
           p_actor: "schedule-registration",
         });
         if (assignmentError) throw assignmentError;
@@ -919,19 +945,19 @@ export default function ScheduleNewPage() {
               ))}
             </select>
           </label>
-          {reason === "板金塗装" && (
+          {(reason === "板金塗装" || reason === "一般整備") && (
             <>
               <label>外注先
                 <select value={vendorId} onChange={(e) => { setVendorId(e.target.value); if (e.target.value) setVendorName(""); }}>
-                  <option value="">未選択 / 直接入力</option>
+                  <option value="">自社作業 / 未選択 / 直接入力</option>
                   {vendors.map((vendor) => (
                     <option key={vendor.id} value={vendor.id}>{vendor.short_name || vendor.display_name}</option>
                   ))}
                 </select>
               </label>
               {!vendorId && (
-                <label>外注先名（直接入力）
-                  <input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：○○鈑金" />
+                <label>外注先名（必要な時だけ）
+                  <input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：ガラス業者、電装業者、○○鈑金" />
                 </label>
               )}
             </>
@@ -940,7 +966,7 @@ export default function ScheduleNewPage() {
             <label className="switch"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />急ぎ</label>
             <label className="switch"><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} />代車あり</label>
             <button type="button" onClick={() => location.assign("/settings/staff")}>社員名を管理</button>
-            {reason === "板金塗装" && <button type="button" onClick={() => location.assign("/settings/vendors")}>外注先を管理</button>}
+            {(reason === "板金塗装" || reason === "一般整備") && <button type="button" onClick={() => location.assign("/settings/vendors")}>外注先を管理</button>}
           </div>
           <label className="wide">備考<textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>
@@ -985,12 +1011,23 @@ export default function ScheduleNewPage() {
             </div>
           ) : (
             <>
-              <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
-              <label>作業枠
-                <select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}>
-                  <option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option>
+              <label>出張時間
+                <select value={onsiteMode} onChange={(e) => setOnsiteMode(e.target.value as "exact" | "morning" | "unspecified")}>
+                  <option value="exact">時間指定</option>
+                  <option value="morning">午前中</option>
+                  <option value="unspecified">午後中</option>
                 </select>
               </label>
+              {onsiteMode === "exact" && (
+                <>
+                  <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
+                  <label>作業枠
+                    <select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}>
+                      <option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option>
+                    </select>
+                  </label>
+                </>
+              )}
             </>
           )}
         </div>
