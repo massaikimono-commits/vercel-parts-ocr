@@ -1,0 +1,43 @@
+{
+  "id": "photo-ocr-partial-missing-lowerblock-006",
+  "description": "写真OCRで下段（使用者情報・満了日）が未取得でも、上段と車両主要項目を誤補完せず保持する匿名化回帰ケース。実車・実顧客を特定できる値は保存しない。",
+  "inputType": "photo-ocr-simulated-partial",
+  "rows": [
+    "自動車登録番号又は車両番号   登録年月日/交付年月日   初度登録年月/初度検査年月   自動車の種別   用途   自家用・事業用の別   車体の形状",
+    "横浜 321 さ 6789   令和8年9月1日   令和5年4月   普通   乗用   自家用   ステーションワゴン",
+    "車 名   乗 車 定 員   最 大 積 載 量   車 両 重 量   車 両 総 重 量",
+    "日産   5人   -kg   1420kg   1695kg",
+    "車 台 番 号   長 さ   幅   高 さ   前 前軸重   前 後軸重   後 前軸重   後 後軸重",
+    "T33-2468135   466cm   184cm   172cm   850kg   -kg   -kg   570kg",
+    "型 式   原 動 機 の 型 式   総排気量又は定格出力   燃 料 の 種 類   型式指定番号   類別区分番号",
+    "5BA-T33   KR15DDT   1.49 L   ガソリン   20456   0002"
+  ],
+  "expected": {
+    "registrationNumber": "横浜 321 さ 6789",
+    "registrationDate": "令和8年9月1日",
+    "firstRegistration": "令和5年4月",
+    "vehicleClass": "普通",
+    "purpose": "乗用",
+    "privateBusiness": "自家用",
+    "bodyShape": "ステーションワゴン",
+    "vehicleName": "日産",
+    "seatingCapacity": "5",
+    "maxPayloadKg": "-",
+    "vehicleWeightKg": "1420",
+    "grossVehicleWeightKg": "1695",
+    "chassisNumber": "T33-2468135",
+    "lengthCm": "466",
+    "widthCm": "184",
+    "heightCm": "172",
+    "frontFrontAxleWeightKg": "850",
+    "frontRearAxleWeightKg": "-",
+    "rearFrontAxleWeightKg": "-",
+    "rearRearAxleWeightKg": "570",
+    "model": "5BA-T33",
+    "engineModel": "KR15DDT",
+    "displacementOrRatedOutput": "1.49 L",
+    "fuel": "ガソリン",
+    "modelDesignationNumber": "20456",
+    "classificationNumber": "0002"
+  }
+}
