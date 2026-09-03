@@ -73,14 +73,20 @@ export function collectDailyReportMessages(entries: DailyReportSecondaryEntry[])
   return messages;
 }
 
-export function selectDailyReportSecondaryWorks<T extends DailyReportSecondaryWork>(works: T[], day: string) {
+export function selectDailyReportSecondaryWorks<T extends DailyReportSecondaryWork>(
+  works: T[],
+  day: string,
+  deliveryVehicleIds: ReadonlySet<string> = new Set(),
+) {
   const { start, end } = dayBoundsJst(day);
   const active = works.filter((work) => isActiveWorkshopWork(work, end));
   const bodyShopVehicleIds = new Set(active.filter((work) => isBodyShopReason(work.reason)).map((work) => work.vehicle_id));
 
   const bodyShopVehicles = uniqueByVehicle(
     active
-      .filter((work) => bodyShopVehicleIds.has(work.vehicle_id))
+      // 引取欄との重複は許可する。
+      // ただし同じ車両が当日の「納車」欄に載ったら、下部の板金車両欄からは外す。
+      .filter((work) => bodyShopVehicleIds.has(work.vehicle_id) && !deliveryVehicleIds.has(work.vehicle_id))
       .sort((a, b) => (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31")),
   );
 
