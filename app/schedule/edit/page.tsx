@@ -208,8 +208,8 @@ export default function ScheduleEditPage(){
           const {error:assignmentError}=await supabase.rpc("set_work_order_assignment",{
             p_work_order_id:entry.work_order_id,
             p_staff_id:staffId||null,
-            p_vendor_id:reason==="板金塗装" ? (vendorId||null) : null,
-            p_vendor_name:reason==="板金塗装" ? (vendorName.trim()||null) : null,
+            p_vendor_id:(reason==="板金塗装" || reason==="一般整備") ? (vendorId||null) : null,
+            p_vendor_name:(reason==="板金塗装" || reason==="一般整備") ? (vendorName.trim()||null) : null,
             p_actor:"schedule-edit",
           });
           if(assignmentError) throw assignmentError;
@@ -278,7 +278,7 @@ export default function ScheduleEditPage(){
                 {staffMembers.map(staff=><option key={staff.id} value={staff.id}>{staff.short_name||staff.display_name}</option>)}
               </select>
             </label>
-            {reason==="板金塗装" && <label>外注先
+            {(reason==="板金塗装" || reason==="一般整備") && <label>外注先
               <select value={vendorId} onChange={(e)=>{setVendorId(e.target.value);if(e.target.value)setVendorName("");}}>
                 <option value="">未選択 / 直接入力</option>
                 {vendors.map(vendor=><option key={vendor.id} value={vendor.id}>{vendor.short_name||vendor.display_name}</option>)}
