@@ -59,6 +59,14 @@ function plusMinutes(iso: string, minutes: number) {
   return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString();
 }
 
+function addDay(day: string, delta: number) {
+  const d = new Date(`${day}T00:00:00+09:00`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+}
+
 function extractCheck(value: any) {
   return {
     allowed: Boolean(value?.allowed),
@@ -77,6 +85,7 @@ export default function ActiveVehicleSchedulePage() {
   const [inspectionScheduleType, setInspectionScheduleType] = useState("");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [timeKey, setTimeKey] = useState("");
+  const [onsiteMode, setOnsiteMode] = useState<"exact" | "morning" | "unspecified">("exact");
   const [onsiteTime, setOnsiteTime] = useState("09:00");
   const [onsiteDuration, setOnsiteDuration] = useState("60");
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -103,8 +112,8 @@ export default function ActiveVehicleSchedulePage() {
   }, [day, entryType]);
 
   useEffect(() => {
-    setDeliveryDay((old) => old || day);
-  }, [day]);
+    setDeliveryDay(reason === "車検" ? addDay(day, 1) : day);
+  }, [day, reason]);
 
   useEffect(() => {
     if (addDelivery) void loadDeliveryOptions();
@@ -186,6 +195,12 @@ export default function ActiveVehicleSchedulePage() {
 
   function mainTimes() {
     if (entryType === "onsite_repair") {
+      if (onsiteMode === "morning") {
+        return { startsAt: jstIso(day, "08:30"), endsAt: jstIso(day, "12:00"), printMode: "morning" as const };
+      }
+      if (onsiteMode === "unspecified") {
+        return { startsAt: jstIso(day, "13:00"), endsAt: jstIso(day, "17:00"), printMode: "unspecified" as const };
+      }
       const startsAt = jstIso(day, onsiteTime);
       return {
         startsAt,
@@ -342,8 +357,15 @@ export default function ActiveVehicleSchedulePage() {
           <label>入庫要因<select value={reason} onChange={(e) => setReason(e.target.value as Reason)}><option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option></select></label>
           {entryType === "onsite_repair" ? (
             <>
-              <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
-              <label>作業枠<select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}><option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option></select></label>
+              <label>出張時間
+                <select value={onsiteMode} onChange={(e) => setOnsiteMode(e.target.value as "exact" | "morning" | "unspecified")}>
+                  <option value="exact">時間指定</option><option value="morning">午前中</option><option value="unspecified">午後中</option>
+                </select>
+              </label>
+              {onsiteMode === "exact" && <>
+                <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
+                <label>作業枠<select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}><option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option></select></label>
+              </>}
             </>
           ) : (
             <label className="wide">時間<select value={timeKey} onChange={(e) => setTimeKey(e.target.value)}>{!timeOptions.length && <option value="">候補なし</option>}{timeOptions.map((x) => <option value={x.key} key={x.key}>{x.label}</option>)}</select></label>
