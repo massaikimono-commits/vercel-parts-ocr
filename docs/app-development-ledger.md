@@ -223,3 +223,12 @@ Before an app-development chat finishes a batch:
 - PR #56 merged: `ae7f015b278e6ecf0cde3616cccb291c1a639100`.
 - Full regression and Next.js build passed.
 - Batch RPC SQL is still not applied to live Supabase; hosting deployment also remains intentionally not run.
+
+### 2026-09-03 — Morning additions deployed to Vercel Preview
+- Applied live Supabase RPCs for same-customer multi-vehicle schedule registration and bulk vehicle-certificate PDF import; anon execute remains disabled.
+- Updated stale single-vehicle regression to cover multi-select scheduling.
+- Updated app-core cancellation regression to preserve optional cancellation reason.
+- Changed GitHub pre-deploy CI final gate to the exact `npm run build` used by Vercel.
+- Exact full build passed in GitHub before final deployment.
+- Vercel Preview READY: `dpl_DeQ2s7Nu5GzBAjZoqPBBLvhimu73`, source `1f50b4e4e2c27ed6b13aa6883aae83c436f2b1cb`.
+- Preview root returned HTTP 200. Netlify was not changed.
