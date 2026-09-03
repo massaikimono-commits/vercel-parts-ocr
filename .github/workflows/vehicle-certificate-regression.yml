@@ -54,6 +54,9 @@ jobs:
       - name: Run fast photo top-header regression
         run: node scripts/photo-fast-top-header-regression.mjs
 
+      - name: Run photo chassis precision regression
+        run: node scripts/photo-chassis-precision-regression.mjs
+
       - name: Run parts-slip regression
         run: npm run test:parts
 
