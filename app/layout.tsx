@@ -13,6 +13,7 @@ import CertificateKeiBaseline from "./certificate-kei-baseline";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
 import CertificatePhotoRescue from "./certificate-photo-rescue";
 import CertificateFinalNativeFix from "./certificate-final-native-fix";
+import CertificateFastTopHeaderRecovery from "./certificate-fast-top-header-recovery";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -201,6 +202,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <CertificateQrApply />
         <CertificatePhotoRescue />
         <CertificateFinalNativeFix />
+        <CertificateFastTopHeaderRecovery />
         <script dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }} />
       </body>
     </html>

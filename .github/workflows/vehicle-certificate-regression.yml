@@ -51,6 +51,9 @@ jobs:
       - name: Run QR glare regression
         run: node scripts/qr-photo-glare-regression.mjs
 
+      - name: Run fast photo top-header regression
+        run: node scripts/photo-fast-top-header-regression.mjs
+
       - name: Run parts-slip regression
         run: npm run test:parts
 
