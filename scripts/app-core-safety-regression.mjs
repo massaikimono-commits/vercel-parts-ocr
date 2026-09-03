@@ -29,6 +29,7 @@ const scheduleBatchSql = read("database","create-schedule-registration-batch-v1.
 const scheduleBatchSearchSql = read("database","search-schedule-vehicles-v1.sql");
 const assignmentHistorySql = read("database","set-work-order-assignment-history.sql");
 const vehicleWorkflow = read("app","vehicle-workflow","page.tsx");
+const vehicleWorkflowFast = read("app","vehicle-workflow-fast","page.tsx");
 const vehicleBulk = read("app","vehicle-workflow","bulk","page.tsx");
 const vehicleBulkPdf = read("app","lib","vehicle-bulk-pdf.ts");
 const vehicleBulkApplySql = read("database","apply-vehicle-import-batch-v1.sql");
@@ -80,6 +81,7 @@ assert(!scheduleBatchSearchSql.toLowerCase().includes("create table"), "batch ve
 assert(assignmentHistorySql.includes("work_order_assignment_changed"), "staff/vendor assignment changes must be recorded in work-order history");
 assert(assignmentHistorySql.includes("'WORKER'"), "assignment history must use an allowed work-order change type");
 assert(vehicleWorkflow.includes("/vehicle-workflow/bulk"), "single vehicle workflow must expose bulk PDF vehicle registration");
+assert(vehicleWorkflowFast.includes("/vehicle-workflow/bulk"), "current high-accuracy vehicle workflow must expose bulk PDF vehicle registration from the normal home route");
 assert(vehicleBulk.includes('multiple accept="application/pdf,.pdf"'), "bulk vehicle registration must allow selecting multiple PDFs");
 assert(vehicleBulk.includes("parseVehicleCertificatePdf"), "bulk vehicle registration must parse each PDF through the isolated batch parser");
 assert(vehicleBulk.includes('.from("vehicle_imports").insert({'), "bulk PDF parsing must stage results before modifying the vehicle master");
