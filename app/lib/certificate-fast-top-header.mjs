@@ -34,11 +34,20 @@ function eraGregorianYear(era, yearText) {
   return 0;
 }
 
+function isInsideEra(era, year, month, day) {
+  const key = year * 10000 + month * 100 + day;
+  if (era === "令和") return key >= 20190501;
+  if (era === "平成") return key >= 19890108 && key <= 20190430;
+  if (era === "昭和") return key >= 19261225 && key <= 19890107;
+  return false;
+}
+
 function isValidEraDate(era, yearText, month, day) {
   const year = eraGregorianYear(era, yearText);
   if (!year || month < 1 || month > 12 || day < 1) return false;
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return day <= daysInMonth;
+  if (day > daysInMonth) return false;
+  return isInsideEra(era, year, month, day);
 }
 
 export function parseTopHeaderDate(value = "") {
