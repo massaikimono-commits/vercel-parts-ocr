@@ -15,6 +15,13 @@ assert.equal(parseTopHeaderDate("令和8年19月3日"), "");
 assert.equal(parseTopHeaderDate("令和8年2月31日"), "");
 assert.equal(parseTopHeaderDate("令和2年2月29日"), "令和2年2月29日");
 assert.equal(parseTopHeaderDate("令和3年2月29日"), "");
+assert.equal(parseTopHeaderDate("令和元年4月30日"), "");
+assert.equal(parseTopHeaderDate("令和元年5月1日"), "令和元年5月1日");
+assert.equal(parseTopHeaderDate("平成元年1月7日"), "");
+assert.equal(parseTopHeaderDate("平成元年1月8日"), "平成元年1月8日");
+assert.equal(parseTopHeaderDate("平成31年5月1日"), "");
+assert.equal(parseTopHeaderDate("昭和64年1月7日"), "昭和64年1月7日");
+assert.equal(parseTopHeaderDate("昭和64年1月8日"), "");
 assert.equal(parseTopHeaderDocumentNumber("記録事項番号 1234 5678 90123"), "1234567890123");
 assert.equal(parseTopHeaderDocumentNumber("123456789012"), "");
 
