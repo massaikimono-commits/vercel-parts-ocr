@@ -32,6 +32,7 @@ const vehicleWorkflow = read("app","vehicle-workflow","page.tsx");
 const vehicleBulk = read("app","vehicle-workflow","bulk","page.tsx");
 const vehicleBulkPdf = read("app","lib","vehicle-bulk-pdf.ts");
 const vehicleBulkApplySql = read("database","apply-vehicle-import-batch-v1.sql");
+const scheduleEditAssignmentSql = read("database","update-schedule-entry-and-assignment-v1.sql");
 function assert(condition, message) {
   if (!condition) {
     console.error(`app-core safety regression failed: ${message}`);
@@ -97,7 +98,7 @@ assert(vehicleBulkApplySql.includes("CREATE_VEHICLE") && vehicleBulkApplySql.inc
 assert(vehicleBulkApplySql.includes("jsonb_array_length(p_items)>100"), "bulk vehicle apply must cap accidental oversized submissions");
 assert(vehicleBulkApplySql.includes("vehicle_pdf_batch"), "bulk-created vehicles must record their source");
 assert(!vehicleBulkApplySql.toLowerCase().includes("create table"), "bulk vehicle import must reuse existing import/vehicle tables");
-assert(scheduleEdit.includes('supabase.rpc("reschedule_schedule_entry_v2"'), "reschedule and stay details must be atomic");
+assert(scheduleEdit.includes('supabase.rpc("update_schedule_entry_and_assignment_v1"'), "reservation/stay and staff/vendor changes must use one atomic RPC");
 assert(scheduleEdit.includes('supabase.rpc("cancel_schedule_entry_v1"'), "reservation cancellation must stay inside the existing schedule edit flow");
 assert(scheduleEdit.includes('opts.find(x=>x.mode===base.print_time_mode)'), "reservation edit must preserve A中/午後/中 instead of falling back to the first exact slot");
 assert(scheduleEdit.includes('changeOnsiteMode("morning")') && scheduleEdit.includes('changeOnsiteMode("unspecified")'), "onsite reservation edit must support exact/A中/中");
@@ -120,6 +121,12 @@ assert(customerBookingLinkedSchedulesSql.includes("delete from public.schedule_e
 assert(customerBookingLinkedSchedulesSql.includes("elsif b.schedule_entry_id is not null"), "customer booking cancellation must still support bookings without a work order");
 assert(!customerBookingLinkedSchedulesSql.toLowerCase().includes("create table"), "linked schedule cancellation fix must not add tables");
 assert(!scheduleEdit.includes("saveWorkDetails"), "separate stay write must not return");
+assert(scheduleEdit.includes("担当・外注先") && scheduleEdit.includes("external_vendors"), "reservation edit must allow staff and vendor changes inside the existing flow");
+assert(scheduleEdit.includes("p_update_schedule:scheduleStayChanged") && scheduleEdit.includes("p_update_assignment:assignmentChanged"), "assignment-only edits must not create fake reschedule changes");
+assert(scheduleEdit.includes("p_staff_id:entry.work_order_id ? staffId||null : null"), "reservation edit must preserve staff ids when changing assignments");
+assert(scheduleEditAssignmentSql.includes("reschedule_schedule_entry_v2") && scheduleEditAssignmentSql.includes("set_work_order_assignment"), "atomic edit wrapper must compose the existing guarded schedule and assignment RPCs");
+assert(scheduleEditAssignmentSql.includes("transactional") && scheduleEditAssignmentSql.includes("p_update_assignment"), "atomic edit wrapper must report transactional assignment updates");
+assert(!scheduleEditAssignmentSql.toLowerCase().includes("create table"), "reservation assignment edit must not add tables");
 assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print must honor finalization gate");
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
 assert(!inspectionPrint.includes("printAndMark"), "print must not pre-mark printed");

@@ -26,6 +26,22 @@ type WorkOrder = {
   id:string;
   stay_reason:string|null;
   planned_delivery_date:string|null;
+  worker_staff_id:string|null;
+  worker_name:string|null;
+  outsource_vendor_id:string|null;
+  outsource_vendor_name:string|null;
+};
+
+type StaffMember = {
+  id:string;
+  display_name:string;
+  short_name:string|null;
+};
+
+type ExternalVendor = {
+  id:string;
+  display_name:string;
+  short_name:string|null;
 };
 
 function dateKey(value:string){
@@ -57,6 +73,12 @@ export default function ScheduleEditPage(){
   const [plannedDeliveryDate,setPlannedDeliveryDate]=useState("");
   const [originalStayReason,setOriginalStayReason]=useState("");
   const [originalPlannedDeliveryDate,setOriginalPlannedDeliveryDate]=useState("");
+  const [staffMembers,setStaffMembers]=useState<StaffMember[]>([]);
+  const [externalVendors,setExternalVendors]=useState<ExternalVendor[]>([]);
+  const [staffId,setStaffId]=useState("");
+  const [vendorName,setVendorName]=useState("");
+  const [originalStaffId,setOriginalStaffId]=useState("");
+  const [originalVendorName,setOriginalVendorName]=useState("");
   const [message,setMessage]=useState("予約情報を読み込みます。");
   const [warnings,setWarnings]=useState<string[]>([]);
   const [cancelConfirmOpen,setCancelConfirmOpen]=useState(false);
@@ -65,7 +87,22 @@ export default function ScheduleEditPage(){
 
   const id=typeof window!=="undefined" ? new URLSearchParams(location.search).get("id") : null;
 
-  useEffect(()=>{ if(id) void loadEntry(id); else { setBusy(false); setMessage("変更する予定が指定されていません。"); } },[]);
+  useEffect(()=>{
+    void loadAssignmentMasters();
+    if(id) void loadEntry(id);
+    else { setBusy(false); setMessage("変更する予定が指定されていません。"); }
+  },[]);
+
+  async function loadAssignmentMasters(){
+    const [staffRes,vendorRes]=await Promise.all([
+      supabase.from("staff_members").select("id,display_name,short_name").eq("is_active",true)
+        .order("display_order",{ascending:true}).order("display_name",{ascending:true}),
+      supabase.from("external_vendors").select("id,display_name,short_name").eq("is_active",true)
+        .order("display_order",{ascending:true}).order("display_name",{ascending:true}),
+    ]);
+    if(!staffRes.error) setStaffMembers((staffRes.data||[]) as StaffMember[]);
+    if(!vendorRes.error) setExternalVendors((vendorRes.data||[]) as ExternalVendor[]);
+  }
 
   async function loadEntry(entryId:string){
     setBusy(true);
@@ -79,7 +116,7 @@ export default function ScheduleEditPage(){
     setOnsiteTime(timeKey(e.starts_at));
     if(e.work_order_id){
       const {data:workData,error:workError}=await supabase.from("work_orders")
-        .select("id,stay_reason,planned_delivery_date")
+        .select("id,stay_reason,planned_delivery_date,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name")
         .eq("id",e.work_order_id).maybeSingle();
       if(workError){setMessage("作業情報の読み込みエラー: "+workError.message);setBusy(false);return;}
       const work=(workData||null) as WorkOrder|null;
@@ -89,6 +126,12 @@ export default function ScheduleEditPage(){
       setPlannedDeliveryDate(loadedPlannedDeliveryDate);
       setOriginalStayReason(loadedStayReason);
       setOriginalPlannedDeliveryDate(loadedPlannedDeliveryDate);
+      const loadedStaffId=work?.worker_staff_id||"";
+      const loadedVendorName=work?.outsource_vendor_name||"";
+      setStaffId(loadedStaffId);
+      setVendorName(loadedVendorName);
+      setOriginalStaffId(loadedStaffId);
+      setOriginalVendorName(loadedVendorName);
     }
     const d=dateKey(e.starts_at);
     setDay(d);
@@ -152,7 +195,7 @@ export default function ScheduleEditPage(){
     }
     return selectedOption ? `${day} ${selectedOption.label}` : `${day} 時間候補なし`;
   },[day,entry,onsiteMode,onsiteTime,selectedOption]);
-  const hasChanges=useMemo(()=>{
+  const scheduleStayChanged=useMemo(()=>{
     if(!entry||!day) return false;
     const scheduleChanged=entry.entry_type==="onsite_repair"
       ? day!==dateKey(entry.starts_at)
@@ -168,6 +211,14 @@ export default function ScheduleEditPage(){
       : false;
     return scheduleChanged || stayChanged;
   },[day,entry,onsiteMode,onsiteTime,originalPlannedDeliveryDate,originalStayReason,plannedDeliveryDate,selectedOption,stayReason]);
+
+  const assignmentChanged=useMemo(()=>entry?.work_order_id
+    ? staffId!==originalStaffId || vendorName.trim()!==originalVendorName.trim()
+    : false,
+    [entry,originalStaffId,originalVendorName,staffId,vendorName]
+  );
+
+  const hasChanges=scheduleStayChanged || assignmentChanged;
 
   async function cancelReservation(){
     if(!entry || busy) return;
@@ -211,7 +262,7 @@ export default function ScheduleEditPage(){
       setMessage("変更内容がありません。予約は更新していません。");
       return;
     }
-    if(entry.entry_type!=="onsite_repair" && !selectedOption){
+    if(scheduleStayChanged && entry.entry_type!=="onsite_repair" && !selectedOption){
       setMessage("変更先の時間を選択してください。");return;
     }
     setBusy(true);
@@ -220,22 +271,33 @@ export default function ScheduleEditPage(){
       let startsAt:string;
       let endsAt:string;
       let mode:string;
-      if(selectedOption){
+      if(scheduleStayChanged && selectedOption){
         startsAt=selectedOption.startsAt; endsAt=selectedOption.endsAt; mode=selectedOption.mode;
-      }else{
+      }else if(scheduleStayChanged){
         const duration=new Date(entry.ends_at).getTime()-new Date(entry.starts_at).getTime();
         const targetTime=onsiteMode==="exact" ? onsiteTime : onsiteMode==="morning" ? "09:00" : "13:00";
         startsAt=new Date(day+"T"+targetTime+":00+09:00").toISOString();
         endsAt=new Date(new Date(startsAt).getTime()+duration).toISOString();
         mode=onsiteMode;
+      }else{
+        startsAt=entry.starts_at;
+        endsAt=entry.ends_at;
+        mode=entry.print_time_mode;
       }
-      const {data,error}=await supabase.rpc("reschedule_schedule_entry_v2",{
+
+      const matchedVendor=externalVendors.find(v=>v.display_name===vendorName.trim() || v.short_name===vendorName.trim())||null;
+      const {data,error}=await supabase.rpc("update_schedule_entry_and_assignment_v1",{
         p_entry_id:entry.id,
         p_starts_at:startsAt,
         p_ends_at:endsAt,
         p_print_time_mode:mode,
         p_stay_reason:entry.work_order_id ? stayReason.trim()||null : null,
         p_planned_delivery_date:entry.work_order_id ? plannedDeliveryDate||null : null,
+        p_staff_id:entry.work_order_id ? staffId||null : null,
+        p_vendor_id:entry.work_order_id ? matchedVendor?.id||null : null,
+        p_vendor_name:entry.work_order_id && !matchedVendor ? vendorName.trim()||null : null,
+        p_update_schedule:scheduleStayChanged,
+        p_update_assignment:assignmentChanged,
         p_actor:"schedule-edit",
         p_allow_warning_override:override,
       });
@@ -249,7 +311,11 @@ export default function ScheduleEditPage(){
         return;
       }
       if(data?.updated){
-        setMessage("予約と滞留情報を一括変更しました。予約変更と滞留情報は履歴にも保存しました。");
+        const changedParts=[
+          scheduleStayChanged ? "予約・滞留情報" : "",
+          assignmentChanged ? "担当・外注先" : "",
+        ].filter(Boolean).join("と");
+        setMessage(changedParts+"を一括変更しました。変更履歴も保存しました。");
         window.setTimeout(()=>location.assign("/schedule?day="+day),350);
       }
     }catch(error:any){
@@ -289,6 +355,22 @@ export default function ScheduleEditPage(){
           <div className="changeRoute"><b>{currentSummary}</b><strong>→</strong><b>{targetSummary}</b></div>
           <small>{hasChanges ? "「空きチェックして変更」を押すと、更新前に空き・重複・受付上限を確認します。警告がある場合はそのまま変更せず、確認画面を表示します。" : "現在の予約内容と同じです。変更がない限り更新処理は行いません。"}</small>
         </div>
+        {entry.work_order_id && <section className="assignmentBox">
+          <b>担当・外注先</b>
+          <div className="grid assignmentGrid">
+            <label>作業担当
+              <select value={staffId} onChange={(e)=>setStaffId(e.target.value)}>
+                <option value="">未選択</option>
+                {staffMembers.map(staff=><option key={staff.id} value={staff.id}>{staff.short_name||staff.display_name}</option>)}
+              </select>
+            </label>
+            <label>外注先
+              <input list="edit-external-vendors" value={vendorName} onChange={(e)=>setVendorName(e.target.value)} placeholder="自社作業なら空欄" />
+              <datalist id="edit-external-vendors">{externalVendors.map(vendor=><option key={vendor.id} value={vendor.display_name}>{vendor.short_name||vendor.display_name}</option>)}</datalist>
+            </label>
+          </div>
+          <small>担当者・外注先の変更も予約変更と同じ履歴に残します。</small>
+        </section>}
         {entry.work_order_id && <section className="stayBox">
           <b>滞留・納車情報</b>
           <div className="grid stayGrid">
@@ -324,7 +406,7 @@ export default function ScheduleEditPage(){
     </section>
     <style jsx global>{`
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}
-      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.onsiteEdit{display:grid;gap:6px;color:#627083}.onsiteModeButtons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.onsiteModeButtons button{padding:9px 7px}.onsiteModeButtons button.selected{background:#2674e8;color:#fff;border-color:#2674e8}.onsiteEdit input{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:7px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:16px}.targetPreview small{color:#627083;line-height:1.5}.changeRoute{display:grid;grid-template-columns:1fr auto 1fr;gap:9px;align-items:center}.changeRoute strong{color:#2674e8}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.primary:disabled{background:#aab5c5;border-color:#aab5c5;color:#fff}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.cancelBox{margin-top:16px;padding-top:14px;border-top:1px solid #e5eaf0}.cancelOpen{width:100%;color:#a83a3a;border-color:#e0a7a7;background:#fff}.cancelConfirm{display:grid;gap:9px;padding:13px;border:1px solid #e4adad;border-radius:13px;background:#fff7f7}.cancelConfirm>b{color:#9d2f2f}.cancelConfirm>small{color:#745f5f;line-height:1.5}.cancelConfirm label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#745f5f}.cancelConfirm input{border:1px solid #d9bcbc;border-radius:9px;padding:10px;background:#fff}.cancelActions{display:flex;justify-content:flex-end;gap:8px}.cancelDanger{background:#b63d3d;color:#fff;border-color:#b63d3d}@media(max-width:600px){.grid{grid-template-columns:1fr}.changeRoute{grid-template-columns:1fr}.changeRoute strong{transform:rotate(90deg);justify-self:start}}
+      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.onsiteEdit{display:grid;gap:6px;color:#627083}.onsiteModeButtons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.onsiteModeButtons button{padding:9px 7px}.onsiteModeButtons button.selected{background:#2674e8;color:#fff;border-color:#2674e8}.onsiteEdit input{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:7px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:16px}.targetPreview small{color:#627083;line-height:1.5}.changeRoute{display:grid;grid-template-columns:1fr auto 1fr;gap:9px;align-items:center}.changeRoute strong{color:#2674e8}.assignmentBox,.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.assignmentGrid,.stayGrid{margin-top:9px}.assignmentBox small,.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.primary:disabled{background:#aab5c5;border-color:#aab5c5;color:#fff}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.cancelBox{margin-top:16px;padding-top:14px;border-top:1px solid #e5eaf0}.cancelOpen{width:100%;color:#a83a3a;border-color:#e0a7a7;background:#fff}.cancelConfirm{display:grid;gap:9px;padding:13px;border:1px solid #e4adad;border-radius:13px;background:#fff7f7}.cancelConfirm>b{color:#9d2f2f}.cancelConfirm>small{color:#745f5f;line-height:1.5}.cancelConfirm label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#745f5f}.cancelConfirm input{border:1px solid #d9bcbc;border-radius:9px;padding:10px;background:#fff}.cancelActions{display:flex;justify-content:flex-end;gap:8px}.cancelDanger{background:#b63d3d;color:#fff;border-color:#b63d3d}@media(max-width:600px){.grid{grid-template-columns:1fr}.changeRoute{grid-template-columns:1fr}.changeRoute strong{transform:rotate(90deg);justify-self:start}}
     `}</style>
   </main>;
 }
