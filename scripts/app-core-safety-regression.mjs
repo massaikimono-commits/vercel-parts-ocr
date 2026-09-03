@@ -50,6 +50,10 @@ assert(!loaners.includes('.from("loaner_vehicles").update({'), "loaner status mu
 assert(week.includes("要確認日のみ表示"), "weekly schedule must offer problem-day filtering");
 assert(week.includes("firstAttentionDay"), "weekly schedule must allow direct access to the first attention day");
 assert(week.includes('capacityClass === "over"') && week.includes('capacityClass === "full"') && week.includes('capacityClass === "tight"'), "weekly attention filter must cover overbooked/full/tight days");
+assert(week.includes("REASON_ORDER") && week.includes('"点検": 0') && week.includes('"車検": 3'), "weekly schedule must sort 点検→一般整備→板金→車検");
+assert(week.includes('a.print_time_mode !== "exact"') && week.includes('b.print_time_mode !== "exact"'), "weekly overlap warnings must ignore A中/午前中/午後中 style ranges");
+assert(week.includes("outsource_vendor_name"), "weekly schedule must distinguish outsourced general repair");
+assert(week.includes("reasonShaken") && week.includes("reasonInspection") && week.includes("reasonGeneral") && week.includes("reasonBodywork"), "weekly schedule must share intake reason colors");
 assert(loanerWeek.includes("unassignedDemand"), "weekly loaner board must calculate unassigned demand");
 assert(loanerWeek.includes("assignedWorkOrderIds"), "weekly loaner shortage must exclude already-assigned work orders");
 assert(loanerWeek.includes("代車不足"), "weekly loaner board must visibly warn about shortages");
