@@ -10,12 +10,11 @@ export type DailyReportRowSlot = {
   y: number;
 };
 
-// Measured directly from the user-supplied A3 daily report PDF.
-// PDF page size: 842 x 1191 pt (A3 portrait).
-// Coordinates are normalized to 0..1 so browser preview and A3 printing
-// use the same geometry.
+// Existing user-supplied daily report form. Coordinates are normalized (0..1)
+// so the same placement model can be reused for PDF preview and printed output.
+// The source PDF itself is intentionally not committed to the public repository.
 export const DAILY_REPORT_TEMPLATE = {
-  id: "existing-daily-report-v2-pdf-measured",
+  id: "existing-daily-report-v1",
   page: {
     width: 1,
     height: 1,
@@ -23,8 +22,6 @@ export const DAILY_REPORT_TEMPLATE = {
     orientation: "portrait" as const,
     widthMm: 297,
     heightMm: 420,
-    sourceWidthPt: 842,
-    sourceHeightPt: 1191,
   },
   background: {
     source: "user-supplied-existing-form" as const,
@@ -32,73 +29,19 @@ export const DAILY_REPORT_TEMPLATE = {
     commitToPublicRepo: false,
   },
   regions: {
-    // Header band containing the printed date.
-    date: { x: 0.044323, y: 0.023778, width: 0.333919, height: 0.041310 },
-
-    // Main schedule fields only.
-    // Delivery intentionally stops at the "作業経過" column.
-    delivery: { x: 0.044323, y: 0.105189, width: 0.333919, height: 0.621058 },
-    // Inbound begins after the No. column and includes 納期.
-    inbound: { x: 0.530024, y: 0.105189, width: 0.441378, height: 0.621058 },
-
-    // Blank area to the right of the printed "伝達事項" label.
-    messages: { x: 0.136532, y: 0.726650, width: 0.514917, height: 0.026599 },
-
-    // Lower tables exclude their vertical title cells and header rows.
-    stayingVehicles: { x: 0.074679, y: 0.820756, width: 0.303563, height: 0.148917 },
-    bodyShopVehicles: { x: 0.408599, y: 0.820756, width: 0.242850, height: 0.148917 },
-    plannedDeliveries: { x: 0.681805, y: 0.739748, width: 0.289596, height: 0.229924 },
+    // Measured from the supplied A3 portrait PDF.
+    date: { x: 0.044, y: 0.024, width: 0.34, height: 0.042 },
+    delivery: { x: 0.044, y: 0.105, width: 0.455, height: 0.621 },
+    inbound: { x: 0.529, y: 0.105, width: 0.442, height: 0.621 },
+    messages: { x: 0.044, y: 0.726, width: 0.637, height: 0.054 },
+    stayingVehicles: { x: 0.044, y: 0.807, width: 0.334, height: 0.161 },
+    bodyShopVehicles: { x: 0.378, y: 0.807, width: 0.303, height: 0.161 },
+    plannedDeliveries: { x: 0.681, y: 0.753, width: 0.290, height: 0.215 },
   } satisfies Record<string, DailyReportRegion>,
-
-  // Column ratios measured from the PDF grid lines.
-  columns: {
-    delivery: {
-      customer: 0.454546,
-      vehicle: 0.272727,
-      time: 0.272727,
-    },
-    inbound: {
-      customer: 0.343881,
-      vehicle: 0.206329,
-      time: 0.211818,
-      due: 0.237972,
-    },
-  },
-
-  lowerColumns: {
-    stayingVehicles: {
-      worker: 0.10,
-      customer: 0.30,
-      vehicle: 0.40,
-      checkIn: 0.10,
-      due: 0.10,
-    },
-    bodyShopVehicles: {
-      factory: 0.125,
-      customer: 0.375,
-      vehicle: 0.25,
-      checkIn: 0.125,
-      due: 0.125,
-    },
-    plannedDeliveries: {
-      customer: 0.419355,
-      vehicle: 0.322581,
-      due: 0.258064,
-    },
-  },
-
-  secondaryRows: {
-    stayingVehicles: 11,
-    bodyShopVehicles: 11,
-    plannedDeliveries: 17,
-  },
-
   rows: {
     count: 23,
-    // Row 1 starts at 125.28 pt. Row 23 starts at 832.80 pt.
-    top: 0.105189,
-    bottom: 0.699244,
-    height: 0.027003,
+    top: 0.105,
+    bottom: 0.699,
   },
 } as const;
 
@@ -116,6 +59,5 @@ export function dailyReportPeriodSlotIndexes(period: "morning" | "afternoon") {
   const slots = dailyReportRowSlots();
   const midpoint = Math.ceil(slots.length / 2);
   if (period === "morning") return slots.slice(0, midpoint).map((slot) => slot.index);
-  // 午後は下側の枠を使い、ブロック内は上→下の順。
   return slots.slice(midpoint).map((slot) => slot.index);
 }
