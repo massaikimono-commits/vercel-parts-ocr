@@ -37,6 +37,37 @@ function paintQr(rgba, { x: centerX, y: centerY, size }) {
   }
 }
 
+function assertQrCoverage(name, actual, averageMs) {
+  if (actual.length < targets.length) {
+    throw new Error(`${name}: expected >=${targets.length} QR targets, got ${actual.length}`);
+  }
+  if (actual.length > targets.length + 1) {
+    throw new Error(`${name}: too many QR candidates (${actual.length}); expected at most ${targets.length + 1}`);
+  }
+  for (const target of targets) {
+    if (!actual.some((item) => Math.abs(item.x - target.x) <= 0.025)) {
+      throw new Error(`${name}: missed QR center x=${target.x}; actual=${actual.map((item) => item.x).join(",")}`);
+    }
+  }
+  if (averageMs > 750) {
+    throw new Error(`${name}: QR detector too slow: ${averageMs.toFixed(1)}ms average > 750ms budget`);
+  }
+}
+
+function measure(rgba) {
+  detectCertificateQrDensityCenters(rgba, width, height);
+  const runs = 3;
+  const started = performance.now();
+  let actual = [];
+  for (let i = 0; i < runs; i += 1) {
+    actual = detectCertificateQrDensityCenters(rgba, width, height);
+  }
+  return {
+    actual,
+    averageMs: (performance.now() - started) / runs,
+  };
+}
+
 const rgba = new Uint8ClampedArray(width * height * 4);
 for (let p = 0; p < rgba.length; p += 4) {
   rgba[p] = rgba[p + 1] = rgba[p + 2] = 242;
@@ -59,28 +90,30 @@ for (let y = glareTop; y < glareBottom; y += 1) {
   }
 }
 
-detectCertificateQrDensityCenters(rgba, width, height);
-const runs = 3;
-const started = performance.now();
-let actual = [];
-for (let i = 0; i < runs; i += 1) {
-  actual = detectCertificateQrDensityCenters(rgba, width, height);
-}
-const averageMs = (performance.now() - started) / runs;
+const glare = measure(rgba);
+assertQrCoverage("glare-photo", glare.actual, glare.averageMs);
 
-if (actual.length < targets.length) {
-  throw new Error(`glare-photo: expected >=${targets.length} QR targets, got ${actual.length}`);
-}
-if (actual.length > targets.length + 1) {
-  throw new Error(`glare-photo: too many QR candidates (${actual.length}); expected at most ${targets.length + 1}`);
-}
-for (const target of targets) {
-  if (!actual.some((item) => Math.abs(item.x - target.x) <= 0.025)) {
-    throw new Error(`glare-photo: missed QR center x=${target.x}; actual=${actual.map((item) => item.x).join(",")}`);
+// Real phone photos can combine a light streak with slight vertical hand/focus
+// softness. Add one deterministic 1px vertical blur across only the QR band so
+// CI covers that combined condition without introducing real documents or PII.
+const blurred = new Uint8ClampedArray(rgba);
+const blurSource = new Uint8ClampedArray(rgba);
+const blurTop = Math.max(1, Math.floor(height * 0.84));
+const blurBottom = Math.min(height - 1, Math.ceil(height * 0.96));
+for (let y = blurTop; y < blurBottom; y += 1) {
+  for (let x = 0; x < width; x += 1) {
+    const above = ((y - 1) * width + x) * 4;
+    const here = (y * width + x) * 4;
+    const below = ((y + 1) * width + x) * 4;
+    const value = Math.round((blurSource[above] + blurSource[here] + blurSource[below]) / 3);
+    blurred[here] = blurred[here + 1] = blurred[here + 2] = value;
   }
 }
-if (averageMs > 750) {
-  throw new Error(`glare-photo: QR detector too slow: ${averageMs.toFixed(1)}ms average > 750ms budget`);
-}
 
-console.log(`PASS QR glare regression: candidates=${actual.length}; average=${averageMs.toFixed(1)}ms`);
+const glareBlur = measure(blurred);
+assertQrCoverage("glare-slight-vertical-blur-photo", glareBlur.actual, glareBlur.averageMs);
+
+console.log(
+  `PASS QR glare regression: glare=${glare.actual.length}/${glare.averageMs.toFixed(1)}ms; ` +
+    `glare+vertical-blur=${glareBlur.actual.length}/${glareBlur.averageMs.toFixed(1)}ms`,
+);
