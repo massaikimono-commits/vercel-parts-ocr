@@ -547,12 +547,12 @@ export default function CustomerVehiclesPage() {
 
             {customerEditing && (
               <div className="customerForm">
-                <label>お客様名<input value={customerForm.name} onChange={(e) => setCustomerForm((f) => ({ ...f, name: e.target.value }))} placeholder="お客様名" /></label>
-                <label>会社名<input value={customerForm.companyName} onChange={(e) => setCustomerForm((f) => ({ ...f, companyName: e.target.value }))} placeholder="会社名" /></label>
+                <label>お客様名<input lang="ja" inputMode="text" autoCapitalize="none" spellCheck={false} autoComplete="name" value={customerForm.name} onChange={(e) => setCustomerForm((f) => ({ ...f, name: e.target.value }))} placeholder="お客様名" /></label>
+                <label>会社名<input lang="ja" inputMode="text" autoCapitalize="none" spellCheck={false} autoComplete="organization" value={customerForm.companyName} onChange={(e) => setCustomerForm((f) => ({ ...f, companyName: e.target.value }))} placeholder="会社名" /></label>
                 <label>電話番号<input value={customerForm.phone} onChange={(e) => setCustomerForm((f) => ({ ...f, phone: e.target.value }))} inputMode="tel" placeholder="電話番号" /></label>
                 <label>メール<input value={customerForm.email} onChange={(e) => setCustomerForm((f) => ({ ...f, email: e.target.value }))} inputMode="email" placeholder="メール" /></label>
                 <label>郵便番号<input value={customerForm.postalCode} onChange={(e) => setCustomerForm((f) => ({ ...f, postalCode: e.target.value }))} inputMode="numeric" placeholder="郵便番号" /></label>
-                <label>住所<input value={customerForm.address} onChange={(e) => setCustomerForm((f) => ({ ...f, address: e.target.value }))} placeholder="住所" /></label>
+                <label>住所<input lang="ja" inputMode="text" autoCapitalize="none" spellCheck={false} autoComplete="street-address" value={customerForm.address} onChange={(e) => setCustomerForm((f) => ({ ...f, address: e.target.value }))} placeholder="住所" /></label>
                 <label className="wide">備考<textarea value={customerForm.notes} onChange={(e) => setCustomerForm((f) => ({ ...f, notes: e.target.value }))} placeholder="備考" /></label>
                 <div className="actions wide">
                   <button className="primary" disabled={savingCustomer} onClick={saveCustomer}>{savingCustomer ? "保存中…" : customerForm.id ? "顧客情報を更新" : "新規顧客を保存して紐付け"}</button>
