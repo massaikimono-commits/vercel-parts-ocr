@@ -274,13 +274,31 @@ export default function WeeklySchedulePage() {
     return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
   }
 
+  function reasonOrder(reason: string | null | undefined) {
+    if (reason === "点検") return 0;
+    if (reason === "一般整備") return 1;
+    if (reason === "板金" || reason === "板金塗装") return 2;
+    if (reason === "車検") return 3;
+    return 9;
+  }
+
+  function sortWeekRowsByReason(rows: EnrichedWeekRow[]) {
+    return rows
+      .map((row, index) => ({ row, index }))
+      .sort((a, b) => {
+        const reasonDiff = reasonOrder(a.row.work?.reason) - reasonOrder(b.row.work?.reason);
+        return reasonDiff || a.index - b.index;
+      })
+      .map(({ row }) => row);
+  }
+
   function prepareWeekDaySection(rows: EnrichedWeekRow[], period: "morning" | "afternoon") {
     const periodRows = rows.filter(({ entry }) => period === "morning" ? isMorningJst(entry.starts_at) : !isMorningJst(entry.starts_at));
     const rowMap = new Map(periodRows.map((row) => [row.entry.id, row]));
     const prepared = prepareDailyReportSection(periodRows.map((row) => row.entry), period);
     return {
-      deliveries: prepared.deliveries.map((entry) => rowMap.get(entry.id)).filter(Boolean) as EnrichedWeekRow[],
-      inbound: prepared.inbound.map((entry) => rowMap.get(entry.id)).filter(Boolean) as EnrichedWeekRow[],
+      deliveries: sortWeekRowsByReason(prepared.deliveries.map((entry) => rowMap.get(entry.id)).filter(Boolean) as EnrichedWeekRow[]),
+      inbound: sortWeekRowsByReason(prepared.inbound.map((entry) => rowMap.get(entry.id)).filter(Boolean) as EnrichedWeekRow[]),
     };
   }
 
