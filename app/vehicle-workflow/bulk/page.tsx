@@ -287,7 +287,7 @@ export default function BulkVehicleRegistrationPage(){
             <div className="reason">{item.reason}</div>
 
             <div className="fieldGrid">
-              <label>登録番号<input value={field(item,"registration_number")} onChange={(e)=>updateField(item.importId,"registration_number",e.target.value)} /></label>
+              <label>登録番号<input value={field(item,"registration_number")} onChange={(e)=>{const value=e.target.value;updateField(item.importId,"registration_number",value);const last=value.match(/(\d{4})(?!.*\d)/)?.[1];if(last)updateField(item.importId,"registration_last4",last);}} /></label>
               <label>下4桁<input value={field(item,"registration_last4")} maxLength={4} onChange={(e)=>updateField(item.importId,"registration_last4",e.target.value.replace(/\D/g,"").slice(-4))} /></label>
               <label>車台番号<input value={field(item,"chassis_number")} onChange={(e)=>updateField(item.importId,"chassis_number",e.target.value)} /></label>
               <label>型式<input value={field(item,"model_code")||field(item,"model")} onChange={(e)=>{updateField(item.importId,"model_code",e.target.value);updateField(item.importId,"model",e.target.value);}} /></label>

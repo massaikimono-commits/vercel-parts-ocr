@@ -1,6 +1,6 @@
 -- Deployed to the existing Supabase project on 2026-09-04.
 -- Atomic bulk vehicle import apply for reviewed PDF imports.
--- Includes create/update identity-collision guards.
+-- Includes create/update identity-collision guards and last4 normalization.
 
 CREATE OR REPLACE FUNCTION public.apply_vehicle_import_batch_v1(p_items jsonb, p_actor text DEFAULT NULL::text)
  RETURNS jsonb
@@ -90,10 +90,10 @@ begin
       v_maker := nullif(btrim(coalesce(v_parsed->>'maker','')),'');
       v_fuel := nullif(btrim(coalesce(v_parsed->>'fuel_type','')),'');
       v_first_registration := nullif(btrim(coalesce(v_parsed->>'first_registration','')),'');
-      v_registration_last4 := nullif(btrim(coalesce(
-        v_parsed->>'registration_last4',
-        substring(coalesce(v_registration,'') from '([0-9]{4})(?!.*[0-9])')
-      )),'');
+      v_registration_last4 := coalesce(
+        nullif(substring(coalesce(v_registration,'') from '([0-9]{4})(?!.*[0-9])'),''),
+        nullif(btrim(coalesce(v_parsed->>'registration_last4','')),'')
+      );
       v_weight := case
         when coalesce(v_parsed->>'vehicle_weight','') ~ '^[0-9]+([.][0-9]+)?$'
           then (v_parsed->>'vehicle_weight')::numeric
