@@ -19,6 +19,7 @@ const sql = read("database","app-core-v1-safety-functions.sql");
 const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.sql");
 const flexibleDeliverySql = read("database","create-schedule-registration-v2-flexible-delivery.sql");
 const rescheduleHistorySql = read("database","reschedule-schedule-entry-v2-history-type.sql");
+const cancelHistorySql = read("database","cancel-schedule-entry-v1-history.sql");
 function assert(condition, message) {
   if (!condition) {
     console.error(`app-core safety regression failed: ${message}`);
@@ -55,6 +56,11 @@ assert(scheduleEdit.includes('onsiteMode==="exact" ? onsiteTime : onsiteMode==="
 assert(scheduleEdit.includes("取消理由（任意）"), "staff schedule cancellation reason must remain optional");
 assert(scheduleEdit.includes("同じ作業に紐づく入庫・納車予定もまとめて取り消します"), "cancellation UI must explain linked schedule cancellation");
 assert(scheduleEdit.includes("rentalCancellationPending"), "cancellation UI must handle rental company confirmation state");
+assert(cancelHistorySql.includes("schedule_entry_cancelled"), "staff reservation cancellation must be recorded in structured history");
+assert(cancelHistorySql.includes("v_entry.work_order_id,''OTHER''"), "cancellation history must use an allowed work_order_schedule_changes type");
+assert(cancelHistorySql.includes("deletedScheduleEntries"), "cancellation history must record how many linked schedule entries were removed");
+assert(cancelHistorySql.includes("rentalCancellationPendingCount"), "cancellation history must preserve rental cancellation pending state");
+assert(!cancelHistorySql.toLowerCase().includes("create table"), "cancellation history fix must not add tables");
 assert(!scheduleEdit.includes("saveWorkDetails"), "separate stay write must not return");
 assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print must honor finalization gate");
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
