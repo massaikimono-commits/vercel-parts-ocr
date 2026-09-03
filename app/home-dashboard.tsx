@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase";
+import { dailyReportTimeLabel } from "./schedule/print-rules";
 
 type ScheduleEntry = {
   id: string;
@@ -10,6 +11,8 @@ type ScheduleEntry = {
   work_order_id: string | null;
   entry_type: "delivery" | "pickup" | "customer_visit" | "onsite_repair";
   starts_at: string;
+  print_time_mode: "exact" | "morning" | "unspecified";
+  print_time_label_override: string | null;
 };
 
 type WorkOrder = {
@@ -49,12 +52,6 @@ function jstBounds(day: string) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-function timeLabel(value: string) {
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false,
-  }).format(new Date(value));
-}
-
 export default function HomeDashboard({ onLogout }: { onLogout: () => void | Promise<unknown> }) {
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [works, setWorks] = useState<WorkOrder[]>([]);
@@ -71,7 +68,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     setLoadError("");
     const bounds = jstBounds(todayJst());
     const [entryRes, workRes, vehicleRes, customerRes] = await Promise.all([
-      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
+      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode,print_time_label_override").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
       supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
@@ -226,7 +223,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {inProgressRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="progressRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="progressDot">中</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+                <span className="uMain"><b>{dailyReportTimeLabel(entry)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
               </button>
             ))}
@@ -244,7 +241,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="statusDot">未</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b><small>下4桁 {last4(vehicle)}　{work?.reason || ""}</small></span>
+                <span className="uMain"><b>{dailyReportTimeLabel(entry)}　{customerName(customer)}</b><small>下4桁 {last4(vehicle)}　{work?.reason || ""}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
                 {work?.needs_loaner && <em>代車</em>}
               </button>
@@ -263,7 +260,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {completedRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="completedRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="completedDot">済</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+                <span className="uMain"><b>{dailyReportTimeLabel(entry)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
               </button>
             ))}
             {completedRows.length > 3 && (

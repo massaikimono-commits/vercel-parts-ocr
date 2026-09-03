@@ -85,6 +85,8 @@ assert(!workload.includes('href="/work-complete"') && !workload.includes('href="
 assert(scheduleSearch.includes('.normalize("NFKC")'), "schedule search must normalize full-width input");
 assert(scheduleSearch.includes("searchDigits"), "schedule search must normalize phone/last4 digits before querying");
 assert(scheduleSearch.includes("全角数字・全角英数字"), "schedule search must tell staff normalized input is supported");
+assert(scheduleSearch.includes("dailyReportTimeLabel(entry)"), "schedule search must show flexible schedule labels instead of storage placeholder times");
+assert(scheduleSearch.includes("print_time_mode,print_time_label_override"), "schedule search query must load flexible time metadata");
 assert(month.includes("月間予定") && month.includes("grid-template-columns:repeat(7"), "desktop monthly schedule must use a seven-column calendar");
 assert(month.includes("mobileExtra") && month.includes("mobileMore"), "mobile monthly schedule must show counts plus only a few entries");
 assert(month.includes('location.assign("/schedule?day=" + day)'), "monthly date tap must open the daily schedule");
@@ -94,6 +96,8 @@ assert(home.includes('location.assign("/schedule/month")') && home.includes("こ
 assert(week.includes('location.assign("/schedule/month?day=" + weekStart)'), "weekly schedule must link to monthly schedule");
 assert(schedule.includes('/schedule/month?day='), "daily schedule must link to monthly schedule");
 assert(home.includes("openTodayWork"), "mobile home work cards must open the matching schedule work");
+assert(home.includes("dailyReportTimeLabel(entry)"), "home schedule cards must show A中/午後/中 instead of storage placeholder times");
+assert(home.includes("print_time_mode,print_time_label_override"), "home schedule query must load flexible time metadata");
 assert(schedule.includes("focusWorkId") && schedule.includes("data-work-id"), "daily schedule must support focused work navigation");
 assert(schedule.includes("focusedWork"), "focused work must be visually obvious");
 assert(schedule.includes('pickup: ""'), "daily schedule must omit the basic pickup label");

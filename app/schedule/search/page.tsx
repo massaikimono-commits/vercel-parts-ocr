@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
+import { dailyReportTimeLabel } from "../print-rules";
 
 type Customer = {
   id: string;
@@ -38,9 +39,11 @@ type ScheduleEntry = {
   id: string;
   vehicle_id: string | null;
   work_order_id: string | null;
-  entry_type: string;
+  entry_type: "delivery" | "pickup" | "customer_visit" | "onsite_repair";
   starts_at: string;
   ends_at: string;
+  print_time_mode: "exact" | "morning" | "unspecified";
+  print_time_label_override: string | null;
 };
 
 type SearchRow = {
@@ -68,18 +71,6 @@ const RANGE_LABEL: Record<SearchRange, string> = {
 function dayKey(value: string) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(new Date(value));
-}
-
-function dateTimeLabel(value: string) {
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    month: "numeric",
-    day: "numeric",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
   }).format(new Date(value));
 }
 
@@ -216,7 +207,7 @@ export default function ScheduleSearchPage() {
       if (workIds.length) {
         let q1 = supabase
           .from("schedule_entries")
-          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at")
+          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override")
           .in("work_order_id", workIds)
           .order("starts_at", { ascending: nextRange === "future" })
           .limit(300);
@@ -229,7 +220,7 @@ export default function ScheduleSearchPage() {
 
       let q2 = supabase
         .from("schedule_entries")
-        .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at")
+        .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override")
         .in("vehicle_id", vehicleIds)
         .order("starts_at", { ascending: nextRange === "future" })
         .limit(300);
@@ -347,7 +338,7 @@ export default function ScheduleSearchPage() {
                 const elapsed = stayElapsedLabel(work);
                 return (
                 <div className="resultRow" key={entry.id}>
-                  <div className="time">{dateTimeLabel(entry.starts_at).split(" ").pop()}</div>
+                  <div className="time">{dailyReportTimeLabel(entry)}</div>
                   <div className="main">
                     <b>{customerLabel(customer)}</b>
                     <span>{ENTRY_LABEL[entry.entry_type] || entry.entry_type}{work?.reason ? "・"+work.reason : ""}</span>
