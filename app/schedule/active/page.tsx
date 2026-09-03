@@ -216,13 +216,14 @@ export default function ActiveVehicleSchedulePage() {
     };
   }
 
-  async function checkSlot(entry: string, startsAt: string, endsAt: string) {
-    const { data, error } = await supabase.rpc("schedule_slot_check", {
+  async function checkSlot(entry: string, startsAt: string, endsAt: string, printMode: string) {
+    const { data, error } = await supabase.rpc("schedule_slot_check_v2", {
       p_entry_type: entry,
       p_starts_at: startsAt,
       p_ends_at: endsAt,
       p_reason: reason,
       p_exclude_entry_id: null,
+      p_print_time_mode: printMode,
     });
     if (error) throw error;
     return extractCheck(data);
@@ -247,9 +248,9 @@ export default function ActiveVehicleSchedulePage() {
 
     setBusy(true);
     try {
-      const mainCheck = await checkSlot(entryType, main.startsAt, main.endsAt);
+      const mainCheck = await checkSlot(entryType, main.startsAt, main.endsAt, main.printMode);
       const deliveryCheck = addDelivery && selectedDelivery
-        ? await checkSlot("delivery", selectedDelivery.startsAt, selectedDelivery.endsAt)
+        ? await checkSlot("delivery", selectedDelivery.startsAt, selectedDelivery.endsAt, selectedDelivery.mode)
         : { allowed: true, overrideRequired: false, hardErrors: [] as string[], warnings: [] as string[] };
 
       const hardErrors = [...mainCheck.hardErrors, ...deliveryCheck.hardErrors];
