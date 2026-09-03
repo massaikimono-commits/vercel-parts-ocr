@@ -246,15 +246,73 @@ export default function DailyReportPrintPage() {
     );
   }
 
-  function workLine(work: WorkOrder, prefix = "") {
-    const stayDays = stayDayCountForReport(work, day);
-    const stayAge = stayDays ? ` 入庫:${stayDays}日目` : "";
-    const completion = work.expected_completion_date ? ` 完成:${work.expected_completion_date}` : "";
-    const stay = work.stay_reason ? ` ${work.stay_reason}` : "";
-    const deliveryDay = work.planned_delivery_date ? ` 納車:${work.planned_delivery_date}` : "";
-    const worker = work.worker_name ? ` 担当:${work.worker_name}` : "";
-    const vendor = work.outsource_vendor_name ? ` 外注:${work.outsource_vendor_name}` : "";
-    return `${prefix}${customerForVehicle(work.vehicle_id)} ${last4ForVehicle(work.vehicle_id)} ${work.reason}${worker}${vendor}${stayAge}${stay}${completion}${deliveryDay}`.trim();
+  function dateOnly(value: string | null | undefined) {
+    if (!value) return "";
+    const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return "";
+    return `${Number(m[2])}/${Number(m[3])}`;
+  }
+
+  function futureDeliveryDue(work: WorkOrder) {
+    if (work.planned_delivery_at) {
+      const d = new Date(work.planned_delivery_at);
+      const date = new Intl.DateTimeFormat("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        month: "numeric",
+        day: "numeric",
+      }).format(d);
+      const time = new Intl.DateTimeFormat("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(d);
+      return `${date} ${time}`;
+    }
+    return dateOnly(work.planned_delivery_date || work.expected_completion_date);
+  }
+
+  function lowerVehicle(work: WorkOrder) {
+    return (
+      <span className="lowerVehicle">
+        <b>{last4ForVehicle(work.vehicle_id)}</b>
+        <small>{work.reason}</small>
+      </span>
+    );
+  }
+
+  function stayingRow(work: WorkOrder) {
+    return (
+      <div className="lowerRow stayingRow" key={work.id}>
+        <span>{work.worker_name || ""}</span>
+        <span>{customerForVehicle(work.vehicle_id)}</span>
+        {lowerVehicle(work)}
+        <span>{dateOnly(work.checked_in_at)}</span>
+        <span>{dateOnly(work.planned_delivery_date || work.expected_completion_date)}</span>
+      </div>
+    );
+  }
+
+  function bodyShopRow(work: WorkOrder) {
+    return (
+      <div className="lowerRow bodyShopRow" key={work.id}>
+        <span>{work.outsource_vendor_name || ""}</span>
+        <span>{customerForVehicle(work.vehicle_id)}</span>
+        {lowerVehicle(work)}
+        <span>{dateOnly(work.checked_in_at)}</span>
+        <span>{dateOnly(work.planned_delivery_date || work.expected_completion_date)}</span>
+      </div>
+    );
+  }
+
+  function plannedDeliveryRow(work: WorkOrder) {
+    return (
+      <div className="lowerRow plannedDeliveryRow" key={work.id}>
+        <span>{customerForVehicle(work.vehicle_id)}</span>
+        {lowerVehicle(work)}
+        <span>{futureDeliveryDue(work)}</span>
+      </div>
+    );
   }
 
   return (
@@ -284,20 +342,20 @@ export default function DailyReportPrintPage() {
           {messages.map((note, index) => <div key={`${note}-${index}`}>{note}</div>)}
         </div>
         <div className="secondary staying" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.stayingVehicles)}>
-          {secondary.stayingVehicles.map((work) => <div key={work.id}>{workLine(work)}</div>)}
+          {secondary.stayingVehicles.map(stayingRow)}
         </div>
         <div className="secondary bodyShop" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.bodyShopVehicles)}>
-          {secondary.bodyShopVehicles.map((work) => <div key={work.id}>{workLine(work)}</div>)}
+          {secondary.bodyShopVehicles.map(bodyShopRow)}
         </div>
         <div className="secondary planned" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.plannedDeliveries)}>
-          {secondary.plannedDeliveries.map((work) => <div key={work.id}>{workLine(work, `${jstTime(work.planned_delivery_at)} `)}</div>)}
+          {secondary.plannedDeliveries.map(plannedDeliveryRow)}
         </div>
 
         {!backgroundUrl && <div className="placeholder">既成の日報用紙へ重ね印刷<br /><small>画面上は位置確認用／印刷時は文字だけ出力</small></div>}
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:${DAILY_REPORT_TEMPLATE.rows.height * 100}%;z-index:2}.delivery,.inbound{position:absolute;height:100%;display:flex;align-items:center;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.reportEntry{width:100%;height:100%;display:grid;align-items:center;white-space:nowrap;font-size:clamp(7px,.92vw,11px);line-height:1.05}.deliveryEntry{grid-template-columns:${DAILY_REPORT_TEMPLATE.columns.delivery.customer * 100}% ${DAILY_REPORT_TEMPLATE.columns.delivery.vehicle * 100}% ${DAILY_REPORT_TEMPLATE.columns.delivery.time * 100}%}.inboundEntry{grid-template-columns:${DAILY_REPORT_TEMPLATE.columns.inbound.customer * 100}% ${DAILY_REPORT_TEMPLATE.columns.inbound.vehicle * 100}% ${DAILY_REPORT_TEMPLATE.columns.inbound.time * 100}% ${DAILY_REPORT_TEMPLATE.columns.inbound.due * 100}%}.reportCustomer,.reportTime,.reportDue{overflow:hidden;text-overflow:ellipsis;padding:0 2px}.reportVehicle{min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden;padding:0 2px}.reportVehicle b{font-size:1em;line-height:1}.reportVehicle small{font-size:.68em;line-height:1;color:#4b5563;overflow:hidden;text-overflow:ellipsis}.reportTime,.reportDue{text-align:center}.reportTime{display:flex;align-items:center;justify-content:center;gap:2px}.reportVisitType{font-weight:800;font-size:.78em}.secondary{position:absolute;z-index:2;overflow:hidden;font-size:clamp(6px,.8vw,10px);line-height:1.3;padding:2px}.secondary>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.background,.placeholder{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none;background:transparent}.date{font-size:3.2mm}.reportEntry{font-size:2.35mm}.reportVehicle small{font-size:1.65mm}.secondary{font-size:2.1mm;padding:.4mm}}`}</style>
+        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:${DAILY_REPORT_TEMPLATE.rows.height * 100}%;z-index:2}.delivery,.inbound{position:absolute;height:100%;display:flex;align-items:center;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.reportEntry{width:100%;height:100%;display:grid;align-items:center;white-space:nowrap;font-size:clamp(7px,.92vw,11px);line-height:1.05}.deliveryEntry{grid-template-columns:${DAILY_REPORT_TEMPLATE.columns.delivery.customer * 100}% ${DAILY_REPORT_TEMPLATE.columns.delivery.vehicle * 100}% ${DAILY_REPORT_TEMPLATE.columns.delivery.time * 100}%}.inboundEntry{grid-template-columns:${DAILY_REPORT_TEMPLATE.columns.inbound.customer * 100}% ${DAILY_REPORT_TEMPLATE.columns.inbound.vehicle * 100}% ${DAILY_REPORT_TEMPLATE.columns.inbound.time * 100}% ${DAILY_REPORT_TEMPLATE.columns.inbound.due * 100}%}.reportCustomer,.reportTime,.reportDue{overflow:hidden;text-overflow:ellipsis;padding:0 2px}.reportVehicle{min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden;padding:0 2px}.reportVehicle b{font-size:1em;line-height:1}.reportVehicle small{font-size:.68em;line-height:1;color:#4b5563;overflow:hidden;text-overflow:ellipsis}.reportTime,.reportDue{text-align:center}.reportTime{display:flex;align-items:center;justify-content:center;gap:2px}.reportVisitType{font-weight:800;font-size:.78em}.secondary{position:absolute;z-index:2;overflow:hidden;font-size:clamp(6px,.8vw,10px);line-height:1;padding:0;display:grid;align-content:start}.secondary.messages{display:block;padding:2px}.secondary.messages>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.secondary.staying{grid-template-rows:repeat(${DAILY_REPORT_TEMPLATE.secondaryRows.stayingVehicles},1fr)}.secondary.bodyShop{grid-template-rows:repeat(${DAILY_REPORT_TEMPLATE.secondaryRows.bodyShopVehicles},1fr)}.secondary.planned{grid-template-rows:repeat(${DAILY_REPORT_TEMPLATE.secondaryRows.plannedDeliveries},1fr)}.lowerRow{display:grid;align-items:center;min-width:0;white-space:nowrap;overflow:hidden}.lowerRow>span{min-width:0;overflow:hidden;text-overflow:ellipsis;padding:0 1px}.stayingRow{grid-template-columns:${DAILY_REPORT_TEMPLATE.lowerColumns.stayingVehicles.worker * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.stayingVehicles.customer * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.stayingVehicles.vehicle * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.stayingVehicles.checkIn * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.stayingVehicles.due * 100}%}.bodyShopRow{grid-template-columns:${DAILY_REPORT_TEMPLATE.lowerColumns.bodyShopVehicles.factory * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.bodyShopVehicles.customer * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.bodyShopVehicles.vehicle * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.bodyShopVehicles.checkIn * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.bodyShopVehicles.due * 100}%}.plannedDeliveryRow{grid-template-columns:${DAILY_REPORT_TEMPLATE.lowerColumns.plannedDeliveries.customer * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.plannedDeliveries.vehicle * 100}% ${DAILY_REPORT_TEMPLATE.lowerColumns.plannedDeliveries.due * 100}%}.lowerVehicle{display:flex;flex-direction:column;justify-content:center;line-height:1}.lowerVehicle b{font-size:1em}.lowerVehicle small{font-size:.68em;color:#4b5563;overflow:hidden;text-overflow:ellipsis}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.background,.placeholder{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none;background:transparent}.date{font-size:3.2mm}.reportEntry{font-size:2.35mm}.reportVehicle small{font-size:1.65mm}.secondary{font-size:2.1mm;padding:.4mm}}`}</style>
     </main>
   );
 }
