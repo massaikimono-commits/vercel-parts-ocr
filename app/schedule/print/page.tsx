@@ -177,7 +177,11 @@ export default function DailyReportPrintPage() {
     return {
       ...entry,
       customerName: customer?.schedule_display_name || customer?.company_name || customer?.name || "お客様未登録",
-      last4: vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----",
+      last4: (() => {
+        const raw = vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{1,4})(?!.*\d)/)?.[1] || "";
+        if (!raw) return "----";
+        return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
+      })(),
       reason: work?.reason || "",
       workerName: work?.worker_name || "",
       outsourceVendorName: work?.outsource_vendor_name || "",
@@ -203,7 +207,9 @@ export default function DailyReportPrintPage() {
 
   function last4ForVehicle(vehicleId: string) {
     const vehicle = vehicleMap.get(vehicleId);
-    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
+    const raw = vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{1,4})(?!.*\d)/)?.[1] || "";
+    if (!raw) return "----";
+    return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
   }
 
   function deliveryCell(entry: PreviewEntry | null) {
