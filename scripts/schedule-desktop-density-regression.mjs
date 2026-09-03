@@ -7,10 +7,15 @@ const failures = [];
 for (const expected of [
   "@media screen and (min-width:721px)",
   ".page{max-width:1440px",
-  ".scheduleItem{padding:6px 8px",
+  ".scheduleItem{padding:5px 7px",
   ".itemMain{display:flex;align-items:center",
-  ".customer{font-size:14px",
-  ".meta span{padding:2px 5px;font-size:10px",
+  ".customer{font-size:12px",
+  ".meta span{padding:2px 4px;font-size:9px",
+  ".scheduleFacts{gap:3px",
+  ".vehicleLast4{font-size:10px",
+  ".entryLabel.type-customer_visit",
+  ".entryLabel.type-pickup",
+  ".entryLabel.type-onsite_repair",
   "@media(max-width:720px)",
   "@media print{",
 ]) {
@@ -43,6 +48,9 @@ if (failures.length) {
 
 console.log("PASS schedule desktop density regression");
 console.log("- compact layout applies to desktop screen only");
+console.log("- per-vehicle customer/meta text is reduced for denser daily schedule viewing");
+console.log("- vehicle row order is customer -> short vehicle number -> reason -> visit type/time");
+console.log("- customer visit, pickup, and onsite rows have distinct visual type cues");
 console.log("- mobile breakpoint remains separate");
 console.log("- schedule print action routes to the dedicated print page");
 console.log("- dedicated print page remains A3 portrait");

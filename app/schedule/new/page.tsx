@@ -100,6 +100,12 @@ function todayJst() {
   }).format(new Date());
 }
 
+function addDays(day: string, delta: number) {
+  const d = new Date(day + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
 function jstIso(day: string, time: string) {
   return new Date(`${day}T${time}:00+09:00`).toISOString();
 }
@@ -119,7 +125,7 @@ function extractWarnings(check: any) {
 
 export default function ScheduleNewPage() {
   const [day, setDay] = useState(todayJst());
-  const [entryType, setEntryType] = useState<EntryType>("customer_visit");
+  const [entryType, setEntryType] = useState<EntryType>("pickup");
   const [reason, setReason] = useState<Reason>("車検");
   const [customerName, setCustomerName] = useState("");
   const [customerType, setCustomerType] = useState<"individual" | "company">("individual");
@@ -141,10 +147,11 @@ export default function ScheduleNewPage() {
   const [inspectionScheduleType, setInspectionScheduleType] = useState("");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [selectedTimeKey, setSelectedTimeKey] = useState("");
+  const [onsiteTimeMode, setOnsiteTimeMode] = useState<"exact" | "morning" | "unspecified">("exact");
   const [onsiteTime, setOnsiteTime] = useState("09:00");
-  const [onsiteDuration, setOnsiteDuration] = useState("60");
 
   const [addDelivery, setAddDelivery] = useState(true);
+  const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "customer_visit">("delivery");
   const [deliveryDay, setDeliveryDay] = useState(todayJst());
   const [deliveryOptions, setDeliveryOptions] = useState<TimeOption[]>([]);
   const [deliveryTimeKey, setDeliveryTimeKey] = useState("");
@@ -173,8 +180,10 @@ export default function ScheduleNewPage() {
   }, []);
 
   useEffect(() => {
-    setDeliveryDay(day);
-  }, [day]);
+    const defaultDeliveryDay = reason === "車検" ? addDays(day, 1) : day;
+    setDeliveryDay(defaultDeliveryDay);
+    setDeliveryTimeKey("");
+  }, [day, reason]);
 
   useEffect(() => {
     void loadCapacity();
@@ -332,6 +341,10 @@ export default function ScheduleNewPage() {
     setDeliveryTimeKey((old) => {
       const oldOption = options.find((x) => x.key === old);
       if (oldOption && oldOption.availability !== "blocked") return old;
+      if (reason === "点検" || reason === "車検") {
+        const unspecified = options.find((x) => x.mode === "unspecified" && x.availability !== "blocked");
+        if (unspecified) return unspecified.key;
+      }
       return options.find((x) => x.availability === "open")?.key
         || options.find((x) => x.availability === "warning")?.key
         || "";
@@ -357,11 +370,17 @@ export default function ScheduleNewPage() {
         printMode: selectedTime.mode,
       };
     }
-    const startsAt = jstIso(day, onsiteTime);
+    const duration = 60;
+    const startTime = onsiteTimeMode === "morning"
+      ? "09:00"
+      : onsiteTimeMode === "unspecified"
+        ? "13:00"
+        : onsiteTime;
+    const startsAt = jstIso(day, startTime);
     return {
       startsAt,
-      endsAt: plusMinutes(startsAt, Math.max(30, Number(onsiteDuration) || 60)),
-      printMode: "exact" as const,
+      endsAt: plusMinutes(startsAt, duration),
+      printMode: onsiteTimeMode,
     };
   }
 
@@ -546,6 +565,16 @@ export default function ScheduleNewPage() {
     };
   }
 
+  async function saveDeliveryMethod(workOrderIds: string[]) {
+    const ids = workOrderIds.filter(Boolean);
+    if (!ids.length) return;
+    const { error } = await supabase.rpc("set_work_order_delivery_method_v1", {
+      p_work_order_ids: ids,
+      p_method: deliveryMethod,
+    });
+    if (error) throw error;
+  }
+
   async function submit(allowOverride = false) {
     setWarnings([]);
     setHardErrors([]);
@@ -617,6 +646,13 @@ export default function ScheduleNewPage() {
           return;
         }
         if (!data?.batchCreated) throw new Error("複数台の予定を登録できませんでした。");
+
+        if (addDelivery && entryType !== "delivery") {
+          const workOrderIds = (Array.isArray(data?.items) ? data.items : [])
+            .map((item: any) => String(item?.workOrderId || ""))
+            .filter(Boolean);
+          await saveDeliveryMethod(workOrderIds);
+        }
 
         setMessage(`${selectedVehicleIds.length}台の予定をまとめて登録しました。1日の予定へ戻ります。`);
         window.setTimeout(() => location.assign(`/schedule?day=${day}`), 450);
@@ -696,6 +732,9 @@ export default function ScheduleNewPage() {
       if (!data?.created) throw new Error("予定を登録できませんでした。");
 
       const workOrderId = data?.workOrderId;
+      if ((entryType === "delivery" || addDelivery) && workOrderId) {
+        await saveDeliveryMethod([String(workOrderId)]);
+      }
       const vehicleId = data?.vehicleId;
 
       if (workOrderId) {
@@ -818,6 +857,10 @@ export default function ScheduleNewPage() {
             お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。同じお客様の車両は続けて複数台選択できます。
           </div>
           <input
+            lang="ja"
+            inputMode="text"
+            autoCapitalize="none"
+            spellCheck={false}
             value={registeredSearch}
             onChange={(e) => setRegisteredSearch(e.target.value)}
             placeholder="例：1234 / 山田 / 090 / 車台番号"
@@ -864,14 +907,9 @@ export default function ScheduleNewPage() {
         </div>
 
         <div className="grid">
-          <label>顧客区分
-            <select value={customerType} onChange={(e) => setCustomerType(e.target.value as "individual" | "company")}>
-              <option value="individual">個人</option><option value="company">法人</option>
-            </select>
-          </label>
-          <label>お客様名<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
-          <label>会社名<input value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></label>
-          <label>予定表表示名<input value={scheduleDisplayName} onChange={(e) => setScheduleDisplayName(e.target.value)} placeholder="短い表示名・任意" /></label>
+          <label>お客様名<input lang="ja" inputMode="text" autoCapitalize="none" spellCheck={false} autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
+          <label>会社名<input lang="ja" inputMode="text" autoCapitalize="none" spellCheck={false} autoComplete="organization" value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></label>
+          <label>予定表表示名<input lang="ja" inputMode="text" autoCapitalize="none" spellCheck={false} value={scheduleDisplayName} onChange={(e) => setScheduleDisplayName(e.target.value)} placeholder="短い表示名・任意" /></label>
           <label>電話番号<input inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
           <label>登録番号<input value={registrationNumber} onChange={(e) => {
             const value = e.target.value;
@@ -901,11 +939,20 @@ export default function ScheduleNewPage() {
               <option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option>
             </select>
           </label>
-          {(reason === "点検" || reason === "車検") && (
+          {entryType === "delivery" && (
+            <label>受け渡し方法
+              <select value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value as "delivery" | "customer_visit")}>
+                <option value="delivery">納車</option>
+                <option value="customer_visit">来社</option>
+              </select>
+            </label>
+          )}
+                    {(reason === "点検" || reason === "車検") && (
             <label>点検区分
               <select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}>
                 <option value="">未指定</option>
-                <option value="schedule">通常予定</option>
+                <option value="schedule">スケ</option>
+                <option value="legal_3m">法定3ヶ月</option>
                 <option value="legal_6m">法定6ヶ月</option>
                 <option value="legal_12m">法定12ヶ月</option>
               </select>
@@ -985,12 +1032,16 @@ export default function ScheduleNewPage() {
             </div>
           ) : (
             <>
-              <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
-              <label>作業枠
-                <select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}>
-                  <option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option>
+              <label>出張時間
+                <select value={onsiteTimeMode} onChange={(e) => setOnsiteTimeMode(e.target.value as "exact" | "morning" | "unspecified")}>
+                  <option value="exact">時間指定</option>
+                  <option value="morning">A中</option>
+                  <option value="unspecified">中（午後）</option>
                 </select>
               </label>
+              {onsiteTimeMode === "exact" && (
+                <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
+              )}
             </>
           )}
         </div>
@@ -1005,13 +1056,19 @@ export default function ScheduleNewPage() {
           </label>
           {addDelivery && (
             <div className="grid deliveryGrid">
+              <label>受け渡し方法
+                <select value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value as "delivery" | "customer_visit")}>
+                  <option value="delivery">納車</option>
+                  <option value="customer_visit">来社</option>
+                </select>
+              </label>
               <label>納車日<input type="date" value={deliveryDay} onChange={(e) => setDeliveryDay(e.target.value)} /></label>
               <label>納車時間
                 <select value={deliveryTimeKey} onChange={(e) => setDeliveryTimeKey(e.target.value)}>
                   {!deliveryOptions.length && <option value="">候補なし</option>}
                   {deliveryOptions.map((x) => {
                     const mark = x.availability === "blocked" ? "×" : x.availability === "warning" ? "△" : "○";
-                    return <option key={x.key} value={x.key} disabled={x.availability === "blocked"}>{mark} {x.label}</option>;
+                    return <option key={x.key} value={x.key} disabled={x.availability === "blocked"}>{mark} {x.displayLabel || x.label}</option>;
                   })}
                 </select>
               </label>

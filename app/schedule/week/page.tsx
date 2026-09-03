@@ -21,6 +21,8 @@ type WorkOrder = {
   id: string;
   vehicle_id: string;
   reason: string;
+  inspection_schedule_type: string | null;
+  planned_delivery_method: "delivery" | "customer_visit" | null;
   status: string;
   work_completed: boolean;
   is_urgent: boolean;
@@ -63,6 +65,25 @@ type EnrichedWeekRow = {
   vehicle: Vehicle | null;
   customer: Customer | null;
 };
+
+function inspectionScheduleLabel(value: string | null | undefined) {
+  if (value === "schedule") return "スケ";
+  if (value === "legal_3m") return "法定3ヶ月";
+  if (value === "legal_6m") return "法定6ヶ月";
+  if (value === "legal_12m") return "法定12ヶ月";
+  return "";
+}
+
+function workDisplayLabel(work: WorkOrder | null) {
+  if (!work) return "";
+  const inspection = inspectionScheduleLabel(work.inspection_schedule_type);
+  return inspection ? `${work.reason} ${inspection}` : work.reason;
+}
+
+function entryDisplayLabel(entry: ScheduleEntry, work: WorkOrder | null) {
+  if (entry.entry_type === "delivery" && work?.planned_delivery_method === "customer_visit") return "来社";
+  return ENTRY_LABEL[entry.entry_type];
+}
 
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   delivery: "納車",
@@ -202,7 +223,7 @@ export default function WeeklySchedulePage() {
       if (workIds.length) {
         const { data, error } = await supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name")
+          .select("id,vehicle_id,reason,inspection_schedule_type,planned_delivery_method,status,work_completed,is_urgent,needs_loaner,worker_name")
           .in("id", workIds);
         if (error) throw error;
         nextWorks = (data || []) as WorkOrder[];
@@ -271,7 +292,9 @@ export default function WeeklySchedulePage() {
   }
 
   function last4(vehicle: Vehicle | null) {
-    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
+    const raw = vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
+    if (!raw) return "";
+    return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
   }
 
   function prepareWeekDaySection(rows: EnrichedWeekRow[], period: "morning" | "afternoon") {
@@ -294,11 +317,11 @@ export default function WeeklySchedulePage() {
         onClick={() => editEntry(entry.id)}
         aria-label={`${customerName(customer)}の予約を変更`}
       >
-        <div className="miniTop"><b>{dailyReportTimeLabel(entry)}</b><span>{ENTRY_LABEL[entry.entry_type]}</span></div>
+        <div className="miniTop"><b>{dailyReportTimeLabel(entry)}</b><span>{entryDisplayLabel(entry, work)}</span></div>
         <div className="miniCustomer">{customerName(customer)}</div>
         <div className="miniMeta">
           {last4(vehicle) && <span>{last4(vehicle)}</span>}
-          {work?.reason && <span>{work.reason}</span>}
+          {work && <span>{workDisplayLabel(work)}</span>}
           {work?.worker_name && <span>{work.worker_name}</span>}
           {work?.needs_loaner && <span className="loaner">代車</span>}
           {work?.is_urgent && <span className="urgentTag">急ぎ</span>}
@@ -316,6 +339,7 @@ export default function WeeklySchedulePage() {
         const a = dayRows[i].entry;
         const b = dayRows[j].entry;
         if (a.entry_type !== b.entry_type) continue;
+        if (a.entry_type === "pickup" || a.entry_type === "delivery") continue;
         if (new Date(a.starts_at) < new Date(b.ends_at) && new Date(a.ends_at) > new Date(b.starts_at)) {
           count += 1;
           ids.add(a.id);

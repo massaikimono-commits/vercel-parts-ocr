@@ -328,18 +328,12 @@ export default function CustomerVehicleBulkImportPage() {
               <p className="rowMessage">{row.message}</p>
 
               <div className="grid">
-                <label>顧客区分
-                  <select
-                    value={row.customerType}
-                    disabled={row.status === "error" || row.status === "saved"}
-                    onChange={(event) => updateCandidate(row.id, { customerType: event.target.value as "individual" | "company" })}
-                  >
-                    <option value="individual">個人</option>
-                    <option value="company">法人</option>
-                  </select>
-                </label>
                 <label>お客様名
                   <input
+                    lang="ja"
+                    inputMode="text"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     value={row.customerName}
                     disabled={row.status === "error" || row.status === "saved"}
                     onChange={(event) => updateCandidate(row.id, { customerName: event.target.value })}
@@ -348,6 +342,10 @@ export default function CustomerVehicleBulkImportPage() {
                 </label>
                 <label>住所
                   <input
+                    lang="ja"
+                    inputMode="text"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     value={row.customerAddress}
                     disabled={row.status === "error" || row.status === "saved"}
                     onChange={(event) => updateCandidate(row.id, { customerAddress: event.target.value })}

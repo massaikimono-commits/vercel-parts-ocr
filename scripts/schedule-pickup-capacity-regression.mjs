@@ -13,7 +13,7 @@ for (const expected of [
   "'afternoon_unspecified'",
   "'afternoon_unspecified_label'",
   "'午後'",
-  "p_entry_type<>'pickup'",
+  "p_entry_type not in ('pickup','delivery')",
   "v_morning_pickup_count>=v_morning_pickup_limit",
   "schedule_pickup_capacity",
   "'displayLabel'",
@@ -58,4 +58,5 @@ console.log("PASS pickup capacity/deadline regression");
 console.log("- morning pickup cap is 10 independent pickup entries");
 console.log("- exact pickup/delivery can render as deadline labels");
 console.log("- afternoon pickup period option exists");
+console.log("- same-time pickup and delivery entries do not create overlap warnings");
 console.log("- legacy option labels remain available for older deployed UI");
