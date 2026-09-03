@@ -39,6 +39,9 @@ jobs:
       - name: Run QR distractor precision regression
         run: node scripts/qr-photo-distractor-regression.mjs
 
+      - name: Run QR stacked-sheet precision regression
+        run: node scripts/qr-photo-stacked-sheet-regression.mjs
+
       - name: Run QR perspective regression
         run: node scripts/qr-photo-perspective-regression.mjs
 
