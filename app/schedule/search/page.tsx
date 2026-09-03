@@ -78,6 +78,13 @@ function customerLabel(c: Customer | null) {
   return c?.schedule_display_name || c?.company_name || c?.name || "お客様未登録";
 }
 
+function last4Label(vehicle: Vehicle | null) {
+  const raw = vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
+  if (!raw) return "";
+  if (/^\d+$/.test(raw)) return String(Number.parseInt(raw, 10));
+  return raw;
+}
+
 function normalizeSearchInput(text: string) {
   return text
     .normalize("NFKC")
@@ -344,7 +351,7 @@ export default function ScheduleSearchPage() {
                     <span>{ENTRY_LABEL[entry.entry_type] || entry.entry_type}{work?.reason ? "・"+work.reason : ""}</span>
                   </div>
                   <div className="meta">
-                    {vehicle?.registration_number_last4 && <span>下4桁 {vehicle.registration_number_last4}</span>}
+                    {last4Label(vehicle) && <span>下4桁 {last4Label(vehicle)}</span>}
                     {customer?.phone && <span>{customer.phone}</span>}
                     {work?.worker_name && <span>担当 {work.worker_name}</span>}
                     {elapsed && <span className="elapsed">{elapsed}</span>}

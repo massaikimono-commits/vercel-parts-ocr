@@ -112,6 +112,9 @@ assert(month.includes("月間予定") && month.includes("grid-template-columns:r
 assert(month.includes("mobileExtra") && month.includes("mobileMore"), "mobile monthly schedule must show counts plus only a few entries");
 assert(month.includes('location.assign("/schedule?day=" + day)'), "monthly date tap must open the daily schedule");
 assert(month.includes("REASON_ORDER") && month.includes('"点検": 0') && month.includes('"車検": 3'), "monthly schedule must sort 点検→一般整備→板金→車検");
+assert(week.includes("Number.parseInt(raw, 10)"), "weekly schedule must compact leading-zero plate suffixes for display only");
+assert(month.includes("Number.parseInt(raw, 10)"), "monthly schedule must compact leading-zero plate suffixes for display only");
+assert(scheduleSearch.includes("function last4Label") && scheduleSearch.includes("Number.parseInt(raw, 10)"), "schedule search must compact leading-zero plate suffixes for display only");
 assert(month.includes("outsource_vendor_name") && month.includes("reasonOutsourced"), "monthly schedule must keep outsourced general repair white");
 assert(home.includes('location.assign("/schedule/month")') && home.includes("この月の予定を見る"), "home must expose monthly schedule search");
 assert(week.includes('location.assign("/schedule/month?day=" + weekStart)'), "weekly schedule must link to monthly schedule");

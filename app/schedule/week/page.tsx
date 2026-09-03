@@ -295,7 +295,10 @@ export default function WeeklySchedulePage() {
   }
 
   function last4(vehicle: Vehicle | null) {
-    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
+    const raw = vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
+    if (!raw) return "";
+    if (/^\d+$/.test(raw)) return String(Number.parseInt(raw, 10));
+    return raw;
   }
 
   function reasonClass(work: WorkOrder | null) {
