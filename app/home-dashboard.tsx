@@ -243,7 +243,9 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   }
 
   function last4(vehicle: Vehicle | null) {
-    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
+    const raw = vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{1,4})(?!.*\d)/)?.[1] || "";
+    if (!raw) return "----";
+    return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
   }
 
   function openDay(day: string) {
@@ -386,7 +388,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {inProgressRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="progressRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="progressDot">中</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　{last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
               </button>
             ))}
@@ -404,7 +406,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="statusDot">未</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b><small>下4桁 {last4(vehicle)}　{work?.reason || ""}</small></span>
+                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b><small>{last4(vehicle)}　{work?.reason || ""}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
                 {work?.needs_loaner && <em>代車</em>}
               </button>
@@ -423,7 +425,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {completedRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="completedRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="completedDot">済</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　{last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
               </button>
             ))}
             {completedRows.length > 3 && (
