@@ -48,6 +48,9 @@ type PreviewEntry = Entry & {
   reason: string;
   workerName: string;
   outsourceVendorName: string;
+  plannedDeliveryAt: string | null;
+  plannedDeliveryDate: string | null;
+  expectedCompletionDate: string | null;
   workCompleted: boolean;
 };
 
@@ -74,6 +77,25 @@ function jstHour(value: string) {
 function jstTime(value: string | null) {
   if (!value) return "";
   return new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
+}
+
+function shortDate(value: string | null) {
+  if (!value) return "";
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return value;
+  return `${Number(m[2])}/${Number(m[3])}`;
+}
+
+function dueLabel(entry: PreviewEntry) {
+  if (entry.plannedDeliveryAt) {
+    const d = new Date(entry.plannedDeliveryAt);
+    const date = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric" }).format(d);
+    const time = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+    return `${date} ${time}`;
+  }
+  if (entry.plannedDeliveryDate) return shortDate(entry.plannedDeliveryDate);
+  if (entry.expectedCompletionDate) return shortDate(entry.expectedCompletionDate);
+  return "";
 }
 
 function stayDayCountForReport(work: WorkOrder, day: string) {
@@ -159,6 +181,9 @@ export default function DailyReportPrintPage() {
       reason: work?.reason || "",
       workerName: work?.worker_name || "",
       outsourceVendorName: work?.outsource_vendor_name || "",
+      plannedDeliveryAt: work?.planned_delivery_at || null,
+      plannedDeliveryDate: work?.planned_delivery_date || null,
+      expectedCompletionDate: work?.expected_completion_date || null,
       workCompleted: work ? workCompletedOnReportDay(work, day) : false,
     };
   }), [entries, vehicleMap, customerMap, workMap]);
@@ -181,10 +206,33 @@ export default function DailyReportPrintPage() {
     return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
   }
 
-  function cell(entry: PreviewEntry | null) {
+  function deliveryCell(entry: PreviewEntry | null) {
     if (!entry) return null;
-    const assignment = [entry.workerName ? `担当:${entry.workerName}` : "", entry.outsourceVendorName ? `外注:${entry.outsourceVendorName}` : ""].filter(Boolean).join(" ");
-    return <div className="entry"><b>{dailyReportTimeLabel(entry)} {entry.customerName}</b><span>{entry.last4} {entry.reason} {LABEL[entry.entry_type]} {assignment}</span>{entry.workCompleted && <strong>○</strong>}</div>;
+    return (
+      <div className="reportEntry deliveryEntry">
+        <div className="reportCustomer">{entry.customerName}</div>
+        <div className="reportVehicle">
+          <b>{entry.last4}</b>
+          {entry.reason && <small>{entry.reason}</small>}
+        </div>
+        <div className="reportTime">{dailyReportTimeLabel(entry)}</div>
+      </div>
+    );
+  }
+
+  function inboundCell(entry: PreviewEntry | null) {
+    if (!entry) return null;
+    return (
+      <div className="reportEntry inboundEntry">
+        <div className="reportCustomer">{entry.customerName}</div>
+        <div className="reportVehicle">
+          <b>{entry.last4}</b>
+          {entry.reason && <small>{entry.reason}</small>}
+        </div>
+        <div className="reportTime">{dailyReportTimeLabel(entry)}</div>
+        <div className="reportDue">{dueLabel(entry)}</div>
+      </div>
+    );
   }
 
   function workLine(work: WorkOrder, prefix = "") {
@@ -216,8 +264,8 @@ export default function DailyReportPrintPage() {
         {model.rows.map((row) => {
           const slot = slots[row.slotIndex];
           return <div key={row.slotIndex} className="row" style={{ top: `${slot.y * 100}%` }}>
-            <div className="delivery">{cell(row.delivery)}</div>
-            <div className="inbound">{cell(row.inbound)}</div>
+            <div className="delivery">{deliveryCell(row.delivery)}</div>
+            <div className="inbound">{inboundCell(row.inbound)}</div>
           </div>;
         })}
 
@@ -238,7 +286,7 @@ export default function DailyReportPrintPage() {
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:2.5%;z-index:2}.delivery,.inbound{position:absolute;height:100%;display:flex;align-items:center;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.entry{width:100%;display:grid;grid-template-columns:1fr auto;column-gap:8px;align-items:center;white-space:nowrap;font-size:clamp(7px,1.05vw,13px)}.entry b{overflow:hidden;text-overflow:ellipsis}.entry span{grid-column:1;color:#4b5563;font-size:.8em;overflow:hidden;text-overflow:ellipsis}.entry strong{grid-column:2;grid-row:1/3;font-size:1.4em}.secondary{position:absolute;z-index:2;overflow:hidden;font-size:clamp(6px,.8vw,10px);line-height:1.3;padding:2px}.secondary>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.background,.placeholder{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none;background:transparent}.date{font-size:3.2mm}.entry{font-size:2.5mm}.secondary{font-size:2.1mm;padding:.4mm}}`}</style>
+        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:2.5%;z-index:2}.delivery,.inbound{position:absolute;height:100%;display:flex;align-items:center;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.reportEntry{width:100%;height:100%;display:grid;align-items:center;white-space:nowrap;font-size:clamp(7px,.92vw,11px);line-height:1.05}.deliveryEntry{grid-template-columns:44% 29% 27%}.inboundEntry{grid-template-columns:38% 24% 18% 20%}.reportCustomer,.reportTime,.reportDue{overflow:hidden;text-overflow:ellipsis;padding:0 2px}.reportVehicle{min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden;padding:0 2px}.reportVehicle b{font-size:1em;line-height:1}.reportVehicle small{font-size:.68em;line-height:1;color:#4b5563;overflow:hidden;text-overflow:ellipsis}.reportTime,.reportDue{text-align:center}.secondary{position:absolute;z-index:2;overflow:hidden;font-size:clamp(6px,.8vw,10px);line-height:1.3;padding:2px}.secondary>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.background,.placeholder{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none;background:transparent}.date{font-size:3.2mm}.reportEntry{font-size:2.35mm}.reportVehicle small{font-size:1.65mm}.secondary{font-size:2.1mm;padding:.4mm}}`}</style>
     </main>
   );
 }
