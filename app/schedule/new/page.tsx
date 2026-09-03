@@ -871,11 +871,6 @@ export default function ScheduleNewPage() {
         </div>
 
         <div className="grid">
-          <label>顧客区分
-            <select value={customerType} onChange={(e) => setCustomerType(e.target.value as "individual" | "company")}>
-              <option value="individual">個人</option><option value="company">法人</option>
-            </select>
-          </label>
           <label>お客様名<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
           <label>会社名<input value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></label>
           <label>予定表表示名<input value={scheduleDisplayName} onChange={(e) => setScheduleDisplayName(e.target.value)} placeholder="短い表示名・任意" /></label>
