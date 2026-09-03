@@ -24,6 +24,7 @@ type WorkOrder = {
   vehicle_id: string;
   reason: "点検" | "車検" | "一般整備" | "板金塗装";
   inspection_schedule_type: string | null;
+  planned_delivery_method: "delivery" | "customer_visit" | null;
   status: string;
   worker_name: string | null;
   outsource_vendor_name: string | null;
@@ -75,6 +76,16 @@ function workDisplayLabel(work: WorkOrder | null) {
   if (!work) return "内容未設定";
   const inspection = inspectionScheduleLabel(work.inspection_schedule_type);
   return inspection ? `${work.reason} ${inspection}` : work.reason;
+}
+
+function entryDisplayLabel(entry: ScheduleEntry, work: WorkOrder | null) {
+  if (entry.entry_type === "delivery" && work?.planned_delivery_method === "customer_visit") return "来社";
+  return ENTRY_LABEL[entry.entry_type];
+}
+
+function entryDisplayType(entry: ScheduleEntry, work: WorkOrder | null) {
+  if (entry.entry_type === "delivery" && work?.planned_delivery_method === "customer_visit") return "customer_visit";
+  return entry.entry_type;
 }
 
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
@@ -232,7 +243,7 @@ export default function SchedulePage() {
           .order("starts_at", { ascending: true }),
         supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,inspection_schedule_type,status,worker_name,outsource_vendor_name,expected_completion_date,delivery_completed,work_completed,work_completed_at,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
+          .select("id,vehicle_id,reason,inspection_schedule_type,planned_delivery_method,status,worker_name,outsource_vendor_name,expected_completion_date,delivery_completed,work_completed,work_completed_at,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
           .neq("status", "cancelled"),
         supabase
           .from("vehicles")
@@ -530,7 +541,7 @@ export default function SchedulePage() {
             <div className="scheduleFacts">
               <b className="vehicleLast4">{last4Label(vehicle)}</b>
               <span className="reasonLabel">{workDisplayLabel(work)}</span>
-              <span className={`entryLabel type-${entry.entry_type}`}>{ENTRY_LABEL[entry.entry_type]} {timeLabel(entry)}</span>
+              <span className={`entryLabel type-${entryDisplayType(entry, work)}`}>{entryDisplayLabel(entry, work)} {timeLabel(entry)}</span>
             </div>
           </div>
           {!isDelivery && (
