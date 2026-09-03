@@ -97,6 +97,9 @@ assert(schedule.includes('onsite_repair: "出張"'), "daily schedule must show o
 assert(schedule.includes('entry.entry_type === "onsite_repair"'), "only onsite schedules may keep the standalone schedule completion control");
 assert(!schedule.includes("車両を開く →"), "daily schedule must not show a separate vehicle-open button");
 assert(schedule.includes("openVehicleFromCard"), "daily schedule cards must open the vehicle from the whole card");
+assert(schedule.includes('className="scheduleSummary"'), "daily schedule cards must show customer first then plate/reason/type-time");
+assert(schedule.includes('className="entryTime"'), "daily schedule cards must keep visit/onsite/time together");
+assert(schedule.includes("Number.parseInt(raw, 10)"), "daily schedule must compact leading-zero plate suffixes for display only");
 assert(schedule.includes("outsource_vendor_name"), "daily schedule must distinguish outsourced general repair");
 assert(schedule.includes("reasonShaken") && schedule.includes("reasonInspection") && schedule.includes("reasonGeneral") && schedule.includes("reasonBodywork"), "daily schedule must preserve intake reason color classes");
 assert(schedule.includes("grid-template-columns:minmax(0,1fr) minmax(0,1fr)"), "mobile daily schedule must keep delivery/inbound in two report-style columns");
