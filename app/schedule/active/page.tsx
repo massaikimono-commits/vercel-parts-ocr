@@ -22,6 +22,12 @@ type Staff = {
   short_name: string | null;
 };
 
+type ExternalVendor = {
+  id: string;
+  display_name: string;
+  short_name: string | null;
+};
+
 type Vehicle = {
   id: string;
   customer_id: string | null;
@@ -90,6 +96,9 @@ export default function ActiveVehicleSchedulePage() {
   const [onsiteDuration, setOnsiteDuration] = useState("60");
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffId, setStaffId] = useState("");
+  const [vendors, setVendors] = useState<ExternalVendor[]>([]);
+  const [vendorId, setVendorId] = useState("");
+  const [vendorName, setVendorName] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [needsLoaner, setNeedsLoaner] = useState(false);
   const [notes, setNotes] = useState("");
@@ -105,6 +114,7 @@ export default function ActiveVehicleSchedulePage() {
   useEffect(() => {
     void loadActiveVehicle();
     void loadStaff();
+    void loadVendors();
   }, []);
 
   useEffect(() => {
@@ -155,6 +165,16 @@ export default function ActiveVehicleSchedulePage() {
       .eq("is_active", true)
       .order("display_order", { ascending: true });
     if (!error) setStaff((data || []) as Staff[]);
+  }
+
+  async function loadVendors() {
+    const { data, error } = await supabase
+      .from("external_vendors")
+      .select("id,display_name,short_name")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .order("display_name", { ascending: true });
+    if (!error) setVendors((data || []) as ExternalVendor[]);
   }
 
   async function loadMainOptions() {
@@ -293,13 +313,15 @@ export default function ActiveVehicleSchedulePage() {
       });
       if (scheduleError) throw scheduleError;
 
-      if (staffId) {
-        const { error: staffError } = await supabase.rpc("set_work_order_worker", {
+      if (staffId || vendorId || vendorName.trim()) {
+        const { error: assignmentError } = await supabase.rpc("set_work_order_assignment", {
           p_work_order_id: work.id,
-          p_staff_id: staffId,
+          p_staff_id: staffId || null,
+          p_vendor_id: (reason === "板金塗装" || reason === "一般整備") ? (vendorId || null) : null,
+          p_vendor_name: (reason === "板金塗装" || reason === "一般整備") ? (vendorName.trim() || null) : null,
           p_actor: "active-vehicle-schedule",
         });
-        if (staffError) throw staffError;
+        if (assignmentError) throw assignmentError;
       }
 
       if (addDelivery && selectedDelivery) {
@@ -373,6 +395,15 @@ export default function ActiveVehicleSchedulePage() {
           )}
           {(reason === "点検" || reason === "車検") && <label>点検区分<select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}><option value="">未指定</option><option value="schedule">スケジュール点検</option><option value="legal_6m">法定6ヶ月</option><option value="legal_12m">法定12ヶ月</option></select></label>}
           <label>作業担当<select value={staffId} onChange={(e) => setStaffId(e.target.value)}><option value="">未選択</option>{staff.map((x) => <option key={x.id} value={x.id}>{x.short_name || x.display_name}</option>)}</select></label>
+          {(reason === "一般整備" || reason === "板金塗装") && <>
+            <label>外注先
+              <select value={vendorId} onChange={(e) => { setVendorId(e.target.value); if (e.target.value) setVendorName(""); }}>
+                <option value="">自社作業 / 未選択 / 直接入力</option>
+                {vendors.map((x) => <option key={x.id} value={x.id}>{x.short_name || x.display_name}</option>)}
+              </select>
+            </label>
+            {!vendorId && <label>外注先名（必要な時だけ）<input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：ガラス業者、電装業者、○○鈑金" /></label>}
+          </>}
           <div className="flags"><label><input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} /> 急ぎ</label><label><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} /> 代車あり</label></div>
           <label className="wide">備考<textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>
