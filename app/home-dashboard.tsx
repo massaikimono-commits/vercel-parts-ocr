@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase";
+import { dailyReportTimeLabel, prepareDailyReportSection } from "./schedule/print-rules";
 
 type ScheduleEntry = {
   id: string;
@@ -10,6 +11,9 @@ type ScheduleEntry = {
   work_order_id: string | null;
   entry_type: "delivery" | "pickup" | "customer_visit" | "onsite_repair";
   starts_at: string;
+  ends_at: string;
+  print_time_mode: "exact" | "morning" | "unspecified";
+  print_time_label_override: string | null;
 };
 
 type WorkOrder = {
@@ -88,6 +92,13 @@ function dateKey(value: string) {
   }).format(new Date(value));
 }
 
+function isMorningJst(value: string) {
+  const hour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo", hour: "2-digit", hour12: false,
+  }).format(new Date(value)));
+  return Number.isFinite(hour) && hour < 12;
+}
+
 function shortDayLabel(day: string) {
   return new Intl.DateTimeFormat("ja-JP", {
     timeZone: "UTC", month: "numeric", day: "numeric", weekday: "short",
@@ -132,8 +143,8 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     const weekStart = mondayOf(today);
     const weekEnd = addDays(weekStart, 7);
     const [entryRes, weekEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
-      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
-      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at").gte("starts_at", new Date(weekStart + "T00:00:00+09:00").toISOString()).lt("starts_at", new Date(weekEnd + "T00:00:00+09:00").toISOString()).order("starts_at", { ascending: true }),
+      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
+      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", new Date(weekStart + "T00:00:00+09:00").toISOString()).lt("starts_at", new Date(weekEnd + "T00:00:00+09:00").toISOString()).order("starts_at", { ascending: true }),
       supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
@@ -328,17 +339,45 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
                 <button className="homeWeekDayHead" onClick={() => openDay(day)}>
                   <b>{shortDayLabel(day)}</b><span>{rows.length}件</span>
                 </button>
-                <div className="homeWeekRows">
+                <div className="homeWeekRows dailyReportMini">
                   {busy ? <div className="homeWeekEmpty">読込中…</div> : rows.length === 0 ? (
                     <div className="homeWeekEmpty">予定なし</div>
-                  ) : rows.slice(0, 7).map(({ entry, work, vehicle, customer }) => (
-                    <button key={entry.id} className="homeWeekRow" onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
-                      <b>{timeLabel(entry.starts_at)} {ENTRY_LABEL[entry.entry_type]}</b>
-                      <span>{customerName(customer)}　{last4(vehicle)}</span>
-                      <small>{work?.reason || ""}{work?.worker_name ? "　担当 " + work.worker_name : ""}</small>
-                    </button>
-                  ))}
-                  {rows.length > 7 && <button className="homeWeekMore" onClick={() => openDay(day)}>ほか {rows.length - 7}件</button>}
+                  ) : (["morning","afternoon"] as const).map((period) => {
+                    const periodRows = rows.filter(({ entry }) => isMorningJst(entry.starts_at) === (period === "morning"));
+                    const itemMap = new Map(periodRows.map((row) => [row.entry.id, row]));
+                    const prepared = prepareDailyReportSection(periodRows.map(({ entry }) => entry), period);
+                    const deliveries = prepared.deliveries.map((entry) => itemMap.get(entry.id)).filter(Boolean) as typeof periodRows;
+                    const inbound = prepared.inbound.map((entry) => itemMap.get(entry.id)).filter(Boolean) as typeof periodRows;
+                    return (
+                      <div key={period} className="miniPeriod">
+                        <div className="miniPeriodLabel">{period === "morning" ? "午前" : "午後"}</div>
+                        <div className="miniReportColumns">
+                          <div className="miniReportColumn delivery">
+                            <small className="miniColumnTitle">納車</small>
+                            {!deliveries.length && <span className="miniEmpty">—</span>}
+                            {deliveries.map(({ entry, work, vehicle, customer }) => (
+                              <button key={entry.id} className="homeWeekRow miniRow type-delivery" onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
+                                <b>{customerName(customer)}</b>
+                                <span>{last4(vehicle)}　{work?.reason || ""}</span>
+                                <small>{ENTRY_LABEL[entry.entry_type]} {dailyReportTimeLabel(entry)}</small>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="miniReportColumn inbound">
+                            <small className="miniColumnTitle">来社・引取・出張</small>
+                            {!inbound.length && <span className="miniEmpty">—</span>}
+                            {inbound.map(({ entry, work, vehicle, customer }) => (
+                              <button key={entry.id} className={`homeWeekRow miniRow type-${entry.entry_type}`} onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
+                                <b>{customerName(customer)}</b>
+                                <span>{last4(vehicle)}　{work?.reason || ""}</span>
+                                <small>{ENTRY_LABEL[entry.entry_type]} {dailyReportTimeLabel(entry)}</small>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
                 <button className="homeWeekAdd" onClick={() => registerDay(day)}>＋ この日に登録</button>
               </article>
@@ -483,7 +522,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       <style jsx global>{`
         .homeWeek{margin-bottom:14px;background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:14px}
         .homeWeekHead{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}.homeWeekHead>div:first-child{display:grid;gap:2px}.homeWeekHead span{font-size:12px;color:#2674e8;font-weight:900}.homeWeekHead h2{margin:0;font-size:22px}.homeWeekHead small{color:#718096}.homeWeekActions{display:flex;gap:7px;flex-wrap:wrap}.homeWeekActions .weekPrimary{background:#2674e8;color:#fff;border-color:#2674e8}
-        .homeWeekGrid{display:grid;grid-template-columns:repeat(7,minmax(180px,1fr));gap:7px;overflow-x:auto;padding-bottom:4px}.homeWeekDay{min-width:180px;border:1px solid #dce4ef;border-radius:13px;overflow:hidden;background:#fff;display:flex;flex-direction:column}.homeWeekDay.today{outline:3px solid #2674e8;outline-offset:-2px}.homeWeekDayHead{border:0;border-radius:0;background:#f5f8fc;color:#172033;padding:9px;display:flex;justify-content:space-between}.homeWeekDayHead span{font-size:11px;color:#657386}.homeWeekRows{padding:5px;display:grid;gap:4px;min-height:150px}.homeWeekRow{border:1px solid #e2e8f0;background:#fff;color:#172033;border-radius:8px;padding:6px;text-align:left;display:grid;gap:1px}.homeWeekRow b{font-size:10px}.homeWeekRow span{font-size:11px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.homeWeekRow small{font-size:9px;color:#738095;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.homeWeekEmpty{padding:18px 4px;text-align:center;color:#9aa5b3;font-size:11px}.homeWeekMore,.homeWeekAdd{font-size:10px;padding:6px}.homeWeekMore{border:0}.homeWeekAdd{margin:5px;background:#f8fbff}
+        .homeWeekGrid{display:grid;grid-template-columns:repeat(7,minmax(180px,1fr));gap:7px;overflow-x:auto;padding-bottom:4px}.homeWeekDay{min-width:180px;border:1px solid #dce4ef;border-radius:13px;overflow:hidden;background:#fff;display:flex;flex-direction:column}.homeWeekDay.today{outline:3px solid #2674e8;outline-offset:-2px}.homeWeekDayHead{border:0;border-radius:0;background:#f5f8fc;color:#172033;padding:9px;display:flex;justify-content:space-between}.homeWeekDayHead span{font-size:11px;color:#657386}.homeWeekRows{padding:5px;display:grid;gap:5px;min-height:150px}.dailyReportMini{align-content:start}.miniPeriod{display:grid;gap:3px}.miniPeriodLabel{font-size:9px;font-weight:900;color:#6d7887;border-bottom:1px solid #e8edf3;padding-bottom:2px}.miniReportColumns{display:grid;grid-template-columns:1fr 1fr;gap:3px}.miniReportColumn{display:grid;gap:2px;align-content:start;min-width:0}.miniColumnTitle{font-size:8px;font-weight:900;color:#7b8796;padding:0 2px}.miniEmpty{font-size:9px;color:#a3acb8;text-align:center;padding:3px}.homeWeekRow{border:1px solid #e2e8f0;background:#fff;color:#172033;border-radius:7px;padding:4px;text-align:left;display:grid;gap:1px;min-width:0}.homeWeekRow b{font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.homeWeekRow span{font-size:8px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.homeWeekRow small{font-size:8px;color:#738095;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.miniRow.type-customer_visit{border-left:3px solid #7da9e8}.miniRow.type-pickup{border-left:3px solid #e8b15b}.miniRow.type-onsite_repair{border-left:3px solid #79b98d}.miniRow.type-delivery{border-left:3px solid #9a87d7}.homeWeekEmpty{padding:18px 4px;text-align:center;color:#9aa5b3;font-size:11px}.homeWeekMore,.homeWeekAdd{font-size:10px;padding:6px}.homeWeekMore{border:0}.homeWeekAdd{margin:5px;background:#f8fbff}
         .todayStatusGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
         .statusTile{min-width:0;padding:12px 6px;display:grid;grid-template-columns:1fr auto auto;gap:4px;align-items:end;text-align:left;border-width:2px}
         .statusTile span{grid-column:1/-1;font-size:12px;font-weight:900;white-space:nowrap}
