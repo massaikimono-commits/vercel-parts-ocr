@@ -127,3 +127,22 @@ Always identify three states separately:
 - PR #56 merged as `ae7f015b278e6ecf0cde3616cccb291c1a639100`; regression and Next.js build passed.
 - New batch RPC SQL remains source-only and unapplied to live Supabase until the user is ready for the next activation/deploy step.
 - No Vercel or Netlify deployment was run for this batch.
+
+## Vercel morning update deployment 2026-09-03
+
+- User requested deployment of the morning additions.
+- Live Supabase now has authenticated-only RPCs:
+  - `create_schedule_registration_batch_v1(...)`
+  - `import_vehicle_certificates_batch_v1(jsonb)`
+- Both RPCs are not executable by `anon`.
+- Two stale regression assumptions were found during Vercel attempts and corrected:
+  - single-vehicle selection regression updated for same-customer multi-select scheduling
+  - cancellation safety regression updated for optional cancellation reason
+- GitHub OCR regression now runs the exact Vercel-equivalent `npm run build` as the final pre-deploy gate.
+- Full pre-deploy CI passed before the successful deployment.
+- Successful Vercel Preview:
+  - source commit `1f50b4e4e2c27ed6b13aa6883aae83c436f2b1cb`
+  - deployment `dpl_DeQ2s7Nu5GzBAjZoqPBBLvhimu73`
+  - URL `https://vercel-parts-ppg7jecbv-massa-ikimono-8427s-projects.vercel.app`
+  - state READY; root HTTP 200 verified
+- This is a Vercel Preview, not Production. Netlify was not touched.
