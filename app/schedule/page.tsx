@@ -543,7 +543,7 @@ export default function SchedulePage() {
     const deliveries = prepared.deliveries.map((entry) => itemMap.get(entry.id)).filter(Boolean) as typeof enriched;
     const arrivals = prepared.inbound.map((entry) => itemMap.get(entry.id)).filter(Boolean) as typeof enriched;
     const deliveryColumn = <div key="delivery" className="deliveryColumn"><h3>納車予定</h3>{!deliveries.length && <div className="empty">予定なし</div>}{deliveries.map(renderCard)}</div>;
-    const arrivalColumn = <div key="arrivals" className="inboundColumn"><h3>引き取り・来社・出張</h3>{!arrivals.length && <div className="empty">予定なし</div>}{arrivals.map(renderCard)}</div>;
+    const arrivalColumn = <div key="arrivals" className="inboundColumn"><h3>来社・引取・出張</h3>{!arrivals.length && <div className="empty">予定なし</div>}{arrivals.map(renderCard)}</div>;
     const columns = columnLayout === "delivery-left" ? [deliveryColumn, arrivalColumn] : [arrivalColumn, deliveryColumn];
     return (
       <section className={`card periodSection ${period === "afternoon" ? "afternoonSection" : "morningSection"}`}>
