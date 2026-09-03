@@ -1,0 +1,34 @@
+{
+  "id": "photo-ocr-partial-missing-outerbands-008",
+  "description": "写真OCRで上段の登録情報と下段の使用者・満了日が同時に未取得でも、中央の車両諸元と型式情報だけを正確に保持し、欠損項目を誤補完しない匿名合成回帰ケース。実車・実顧客を特定できる値は含めない。",
+  "inputType": "photo-ocr-simulated-partial",
+  "rows": [
+    "車 名   乗 車 定 員   最 大 積 載 量   車 両 重 量   車 両 総 重 量",
+    "トヨタ [999] 5人 -kg 1280kg 1555kg",
+    "車 台 番 号   長 さ   幅   高 さ   前 前軸重   前 後軸重   後 前軸重   後 後軸重",
+    "TEST01-1234567 435cm 178cm 145cm 780kg -kg -kg 500kg",
+    "型 式   原 動 機 の 型 式   総排気量又は定格出力   燃 料 の 種 類   型式指定番号   類別区分番号",
+    "6AA-TEST01 ENG-001 1.80 L ガソリン 28888 0008"
+  ],
+  "expected": {
+    "vehicleName": "トヨタ",
+    "seatingCapacity": "5",
+    "maxPayloadKg": "-",
+    "vehicleWeightKg": "1280",
+    "grossVehicleWeightKg": "1555",
+    "chassisNumber": "TEST01-1234567",
+    "lengthCm": "435",
+    "widthCm": "178",
+    "heightCm": "145",
+    "frontFrontAxleWeightKg": "780",
+    "frontRearAxleWeightKg": "-",
+    "rearFrontAxleWeightKg": "-",
+    "rearRearAxleWeightKg": "500",
+    "model": "6AA-TEST01",
+    "engineModel": "ENG-001",
+    "displacementOrRatedOutput": "1.80 L",
+    "fuel": "ガソリン",
+    "modelDesignationNumber": "28888",
+    "classificationNumber": "0008"
+  }
+}
