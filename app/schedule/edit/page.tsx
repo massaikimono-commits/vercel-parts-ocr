@@ -50,6 +50,8 @@ export default function ScheduleEditPage(){
   const [originalPlannedDeliveryDate,setOriginalPlannedDeliveryDate]=useState("");
   const [message,setMessage]=useState("予約情報を読み込みます。");
   const [warnings,setWarnings]=useState<string[]>([]);
+  const [cancelConfirmOpen,setCancelConfirmOpen]=useState(false);
+  const [cancelReason,setCancelReason]=useState("");
   const [busy,setBusy]=useState(true);
 
   const id=typeof window!=="undefined" ? new URLSearchParams(location.search).get("id") : null;
@@ -137,6 +139,41 @@ export default function ScheduleEditPage(){
       : false;
     return scheduleChanged || stayChanged;
   },[day,entry,originalPlannedDeliveryDate,originalStayReason,plannedDeliveryDate,selectedOption,stayReason]);
+
+  async function cancelReservation(){
+    if(!entry || busy) return;
+    setBusy(true);
+    setWarnings([]);
+    try{
+      const {data,error}=await supabase.rpc("cancel_schedule_entry_v1",{
+        p_entry_id:entry.id,
+        p_reason:cancelReason.trim()||null,
+        p_actor:"schedule-edit",
+      });
+      if(error) throw error;
+
+      if(data?.cancelled){
+        const rentalNote=data?.rentalCancellationPending
+          ? " レンタカーは取消連絡待ちとして残しています。"
+          : "";
+        setMessage("予約を取り消しました。"+rentalNote);
+        window.setTimeout(()=>location.assign("/schedule?day="+day),450);
+        return;
+      }
+
+      if(data?.rentalCancellationPending || data?.requiresRentalCompanyConfirmation){
+        setCancelConfirmOpen(false);
+        setMessage("レンタカー会社への取消確認待ちです。確認が完了するまで予約本体は残しています。");
+        return;
+      }
+
+      setMessage("予約を取り消せませんでした。内容を確認してください。");
+    }catch(error:any){
+      setMessage("予約取消エラー: "+(error?.message||error));
+    }finally{
+      setBusy(false);
+    }
+  }
 
   async function save(override=false){
     if(!entry){return;}
@@ -228,11 +265,29 @@ export default function ScheduleEditPage(){
         </section>}
         {!!warnings.length && <div className="warnings"><b>確認が必要</b>{warnings.map((w,i)=><div key={i}>・{w}</div>)}<button onClick={()=>void save(true)}>警告を確認して変更</button></div>}
         <button className="primary" disabled={busy||!hasChanges} onClick={()=>void save(false)}>{hasChanges?"空きチェックして変更":"変更内容なし"}</button>
+
+        <section className="cancelBox">
+          {!cancelConfirmOpen ? (
+            <button className="cancelOpen" disabled={busy} onClick={()=>setCancelConfirmOpen(true)}>この予約を取り消す</button>
+          ) : (
+            <div className="cancelConfirm">
+              <b>この予約を取り消しますか？</b>
+              <small>同じ作業に紐づく入庫・納車予定もまとめて取り消します。作業開始済みの車両は予約取消できません。</small>
+              <label>取消理由（任意）
+                <input value={cancelReason} onChange={(e)=>setCancelReason(e.target.value)} placeholder="例：お客様都合" />
+              </label>
+              <div className="cancelActions">
+                <button disabled={busy} onClick={()=>setCancelConfirmOpen(false)}>戻る</button>
+                <button className="cancelDanger" disabled={busy} onClick={()=>void cancelReservation()}>取消を確定</button>
+              </div>
+            </div>
+          )}
+        </section>
       </>}
     </section>
     <style jsx global>{`
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}
-      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:7px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:16px}.targetPreview small{color:#627083;line-height:1.5}.changeRoute{display:grid;grid-template-columns:1fr auto 1fr;gap:9px;align-items:center}.changeRoute strong{color:#2674e8}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.primary:disabled{background:#aab5c5;border-color:#aab5c5;color:#fff}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}@media(max-width:600px){.grid{grid-template-columns:1fr}.changeRoute{grid-template-columns:1fr}.changeRoute strong{transform:rotate(90deg);justify-self:start}}
+      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:7px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:16px}.targetPreview small{color:#627083;line-height:1.5}.changeRoute{display:grid;grid-template-columns:1fr auto 1fr;gap:9px;align-items:center}.changeRoute strong{color:#2674e8}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.primary:disabled{background:#aab5c5;border-color:#aab5c5;color:#fff}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.cancelBox{margin-top:16px;padding-top:14px;border-top:1px solid #e5eaf0}.cancelOpen{width:100%;color:#a83a3a;border-color:#e0a7a7;background:#fff}.cancelConfirm{display:grid;gap:9px;padding:13px;border:1px solid #e4adad;border-radius:13px;background:#fff7f7}.cancelConfirm>b{color:#9d2f2f}.cancelConfirm>small{color:#745f5f;line-height:1.5}.cancelConfirm label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#745f5f}.cancelConfirm input{border:1px solid #d9bcbc;border-radius:9px;padding:10px;background:#fff}.cancelActions{display:flex;justify-content:flex-end;gap:8px}.cancelDanger{background:#b63d3d;color:#fff;border-color:#b63d3d}@media(max-width:600px){.grid{grid-template-columns:1fr}.changeRoute{grid-template-columns:1fr}.changeRoute strong{transform:rotate(90deg);justify-self:start}}
     `}</style>
   </main>;
 }

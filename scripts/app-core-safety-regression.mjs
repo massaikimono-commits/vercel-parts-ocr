@@ -42,6 +42,10 @@ assert(scheduleNew.includes("予定は登録済みです。ただし外注先だ
 assert(!scheduleNew.includes('supabase.rpc("create_manual_schedule_registration"'), "legacy partial schedule RPC must not be used");
 assert(!scheduleNew.includes('.from("schedule_entries").insert({'), "delivery insert must stay inside atomic RPC");
 assert(scheduleEdit.includes('supabase.rpc("reschedule_schedule_entry_v2"'), "reschedule and stay details must be atomic");
+assert(scheduleEdit.includes('supabase.rpc("cancel_schedule_entry_v1"'), "reservation cancellation must stay inside the existing schedule edit flow");
+assert(scheduleEdit.includes("取消理由（任意）"), "staff schedule cancellation reason must remain optional");
+assert(scheduleEdit.includes("同じ作業に紐づく入庫・納車予定もまとめて取り消します"), "cancellation UI must explain linked schedule cancellation");
+assert(scheduleEdit.includes("rentalCancellationPending"), "cancellation UI must handle rental company confirmation state");
 assert(!scheduleEdit.includes("saveWorkDetails"), "separate stay write must not return");
 assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print must honor finalization gate");
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
