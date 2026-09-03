@@ -419,15 +419,21 @@ export default function BulkSchedulePage(){
 
       const hard=Array.isArray(data?.hardErrors)?data.hardErrors.map(String):[];
       const warns=Array.isArray(data?.warnings)?data.warnings.map(String):[];
+      const failedIndex=Number(data?.failedIndex||0);
+      const failedItem=failedIndex>0 ? selected[failedIndex-1] : null;
+      const failedLabel=failedItem ? `${customerLabel(failedItem)} / ${vehicleLabel(failedItem)}` : "";
       if(data?.overrideRequired && !override){
-        setWarnings(warns.length?warns:["上限・重複の警告があります。"]);
-        setMessage("まとめ登録はまだ行っていません。警告を確認してください。");
+        const contextualWarnings=(warns.length?warns:["上限・重複の警告があります。"])
+          .map((warning:string)=>failedLabel ? `${failedLabel}：${warning}` : warning);
+        setWarnings(contextualWarnings);
+        setMessage(failedLabel
+          ? `${failedLabel} に警告があります。まとめ登録はまだ行っていません。`
+          : "まとめ登録はまだ行っていません。警告を確認してください。");
         return;
       }
       if(!data?.created){
-        const failedIndex=Number(data?.failedIndex||0);
-        const item=failedIndex>0 ? selected[failedIndex-1] : null;
-        setHardErrors(hard.length?hard:[item ? `${customerLabel(item)} の予定を登録できません。` : "まとめ登録できませんでした。"]);
+        const contextualHard=hard.map((problem:string)=>failedLabel ? `${failedLabel}：${problem}` : problem);
+        setHardErrors(contextualHard.length?contextualHard:[failedItem ? `${failedLabel} の予定を登録できません。` : "まとめ登録できませんでした。"]);
         setMessage(data?.rolledBack ? "1台で問題が見つかったため、全台をロールバックしました。" : "まとめ登録できませんでした。");
         return;
       }

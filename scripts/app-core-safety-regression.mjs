@@ -67,6 +67,8 @@ assert(scheduleBulk.includes('supabase.rpc("search_schedule_vehicles_v1"'), "bul
 assert(scheduleBulk.includes('supabase.rpc("create_schedule_registration_batch_v1"'), "bulk schedule registration must use the atomic batch RPC");
 assert(scheduleBulk.includes("検索を変えても選択済み車両は保持"), "bulk schedule registration must keep selections across different-customer searches");
 assert(scheduleBulk.includes("1台でも登録不可なら全台ロールバック"), "bulk schedule UI must explain all-or-none behavior");
+assert(scheduleBulk.includes("failedLabel") && scheduleBulk.includes("contextualWarnings"), "bulk schedule warnings must identify the customer/vehicle that triggered the batch warning");
+assert(scheduleBulk.includes("contextualHard"), "bulk schedule hard errors must identify the failing customer/vehicle");
 assert(scheduleBulk.includes("changeCommonDay") && scheduleBulk.includes("daysBetween(day,nextDay)"), "bulk schedule date changes must refresh selected vehicles instead of retaining old-day slots");
 assert(scheduleBulk.includes("addDays(item.deliveryDay,delta)"), "bulk schedule date changes must preserve each vehicle's delivery-day offset");
 assert(scheduleBulk.includes("時間候補を新しい日に更新しました"), "bulk schedule must confirm that selected vehicle slots were refreshed after a date change");
