@@ -83,9 +83,12 @@ export default function BulkVehicleRegistrationPage(){
     try{
       for(let i=0;i<list.length;i++){
         const file=list[i];
+        let stagedImportId="";
+        let parsedSnapshot:any=null;
         setProgress(`${i+1}/${list.length}　${file.name}`);
         try{
           const parsed=await parseVehicleCertificatePdf(file);
+          parsedSnapshot=parsed;
           const customerName=String(parsed.parsedFields.user_name||"");
           const status=parsed.quality==="ready"?"PARSED":"NEEDS_REVIEW";
           const {data:importRow,error:insertError}=await supabase.from("vehicle_imports").insert({
@@ -98,6 +101,7 @@ export default function BulkVehicleRegistrationPage(){
             status,
           }).select("id").single();
           if(insertError) throw insertError;
+          stagedImportId=importRow.id;
 
           let suggested:Action="";
           let targetVehicleId="";
@@ -128,13 +132,14 @@ export default function BulkVehicleRegistrationPage(){
                 ?"CREATE_VEHICLE"
                 :"";
 
-            await supabase.from("vehicle_imports").update({
+            const {error:updateError}=await supabase.from("vehicle_imports").update({
               matched_vehicle_id:targetVehicleId||null,
               match_score:matchScore,
               status:suggested==="UPDATE_EXISTING"?"MATCHED":suggested==="CREATE_VEHICLE"?"PARSED":"NEEDS_REVIEW",
               resolution_action:suggested||null,
               updated_at:new Date().toISOString(),
             }).eq("id",importRow.id);
+            if(updateError) throw updateError;
           }
 
           nextItems.push({
@@ -154,12 +159,22 @@ export default function BulkVehicleRegistrationPage(){
             customerCandidates,
           });
         }catch(error:any){
+          if(stagedImportId){
+            await supabase.from("vehicle_imports").update({
+              status:"NEEDS_REVIEW",
+              resolution_action:null,
+              updated_at:new Date().toISOString(),
+            }).eq("id",stagedImportId).catch(()=>null);
+          }
           nextItems.push({
-            importId:"",
+            importId:stagedImportId,
             fileName:file.name,
-            quality:"image_pdf",
-            reason:"解析エラー: "+(error?.message||error),
-            pageNumber:1,pageCount:1,parsedFields:{},action:"",targetVehicleId:"",
+            quality:stagedImportId?"review":"image_pdf",
+            reason:(stagedImportId?"取込後の照合エラー。要確認として保持しました: ":"解析エラー: ")+(error?.message||error),
+            pageNumber:parsedSnapshot?.pageNumber||1,
+            pageCount:parsedSnapshot?.pageCount||1,
+            parsedFields:parsedSnapshot?.parsedFields||{},
+            action:"",targetVehicleId:"",
             customerId:"",include:false,matchScore:null,vehicleCandidates:[],customerCandidates:[],
           });
         }
