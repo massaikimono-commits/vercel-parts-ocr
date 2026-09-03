@@ -55,6 +55,14 @@ function timeKey(value:string){
   return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(value));
 }
 
+function jstIso(day:string,time:string){
+  return new Date(day+"T"+time+":00+09:00").toISOString();
+}
+
+function plusMinutes(iso:string,minutes:number){
+  return new Date(new Date(iso).getTime()+minutes*60_000).toISOString();
+}
+
 const LABEL:Record<string,string>={delivery:"納車",pickup:"引取",customer_visit:"来社",onsite_repair:"出張"};
 const STAY_REASON_SUGGESTIONS=["部品待ち","外注作業待ち","見積確認待ち","お客様連絡待ち","作業待ち"];
 
@@ -63,6 +71,9 @@ export default function ScheduleEditPage(){
   const [day,setDay]=useState("");
   const [options,setOptions]=useState<TimeOption[]>([]);
   const [selected,setSelected]=useState("");
+  const [onsiteMode,setOnsiteMode]=useState<"exact"|"morning"|"unspecified">("exact");
+  const [onsiteTime,setOnsiteTime]=useState("09:00");
+  const [onsiteDuration,setOnsiteDuration]=useState("60");
   const [stayReason,setStayReason]=useState("");
   const [plannedDeliveryDate,setPlannedDeliveryDate]=useState("");
   const [reason,setReason]=useState("");
@@ -101,6 +112,9 @@ export default function ScheduleEditPage(){
     if(error){setMessage(safeActionError("予定の読み込み", error));setBusy(false);return;}
     const e=data as Entry;
     setEntry(e);
+    setOnsiteMode(e.print_time_mode==="morning" ? "morning" : e.print_time_mode==="unspecified" ? "unspecified" : "exact");
+    setOnsiteTime(timeKey(e.starts_at));
+    setOnsiteDuration(String(Math.max(30,Math.round((new Date(e.ends_at).getTime()-new Date(e.starts_at).getTime())/60000))));
     if(e.work_order_id){
       const {data:workData,error:workError}=await supabase.from("work_orders")
         .select("id,reason,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name,stay_reason,planned_delivery_date")
@@ -160,9 +174,13 @@ export default function ScheduleEditPage(){
 
   const targetSummary=useMemo(()=>{
     if(!entry||!day) return "";
-    if(entry.entry_type==="onsite_repair") return `${day} ${timeKey(entry.starts_at)}`;
+    if(entry.entry_type==="onsite_repair"){
+      if(onsiteMode==="morning") return `${day} 午前中`;
+      if(onsiteMode==="unspecified") return `${day} 午後中`;
+      return `${day} ${onsiteTime}`;
+    }
     return selectedOption ? `${day} ${selectedOption.displayLabel || selectedOption.label}` : `${day} 時間候補なし`;
-  },[day,entry,selectedOption]);
+  },[day,entry,selectedOption,onsiteMode,onsiteTime]);
 
   async function save(override=false){
     if(!entry){return;}
@@ -177,6 +195,16 @@ export default function ScheduleEditPage(){
       let mode:string;
       if(selectedOption){
         startsAt=selectedOption.startsAt; endsAt=selectedOption.endsAt; mode=selectedOption.mode;
+      }else if(entry.entry_type==="onsite_repair"){
+        if(onsiteMode==="morning"){
+          startsAt=jstIso(day,"08:30"); endsAt=jstIso(day,"12:00"); mode="morning";
+        }else if(onsiteMode==="unspecified"){
+          startsAt=jstIso(day,"13:00"); endsAt=jstIso(day,"17:00"); mode="unspecified";
+        }else{
+          startsAt=jstIso(day,onsiteTime);
+          endsAt=plusMinutes(startsAt,Math.max(30,Number(onsiteDuration)||60));
+          mode="exact";
+        }
       }else{
         const currentTime=timeKey(entry.starts_at);
         const duration=new Date(entry.ends_at).getTime()-new Date(entry.starts_at).getTime();
@@ -258,12 +286,22 @@ export default function ScheduleEditPage(){
         <div className="current">現在：<b>{dateKey(entry.starts_at)} {timeKey(entry.starts_at)}</b></div>
         <div className="grid">
           <label>変更日<input type="date" value={day} onChange={(e)=>void changeDay(e.target.value)} /></label>
-          {entry.entry_type!=="onsite_repair" && <label>変更時間
+          {entry.entry_type!=="onsite_repair" ? <label>変更時間
             <select value={selected} onChange={(e)=>changeTime(e.target.value)}>
               {!options.length && <option value="">候補なし</option>}
               {options.map(x=><option key={x.key} value={x.key}>{x.displayLabel || x.label}</option>)}
             </select>
-          </label>}
+          </label> : <>
+            <label>出張時間
+              <select value={onsiteMode} onChange={(e)=>{setOnsiteMode(e.target.value as "exact"|"morning"|"unspecified");resetWarningsForTargetChange();}}>
+                <option value="exact">時間指定</option><option value="morning">午前中</option><option value="unspecified">午後中</option>
+              </select>
+            </label>
+            {onsiteMode==="exact" && <>
+              <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e)=>{setOnsiteTime(e.target.value);resetWarningsForTargetChange();}} /></label>
+              <label>作業枠<select value={onsiteDuration} onChange={(e)=>{setOnsiteDuration(e.target.value);resetWarningsForTargetChange();}}><option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option></select></label>
+            </>}
+          </>}
         </div>
         <div className="targetPreview">
           <span>変更後</span><b>{targetSummary}</b>
@@ -284,13 +322,13 @@ export default function ScheduleEditPage(){
                 {vendors.map(vendor=><option key={vendor.id} value={vendor.id}>{vendor.short_name||vendor.display_name}</option>)}
               </select>
             </label>}
-            {reason==="板金塗装" && !vendorId && <label>外注先名（直接入力）
+            {(reason==="板金塗装" || reason==="一般整備") && !vendorId && <label>外注先名（直接入力）
               <input value={vendorName} onChange={(e)=>setVendorName(e.target.value)} placeholder="例：○○鈑金" />
             </label>}
           </div>
           <div className="manageLinks">
             <button type="button" onClick={()=>location.assign("/settings/staff")}>社員名を管理</button>
-            {reason==="板金塗装" && <button type="button" onClick={()=>location.assign("/settings/vendors")}>外注先を管理</button>}
+            {(reason==="板金塗装" || reason==="一般整備") && <button type="button" onClick={()=>location.assign("/settings/vendors")}>外注先を管理</button>}
           </div>
         </section>}
         {entry.work_order_id && <section className="stayBox">
