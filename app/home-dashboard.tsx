@@ -17,6 +17,7 @@ type ScheduleEntry = {
 
 type WorkOrder = {
   id: string;
+  vehicle_id: string;
   reason: string;
   status: string;
   work_completed: boolean;
@@ -67,19 +68,77 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     setBusy(true);
     setLoadError("");
     const bounds = jstBounds(todayJst());
-    const [entryRes, workRes, vehicleRes, customerRes] = await Promise.all([
-      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode,print_time_label_override").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
-      supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
-      supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
-      supabase.from("customers").select("id,name,company_name,schedule_display_name"),
-    ]);
-    const firstError = [entryRes.error, workRes.error, vehicleRes.error, customerRes.error].find(Boolean);
-    if (firstError) setLoadError("今日の予定を取得できません。1日のスケジュールで再確認してください。");
-    if (!entryRes.error) setEntries((entryRes.data || []) as ScheduleEntry[]);
-    if (!workRes.error) setWorks((workRes.data || []) as WorkOrder[]);
-    if (!vehicleRes.error) setVehicles((vehicleRes.data || []) as Vehicle[]);
-    if (!customerRes.error) setCustomers((customerRes.data || []) as Customer[]);
-    setBusy(false);
+    try {
+      const { data: entryData, error: entryError } = await supabase
+        .from("schedule_entries")
+        .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode,print_time_label_override")
+        .gte("starts_at", bounds.start)
+        .lt("starts_at", bounds.end)
+        .order("starts_at", { ascending: true });
+      if (entryError) throw entryError;
+
+      const nextEntries = (entryData || []) as ScheduleEntry[];
+      const todayWorkIds = [...new Set(nextEntries.map((entry) => entry.work_order_id).filter(Boolean))] as string[];
+      const workFields = "id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at";
+
+      const unfinishedPromise = supabase
+        .from("work_orders")
+        .select(workFields)
+        .eq("work_completed", false)
+        .is("checked_out_at", null)
+        .neq("status", "completed")
+        .neq("status", "cancelled");
+      const todayWorkPromise = todayWorkIds.length
+        ? supabase.from("work_orders").select(workFields).in("id", todayWorkIds)
+        : Promise.resolve({ data: [], error: null });
+
+      const [unfinishedRes, todayWorkRes] = await Promise.all([unfinishedPromise, todayWorkPromise]);
+      if (unfinishedRes.error) throw unfinishedRes.error;
+      if (todayWorkRes.error) throw todayWorkRes.error;
+
+      const nextWorkMap = new Map<string, WorkOrder>();
+      for (const work of ((unfinishedRes.data || []) as WorkOrder[])) nextWorkMap.set(work.id, work);
+      for (const work of ((todayWorkRes.data || []) as WorkOrder[])) nextWorkMap.set(work.id, work);
+      const nextWorks = [...nextWorkMap.values()];
+
+      const vehicleIds = [...new Set([
+        ...nextEntries.map((entry) => entry.vehicle_id).filter(Boolean),
+        ...nextWorks.map((work) => work.vehicle_id).filter(Boolean),
+      ])] as string[];
+      let nextVehicles: Vehicle[] = [];
+      if (vehicleIds.length) {
+        const { data, error } = await supabase
+          .from("vehicles")
+          .select("id,customer_id,registration_number_last4,registration_number")
+          .in("id", vehicleIds);
+        if (error) throw error;
+        nextVehicles = (data || []) as Vehicle[];
+      }
+
+      const customerIds = [...new Set(nextVehicles.map((vehicle) => vehicle.customer_id).filter(Boolean))] as string[];
+      let nextCustomers: Customer[] = [];
+      if (customerIds.length) {
+        const { data, error } = await supabase
+          .from("customers")
+          .select("id,name,company_name,schedule_display_name")
+          .in("id", customerIds);
+        if (error) throw error;
+        nextCustomers = (data || []) as Customer[];
+      }
+
+      setEntries(nextEntries);
+      setWorks(nextWorks);
+      setVehicles(nextVehicles);
+      setCustomers(nextCustomers);
+    } catch {
+      setEntries([]);
+      setWorks([]);
+      setVehicles([]);
+      setCustomers([]);
+      setLoadError("今日の予定を取得できません。1日のスケジュールで再確認してください。");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const workMap = useMemo(() => new Map(works.map((x) => [x.id, x])), [works]);
@@ -88,7 +147,8 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
 
   const todayRows = useMemo(() => entries.map((entry) => {
     const work = entry.work_order_id ? workMap.get(entry.work_order_id) || null : null;
-    const vehicle = entry.vehicle_id ? vehicleMap.get(entry.vehicle_id) || null : null;
+    const vehicleId = entry.vehicle_id || work?.vehicle_id || null;
+    const vehicle = vehicleId ? vehicleMap.get(vehicleId) || null : null;
     const customer = vehicle && vehicle.customer_id ? customerMap.get(vehicle.customer_id) || null : null;
     return { entry, work, vehicle, customer };
   }), [entries, workMap, vehicleMap, customerMap]);
@@ -158,7 +218,10 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   }
 
   function last4(vehicle: Vehicle | null) {
-    return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
+    const raw = vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "";
+    if (!raw) return "----";
+    if (/^\d+$/.test(raw)) return String(Number.parseInt(raw, 10));
+    return raw;
   }
 
   function openDay(day: string) {

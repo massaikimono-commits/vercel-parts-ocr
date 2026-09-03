@@ -66,6 +66,10 @@ assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
 assert(!inspectionPrint.includes("printAndMark"), "print must not pre-mark printed");
 assert(home.includes("checked_out_at"), "home workload must exclude checked-out work");
+assert(home.includes('.eq("work_completed", false)') && home.includes('.is("checked_out_at", null)'), "home must fetch only unfinished work for the workload summary");
+assert(home.includes('.in("id", vehicleIds)') && home.includes('.in("id", customerIds)'), "home must not load the entire vehicle/customer master on every visit");
+assert(home.includes("entry.vehicle_id || work?.vehicle_id"), "home must fall back to the work-order vehicle when the schedule entry vehicle is empty");
+assert(home.includes("Number.parseInt(raw, 10)"), "home must compact leading-zero plate suffixes for display only");
 assert(home.includes('className="mobileToday"'), "mobile home must keep today-first responsive section");
 assert(home.includes('className="desktopMain"'), "desktop home must keep its dedicated responsive section");
 assert(home.includes("作業未実施") && home.includes("作業中") && home.includes("作業完了"), "mobile home must keep the three work-state summaries visible");
