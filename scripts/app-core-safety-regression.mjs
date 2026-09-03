@@ -17,6 +17,7 @@ const scheduleSearch = read("app","schedule","search","page.tsx");
 const month = read("app","schedule","month","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.sql");
+const rentalCancellationFinalizeSql = read("database","finalize-rental-company-cancellation-safety.sql");
 const flexibleDeliverySql = read("database","create-schedule-registration-v2-flexible-delivery.sql");
 const rescheduleHistorySql = read("database","reschedule-schedule-entry-v2-history-type.sql");
 const legacyRescheduleHistorySql = read("database","reschedule-schedule-entry-v1-history-type.sql");
@@ -94,6 +95,9 @@ assert(schedule.includes("checkedOutAt !== null && checkedOutAt <= endOfDay"), "
 assert(reportPrint.includes("workCompletedOnReportDay"), "daily report completion mark must use selected-day semantics");
 assert(secondary.includes("work_completed_at"), "daily report secondary sections must use completion timestamp");
 assert(loaners.includes('supabase.rpc("set_loaner_vehicle_operational_status"'), "loaner operational status must use guarded RPC");
+assert(loaners.includes('supabase.rpc("rental_company_cancellation_queue"'), "loaner board must load the rental-company cancellation queue");
+assert(loaners.includes('supabase.rpc("finalize_rental_company_cancellation"'), "loaner board must expose the existing rental cancellation finalizer");
+assert(loaners.includes("会社側取消済み") && loaners.includes("取消できず継続"), "loaner board must let staff record both rental cancellation outcomes");
 assert(!loaners.includes('.from("loaner_vehicles").update({'), "loaner status must not bypass guarded RPC");
 assert(week.includes("要確認日のみ表示"), "weekly schedule must offer problem-day filtering");
 assert(week.includes("firstAttentionDay"), "weekly schedule must allow direct access to the first attention day");
@@ -168,6 +172,10 @@ assert(legacyRescheduleHistorySql.includes("v_new_type text := 'e.work_order_id,
 assert(legacyRescheduleHistorySql.includes("schedule_entry_rescheduled"), "legacy reschedule history must preserve the precise event name");
 assert(!legacyRescheduleHistorySql.toLowerCase().includes("create table"), "legacy reschedule history fix must not add tables");
 assert(!loanerSyncSql.toLowerCase().includes("create table"), "loaner reschedule sync must not add tables");
+assert(rentalCancellationFinalizeSql.includes("delete from public.schedule_entries where work_order_id=b.work_order_id"), "approved rental cancellation must remove every linked schedule entry");
+assert(rentalCancellationFinalizeSql.includes("rental_cancellation_approved") && rentalCancellationFinalizeSql.includes("rental_cancellation_refused"), "rental cancellation outcome must be recorded in work-order history");
+assert(rentalCancellationFinalizeSql.includes("b.work_order_id,''OTHER''"), "rental cancellation history must use an allowed work-order change type");
+assert(!rentalCancellationFinalizeSql.toLowerCase().includes("create table"), "rental cancellation finalization fix must not add tables");
 assert(flexibleDeliverySql.includes("p_delivery_print_time_mode"), "flexible delivery chronology must branch by print-time mode");
 assert(flexibleDeliverySql.includes("Asia/Tokyo"), "flexible delivery chronology must compare non-exact delivery by JST date");
 assert(!flexibleDeliverySql.toLowerCase().includes("create table"), "flexible delivery chronology must not add tables");
