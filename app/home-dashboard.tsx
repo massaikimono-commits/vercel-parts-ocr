@@ -101,9 +101,12 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       for (const work of ((todayWorkRes.data || []) as WorkOrder[])) nextWorkMap.set(work.id, work);
       const nextWorks = [...nextWorkMap.values()];
 
+      const todayWorkVehicleIds = todayWorkIds
+        .map((workId) => nextWorkMap.get(workId)?.vehicle_id || null)
+        .filter(Boolean);
       const vehicleIds = [...new Set([
         ...nextEntries.map((entry) => entry.vehicle_id).filter(Boolean),
-        ...nextWorks.map((work) => work.vehicle_id).filter(Boolean),
+        ...todayWorkVehicleIds,
       ])] as string[];
       let nextVehicles: Vehicle[] = [];
       if (vehicleIds.length) {

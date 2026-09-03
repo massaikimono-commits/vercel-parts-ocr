@@ -78,6 +78,8 @@ assert(!inspectionPrint.includes("printAndMark"), "print must not pre-mark print
 assert(home.includes("checked_out_at"), "home workload must exclude checked-out work");
 assert(home.includes('.eq("work_completed", false)') && home.includes('.is("checked_out_at", null)'), "home must fetch only unfinished work for the workload summary");
 assert(home.includes('.in("id", vehicleIds)') && home.includes('.in("id", customerIds)'), "home must not load the entire vehicle/customer master on every visit");
+assert(home.includes("todayWorkVehicleIds") && home.includes("todayWorkIds"), "home vehicle/customer lookup must be scoped to today's work orders, not every unfinished work");
+assert(!home.includes("...nextWorks.map((work) => work.vehicle_id).filter(Boolean)"), "home must not fetch vehicle/customer masters for workload-only unfinished work");
 assert(home.includes("entry.vehicle_id || work?.vehicle_id"), "home must fall back to the work-order vehicle when the schedule entry vehicle is empty");
 assert(home.includes("Number.parseInt(raw, 10)"), "home must compact leading-zero plate suffixes for display only");
 assert(home.includes('className="mobileToday"'), "mobile home must keep today-first responsive section");
