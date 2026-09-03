@@ -456,6 +456,7 @@ export default function WeeklySchedulePage() {
           <button onClick={() => setWeekStart(addDays(weekStart, -7))}>← 前週</button>
           <button onClick={() => setWeekStart(mondayOf(todayJst()))}>今週</button>
           <button onClick={() => setWeekStart(addDays(weekStart, 7))}>翌週 →</button>
+          <button onClick={() => location.assign("/schedule/month?day=" + weekStart)}>月間予定</button>
         </div>
       </section>
 

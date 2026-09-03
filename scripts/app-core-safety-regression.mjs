@@ -14,6 +14,7 @@ const week = read("app","schedule","week","page.tsx");
 const loanerWeek = read("app","loaners","week","page.tsx");
 const workload = read("app","schedule","workload","page.tsx");
 const scheduleSearch = read("app","schedule","search","page.tsx");
+const month = read("app","schedule","month","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.sql");
 function assert(condition, message) {
@@ -65,6 +66,14 @@ assert(!workload.includes('href="/work-complete"') && !workload.includes('href="
 assert(scheduleSearch.includes('.normalize("NFKC")'), "schedule search must normalize full-width input");
 assert(scheduleSearch.includes("searchDigits"), "schedule search must normalize phone/last4 digits before querying");
 assert(scheduleSearch.includes("全角数字・全角英数字"), "schedule search must tell staff normalized input is supported");
+assert(month.includes("月間予定") && month.includes("grid-template-columns:repeat(7"), "desktop monthly schedule must use a seven-column calendar");
+assert(month.includes("mobileExtra") && month.includes("mobileMore"), "mobile monthly schedule must show counts plus only a few entries");
+assert(month.includes('location.assign("/schedule?day=" + day)'), "monthly date tap must open the daily schedule");
+assert(month.includes("REASON_ORDER") && month.includes('"点検": 0') && month.includes('"車検": 3'), "monthly schedule must sort 点検→一般整備→板金→車検");
+assert(month.includes("outsource_vendor_name") && month.includes("reasonOutsourced"), "monthly schedule must keep outsourced general repair white");
+assert(home.includes('location.assign("/schedule/month")') && home.includes("この月の予定を見る"), "home must expose monthly schedule search");
+assert(week.includes('location.assign("/schedule/month?day=" + weekStart)'), "weekly schedule must link to monthly schedule");
+assert(schedule.includes('/schedule/month?day='), "daily schedule must link to monthly schedule");
 assert(home.includes("openTodayWork"), "mobile home work cards must open the matching schedule work");
 assert(schedule.includes("focusWorkId") && schedule.includes("data-work-id"), "daily schedule must support focused work navigation");
 assert(schedule.includes("focusedWork"), "focused work must be visually obvious");
