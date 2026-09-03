@@ -1,0 +1,42 @@
+{
+  "id": "photo-ocr-partial-missing-topband-005",
+  "description": "写真OCRで上段（登録番号・登録日・初度登録・種別等）が未取得でも、取得済みの車名・重量・車台番号・型式・使用者・満了日を誤生成せず保持する匿名化回帰ケース。実車・実顧客を特定できる値は保存しない。",
+  "inputType": "photo-ocr-simulated-partial",
+  "rows": [
+    "車 名   乗 車 定 員   最 大 積 載 量   車 両 重 量   車 両 総 重 量",
+    "トヨタ   [194]   5人   -kg   1360kg   1635kg",
+    "車 台 番 号   長 さ   幅   高 さ   前 前軸重   前 後軸重   後 前軸重   後 後軸重",
+    "ZWE219-7654321   437cm   179cm   146cm   830kg   -kg   -kg   530kg",
+    "型 式   原 動 機 の 型 式   総排気量又は定格出力   燃 料 の 種 類   型式指定番号   類別区分番号",
+    "6AA-ZWE219H   2ZR-1VM   1.79 L   ガソリン   20512   0001",
+    "使用者の氏名又は名称   テスト整備株式会社",
+    "使 用 者 の 住 所   大阪府大阪市中央区テスト1丁目2番3号   [00000 0000]",
+    "使用の本拠の位置",
+    "有効期間の満了する日   車検期間",
+    "令和8年10月10日   2年"
+  ],
+  "expected": {
+    "vehicleName": "トヨタ",
+    "seatingCapacity": "5",
+    "maxPayloadKg": "-",
+    "vehicleWeightKg": "1360",
+    "grossVehicleWeightKg": "1635",
+    "chassisNumber": "ZWE219-7654321",
+    "lengthCm": "437",
+    "widthCm": "179",
+    "heightCm": "146",
+    "frontFrontAxleWeightKg": "830",
+    "frontRearAxleWeightKg": "-",
+    "rearFrontAxleWeightKg": "-",
+    "rearRearAxleWeightKg": "530",
+    "model": "6AA-ZWE219H",
+    "engineModel": "2ZR-1VM",
+    "displacementOrRatedOutput": "1.79 L",
+    "fuel": "ガソリン",
+    "modelDesignationNumber": "20512",
+    "classificationNumber": "0001",
+    "userName": "テスト整備株式会社",
+    "userAddress": "大阪府大阪市中央区テスト1丁目2番3号",
+    "inspectionExpiry": "令和8年10月10日"
+  }
+}
