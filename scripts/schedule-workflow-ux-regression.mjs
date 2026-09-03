@@ -59,6 +59,7 @@ console.log("- home is weekly-schedule first");
 console.log("- home weekly schedule uses the same daily-report period/column/order rules");
 console.log("- registration starts with customer/vehicle, then work, then date/time");
 console.log("- onsite registration uses time/A中/午後 only; no work-duration selector");
+console.log("- completed-vehicle handoff can be marked as delivery or customer visit");
 console.log("- inspection defaults delivery to same-day 中; vehicle inspection defaults to next-day 中");
 console.log("- cancellation reason is optional");
 console.log("- onsite registration uses time / A中 / 中 only, without a work-duration selector");
