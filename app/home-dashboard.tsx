@@ -19,6 +19,7 @@ type ScheduleEntry = {
 type WorkOrder = {
   id: string;
   reason: string;
+  inspection_schedule_type: string | null;
   status: string;
   work_completed: boolean;
   is_urgent: boolean;
@@ -54,6 +55,20 @@ type SecurityAlert = {
   occurred_at: string | null;
   message: string;
 };
+
+function inspectionScheduleLabel(value: string | null | undefined) {
+  if (value === "schedule") return "スケ";
+  if (value === "legal_3m") return "法定3ヶ月";
+  if (value === "legal_6m") return "法定6ヶ月";
+  if (value === "legal_12m") return "法定12ヶ月";
+  return "";
+}
+
+function workDisplayLabel(work: WorkOrder | null) {
+  if (!work) return "";
+  const inspection = inspectionScheduleLabel(work.inspection_schedule_type);
+  return inspection ? `${work.reason} ${inspection}` : work.reason;
+}
 
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   delivery: "納車",
@@ -145,7 +160,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     const [entryRes, weekEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", new Date(weekStart + "T00:00:00+09:00").toISOString()).lt("starts_at", new Date(weekEnd + "T00:00:00+09:00").toISOString()).order("starts_at", { ascending: true }),
-      supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
+      supabase.from("work_orders").select("id,reason,inspection_schedule_type,status,work_completed,is_urgent,needs_loaner,worker_name,checked_out_at").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
     ]);
@@ -358,7 +373,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
                             {deliveries.map(({ entry, work, vehicle, customer }) => (
                               <button key={entry.id} className="homeWeekRow miniRow type-delivery" onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
                                 <b>{customerName(customer)}</b>
-                                <span>{last4(vehicle)}　{work?.reason || ""}</span>
+                                <span>{last4(vehicle)}　{workDisplayLabel(work)}</span>
                                 <small>{ENTRY_LABEL[entry.entry_type]} {dailyReportTimeLabel(entry)}</small>
                               </button>
                             ))}
@@ -369,7 +384,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
                             {inbound.map(({ entry, work, vehicle, customer }) => (
                               <button key={entry.id} className={`homeWeekRow miniRow type-${entry.entry_type}`} onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
                                 <b>{customerName(customer)}</b>
-                                <span>{last4(vehicle)}　{work?.reason || ""}</span>
+                                <span>{last4(vehicle)}　{workDisplayLabel(work)}</span>
                                 <small>{ENTRY_LABEL[entry.entry_type]} {dailyReportTimeLabel(entry)}</small>
                               </button>
                             ))}
@@ -413,7 +428,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {inProgressRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="progressRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="progressDot">中</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{workDisplayLabel(work)}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
               </button>
             ))}
@@ -431,7 +446,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="statusDot">未</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b><small>下4桁 {last4(vehicle)}　{work?.reason || ""}</small></span>
+                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b><small>下4桁 {last4(vehicle)}　{workDisplayLabel(work)}</small></span>
                 {work?.is_urgent && <em>急ぎ</em>}
                 {work?.needs_loaner && <em>代車</em>}
               </button>
@@ -450,7 +465,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             {completedRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
               <button key={work?.id || entry.id} className="completedRow" onClick={() => openTodayWork(work?.id)}>
                 <span className="completedDot">済</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
+                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　下4桁 {last4(vehicle)}</b><small>{workDisplayLabel(work)}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
               </button>
             ))}
             {completedRows.length > 3 && (
