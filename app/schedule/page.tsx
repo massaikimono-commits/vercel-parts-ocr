@@ -69,13 +69,6 @@ const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   onsite_repair: "出張",
 };
 
-const ENTRY_COMPLETE_LABEL: Record<ScheduleEntry["entry_type"], string> = {
-  delivery: "納車完了",
-  pickup: "引取完了",
-  customer_visit: "受付完了",
-  onsite_repair: "出張完了",
-};
-
 const LAYOUT_KEY = "icb-schedule-column-layout";
 const LAYOUT_SETTING_KEY = "schedule_layout";
 
