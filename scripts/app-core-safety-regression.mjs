@@ -97,6 +97,7 @@ assert(vehicleWorkflowFast.includes("if(saving)return;") && vehicleWorkflowFast.
 assert(singleVehicleSaveSql.includes("registration_last4") && singleVehicleSaveSql.includes("registration_number_last4"), "single vehicle save must keep both plate suffix columns aligned");
 assert(!singleVehicleSaveSql.toLowerCase().includes("create table"), "single vehicle duplicate protection must reuse the existing vehicle table");
 assert(customerVehicles.includes('location.assign("/vehicle-workflow-v2")'), "customer/vehicle management must open the current high-accuracy vehicle editor");
+assert(customerVehicles.includes('location.assign("/vehicle-workflow/bulk")'), "customer/vehicle management must expose bulk PDF vehicle registration directly");
 assert(!customerVehicles.includes('location.assign("/vehicle-workflow")'), "customer/vehicle management must not route edits to the legacy vehicle workflow");
 assert(vehicleBulk.includes('multiple accept="application/pdf,.pdf"'), "bulk vehicle registration must allow selecting multiple PDFs");
 assert(vehicleBulk.includes("parseVehicleCertificatePdf"), "bulk vehicle registration must parse each PDF through the isolated batch parser");
