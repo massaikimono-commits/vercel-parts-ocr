@@ -112,6 +112,7 @@ assert(vehicleBulkApplySql.includes("duplicateVehicleId"), "bulk vehicle apply m
 assert(vehicleBulkApplySql.includes("v.id<>v_target_vehicle_id"), "bulk vehicle updates must exclude only their own row when checking identity collisions");
 assert(vehicleBulkApplySql.includes("更新後の登録番号または車台番号が別の既存車両と重複します"), "bulk vehicle updates must stop cross-vehicle registration/chassis collisions");
 assert(vehicleBulk.includes('updateField(item.importId,"registration_last4",last)'), "bulk vehicle registration edits must keep the displayed last4 synchronized");
+assert(vehicleBulk.includes('?.[1]||"";updateField(item.importId,"registration_last4",last)'), "clearing a bulk registration number must also clear its stale displayed last4");
 assert(vehicleBulkApplySql.includes("nullif(substring(coalesce(v_registration"), "bulk vehicle save must derive last4 from the final registration number before using any parsed fallback");
 assert(vehicleBulkApplySql.includes("CREATE_VEHICLE") && vehicleBulkApplySql.includes("UPDATE_EXISTING"), "bulk vehicle apply must support reviewed create/update decisions");
 assert(vehicleBulkApplySql.includes("jsonb_array_length(p_items)>100"), "bulk vehicle apply must cap accidental oversized submissions");
