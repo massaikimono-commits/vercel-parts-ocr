@@ -64,6 +64,14 @@ assert(scheduleSearch.includes("全角数字・全角英数字"), "schedule sear
 assert(home.includes("openTodayWork"), "mobile home work cards must open the matching schedule work");
 assert(schedule.includes("focusWorkId") && schedule.includes("data-work-id"), "daily schedule must support focused work navigation");
 assert(schedule.includes("focusedWork"), "focused work must be visually obvious");
+assert(schedule.includes('pickup: ""'), "daily schedule must omit the basic pickup label");
+assert(schedule.includes('onsite_repair: "出張"'), "daily schedule must show onsite work as 出張");
+assert(schedule.includes('entry.entry_type === "onsite_repair"'), "only onsite schedules may keep the standalone schedule completion control");
+assert(!schedule.includes("車両を開く →"), "daily schedule must not show a separate vehicle-open button");
+assert(schedule.includes("openVehicleFromCard"), "daily schedule cards must open the vehicle from the whole card");
+assert(schedule.includes("outsource_vendor_name"), "daily schedule must distinguish outsourced general repair");
+assert(schedule.includes("reasonShaken") && schedule.includes("reasonInspection") && schedule.includes("reasonGeneral") && schedule.includes("reasonBodywork"), "daily schedule must preserve intake reason color classes");
+assert(schedule.includes("grid-template-columns:minmax(0,1fr) minmax(0,1fr)"), "mobile daily schedule must keep delivery/inbound in two report-style columns");
 assert(workload.includes('params.get("worker")') && workload.includes('params.get("filter")'), "workload page must accept direct worker/state filters");
 assert(home.includes("openWorkload(row.name)"), "desktop home staff load cards must open the actionable workload board");
 assert(workload.includes('supabase.rpc("set_work_order_worker"'), "workload board must reuse the existing staff assignment RPC");

@@ -36,6 +36,7 @@ type WorkOrder = {
   stay_reason: string | null;
   is_urgent: boolean;
   needs_loaner: boolean;
+  outsource_vendor_name: string | null;
 };
 
 type Vehicle = {
@@ -62,9 +63,9 @@ type CompletionPosition = "name" | "meta";
 
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   delivery: "納車",
-  pickup: "引き取り",
+  pickup: "",
   customer_visit: "来社",
-  onsite_repair: "出張整備",
+  onsite_repair: "出張",
 };
 
 const LAYOUT_KEY = "icb-schedule-column-layout";
@@ -206,7 +207,7 @@ export default function SchedulePage() {
           .order("starts_at", { ascending: true }),
         supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,worker_name,expected_completion_date,delivery_completed,work_completed,work_completed_at,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
+          .select("id,vehicle_id,reason,status,worker_name,expected_completion_date,delivery_completed,work_completed,work_completed_at,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner,outsource_vendor_name")
           .neq("status", "cancelled"),
         supabase
           .from("vehicles")
@@ -388,6 +389,28 @@ export default function SchedulePage() {
     return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
   }
 
+  function reasonClass(work: WorkOrder | null) {
+    if (!work) return "";
+    if (work.reason === "車検") return "reasonShaken";
+    if (work.reason === "点検") return "reasonInspection";
+    if (work.reason === "一般整備" && work.outsource_vendor_name) return "reasonOutsourced";
+    if (work.reason === "一般整備") return "reasonGeneral";
+    if (work.reason === "板金塗装") return "reasonBodywork";
+    return "";
+  }
+
+  function openVehicleFromCard(
+    event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
+    vehicle: Vehicle | null
+  ) {
+    if (!vehicle) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,input,select,textarea,a,label,summary,details,form")) return;
+    if ("key" in event && event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    setActiveVehicle(vehicle);
+  }
+
   function workFlags(work: WorkOrder | null) {
     if (!work) return null;
     return (
@@ -436,11 +459,19 @@ export default function SchedulePage() {
   function renderStayingVehicle(item: typeof stayingVehicles[number]) {
     const { work, vehicle, customer } = item;
     return (
-      <article key={work.id} data-work-id={work.id} className={`stayItem ${work.is_urgent ? "urgentItem" : ""} ${focusWorkId === work.id ? "focusedWork" : ""}`}>
+      <article
+        key={work.id}
+        data-work-id={work.id}
+        className={`stayItem vehicleCard ${reasonClass(work)} ${work.is_urgent ? "urgentItem" : ""} ${focusWorkId === work.id ? "focusedWork" : ""}`}
+        role={vehicle ? "button" : undefined}
+        tabIndex={vehicle ? 0 : undefined}
+        onClick={(event) => openVehicleFromCard(event, vehicle)}
+        onKeyDown={(event) => openVehicleFromCard(event, vehicle)}
+      >
         <div className="itemTop">
           <div>
             <div className="customerRow"><b>{customerLabel(customer)}</b>{workFlags(work)}</div>
-            <div className="sub">下4桁 {last4Label(vehicle)}　{work.reason}</div>
+            <div className="sub">下4桁 {last4Label(vehicle)}　<span className={`reasonTag ${reasonClass(work)}`}>{work.reason}{work.outsource_vendor_name ? `・外注 ${work.outsource_vendor_name}` : ""}</span></div>
           </div>
           <div className="workStateSlot">{workStateControl(work)}</div>
         </div>
@@ -468,9 +499,6 @@ export default function SchedulePage() {
             <button type="submit">保存</button>
           </form>
         </details>
-        <div className="rowActions noPrint">
-          {vehicle && <button className="open" onClick={() => setActiveVehicle(vehicle)}>車両を開く →</button>}
-        </div>
       </article>
     );
   }
@@ -491,33 +519,42 @@ export default function SchedulePage() {
   function renderCard(item: typeof enriched[number]) {
     const { entry, work, vehicle, customer } = item;
     const isDelivery = entry.entry_type === "delivery";
+    const entryLabel = ENTRY_LABEL[entry.entry_type];
+    const showScheduleCompletion = entry.entry_type === "onsite_repair";
     return (
-      <article key={entry.id} data-work-id={work?.id || undefined} className={`scheduleItem ${!isDelivery && entry.completed ? "done" : ""} ${work?.is_urgent ? "urgentItem" : ""} ${work && focusWorkId === work.id ? "focusedWork" : ""}`}>
+      <article
+        key={entry.id}
+        data-work-id={work?.id || undefined}
+        className={`scheduleItem vehicleCard ${reasonClass(work)} ${showScheduleCompletion && entry.completed ? "done" : ""} ${work?.is_urgent ? "urgentItem" : ""} ${work && focusWorkId === work.id ? "focusedWork" : ""}`}
+        role={vehicle ? "button" : undefined}
+        tabIndex={vehicle ? 0 : undefined}
+        onClick={(event) => openVehicleFromCard(event, vehicle)}
+        onKeyDown={(event) => openVehicleFromCard(event, vehicle)}
+      >
         <div className="itemTop">
           <div className="itemMain">
-            <b>{timeLabel(entry)}　{ENTRY_LABEL[entry.entry_type]}</b>
+            <b>{timeLabel(entry)}{entryLabel ? `　${entryLabel}` : ""}</b>
             <div className="customerRow">
               <div className="customer">{customerLabel(customer)}</div>
               {completionPosition === "name" && <div className="workStateSlot">{workStateControl(work)}</div>}
               {workFlags(work)}
             </div>
           </div>
-          {!isDelivery && (
-            <button className={entry.completed ? "complete active noPrint" : "complete noPrint"} onClick={() => void toggleCompleted(entry)} aria-label="入出庫予定完了切替">
-              {entry.completed ? "✓ 完了" : "完了"}
+          {showScheduleCompletion && (
+            <button className={entry.completed ? "complete active noPrint" : "complete noPrint"} onClick={() => void toggleCompleted(entry)} aria-label="出張完了切替">
+              {entry.completed ? "✓ 出張完了" : "出張完了"}
             </button>
           )}
         </div>
         <div className="meta">
           <span>下4桁 <b>{last4Label(vehicle)}</b></span>
-          <span>{work?.reason || "入庫要因未設定"}</span>
+          <span className={`reasonTag ${reasonClass(work)}`}>{work?.reason || "入庫要因未設定"}{work?.outsource_vendor_name ? `・外注 ${work.outsource_vendor_name}` : ""}</span>
           {work?.worker_name && <span>担当 {work.worker_name}</span>}
           {work?.expected_completion_date && <span>完成予定 {work.expected_completion_date}</span>}
           {completionPosition === "meta" && <div className="workStateSlot">{workStateControl(work)}</div>}
         </div>
         {(vehicle?.maker || vehicle?.model) && <div className="sub">{[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>}
         {entry.notes && <div className="note">{entry.notes}</div>}
-        {vehicle && <button className="open noPrint" onClick={() => setActiveVehicle(vehicle)}>車両を開く →</button>}
       </article>
     );
   }
@@ -528,7 +565,7 @@ export default function SchedulePage() {
     const deliveries = prepared.deliveries.map((entry) => itemMap.get(entry.id)).filter(Boolean) as typeof enriched;
     const arrivals = prepared.inbound.map((entry) => itemMap.get(entry.id)).filter(Boolean) as typeof enriched;
     const deliveryColumn = <div key="delivery"><h3>納車予定</h3>{!deliveries.length && <div className="empty">予定なし</div>}{deliveries.map(renderCard)}</div>;
-    const arrivalColumn = <div key="arrivals"><h3>引き取り・来社・出張</h3>{!arrivals.length && <div className="empty">予定なし</div>}{arrivals.map(renderCard)}</div>;
+    const arrivalColumn = <div key="arrivals"><h3>入庫予定</h3>{!arrivals.length && <div className="empty">予定なし</div>}{arrivals.map(renderCard)}</div>;
     const columns = columnLayout === "delivery-left" ? [deliveryColumn, arrivalColumn] : [arrivalColumn, deliveryColumn];
     return (
       <section className={`card periodSection ${period === "afternoon" ? "afternoonSection" : "morningSection"}`}>
@@ -617,7 +654,7 @@ export default function SchedulePage() {
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.dateNav input,.layoutControl select{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.layoutControl{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;color:#5d6878}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}.focusedWork{outline:4px solid #2674e8;outline-offset:2px;box-shadow:0 0 0 7px rgba(38,116,232,.12)}.scheduleItem.done{opacity:.62;background:#f5f7f9}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.complete{min-width:70px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workStateSlot{display:inline-flex;align-items:center;gap:6px}.workState{border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;white-space:nowrap}.workState.pending{background:#f0f2f5;border-color:#cdd4dd;color:#657180}.workState.running{background:#fff0d8;border-color:#e7b465;color:#9a5d00}.workState.completed{background:#e9f7ef;border-color:#78bc8e;color:#176b37}.completeWorkNow{padding:5px 9px;border-radius:999px;font-size:12px;font-weight:900;line-height:1;color:#176b37;border-color:#78bc8e;background:#f5fbf7}.printWorkState{display:none;font-weight:900;font-size:11px}.printWorkState.running{color:#7c4d00}.printWorkState.pending{color:#667180}.printWorkState.completed{color:#176b37}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.meta .stayAge{background:#eef5ff;color:#315f98;font-weight:800}.meta .stayAge.alert{background:#fff0db;color:#995b00}.workloadGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.workloadCard{border:1px solid #dbe3ee;border-radius:13px;padding:12px;display:grid;gap:4px;background:#fff;color:inherit;text-align:left;cursor:pointer}.workloadCard:hover{border-color:#8eb5ef;background:#f8fbff}.workloadCard>b{font-size:16px}.workloadCard span{font-size:12px;color:#5d6878}.workloadCard strong{font-size:18px;color:#172033}.workloadCard em{font-size:11px;font-style:normal;font-weight:900;color:#995b00;background:#fff0db;border-radius:999px;padding:3px 7px;justify-self:start}.workloadCard.unassigned{border-color:#e6aa5a}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.rowActions{display:flex;gap:7px;flex-wrap:wrap}.open{margin-top:10px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}.stayInfo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.stayReason,.stayDelivery{display:grid;gap:3px;border-radius:11px;padding:9px 10px;background:#f7f9fc}.stayReason b,.stayDelivery b{font-size:11px;color:#6c7889}.stayReason span,.stayDelivery span{font-weight:900}.stayReason span{color:#8b5a0a}.stayEdit{margin-top:10px;border-top:1px solid #edf0f4;padding-top:8px}.stayEdit summary{cursor:pointer;color:#2674e8;font-weight:800;font-size:13px}.stayEdit form{display:grid;grid-template-columns:1fr 180px auto;gap:8px;align-items:end;margin-top:8px}.stayEdit label{display:grid;gap:4px;font-size:12px;font-weight:800;color:#5d6878}.stayEdit input{border:1px solid #ccd7e5;border-radius:9px;padding:8px;background:#fff}.printPeriod{display:none}@media(max-width:720px){.hero{display:block}.summary{margin-top:12px}.columns,.stayGrid{grid-template-columns:1fr}.stayInfo{grid-template-columns:1fr}.stayEdit form{grid-template-columns:1fr}.workloadGrid{grid-template-columns:1fr 1fr}.quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkState{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}.afternoonSection .columns>div{display:flex;flex-direction:column;justify-content:flex-end}.afternoonSection .scheduleItem{flex:0 0 auto}h1{font-size:20pt}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.dateNav input,.layoutControl select{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.layoutControl{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;color:#5d6878}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid}.vehicleCard[role="button"]{cursor:pointer}.vehicleCard[role="button"]:hover{border-color:#8eb5ef}.vehicleCard[role="button"]:focus-visible{outline:3px solid #2674e8;outline-offset:2px}.reasonShaken{background:#fff5f5}.reasonInspection{background:#f3f8ff}.reasonGeneral{background:#fffbe8}.reasonOutsourced,.reasonBodywork{background:#fff}.reasonTag{font-weight:900;border-radius:999px;padding:4px 8px!important}.reasonTag.reasonShaken{background:#ffe1e1!important;color:#a82525}.reasonTag.reasonInspection{background:#e2efff!important;color:#245fa8}.reasonTag.reasonGeneral{background:#fff1ad!important;color:#745600}.reasonTag.reasonOutsourced,.reasonTag.reasonBodywork{background:#fff!important;color:#4f5b68;border:1px solid #cfd7e2}.focusedWork{outline:4px solid #2674e8;outline-offset:2px;box-shadow:0 0 0 7px rgba(38,116,232,.12)}.scheduleItem.done{opacity:.62;background:#f5f7f9}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.complete{min-width:70px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workStateSlot{display:inline-flex;align-items:center;gap:6px}.workState{border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;white-space:nowrap}.workState.pending{background:#f0f2f5;border-color:#cdd4dd;color:#657180}.workState.running{background:#fff0d8;border-color:#e7b465;color:#9a5d00}.workState.completed{background:#e9f7ef;border-color:#78bc8e;color:#176b37}.completeWorkNow{padding:5px 9px;border-radius:999px;font-size:12px;font-weight:900;line-height:1;color:#176b37;border-color:#78bc8e;background:#f5fbf7}.printWorkState{display:none;font-weight:900;font-size:11px}.printWorkState.running{color:#7c4d00}.printWorkState.pending{color:#667180}.printWorkState.completed{color:#176b37}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.meta .stayAge{background:#eef5ff;color:#315f98;font-weight:800}.meta .stayAge.alert{background:#fff0db;color:#995b00}.workloadGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.workloadCard{border:1px solid #dbe3ee;border-radius:13px;padding:12px;display:grid;gap:4px;background:#fff;color:inherit;text-align:left;cursor:pointer}.workloadCard:hover{border-color:#8eb5ef;background:#f8fbff}.workloadCard>b{font-size:16px}.workloadCard span{font-size:12px;color:#5d6878}.workloadCard strong{font-size:18px;color:#172033}.workloadCard em{font-size:11px;font-style:normal;font-weight:900;color:#995b00;background:#fff0db;border-radius:999px;padding:3px 7px;justify-self:start}.workloadCard.unassigned{border-color:#e6aa5a}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid}.stayItem.reasonShaken{border-left:6px solid #d94b4b}.stayItem.reasonInspection{border-left:6px solid #4a86d9}.stayItem.reasonGeneral{border-left:6px solid #e0b316}.stayItem.reasonOutsourced,.stayItem.reasonBodywork{border-left:6px solid #fff;box-shadow:inset 0 0 0 1px #dbe3ee}.scheduleItem.reasonShaken{border-left:6px solid #d94b4b}.scheduleItem.reasonInspection{border-left:6px solid #4a86d9}.scheduleItem.reasonGeneral{border-left:6px solid #e0b316}.scheduleItem.reasonOutsourced,.scheduleItem.reasonBodywork{border-left:6px solid #fff;box-shadow:inset 0 0 0 1px #dbe3ee}.stayInfo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.stayReason,.stayDelivery{display:grid;gap:3px;border-radius:11px;padding:9px 10px;background:#f7f9fc}.stayReason b,.stayDelivery b{font-size:11px;color:#6c7889}.stayReason span,.stayDelivery span{font-weight:900}.stayReason span{color:#8b5a0a}.stayEdit{margin-top:10px;border-top:1px solid #edf0f4;padding-top:8px}.stayEdit summary{cursor:pointer;color:#2674e8;font-weight:800;font-size:13px}.stayEdit form{display:grid;grid-template-columns:1fr 180px auto;gap:8px;align-items:end;margin-top:8px}.stayEdit label{display:grid;gap:4px;font-size:12px;font-weight:800;color:#5d6878}.stayEdit input{border:1px solid #ccd7e5;border-radius:9px;padding:8px;background:#fff}.printPeriod{display:none}@media screen and (min-width:721px){.periodSection{padding:14px 16px}.periodSection .sectionTitle{margin-bottom:8px}.periodSection .columns{gap:10px}.periodSection .scheduleItem{padding:9px 10px;margin-bottom:6px;border-radius:12px}.periodSection .customer{font-size:16px;margin-top:2px}.periodSection .meta{margin-top:6px;gap:5px}.periodSection .meta span{font-size:11px;padding:3px 6px}.periodSection .sub,.periodSection .note{margin-top:5px;font-size:11px}.periodSection h3{margin-bottom:6px;font-size:14px}}@media(max-width:720px){.hero{display:block}.summary{margin-top:12px}.periodSection{padding:12px 8px}.columns{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}.stayGrid{grid-template-columns:1fr}.periodSection .scheduleItem{padding:8px;margin-bottom:6px}.periodSection h3{font-size:12px;margin-bottom:6px}.periodSection .customer{font-size:14px}.periodSection .meta{gap:4px;margin-top:6px}.periodSection .meta span{font-size:10px;padding:3px 5px}.periodSection .sub,.periodSection .note{font-size:10px;margin-top:5px}.periodSection .itemTop{gap:4px}.periodSection .workState{font-size:10px;padding:4px 6px}.periodSection .completeWorkNow,.periodSection .complete{font-size:10px;padding:4px 6px;min-width:0}.stayInfo{grid-template-columns:1fr}.stayEdit form{grid-template-columns:1fr}.workloadGrid{grid-template-columns:1fr 1fr}.quick{grid-template-columns:1fr 1fr}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkState{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}.afternoonSection .columns>div{display:flex;flex-direction:column;justify-content:flex-end}.afternoonSection .scheduleItem{flex:0 0 auto}h1{font-size:20pt}}
       `}</style>
     </main>
   );
