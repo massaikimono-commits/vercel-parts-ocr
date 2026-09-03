@@ -23,6 +23,7 @@ type WorkOrder = {
   id: string;
   vehicle_id: string;
   reason: "点検" | "車検" | "一般整備" | "板金塗装";
+  inspection_schedule_type: string | null;
   status: string;
   worker_name: string | null;
   outsource_vendor_name: string | null;
@@ -61,6 +62,20 @@ type Customer = {
 
 type ColumnLayout = "delivery-left" | "delivery-right";
 type CompletionPosition = "name" | "meta";
+
+function inspectionScheduleLabel(value: string | null | undefined) {
+  if (value === "schedule") return "スケ";
+  if (value === "legal_3m") return "法定3ヶ月";
+  if (value === "legal_6m") return "法定6ヶ月";
+  if (value === "legal_12m") return "法定12ヶ月";
+  return "";
+}
+
+function workDisplayLabel(work: WorkOrder | null) {
+  if (!work) return "内容未設定";
+  const inspection = inspectionScheduleLabel(work.inspection_schedule_type);
+  return inspection ? `${work.reason} ${inspection}` : work.reason;
+}
 
 const ENTRY_LABEL: Record<ScheduleEntry["entry_type"], string> = {
   delivery: "納車",
@@ -217,7 +232,7 @@ export default function SchedulePage() {
           .order("starts_at", { ascending: true }),
         supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,delivery_completed,work_completed,work_completed_at,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
+          .select("id,vehicle_id,reason,inspection_schedule_type,status,worker_name,outsource_vendor_name,expected_completion_date,delivery_completed,work_completed,work_completed_at,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
           .neq("status", "cancelled"),
         supabase
           .from("vehicles")
@@ -514,7 +529,7 @@ export default function SchedulePage() {
             </div>
             <div className="scheduleFacts">
               <b className="vehicleLast4">{last4Label(vehicle)}</b>
-              <span className="reasonLabel">{work?.reason || "内容未設定"}</span>
+              <span className="reasonLabel">{workDisplayLabel(work)}</span>
               <span className={`entryLabel type-${entry.entry_type}`}>{ENTRY_LABEL[entry.entry_type]} {timeLabel(entry)}</span>
             </div>
           </div>
