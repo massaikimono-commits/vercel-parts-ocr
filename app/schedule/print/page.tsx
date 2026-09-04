@@ -342,7 +342,6 @@ export default function DailyReportPrintPage() {
           PRINT_LAYOUT.secondaryRows.stayingVehicles,
         )}
       >
-        <span aria-hidden="true" />
         <span>{work.worker_name || ""}</span>
         <span>{customerForVehicle(work.vehicle_id)}</span>
         <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{work.reason || ""}</small></span>
@@ -363,7 +362,6 @@ export default function DailyReportPrintPage() {
           PRINT_LAYOUT.secondaryRows.bodyShopVehicles,
         )}
       >
-        <span aria-hidden="true" />
         <span>{work.outsource_vendor_name || ""}</span>
         <span>{customerForVehicle(work.vehicle_id)}</span>
         <span><b>{last4ForVehicle(work.vehicle_id)}</b></span>
