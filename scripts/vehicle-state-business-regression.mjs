@@ -74,4 +74,25 @@ const entry = (id, workId, type, day, mode = "unspecified") => ({
   assert.equal(mod.classifyVehicleBusinessStates(works, rows, "2026-08-31").stayingVehicles.length, 0);
 }
 
+// 来社は引取と同じく予定入庫日から滞留開始。
+{
+  const works = [work("F")];
+  const rows = [entry("F-in", "F", "customer_visit", "2026-08-31")];
+  assert.equal(mod.classifyVehicleBusinessStates(works, rows, "2026-08-31").stayingVehicles.length, 1);
+}
+
+// checked_in/out・作業完了はトップ/日別/日報の滞留判定へ混ぜない。
+{
+  const works = [{
+    ...work("G"),
+    checked_in_at: null,
+    checked_out_at: "2026-08-31T08:00:00.000Z",
+    work_completed: true,
+    work_completed_at: "2026-08-31T08:00:00.000Z",
+    delivery_completed: true,
+  }];
+  const rows = [entry("G-in", "G", "pickup", "2026-08-31")];
+  assert.equal(mod.classifyVehicleBusinessStates(works, rows, "2026-09-01").stayingVehicles.length, 1);
+}
+
 console.log("vehicle state business regression: ok");
