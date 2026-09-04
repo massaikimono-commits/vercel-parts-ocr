@@ -328,6 +328,39 @@ export default function DailyReportPrintPage() {
     [workOrders, day, deliveryVehicleIds],
   );
 
+  const bodyShopRows = useMemo(() => {
+    const timelineByWork = new Map<string, BodyShopTimelineEntry[]>();
+    for (const event of bodyShopTimeline) {
+      if (!event.work_order_id) continue;
+      const rows = timelineByWork.get(event.work_order_id) || [];
+      rows.push(event);
+      timelineByWork.set(event.work_order_id, rows);
+    }
+
+    const persistent = workOrders.filter((work) => {
+      if (!isBodyShopReason(work.reason) || deliveryVehicleIds.has(work.vehicle_id)) return false;
+      const timeline = timelineByWork.get(work.id) || [];
+      let latestPickup = -Infinity;
+      let latestDelivery = -Infinity;
+      for (const event of timeline) {
+        const at = new Date(event.starts_at).getTime();
+        if (event.entry_type === "pickup") latestPickup = Math.max(latestPickup, at);
+        if (event.entry_type === "delivery") latestDelivery = Math.max(latestDelivery, at);
+      }
+      return Number.isFinite(latestPickup) && latestPickup > latestDelivery;
+    });
+
+    const merged = [...secondary.bodyShopVehicles, ...persistent];
+    const seenVehicleIds = new Set<string>();
+    return merged.filter((work) => {
+      if (deliveryVehicleIds.has(work.vehicle_id) || seenVehicleIds.has(work.vehicle_id)) return false;
+      seenVehicleIds.add(work.vehicle_id);
+      return true;
+    }).sort((a, b) =>
+      (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31")
+    );
+  }, [bodyShopTimeline, deliveryVehicleIds, secondary.bodyShopVehicles, workOrders]);
+
   function customerForVehicle(vehicleId: string) {
     const vehicle = vehicleMap.get(vehicleId);
     const customer = vehicle?.customer_id ? customerMap.get(vehicle.customer_id) : null;
@@ -373,23 +406,32 @@ export default function DailyReportPrintPage() {
           <span>{dailyReportTimeLabel(entry)}</span>
         </div>
         <div className="reportDue">
-          <span className="dueDay">{due.day}</span>
-          <span className="dueTime">{due.time}</span>
+          <span className="dueDayValue">{due.day}</span>
+          {due.broad ? (
+            <span className="dueBroadValue">{due.broad}</span>
+          ) : (
+            <>
+              <span className="dueHourValue">{due.hour}</span>
+              <span className="dueMinuteValue">{due.minute}</span>
+            </>
+          )}
         </div>
       </div>
     );
   }
 
   function workDue(work: WorkOrder) {
-    if (work.planned_delivery_at) {
-      return {
-        day: shortDay(work.planned_delivery_at),
-        time: compactDeliveryTime(work.planned_delivery_at),
-      };
-    }
-    if (work.planned_delivery_date) return { day: shortDay(work.planned_delivery_date), time: "中" };
-    if (work.expected_completion_date) return { day: shortDay(work.expected_completion_date), time: "中" };
-    return { day: "", time: "" };
+    if (work.planned_delivery_at) return exactDueParts(work.planned_delivery_at);
+    if (work.planned_delivery_date) return { day: shortDay(work.planned_delivery_date), hour: "", minute: "", broad: "中" };
+    if (work.expected_completion_date) return { day: shortDay(work.expected_completion_date), hour: "", minute: "", broad: "中" };
+    return { day: "", hour: "", minute: "", broad: "" };
+  }
+
+  function latestPickupDay(workId: string) {
+    const pickup = bodyShopTimeline
+      .filter((entry) => entry.work_order_id === workId && entry.entry_type === "pickup")
+      .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())[0];
+    return pickup ? shortDay(pickup.starts_at) : "";
   }
 
   function stayingRow(work: WorkOrder) {
@@ -399,8 +441,8 @@ export default function DailyReportPrintPage() {
         key={work.id}
         className="secondaryRow stayingRow"
         style={secondaryRowStyle(
-          DAILY_REPORT_TEMPLATE.columns.stayingVehicles,
-          DAILY_REPORT_TEMPLATE.secondaryRows.stayingVehicles,
+          PRINT_LAYOUT.columns.stayingVehicles,
+          PRINT_LAYOUT.secondaryRows.stayingVehicles,
         )}
       >
         <span aria-hidden="true" />
@@ -420,15 +462,15 @@ export default function DailyReportPrintPage() {
         key={work.id}
         className="secondaryRow bodyShopRow"
         style={secondaryRowStyle(
-          DAILY_REPORT_TEMPLATE.columns.bodyShopVehicles,
-          DAILY_REPORT_TEMPLATE.secondaryRows.bodyShopVehicles,
+          PRINT_LAYOUT.columns.bodyShopVehicles,
+          PRINT_LAYOUT.secondaryRows.bodyShopVehicles,
         )}
       >
         <span aria-hidden="true" />
         <span>{work.outsource_vendor_name || ""}</span>
         <span>{customerForVehicle(work.vehicle_id)}</span>
         <span><b>{last4ForVehicle(work.vehicle_id)}</b></span>
-        <span>{shortDay(work.checked_in_at)}</span>
+        <span>{shortDay(work.checked_in_at) || latestPickupDay(work.id)}</span>
         <span>{due.day}</span>
       </div>
     );
@@ -441,13 +483,13 @@ export default function DailyReportPrintPage() {
         key={work.id}
         className="secondaryRow plannedRow"
         style={secondaryRowStyle(
-          DAILY_REPORT_TEMPLATE.columns.plannedDeliveries,
-          DAILY_REPORT_TEMPLATE.secondaryRows.plannedDeliveries,
+          PRINT_LAYOUT.columns.plannedDeliveries,
+          PRINT_LAYOUT.secondaryRows.plannedDeliveries,
         )}
       >
         <span>{customerForVehicle(work.vehicle_id)}</span>
         <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{work.reason || ""}</small></span>
-        <span className="secondaryDue"><b>{due.day}</b><small>{due.time}</small></span>
+        <span className="secondaryDue"><b>{due.day}</b><small>{due.broad || (due.hour ? `${due.hour}${due.minute ? ":" + due.minute.padStart(2, "0") : "時"}` : "")}</small></span>
       </div>
     );
   }
@@ -466,7 +508,9 @@ export default function DailyReportPrintPage() {
 
       <section className="sheet" aria-label="既存日報プレビュー">
         {backgroundUrl && <img className="background" src={backgroundUrl} alt="既存の日報用紙" />}
-        <div className="date">{day.replaceAll("-", "/")}</div>
+        <div className="dateToken dateMonth">{printedDate.month}</div>
+        <div className="dateToken dateDay">{printedDate.day}</div>
+        <div className="dateToken dateWeekday">{printedDate.weekday}</div>
         {model.rows.map((row) => {
           const slot = slots[row.slotIndex];
           return <div key={row.slotIndex} className="row" style={{ top: `${slot.y * 100}%` }}>
@@ -475,22 +519,22 @@ export default function DailyReportPrintPage() {
           </div>;
         })}
 
-        <div className="secondary messages" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.messages)}>
+        <div className="secondary messages" style={regionStyle(PRINT_LAYOUT.regions.messages)}>
           {messages.map((note, index) => <div key={`${note}-${index}`}>{note}</div>)}
         </div>
-        <div className="secondary staying" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.stayingVehicles)}>
+        <div className="secondary staying" style={regionStyle(PRINT_LAYOUT.regions.stayingVehicles)}>
           {secondary.stayingVehicles
-            .slice(0, DAILY_REPORT_TEMPLATE.secondaryRows.stayingVehicles)
+            .slice(0, PRINT_LAYOUT.secondaryRows.stayingVehicles)
             .map(stayingRow)}
         </div>
-        <div className="secondary bodyShop" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.bodyShopVehicles)}>
-          {secondary.bodyShopVehicles
-            .slice(0, DAILY_REPORT_TEMPLATE.secondaryRows.bodyShopVehicles)
+        <div className="secondary bodyShop" style={regionStyle(PRINT_LAYOUT.regions.bodyShopVehicles)}>
+          {bodyShopRows
+            .slice(0, PRINT_LAYOUT.secondaryRows.bodyShopVehicles)
             .map(bodyShopRow)}
         </div>
-        <div className="secondary planned" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.plannedDeliveries)}>
+        <div className="secondary planned" style={regionStyle(PRINT_LAYOUT.regions.plannedDeliveries)}>
           {secondary.plannedDeliveries
-            .slice(0, DAILY_REPORT_TEMPLATE.secondaryRows.plannedDeliveries)
+            .slice(0, PRINT_LAYOUT.secondaryRows.plannedDeliveries)
             .map(plannedDeliveryRow)}
         </div>
 
