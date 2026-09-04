@@ -28,6 +28,7 @@ type WorkOrder = {
   vehicle_id: string;
   reason: string;
   worker_name: string | null;
+  outsource_vendor_name: string | null;
   expected_completion_date: string | null;
   planned_delivery_at: string | null;
   planned_delivery_date: string | null;
@@ -135,7 +136,7 @@ export default function DailyReportPrintPage() {
         supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,completed,notes,print_time_mode,print_time_label_override").gte("starts_at", start).lt("starts_at", end),
         supabase.from("vehicles").select("id,customer_id,registration_number,registration_number_last4"),
         supabase.from("customers").select("id,name,company_name,schedule_display_name"),
-        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,expected_completion_date,planned_delivery_at,planned_delivery_date,stay_reason,checked_in_at,checked_out_at,status,work_completed,work_completed_at"),
+        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,outsource_vendor_name,expected_completion_date,planned_delivery_at,planned_delivery_date,stay_reason,checked_in_at,checked_out_at,status,work_completed,work_completed_at"),
         supabase.from("app_settings").select("setting_value").eq("setting_key", "daily_report_template").maybeSingle(),
       ]);
       for (const res of [scheduleRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
@@ -180,6 +181,11 @@ export default function DailyReportPrintPage() {
       .filter((entry) => entry.entry_type === "delivery" && entry.work_order_id)
       .map((entry) => [String(entry.work_order_id), entry]),
   ), [entries]);
+  const inboundEntryMap = useMemo(() => new Map(
+    entries
+      .filter((entry) => entry.entry_type !== "delivery" && entry.work_order_id)
+      .map((entry) => [String(entry.work_order_id), entry]),
+  ), [entries]);
 
   function customerForVehicle(vehicleId: string) {
     const vehicle = vehicleMap.get(vehicleId);
@@ -218,34 +224,56 @@ export default function DailyReportPrintPage() {
     return parts ? `${parts.day} ${parts.time}` : "";
   }
 
-  function cell(entry: PreviewEntry | null) {
+  function inboundDay(work: WorkOrder) {
+    const entry = inboundEntryMap.get(work.id);
+    if (entry) return String(jstDayNumber(entry.starts_at));
+    if (work.checked_in_at) return String(jstDayNumber(work.checked_in_at));
+    return "";
+  }
+
+  function deadlineStack(parts: { day: string; time: string } | null, className: string) {
+    if (!parts) return <span className={className} />;
+    return <span className={className}><b>{parts.day}</b><em>{parts.time}</em></span>;
+  }
+
+  function cell(entry: PreviewEntry | null, side: "delivery" | "inbound") {
     if (!entry) return null;
     const work = entry.work_order_id ? workMap.get(entry.work_order_id) || null : null;
-    const deadline = entry.entry_type === "delivery" ? null : deliveryDeadlineParts(work);
-    return <div className="entry">
+    const deadline = side === "inbound" ? deliveryDeadlineParts(work) : null;
+    const kindText = side === "inbound"
+      ? entry.entry_type === "customer_visit" ? "来社" : entry.entry_type === "onsite_repair" ? "出張" : ""
+      : "";
+    return <div className={`entry ${side}Entry`}>
       <b className="entryName">{entry.customerName}</b>
-      <span className="entryTimeText">{dailyReportTimeLabel(entry)}</span>
       <span className="entryPlate">{entry.last4}</span>
+      <span className="entryTimeText">{dailyReportTimeLabel(entry)}</span>
+      {kindText && <span className="entryKind">{kindText}</span>}
       <span className="entryReason">{entry.reason}</span>
-      <span className="entryKind">{LABEL[entry.entry_type]}</span>
-      {deadline && <span className="entryDeadline"><b>{deadline.day}</b><em>{deadline.time}</em></span>}
+      <span className="entryWorker">{entry.workerName}</span>
+      {deadlineStack(deadline, "entryDeadline")}
       {entry.workCompleted && <strong className="entryDone">○</strong>}
     </div>;
   }
 
-  function secondaryWorkItem(work: WorkOrder, kind: "staying" | "bodyShop") {
-    const stayDays = stayDayCountForReport(work, day);
-    const detail = [
-      last4ForVehicle(work.vehicle_id),
-      work.reason,
-      stayDays ? `入庫${stayDays}日目` : "",
-      work.stay_reason || "",
-    ].filter(Boolean).join(" ");
-    const deadline = deliveryDeadlineLabel(work);
-    return <div className={`secondaryItem ${kind}`} key={work.id}>
-      <b className="secondaryName">{customerForVehicle(work.vehicle_id)}</b>
-      <span className="secondaryDetail">{detail}</span>
-      {deadline && <strong className="secondaryDeadline">{deadline}</strong>}
+  function stayingItem(work: WorkOrder) {
+    const deadline = deliveryDeadlineParts(work);
+    return <div className="stayingRow" key={work.id}>
+      <span className="stayWorker">{work.worker_name || ""}</span>
+      <b className="stayCustomer">{customerForVehicle(work.vehicle_id)}</b>
+      <span className="stayVehicle"><b>{last4ForVehicle(work.vehicle_id)}</b><em>{work.reason}</em></span>
+      <span className="stayInbound">{inboundDay(work)}</span>
+      {deadlineStack(deadline, "stayDeadline")}
+    </div>;
+  }
+
+  function bodyShopItem(work: WorkOrder) {
+    const deadline = deliveryDeadlineParts(work);
+    return <div className="bodyShopRow" key={work.id}>
+      <span className="bodyFactory">{work.outsource_vendor_name || ""}</span>
+      <b className="bodyCustomer">{customerForVehicle(work.vehicle_id)}</b>
+      <span className="bodyVehicle">{last4ForVehicle(work.vehicle_id)}</span>
+      <span className="bodyInbound">{inboundDay(work)}</span>
+      {deadlineStack(deadline, "bodyDeadline")}
     </div>;
   }
 
@@ -257,9 +285,7 @@ export default function DailyReportPrintPage() {
         <b>{last4ForVehicle(work.vehicle_id)}</b>
         <em>{work.reason}</em>
       </span>
-      <span className="plannedDeadline">
-        {deadline ? <><b>{deadline.day}</b><em>{deadline.time}</em></> : null}
-      </span>
+      {deadlineStack(deadline, "plannedDeadline")}
     </div>;
   }
 
@@ -281,8 +307,8 @@ export default function DailyReportPrintPage() {
         {model.rows.map((row) => {
           const slot = slots[row.slotIndex];
           return <div key={row.slotIndex} className="row" style={{ top: `${slot.y * 100}%` }}>
-            <div className="delivery">{cell(row.delivery)}</div>
-            <div className="inbound">{cell(row.inbound)}</div>
+            <div className="delivery">{cell(row.delivery, "delivery")}</div>
+            <div className="inbound">{cell(row.inbound, "inbound")}</div>
           </div>;
         })}
 
@@ -290,22 +316,20 @@ export default function DailyReportPrintPage() {
           {messages.map((note, index) => <div key={`${note}-${index}`}>{note}</div>)}
         </div>
         <div className="secondary staying" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.stayingVehicles)}>
-          {secondary.stayingVehicles.map((work) => secondaryWorkItem(work, "staying"))}
+          <div className="stayingGrid">{secondary.stayingVehicles.slice(0, 11).map(stayingItem)}</div>
         </div>
         <div className="secondary bodyShop" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.bodyShopVehicles)}>
-          {secondary.bodyShopVehicles.map((work) => secondaryWorkItem(work, "bodyShop"))}
+          <div className="bodyShopGrid">{secondary.bodyShopVehicles.slice(0, 11).map(bodyShopItem)}</div>
         </div>
         <div className="secondary planned" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.plannedDeliveries)}>
-          <div className="plannedGrid">
-            {secondary.plannedDeliveries.slice(0, 15).map(plannedDeliveryItem)}
-          </div>
+          <div className="plannedGrid">{secondary.plannedDeliveries.slice(0, 17).map(plannedDeliveryItem)}</div>
         </div>
 
         {!backgroundUrl && <div className="placeholder">既存「日報用紙」背景待ち<br /><small>配置確認専用プレビュー</small></div>}
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:2.5%;z-index:2}.delivery,.inbound{position:absolute;height:100%;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.entry{position:relative;width:100%;height:100%;white-space:nowrap;font-size:clamp(7px,1.05vw,13px)}.entryName{position:absolute;left:1%;top:0;width:32%;height:48%;display:flex;align-items:flex-start;overflow:hidden;text-overflow:ellipsis;font-weight:900;line-height:1}.entryPlate,.entryTimeText{position:absolute;top:0;height:48%;display:flex;align-items:flex-start;overflow:hidden;text-overflow:ellipsis;color:#111827;font-size:.82em;line-height:1;font-weight:800}.entryPlate{left:34%;width:18%}.entryTimeText{left:54%;width:18%}.entryReason,.entryKind{position:absolute;bottom:0;height:48%;display:flex;align-items:flex-end;overflow:hidden;text-overflow:ellipsis;color:#374151;font-size:.76em;line-height:1}.entryReason{left:34%;width:20%;justify-content:center;font-weight:900}.entryKind{left:55%;width:17%;justify-content:center;font-weight:800}.entryDeadline{position:absolute;right:1%;top:0;width:23%;height:100%;display:grid;grid-template-rows:1fr 1fr;align-items:center;justify-items:center;line-height:1;font-size:.76em;font-style:normal}.entryDeadline b,.entryDeadline em{font:inherit;font-weight:900;font-style:normal}.entryDone{position:absolute;right:0;top:0;font-size:1.3em;line-height:1}.secondary{position:absolute;z-index:2;overflow:hidden;font-size:clamp(6px,.8vw,10px);line-height:1.15;padding:2px}.secondaryItem{position:relative;min-height:2.45em;padding:0 1px 1px;overflow:hidden}.secondaryName{display:block;height:1.12em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:900}.secondaryDetail{display:block;height:1.05em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#4b5563}.secondaryDeadline{position:absolute;right:1px;bottom:0;background:#fff;padding-left:3px;font-weight:900}.bodyShop .secondaryItem{margin-left:10%;width:90%}.planned{padding:0}.plannedGrid{position:absolute;left:0;right:0;top:6.25%;bottom:0;display:grid;grid-template-rows:repeat(15,minmax(0,1fr))}.plannedRow{display:grid;grid-template-columns:42% 32% 26%;min-height:0;overflow:hidden;font-size:clamp(6px,.78vw,10px);line-height:1}.plannedCustomer,.plannedVehicle,.plannedDeadline{min-width:0;overflow:hidden}.plannedCustomer{display:flex;align-items:flex-start;padding:1px 3px 0;font-weight:900;white-space:nowrap;text-overflow:ellipsis}.plannedVehicle,.plannedDeadline{display:grid;grid-template-rows:1fr 1fr;align-items:center;justify-items:center}.plannedVehicle b,.plannedVehicle em,.plannedDeadline b,.plannedDeadline em{font:inherit;font-style:normal;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.plannedVehicle em{font-size:.88em}.plannedDeadline em{font-size:.9em}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none}.date{font-size:3.2mm}.entry{font-size:2.5mm}.secondary{font-size:2.1mm;padding:.4mm}.entryName{top:.15mm}.entryPlate,.entryTimeText{font-size:2.1mm}.entryReason{font-size:1.95mm}.entryDeadline{font-size:1.95mm}.secondaryName{font-size:2.2mm}.secondaryDeadline{font-size:2.1mm}.plannedRow{font-size:2mm}}`}</style>
+        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:2.70%;z-index:2}.delivery,.inbound{position:absolute;height:100%;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.entry{position:relative;width:100%;height:100%;white-space:nowrap;font-size:clamp(7px,.92vw,12px);line-height:1}.entryName,.entryPlate,.entryTimeText,.entryKind,.entryReason,.entryWorker{position:absolute;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.entryName,.entryPlate,.entryTimeText{top:3%;height:44%;display:flex;align-items:flex-start}.entryName{font-weight:900}.entryPlate,.entryTimeText{font-weight:800}.entryKind,.entryReason,.entryWorker{bottom:3%;height:43%;display:flex;align-items:flex-end;font-size:.78em;color:#374151}.entryReason{justify-content:center;font-weight:900}.entryWorker{justify-content:center;font-weight:800}.deliveryEntry .entryName{left:.8%;width:31.6%}.deliveryEntry .entryPlate{left:33.3%;width:19.9%}.deliveryEntry .entryTimeText{left:53.3%;width:19.9%}.deliveryEntry .entryKind{display:none}.deliveryEntry .entryReason{left:33.3%;width:19.9%}.deliveryEntry .entryWorker{left:53.3%;width:19.9%}.inboundEntry .entryName{left:.8%;width:33.4%}.inboundEntry .entryPlate{left:34.4%;width:20.6%}.inboundEntry .entryTimeText{left:55.0%;width:21.2%}.inboundEntry .entryKind{left:.8%;width:33.4%}.inboundEntry .entryReason{left:34.4%;width:20.6%}.inboundEntry .entryWorker{left:55.0%;width:21.2%}.entryDeadline{position:absolute;left:83.1%;top:0;width:16.9%;height:100%;display:grid;grid-template-rows:1fr 1fr;align-items:center;justify-items:center;line-height:1;font-size:.78em}.entryDeadline b,.entryDeadline em,.stayDeadline b,.stayDeadline em,.bodyDeadline b,.bodyDeadline em,.plannedDeadline b,.plannedDeadline em{font:inherit;font-weight:900;font-style:normal}.entryDone{position:absolute;right:.5%;top:2%;font-size:1.25em;line-height:1}.secondary{position:absolute;z-index:2;overflow:hidden;padding:0;font-size:clamp(6px,.72vw,9px);line-height:1}.stayingGrid,.bodyShopGrid,.plannedGrid{position:absolute;inset:0;display:grid;min-height:0}.stayingGrid,.bodyShopGrid{grid-template-rows:repeat(11,minmax(0,1fr))}.plannedGrid{grid-template-rows:repeat(17,minmax(0,1fr))}.stayingRow,.bodyShopRow,.plannedRow{display:grid;min-height:0;overflow:hidden;align-items:center}.stayingRow{grid-template-columns:9.9% 29.9% 40.1% 10% 10.1%}.bodyShopRow{grid-template-columns:10.8% 33.6% 22.1% 11.3% 22.2%}.plannedRow{grid-template-columns:35.5% 35.8% 28.7%}.stayWorker,.stayCustomer,.stayVehicle,.stayInbound,.stayDeadline,.bodyFactory,.bodyCustomer,.bodyVehicle,.bodyInbound,.bodyDeadline,.plannedCustomer,.plannedVehicle,.plannedDeadline{min-width:0;max-width:100%;height:100%;overflow:hidden;padding:1px 2px}.stayWorker,.stayCustomer,.bodyFactory,.bodyCustomer,.bodyVehicle,.bodyInbound,.plannedCustomer{display:flex;align-items:flex-start;white-space:nowrap;text-overflow:ellipsis}.stayCustomer,.bodyCustomer,.plannedCustomer{font-weight:900}.stayVehicle,.stayDeadline,.bodyDeadline,.plannedVehicle,.plannedDeadline{display:grid;grid-template-rows:1fr 1fr;align-items:center;justify-items:center}.stayVehicle b,.stayVehicle em,.plannedVehicle b,.plannedVehicle em{font:inherit;font-style:normal;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.stayVehicle em,.plannedVehicle em{font-size:.85em}.stayInbound,.bodyInbound{justify-content:center;font-weight:800}.bodyVehicle{justify-content:center;font-weight:900}.bodyFactory{font-size:.88em}.stayDeadline,.bodyDeadline,.plannedDeadline{font-size:.9em}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none}.date{font-size:3.2mm}.entry{font-size:2.35mm}.entryPlate,.entryTimeText{font-size:2.1mm}.entryKind,.entryReason,.entryWorker{font-size:1.9mm}.entryDeadline{font-size:1.9mm}.secondary{font-size:1.9mm}.stayingRow,.bodyShopRow,.plannedRow{font-size:1.9mm}}`}</style>
     </main>
   );
 }
