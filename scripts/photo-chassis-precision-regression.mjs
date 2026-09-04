@@ -10,10 +10,10 @@ function mustInclude(label, needle) {
   console.log(`ok: ${label}`);
 }
 
-// 車台番号のOCR補完は、QRが取れている時は不要に上書きしない。
+// 車台番号のOCR補完は、QRの存在だけで止めず、QRから値まで取得できた時だけ止める。
 mustInclude(
-  "chassis OCR stays gated when critical QR exists",
-  "const needChassis = !haveCriticalQr"
+  "chassis OCR stays gated when parsed QR chassis exists",
+  "const needChassis = !qrPriority.chassisNumber && (!currentChassis || (fam && currentPrefix && currentPrefix !== fam));"
 );
 
 // 型式由来の既知ファミリーと一致する候補を最優先する。
