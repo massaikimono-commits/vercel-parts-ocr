@@ -248,11 +248,12 @@ export default function SchedulePage() {
           .select("id,name,company_name,phone,schedule_display_name"),
       ]);
 
-      for (const result of [scheduleRes, workRes, vehicleRes, customerRes]) {
+      for (const result of [scheduleRes, stateEntryRes, workRes, vehicleRes, customerRes]) {
         if (result.error) throw result.error;
       }
 
       setEntries((scheduleRes.data || []) as ScheduleEntry[]);
+      setStateEntries((stateEntryRes.data || []) as BusinessScheduleEntry[]);
       setWorkOrders((workRes.data || []) as WorkOrder[]);
       setVehicles((vehicleRes.data || []) as Vehicle[]);
       setCustomers((customerRes.data || []) as Customer[]);
