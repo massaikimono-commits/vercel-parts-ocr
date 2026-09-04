@@ -29,14 +29,8 @@ type WorkOrder = {
   worker_name: string | null;
   outsource_vendor_name: string | null;
   expected_completion_date: string | null;
-  delivery_completed: boolean;
   work_completed: boolean;
-  work_completed_at: string | null;
-  scheduled_at: string | null;
-  checked_in_at: string | null;
   checked_out_at: string | null;
-  planned_delivery_at: string | null;
-  planned_delivery_date: string | null;
   stay_reason: string | null;
   is_urgent: boolean;
   needs_loaner: boolean;
@@ -238,7 +232,7 @@ export default function SchedulePage() {
           .in("entry_type", ["pickup", "customer_visit", "delivery"]),
         supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,delivery_completed,work_completed,work_completed_at,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
+          .select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,work_completed,checked_out_at,stay_reason,is_urgent,needs_loaner")
           .neq("status", "cancelled"),
         supabase
           .from("vehicles")
