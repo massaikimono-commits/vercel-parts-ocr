@@ -19,7 +19,7 @@ assert.doesNotMatch(newPage, />通常予定</, "通常予定の表示を残さ�
 assert.doesNotMatch(newPage, /legal_3m/, "予定登録へlegal_3mを追加しない");
 
 const codeUses = printPage.match(/dailyReportWorkCode\(/g) || [];
-assert.equal(codeUses.length, 5, "日報専用helper定義参照を含め上部2箇所・滞留・納車予定へコードを適用");
+assert.equal(codeUses.length, 4, "上部2箇所・滞留・納車予定へ日報専用コードを適用");
 assert.match(printPage, /inspection_schedule_type/, "日報は既存inspection_schedule_typeを読み込む");
 assert.doesNotMatch(printPage, /legal_3m/, "日報側にもlegal_3mを追加しない");
 
