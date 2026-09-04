@@ -32,14 +32,9 @@ type WorkOrder = {
   worker_name: string | null;
   outsource_vendor_name: string | null;
   expected_completion_date: string | null;
-  planned_delivery_at: string | null;
-  planned_delivery_date: string | null;
   stay_reason: string | null;
-  checked_in_at: string | null;
-  checked_out_at: string | null;
   status: string;
   work_completed: boolean;
-  work_completed_at: string | null;
 };
 
 type PreviewEntry = Entry & {
@@ -48,9 +43,7 @@ type PreviewEntry = Entry & {
   reason: string;
   workerName: string;
   outsourceVendorName: string;
-  plannedDeliveryAt: string | null;
-  plannedDeliveryDate: string | null;
-  expectedCompletionDate: string | null;
+  deliveryEntry: BusinessScheduleEntry | null;
   workCompleted: boolean;
 };
 
@@ -120,18 +113,6 @@ function shortDay(value: string | null) {
   return String(Number(m[3]));
 }
 
-function compactDeliveryTime(value: string) {
-  const parts = new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date(value));
-  const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
-  const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
-  return minute === 0 ? `${hour}時` : `${hour}時${minute}分`;
-}
-
 function exactDueParts(value: string) {
   const parts = new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo",
@@ -150,10 +131,15 @@ function exactDueParts(value: string) {
 }
 
 function dueParts(entry: PreviewEntry) {
-  if (entry.plannedDeliveryAt) return exactDueParts(entry.plannedDeliveryAt);
-  if (entry.plannedDeliveryDate) return { day: shortDay(entry.plannedDeliveryDate), hour: "", minute: "", broad: "中" };
-  if (entry.expectedCompletionDate) return { day: shortDay(entry.expectedCompletionDate), hour: "", minute: "", broad: "中" };
-  return { day: "", hour: "", minute: "", broad: "" };
+  const delivery = entry.deliveryEntry;
+  if (!delivery) return { day: "", hour: "", minute: "", broad: "" };
+  if (delivery.print_time_mode === "unspecified") {
+    return { day: shortDay(delivery.starts_at), hour: "", minute: "", broad: "中" };
+  }
+  if (delivery.print_time_mode === "morning") {
+    return { day: shortDay(delivery.starts_at), hour: "", minute: "", broad: "A中" };
+  }
+  return exactDueParts(delivery.starts_at);
 }
 
 function reportDateParts(day: string) {
@@ -218,7 +204,7 @@ export default function DailyReportPrintPage() {
         supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode").in("entry_type", ["pickup", "customer_visit", "delivery"]),
         supabase.from("vehicles").select("id,customer_id,registration_number,registration_number_last4"),
         supabase.from("customers").select("id,name,company_name,schedule_display_name"),
-        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,outsource_vendor_name,expected_completion_date,planned_delivery_at,planned_delivery_date,stay_reason,checked_in_at,checked_out_at,status,work_completed,work_completed_at").neq("status", "cancelled"),
+        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,outsource_vendor_name,expected_completion_date,stay_reason,status,work_completed").neq("status", "cancelled"),
         supabase.from("app_settings").select("setting_value").eq("setting_key", "daily_report_template").maybeSingle(),
       ]);
       for (const res of [scheduleRes, stateEntryRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
@@ -239,11 +225,26 @@ export default function DailyReportPrintPage() {
   const vehicleMap = useMemo(() => new Map(vehicles.map((x) => [x.id, x])), [vehicles]);
   const customerMap = useMemo(() => new Map(customers.map((x) => [x.id, x])), [customers]);
   const workMap = useMemo(() => new Map(workOrders.map((x) => [x.id, x])), [workOrders]);
+  const stateEntriesByWork = useMemo(() => {
+    const map = new Map<string, BusinessScheduleEntry[]>();
+    for (const entry of stateEntries) {
+      if (!entry.work_order_id) continue;
+      const rows = map.get(entry.work_order_id) || [];
+      rows.push(entry);
+      map.set(entry.work_order_id, rows);
+    }
+    return map;
+  }, [stateEntries]);
 
   const enriched = useMemo<PreviewEntry[]>(() => entries.map((entry) => {
     const vehicle = entry.vehicle_id ? vehicleMap.get(entry.vehicle_id) : null;
     const customer = vehicle?.customer_id ? customerMap.get(vehicle.customer_id) : null;
     const work = entry.work_order_id ? workMap.get(entry.work_order_id) : null;
+    const deliveryEntry = work
+      ? [...(stateEntriesByWork.get(work.id) || [])]
+          .filter((row) => row.entry_type === "delivery")
+          .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0] || null
+      : null;
     return {
       ...entry,
       customerName: customer?.schedule_display_name || customer?.company_name || customer?.name || "お客様未登録",
@@ -255,12 +256,10 @@ export default function DailyReportPrintPage() {
       reason: work?.reason || "",
       workerName: work?.worker_name || "",
       outsourceVendorName: work?.outsource_vendor_name || "",
-      plannedDeliveryAt: work?.planned_delivery_at || null,
-      plannedDeliveryDate: work?.planned_delivery_date || null,
-      expectedCompletionDate: work?.expected_completion_date || null,
+      deliveryEntry,
       workCompleted: Boolean(work?.work_completed || work?.status === "completed"),
     };
-  }), [entries, vehicleMap, customerMap, workMap]);
+  }), [entries, vehicleMap, customerMap, workMap, stateEntriesByWork]);
 
   const morning = enriched.filter((x) => jstHour(x.starts_at) < 12);
   const afternoon = enriched.filter((x) => jstHour(x.starts_at) >= 12);
