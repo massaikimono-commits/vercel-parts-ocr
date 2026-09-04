@@ -11,6 +11,7 @@ assert.match(source, /scheduledInboundWorkIds/, "当日の引取・来社・出�
 assert.match(source, /entry\.entry_type !== "delivery"/, "板金車両欄へ追加する当日予定は納車以外だけを対象にする");
 assert.match(source, /deliveryVehicleIds/, "当日の納車欄へ出る車両を板金車両欄の除外候補として保持する");
 assert.match(source, /!deliveryVehicleIds\.has\(work\.vehicle_id\)/, "納車欄に表示される板金車両は板金車両欄から除外する");
+assert.match(source, /scheduledInboundWorkIds/, "引取・来社・出張と板金車両欄の同時表示を維持する");
 assert.match(source, /uniqueByVehicle/, "滞留・鈑金・納車予定は車両単位で重複表示しない");
 assert.match(source, /!bodyShopVehicleIds\.has\(work\.vehicle_id\)/, "鈑金車両を一般の滞留車両欄へ重複表示しない");
 assert.match(source, /planned_delivery_at/, "納車予定車両は既存planned_delivery_atを再利用する");

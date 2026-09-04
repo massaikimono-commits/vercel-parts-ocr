@@ -176,6 +176,12 @@ assert(schedule.includes("work_completed_at"), "daily schedule must evaluate com
 assert(schedule.includes("checkedOutAt !== null && checkedOutAt <= endOfDay"), "historical daily schedule must keep later checkouts");
 assert(reportPrint.includes("workCompletedOnReportDay"), "daily report completion mark must use selected-day semantics");
 assert(reportPrint.includes('className="entryName"') && reportPrint.includes('className="entryReason"'), "daily report rows must keep customer names high and print intake reason in its dedicated form field");
+assert(reportPrint.includes(".entryName{position:absolute;left:1%;top:0;width:32%"), "daily report customer names must stay in the upper user-name column");
+assert(reportPrint.includes(".entryReason{left:34%;width:20%"), "daily report intake reason must align to the source PDF parenthesis field instead of a free line under the plate");
+assert(reportPrint.includes("plannedDeliveryItem") && reportPrint.includes('className="plannedCustomer"') && reportPrint.includes('className="plannedVehicle"') && reportPrint.includes('className="plannedDeadline"'), "planned-delivery section must render source-PDF columns separately");
+assert(reportPrint.includes("grid-template-columns:42% 32% 26%"), "planned-delivery columns must follow user / vehicle(work) / deadline proportions");
+assert(reportPrint.includes("grid-template-rows:repeat(15"), "planned-delivery rows must follow the existing PDF row structure instead of paragraph lines");
+assert(reportPrint.includes(".bodyShop .secondaryItem{margin-left:10%;width:90%}"), "body-shop entries must avoid the vertical 板金車両 label strip");
 assert(reportPrint.includes('className="entryDeadline"') && reportPrint.includes("deliveryDeadlineParts"), "inbound daily-report rows must use the original two-line deadline area");
 assert(reportPrint.includes('time: "中"') && reportPrint.includes("jstDeadlineTime"), "daily report deadlines must render day + exact hour or day + 中 without a year");
 assert(reportPrint.includes("selectDailyReportSecondaryWorks(workOrders, day, entries)"), "daily report body-shop selection must know same-day inbound/delivery entries");
