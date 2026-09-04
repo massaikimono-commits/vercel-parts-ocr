@@ -377,9 +377,9 @@ export default function CertificatePhotoCriticalOcrV2() {
               const label = labelByKey[key];
               if (!label || fieldValue(label)) continue;
               // 2パス一致を最優先。固定カテゴリは1パスでも安全に採用、
-              // 数値は一意候補の時だけ採用する。
+              // 数値は2パス一致した時だけ採用する。
               const categorical = ["vehicleName","vehicleClass","purpose","privateBusiness","bodyShape","fuel"].includes(key);
-              if (unique.length === 1 && (categorical || values.length >= 1)) patch[key] = unique[0];
+              if (unique.length === 1 && (categorical || values.length >= 2)) patch[key] = unique[0];
             }
           }
 
