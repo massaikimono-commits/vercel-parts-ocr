@@ -22,5 +22,7 @@ const codeUses = printPage.match(/dailyReportWorkCode\(/g) || [];
 assert.equal(codeUses.length, 4, "上部2箇所・滞留・納車予定へ日報専用コードを適用");
 assert.match(printPage, /inspection_schedule_type/, "日報は既存inspection_schedule_typeを読み込む");
 assert.doesNotMatch(printPage, /legal_3m/, "日報側にもlegal_3mを追加しない");
+assert.match(printPage, /\.reportVehicle small\{[^}]*color:#000/, "上部の入庫要因コードは黒文字");
+assert.match(printPage, /\.secondaryRow \.vehicleWork small\{[^}]*color:#000/, "下部の入庫要因コードは黒文字");
 
 console.log("daily report work-code regression: ok");
