@@ -277,15 +277,16 @@ export default function CertificatePhotoCriticalOcrV2() {
         // QR重点補完の反映も少し待つ。
         await new Promise((resolve) => setTimeout(resolve, 900));
 
-        const haveCriticalQr = hasQr("0") || hasQr("2");
+        const qrPriority = window.__vehicleCertificateQrPriority || {};
         const needTopRight = !fieldValue("記録年月日") || !fieldValue("記録事項番号");
-        const needEngine = !fieldValue("原動機の型式") && !window.__vehicleCertificatePhotoPriority?.engineModel && !window.__vehicleCertificateQrPriority?.engineModel;
-        const needReg = !fieldValue("自動車登録番号又は車両番号") && !haveCriticalQr;
+        const needEngine = !fieldValue("原動機の型式") && !window.__vehicleCertificatePhotoPriority?.engineModel && !qrPriority.engineModel;
+        // QRを検出しただけでは不足OCRを止めない。実際に解析できた値がある時だけQRを優先する。
+        const needReg = !fieldValue("自動車登録番号又は車両番号") && !qrPriority.registrationNumber;
         const currentChassis = fieldValue("車台番号");
-        const model = fieldValue("型式") || window.__vehicleCertificatePhotoPriority?.model || window.__vehicleCertificateQrPriority?.model || "";
+        const model = fieldValue("型式") || window.__vehicleCertificatePhotoPriority?.model || qrPriority.model || "";
         const fam = modelFamily(model);
         const currentPrefix = compact(currentChassis).toUpperCase().split("-")[0] || "";
-        const needChassis = !haveCriticalQr && (!currentChassis || (fam && currentPrefix && currentPrefix !== fam));
+        const needChassis = !qrPriority.chassisNumber && (!currentChassis || (fam && currentPrefix && currentPrefix !== fam));
         const profileLabels = [
           "車名","自動車の種別","用途","自家用・事業用の別","車体の形状","乗車定員","最大積載量 kg"
         ];
