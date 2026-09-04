@@ -22,4 +22,14 @@ expect(
   !/const need(?:Reg|Chassis)[^\n]*haveCriticalQr/.test(source),
 );
 
+expect(
+  "missing fuel is included in profile OCR fallback trigger",
+  /const profileLabels = \[[\s\S]{0,220}"燃料の種類"[\s\S]{0,80}\];\s*const needProfile = profileLabels\.some/.test(source),
+);
+
+expect(
+  "fuel OCR result maps back to the fuel field",
+  /fuel:\s*"燃料の種類"/.test(source),
+);
+
 console.log("photo QR field fallback regression: ok");
