@@ -26,6 +26,7 @@ type Entry = {
 
 type WorkOrder = {
   id:string;
+  vehicle_id?:string;
   reason:string;
   worker_staff_id:string|null;
   worker_name:string|null;
@@ -76,6 +77,11 @@ export default function ScheduleEditPage(){
   const [onsiteDuration,setOnsiteDuration]=useState("60");
   const [stayReason,setStayReason]=useState("");
   const [plannedDeliveryDate,setPlannedDeliveryDate]=useState("");
+  const [deliveryEntry,setDeliveryEntry]=useState<Entry|null>(null);
+  const [deliveryEnabled,setDeliveryEnabled]=useState(false);
+  const [deliveryDay,setDeliveryDay]=useState("");
+  const [deliveryMode,setDeliveryMode]=useState<"unspecified"|"exact">("unspecified");
+  const [deliveryTime,setDeliveryTime]=useState("15:00");
   const [reason,setReason]=useState("");
   const [staffMembers,setStaffMembers]=useState<StaffMember[]>([]);
   const [staffId,setStaffId]=useState("");
@@ -116,17 +122,33 @@ export default function ScheduleEditPage(){
     setOnsiteTime(timeKey(e.starts_at));
     setOnsiteDuration(String(Math.max(30,Math.round((new Date(e.ends_at).getTime()-new Date(e.starts_at).getTime())/60000))));
     if(e.work_order_id){
-      const {data:workData,error:workError}=await supabase.from("work_orders")
-        .select("id,reason,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name,stay_reason,planned_delivery_date")
-        .eq("id",e.work_order_id).maybeSingle();
+      const [{data:workData,error:workError},{data:deliveryData,error:deliveryError}]=await Promise.all([
+        supabase.from("work_orders")
+          .select("id,reason,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name,stay_reason,planned_delivery_date")
+          .eq("id",e.work_order_id).maybeSingle(),
+        supabase.from("schedule_entries")
+          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
+          .eq("work_order_id",e.work_order_id)
+          .eq("entry_type","delivery")
+          .order("starts_at",{ascending:true})
+          .limit(1)
+          .maybeSingle(),
+      ]);
       if(workError){setMessage("作業情報の読み込みエラー: "+workError.message);setBusy(false);return;}
+      if(deliveryError){setMessage("納車予定の読み込みエラー: "+deliveryError.message);setBusy(false);return;}
       const work=(workData||null) as WorkOrder|null;
+      const delivery=(deliveryData||null) as Entry|null;
       setReason(work?.reason||"");
       setStaffId(work?.worker_staff_id||"");
       setVendorId(work?.outsource_vendor_id||"");
       setVendorName(work?.outsource_vendor_id ? "" : (work?.outsource_vendor_name||""));
       setStayReason(work?.stay_reason||"");
       setPlannedDeliveryDate(work?.planned_delivery_date||"");
+      setDeliveryEntry(delivery);
+      setDeliveryEnabled(Boolean(delivery));
+      setDeliveryDay(delivery ? dateKey(delivery.starts_at) : (work?.planned_delivery_date || dateKey(e.starts_at)));
+      setDeliveryMode(delivery?.print_time_mode==="exact" ? "exact" : "unspecified");
+      setDeliveryTime(delivery ? timeKey(delivery.starts_at) : "15:00");
     }
     const d=dateKey(e.starts_at);
     setDay(d);
