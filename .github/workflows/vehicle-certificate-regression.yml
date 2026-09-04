@@ -63,6 +63,9 @@ jobs:
       - name: Run photo OCR skip/speed regression
         run: node scripts/photo-ocr-skip-speed-regression.mjs
 
+      - name: Run photo OCR resource/speed regression
+        run: node scripts/photo-ocr-resource-speed-regression.mjs
+
       - name: Run parts-slip regression
         run: npm run test:parts
 
