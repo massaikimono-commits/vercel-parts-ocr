@@ -43,6 +43,7 @@ type SelectedItem = VehicleRow & {
   onsiteMode:Mode;
   onsiteTime:string;
   onsiteDuration:number;
+  inspectionScheduleType:string;
   staffId:string;
   vendorName:string;
   isUrgent:boolean;
@@ -126,6 +127,8 @@ export default function BulkSchedulePage(){
   const [optionsCache,setOptionsCache]=useState<Record<string,TimeOption[]>>({});
   const [defaultEntryType,setDefaultEntryType]=useState<EntryType>("customer_visit");
   const [defaultReason,setDefaultReason]=useState<Reason>("車検");
+  const [defaultInspectionScheduleType,setDefaultInspectionScheduleType]=useState("");
+  const [defaultOnsiteDuration,setDefaultOnsiteDuration]=useState(60);
   const [defaultStaffId,setDefaultStaffId]=useState("");
   const [defaultVendorName,setDefaultVendorName]=useState("");
   const [defaultUrgent,setDefaultUrgent]=useState(false);
@@ -199,7 +202,8 @@ export default function BulkSchedulePage(){
         timeKey:first?.key || "",
         onsiteMode:"exact",
         onsiteTime:"09:00",
-        onsiteDuration:60,
+        onsiteDuration:defaultOnsiteDuration,
+        inspectionScheduleType:(defaultReason==="点検"||defaultReason==="車検") ? defaultInspectionScheduleType : "",
         staffId:defaultStaffId,
         vendorName:defaultVendorName,
         isUrgent:defaultUrgent,
@@ -228,6 +232,7 @@ export default function BulkSchedulePage(){
     if(patch.reason && patch.reason!==current.reason){
       next.deliveryDay=defaultDeliveryDay(day,next.reason);
       next.deliveryTimeKey="";
+      next.inspectionScheduleType=(next.reason==="点検"||next.reason==="車検") ? defaultInspectionScheduleType : "";
     }
     if(patch.entryType && patch.entryType!==current.entryType){
       next.addDelivery=patch.entryType!=="delivery";
@@ -325,6 +330,8 @@ export default function BulkSchedulePage(){
         timeKey:main?.key||"",
         onsiteMode:"exact",
         onsiteTime:"09:00",
+        onsiteDuration:defaultOnsiteDuration,
+        inspectionScheduleType:(defaultReason==="点検"||defaultReason==="車検") ? defaultInspectionScheduleType : "",
         staffId:defaultStaffId,
         vendorName:defaultVendorName,
         isUrgent:defaultUrgent,
@@ -386,6 +393,7 @@ export default function BulkSchedulePage(){
       startsAt:main.startsAt,
       endsAt:main.endsAt,
       printTimeMode:main.printMode,
+      inspectionScheduleType:item.inspectionScheduleType||null,
       staffId:item.staffId||null,
       vendorId:vendor?.id||null,
       vendorName:vendor?null:(item.vendorName.trim()||null),
@@ -493,6 +501,12 @@ export default function BulkSchedulePage(){
         <label>入庫要因<select value={defaultReason} onChange={(e)=>setDefaultReason(e.target.value as Reason)}>
           <option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option>
         </select></label>
+        {(defaultReason==="点検"||defaultReason==="車検") && <label>点検区分<select value={defaultInspectionScheduleType} onChange={(e)=>setDefaultInspectionScheduleType(e.target.value)}>
+          <option value="">未指定</option><option value="schedule">通常予定</option><option value="legal_6m">法定6ヶ月</option><option value="legal_12m">法定12ヶ月</option>
+        </select></label>}
+        {defaultEntryType==="onsite_repair" && <label>出張作業時間<select value={defaultOnsiteDuration} onChange={(e)=>setDefaultOnsiteDuration(Number(e.target.value))}>
+          <option value={30}>30分</option><option value={60}>60分</option><option value={90}>90分</option><option value={120}>120分</option>
+        </select></label>}
         <label>作業担当<select value={defaultStaffId} onChange={(e)=>setDefaultStaffId(e.target.value)}>
           <option value="">未選択</option>{staffMembers.map(s=><option key={s.id} value={s.id}>{s.short_name||s.display_name}</option>)}
         </select></label>
@@ -523,6 +537,9 @@ export default function BulkSchedulePage(){
               <label>入庫要因<select value={item.reason} onChange={(e)=>void changeSchedule(item.vehicleId,{reason:e.target.value as Reason})}>
                 <option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option>
               </select></label>
+              {(item.reason==="点検"||item.reason==="車検") && <label>点検区分<select value={item.inspectionScheduleType} onChange={(e)=>setSelected(old=>old.map(x=>x.vehicleId===item.vehicleId?{...x,inspectionScheduleType:e.target.value}:x))}>
+                <option value="">未指定</option><option value="schedule">通常予定</option><option value="legal_6m">法定6ヶ月</option><option value="legal_12m">法定12ヶ月</option>
+              </select></label>}
               {item.entryType!=="onsite_repair" ? <label>時間<select value={item.timeKey} onChange={(e)=>setSelected(old=>old.map(x=>x.vehicleId===item.vehicleId?{...x,timeKey:e.target.value}:x))}>
                 <option value="">選択</option>
                 {opts.map(o=><option key={o.key} value={o.key} disabled={o.availability==="blocked"}>{o.availability==="blocked"?"×":o.availability==="warning"?"△":"○"} {o.label}</option>)}
@@ -531,6 +548,9 @@ export default function BulkSchedulePage(){
                   <option value="exact">時間指定</option><option value="morning">A中</option><option value="unspecified">中</option>
                 </select></label>
                 {item.onsiteMode==="exact" && <label>開始<input type="time" min="08:30" max="17:00" step="1800" value={item.onsiteTime} onChange={(e)=>setSelected(old=>old.map(x=>x.vehicleId===item.vehicleId?{...x,onsiteTime:e.target.value}:x))} /></label>}
+                <label>作業時間<select value={item.onsiteDuration} onChange={(e)=>setSelected(old=>old.map(x=>x.vehicleId===item.vehicleId?{...x,onsiteDuration:Number(e.target.value)}:x))}>
+                  <option value={30}>30分</option><option value={60}>60分</option><option value={90}>90分</option><option value={120}>120分</option>
+                </select></label>
               </>}
               <label>担当<select value={item.staffId} onChange={(e)=>setSelected(old=>old.map(x=>x.vehicleId===item.vehicleId?{...x,staffId:e.target.value}:x))}>
                 <option value="">未選択</option>{staffMembers.map(s=><option key={s.id} value={s.id}>{s.short_name||s.display_name}</option>)}

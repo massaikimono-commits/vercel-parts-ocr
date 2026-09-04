@@ -74,6 +74,9 @@ assert(scheduleBulk.includes("changeCommonDay") && scheduleBulk.includes("daysBe
 assert(scheduleBulk.includes("addDays(item.deliveryDay,delta)"), "bulk schedule date changes must preserve each vehicle's delivery-day offset");
 assert(scheduleBulk.includes("時間候補を新しい日に更新しました"), "bulk schedule must confirm that selected vehicle slots were refreshed after a date change");
 assert(scheduleBulk.includes("defaultDeliveryDay(day,item.reason)") || scheduleBulk.includes("defaultDeliveryDay(day,defaultReason)"), "bulk schedule must keep inspection/shaken delivery defaults");
+assert(scheduleBulk.includes("inspectionScheduleType") && scheduleBulk.includes("法定6ヶ月") && scheduleBulk.includes("法定12ヶ月"), "bulk schedule must preserve inspection schedule types from single registration");
+assert(scheduleBulk.includes("defaultOnsiteDuration") && scheduleBulk.includes("onsiteDuration:Number(e.target.value)"), "bulk onsite registration must allow 30/60/90/120 minute durations");
+assert(scheduleBulk.includes("inspectionScheduleType:item.inspectionScheduleType||null"), "bulk schedule payload must pass each vehicle inspection schedule type");
 assert(scheduleBatchSql.includes("create_schedule_registration_v2"), "batch schedule RPC must reuse the guarded single-registration RPC");
 assert(scheduleBatchSql.includes("exception") && scheduleBatchSql.includes("batch_item_failed"), "batch schedule RPC must roll back the entire batch on any item failure");
 assert(scheduleBatchSql.includes("jsonb_array_length(p_items) > 50"), "batch schedule RPC must cap accidental oversized submissions");
