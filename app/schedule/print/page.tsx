@@ -141,6 +141,17 @@ function regionStyle(region: DailyReportRegion) {
   };
 }
 
+function gridColumns(columns: readonly number[]) {
+  return columns.map((value) => `${(value * 100).toFixed(2)}%`).join(" ");
+}
+
+function secondaryRowStyle(columns: readonly number[], rowCount: number) {
+  return {
+    gridTemplateColumns: gridColumns(columns),
+    height: `${100 / rowCount}%`,
+  };
+}
+
 export default function DailyReportPrintPage() {
   const [day, setDay] = useState(() => {
     if (typeof window === "undefined") return jstDay();
@@ -243,9 +254,10 @@ export default function DailyReportPrintPage() {
         <div className="reportCustomer">{entry.customerName}</div>
         <div className="reportVehicle">
           <b>{entry.last4}</b>
-          {entry.reason && <small>{entry.reason}</small>}
+          <small>{entry.reason || ""}</small>
         </div>
         <div className="reportTime">{dailyReportTimeLabel(entry)}</div>
+        <div className="reportProgress" aria-hidden="true" />
       </div>
     );
   }
@@ -258,7 +270,7 @@ export default function DailyReportPrintPage() {
         <div className="reportCustomer">{entry.customerName}</div>
         <div className="reportVehicle">
           <b>{entry.last4}</b>
-          {entry.reason && <small>{entry.reason}</small>}
+          <small>{entry.reason || ""}</small>
         </div>
         <div className="reportTime">
           {(entry.entry_type === "customer_visit" || entry.entry_type === "onsite_repair") && (
@@ -274,15 +286,76 @@ export default function DailyReportPrintPage() {
     );
   }
 
-  function workLine(work: WorkOrder, prefix = "") {
-    const stayDays = stayDayCountForReport(work, day);
-    const stayAge = stayDays ? ` 入庫:${stayDays}日目` : "";
-    const completion = work.expected_completion_date ? ` 完成:${shortDay(work.expected_completion_date)}` : "";
-    const stay = work.stay_reason ? ` ${work.stay_reason}` : "";
-    const deliveryDay = work.planned_delivery_date ? ` 納車:${shortDay(work.planned_delivery_date)} 中` : "";
-    const worker = work.worker_name ? ` 担当:${work.worker_name}` : "";
-    const vendor = work.outsource_vendor_name ? ` 外注:${work.outsource_vendor_name}` : "";
-    return `${prefix}${customerForVehicle(work.vehicle_id)} ${last4ForVehicle(work.vehicle_id)} ${work.reason}${worker}${vendor}${stayAge}${stay}${completion}${deliveryDay}`.trim();
+  function workDue(work: WorkOrder) {
+    if (work.planned_delivery_at) {
+      return {
+        day: shortDay(work.planned_delivery_at),
+        time: compactDeliveryTime(work.planned_delivery_at),
+      };
+    }
+    if (work.planned_delivery_date) return { day: shortDay(work.planned_delivery_date), time: "中" };
+    if (work.expected_completion_date) return { day: shortDay(work.expected_completion_date), time: "中" };
+    return { day: "", time: "" };
+  }
+
+  function stayingRow(work: WorkOrder) {
+    const due = workDue(work);
+    return (
+      <div
+        key={work.id}
+        className="secondaryRow stayingRow"
+        style={secondaryRowStyle(
+          DAILY_REPORT_TEMPLATE.columns.stayingVehicles,
+          DAILY_REPORT_TEMPLATE.secondaryRows.stayingVehicles,
+        )}
+      >
+        <span aria-hidden="true" />
+        <span>{work.worker_name || ""}</span>
+        <span>{customerForVehicle(work.vehicle_id)}</span>
+        <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{work.reason || ""}</small></span>
+        <span>{shortDay(work.checked_in_at)}</span>
+        <span>{due.day}</span>
+      </div>
+    );
+  }
+
+  function bodyShopRow(work: WorkOrder) {
+    const due = workDue(work);
+    return (
+      <div
+        key={work.id}
+        className="secondaryRow bodyShopRow"
+        style={secondaryRowStyle(
+          DAILY_REPORT_TEMPLATE.columns.bodyShopVehicles,
+          DAILY_REPORT_TEMPLATE.secondaryRows.bodyShopVehicles,
+        )}
+      >
+        <span aria-hidden="true" />
+        <span>{work.outsource_vendor_name || ""}</span>
+        <span>{customerForVehicle(work.vehicle_id)}</span>
+        <span><b>{last4ForVehicle(work.vehicle_id)}</b></span>
+        <span>{shortDay(work.checked_in_at)}</span>
+        <span>{due.day}</span>
+      </div>
+    );
+  }
+
+  function plannedDeliveryRow(work: WorkOrder) {
+    const due = workDue(work);
+    return (
+      <div
+        key={work.id}
+        className="secondaryRow plannedRow"
+        style={secondaryRowStyle(
+          DAILY_REPORT_TEMPLATE.columns.plannedDeliveries,
+          DAILY_REPORT_TEMPLATE.secondaryRows.plannedDeliveries,
+        )}
+      >
+        <span>{customerForVehicle(work.vehicle_id)}</span>
+        <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{work.reason || ""}</small></span>
+        <span className="secondaryDue"><b>{due.day}</b><small>{due.time}</small></span>
+      </div>
+    );
   }
 
   return (
@@ -312,25 +385,26 @@ export default function DailyReportPrintPage() {
           {messages.map((note, index) => <div key={`${note}-${index}`}>{note}</div>)}
         </div>
         <div className="secondary staying" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.stayingVehicles)}>
-          {secondary.stayingVehicles.map((work) => <div key={work.id}>{workLine(work)}</div>)}
+          {secondary.stayingVehicles
+            .slice(0, DAILY_REPORT_TEMPLATE.secondaryRows.stayingVehicles)
+            .map(stayingRow)}
         </div>
         <div className="secondary bodyShop" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.bodyShopVehicles)}>
-          {secondary.bodyShopVehicles.map((work) => <div key={work.id}>{workLine(work)}</div>)}
+          {secondary.bodyShopVehicles
+            .slice(0, DAILY_REPORT_TEMPLATE.secondaryRows.bodyShopVehicles)
+            .map(bodyShopRow)}
         </div>
         <div className="secondary planned" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.plannedDeliveries)}>
-          {secondary.plannedDeliveries.map((work) => {
-            const planned = work.planned_delivery_at
-              ? `${new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", day: "numeric" }).format(new Date(work.planned_delivery_at))} ${compactDeliveryTime(work.planned_delivery_at)} `
-              : "";
-            return <div key={work.id}>{workLine(work, planned)}</div>;
-          })}
+          {secondary.plannedDeliveries
+            .slice(0, DAILY_REPORT_TEMPLATE.secondaryRows.plannedDeliveries)
+            .map(plannedDeliveryRow)}
         </div>
 
         {!backgroundUrl && <div className="placeholder">既成の日報用紙へ重ね印刷<br /><small>画面上は位置確認用／印刷時は文字だけ出力</small></div>}
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:2.5%;z-index:2}.delivery,.inbound{position:absolute;height:100%;display:flex;align-items:center;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.reportEntry{width:100%;height:100%;display:grid;align-items:center;white-space:nowrap;font-size:clamp(7px,.92vw,11px);line-height:1.05}.deliveryEntry{grid-template-columns:44% 29% 27%}.inboundEntry{grid-template-columns:38% 24% 18% 20%}.reportCustomer,.reportTime,.reportDue{overflow:hidden;text-overflow:ellipsis;padding:0 2px}.reportVehicle{min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden;padding:0 2px}.reportVehicle b{font-size:1em;line-height:1}.reportVehicle small{font-size:.68em;line-height:1;color:#4b5563;overflow:hidden;text-overflow:ellipsis}.reportTime,.reportDue{text-align:center}.reportTime{display:flex;align-items:center;justify-content:center;gap:2px}.reportDue{height:100%;display:grid;grid-template-rows:1fr 1fr;align-items:center;justify-items:center;line-height:1}.reportDue .dueDay,.reportDue .dueTime{display:block;width:100%;overflow:hidden;text-overflow:clip;white-space:nowrap;font-size:.86em;font-weight:700}.reportDue .dueDay{padding-top:.08em}.reportDue .dueTime{padding-bottom:.08em}.reportVisitType{font-weight:800;font-size:.78em}.secondary{position:absolute;z-index:2;overflow:hidden;font-size:clamp(6px,.8vw,10px);line-height:1.3;padding:2px}.secondary>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.background,.placeholder{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none;background:transparent}.date{font-size:3.2mm}.reportEntry{font-size:2.35mm}.reportVehicle small{font-size:1.65mm}.secondary{font-size:2.1mm;padding:.4mm}}`}</style>
+        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:2.5%;z-index:2}.delivery,.inbound{position:absolute;height:100%;display:flex;align-items:center;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.reportEntry{width:100%;height:100%;display:grid;align-items:center;white-space:nowrap;font-size:clamp(7px,.92vw,11px);line-height:1.05}.deliveryEntry{grid-template-columns:${gridColumns(DAILY_REPORT_TEMPLATE.columns.delivery)}}.inboundEntry{grid-template-columns:${gridColumns(DAILY_REPORT_TEMPLATE.columns.inbound)}}.reportCustomer,.reportTime,.reportDue{overflow:hidden;text-overflow:ellipsis;padding:0 2px}.reportCustomer{align-self:start;padding-top:.15em}.reportVehicle{min-width:0;height:100%;display:grid;grid-template-rows:1fr 1fr;align-items:center;overflow:hidden;padding:0 2px}.reportVehicle b{font-size:1em;line-height:1;align-self:end}.reportVehicle small{font-size:.68em;line-height:1;color:#4b5563;overflow:hidden;text-overflow:ellipsis;align-self:start}.reportProgress{height:100%}.reportTime,.reportDue{text-align:center}.reportTime{display:flex;align-items:center;justify-content:center;gap:2px}.reportDue{height:100%;display:grid;grid-template-rows:1fr 1fr;align-items:center;justify-items:center;line-height:1}.reportDue .dueDay,.reportDue .dueTime{display:block;width:100%;overflow:hidden;text-overflow:clip;white-space:nowrap;font-size:.86em;font-weight:700}.reportDue .dueDay{padding-top:.08em}.reportDue .dueTime{padding-bottom:.08em}.reportVisitType{font-weight:800;font-size:.78em}.secondary{position:absolute;z-index:2;overflow:hidden;font-size:clamp(6px,.8vw,10px);line-height:1;padding:0}.messages{padding:2px}.messages>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.secondaryRow{width:100%;display:grid;align-items:center;white-space:nowrap;overflow:hidden}.secondaryRow>span{min-width:0;height:100%;padding:0 2px;display:flex;align-items:center;justify-content:center;overflow:hidden;text-overflow:ellipsis}.secondaryRow .vehicleWork{display:grid;grid-template-rows:1fr 1fr;align-items:center;justify-content:stretch;text-align:center}.secondaryRow .vehicleWork b{align-self:end;overflow:hidden;text-overflow:ellipsis}.secondaryRow .vehicleWork small{align-self:start;font-size:.72em;overflow:hidden;text-overflow:ellipsis}.secondaryDue{display:grid!important;grid-template-rows:1fr 1fr!important;align-items:center!important;justify-items:center!important}.secondaryDue b{align-self:end}.secondaryDue small{align-self:start;font-size:.72em}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.background,.placeholder{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none;background:transparent}.date{font-size:3.2mm}.reportEntry{font-size:2.35mm}.reportVehicle small{font-size:1.65mm}.secondary{font-size:2.1mm;padding:0}.messages{padding:.4mm}}`}</style>
     </main>
   );
 }
