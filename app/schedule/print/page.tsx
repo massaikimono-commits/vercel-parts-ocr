@@ -332,22 +332,8 @@ export default function DailyReportPrintPage() {
     );
   }
 
-  function workDue(work: WorkOrder) {
-    if (work.planned_delivery_at) return exactDueParts(work.planned_delivery_at);
-    if (work.planned_delivery_date) return { day: shortDay(work.planned_delivery_date), hour: "", minute: "", broad: "中" };
-    if (work.expected_completion_date) return { day: shortDay(work.expected_completion_date), hour: "", minute: "", broad: "中" };
-    return { day: "", hour: "", minute: "", broad: "" };
-  }
-
-  function latestPickupDay(workId: string) {
-    const pickup = bodyShopTimeline
-      .filter((entry) => entry.work_order_id === workId && entry.entry_type === "pickup")
-      .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())[0];
-    return pickup ? shortDay(pickup.starts_at) : "";
-  }
-
-  function stayingRow(work: WorkOrder) {
-    const due = workDue(work);
+  function stayingRow(state: BusinessVehicleState<WorkOrder>) {
+    const work = state.work;
     return (
       <div
         key={work.id}
@@ -361,14 +347,14 @@ export default function DailyReportPrintPage() {
         <span>{work.worker_name || ""}</span>
         <span>{customerForVehicle(work.vehicle_id)}</span>
         <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{work.reason || ""}</small></span>
-        <span>{shortDay(work.checked_in_at)}</span>
-        <span>{due.day}</span>
+        <span>{String(Number(state.inboundDay.slice(8, 10)))}</span>
+        <span>{shortDay(work.expected_completion_date)}</span>
       </div>
     );
   }
 
-  function bodyShopRow(work: WorkOrder) {
-    const due = workDue(work);
+  function bodyShopRow(state: BusinessVehicleState<WorkOrder>) {
+    const work = state.work;
     return (
       <div
         key={work.id}
@@ -382,14 +368,15 @@ export default function DailyReportPrintPage() {
         <span>{work.outsource_vendor_name || ""}</span>
         <span>{customerForVehicle(work.vehicle_id)}</span>
         <span><b>{last4ForVehicle(work.vehicle_id)}</b></span>
-        <span>{shortDay(work.checked_in_at) || latestPickupDay(work.id)}</span>
-        <span>{due.day}</span>
+        <span>{String(Number(state.inboundDay.slice(8, 10)))}</span>
+        <span>{state.deliveryDay ? String(Number(state.deliveryDay.slice(8, 10))) : shortDay(work.expected_completion_date)}</span>
       </div>
     );
   }
 
-  function plannedDeliveryRow(work: WorkOrder) {
-    const due = workDue(work);
+  function plannedDeliveryRow(state: BusinessVehicleState<WorkOrder>) {
+    const work = state.work;
+    const deliveryDay = state.deliveryDay ? String(Number(state.deliveryDay.slice(8, 10))) : "";
     return (
       <div
         key={work.id}
@@ -401,7 +388,7 @@ export default function DailyReportPrintPage() {
       >
         <span>{customerForVehicle(work.vehicle_id)}</span>
         <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{work.reason || ""}</small></span>
-        <span className="secondaryDue"><b>{due.day}</b><small>{due.broad || (due.hour ? `${due.hour}${due.minute ? ":" + due.minute.padStart(2, "0") : "時"}` : "")}</small></span>
+        <span className="secondaryDue"><b>{deliveryDay}</b><small>{deliveryTimeLabel(state.deliveryEntry)}</small></span>
       </div>
     );
   }
@@ -435,17 +422,17 @@ export default function DailyReportPrintPage() {
           {messages.map((note, index) => <div key={`${note}-${index}`}>{note}</div>)}
         </div>
         <div className="secondary staying" style={regionStyle(PRINT_LAYOUT.regions.stayingVehicles)}>
-          {secondary.stayingVehicles
+          {businessStates.stayingVehicles
             .slice(0, PRINT_LAYOUT.secondaryRows.stayingVehicles)
             .map(stayingRow)}
         </div>
         <div className="secondary bodyShop" style={regionStyle(PRINT_LAYOUT.regions.bodyShopVehicles)}>
-          {bodyShopRows
+          {businessStates.bodyShopVehicles
             .slice(0, PRINT_LAYOUT.secondaryRows.bodyShopVehicles)
             .map(bodyShopRow)}
         </div>
         <div className="secondary planned" style={regionStyle(PRINT_LAYOUT.regions.plannedDeliveries)}>
-          {secondary.plannedDeliveries
+          {businessStates.plannedDeliveries
             .slice(0, PRINT_LAYOUT.secondaryRows.plannedDeliveries)
             .map(plannedDeliveryRow)}
         </div>
