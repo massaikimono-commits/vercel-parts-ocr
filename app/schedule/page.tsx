@@ -6,6 +6,7 @@ import { supabase } from "../supabase";
 import { dailyReportTimeLabel } from "./print-rules";
 import { buildDailyReportPreviewModel } from "./daily-report-print-model";
 import { safeActionError } from "../lib/client-security";
+import { classifyVehicleBusinessStates, type BusinessScheduleEntry } from "./business-vehicle-state";
 
 type ScheduleEntry = {
   id: string;
@@ -153,6 +154,7 @@ function addDay(day: string, delta: number) {
 export default function SchedulePage() {
   const [day, setDay] = useState(() => localDateString());
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
+  const [stateEntries, setStateEntries] = useState<BusinessScheduleEntry[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -225,13 +227,17 @@ export default function SchedulePage() {
     setBusy(true);
     const { start, end } = jstBounds(day);
     try {
-      const [scheduleRes, workRes, vehicleRes, customerRes] = await Promise.all([
+      const [scheduleRes, stateEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
         supabase
           .from("schedule_entries")
           .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,completed,notes,print_time_mode,print_time_label_override")
           .gte("starts_at", start)
           .lt("starts_at", end)
           .order("starts_at", { ascending: true }),
+        supabase
+          .from("schedule_entries")
+          .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode")
+          .in("entry_type", ["pickup", "customer_visit", "delivery"]),
         supabase
           .from("work_orders")
           .select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,delivery_completed,work_completed,work_completed_at,scheduled_at,checked_in_at,checked_out_at,planned_delivery_at,planned_delivery_date,stay_reason,is_urgent,needs_loaner")
@@ -303,31 +309,18 @@ export default function SchedulePage() {
     });
   }, [workOrders]);
 
+  const businessStates = useMemo(
+    () => classifyVehicleBusinessStates(workOrders, stateEntries, day),
+    [workOrders, stateEntries, day],
+  );
+
   const stayingVehicles = useMemo(() => {
-    const endOfDay = new Date(`${day}T23:59:59+09:00`).getTime();
-    return workOrders
-      .filter((work) => {
-        const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
-        if (checkedOutAt !== null && checkedOutAt <= endOfDay) return false;
-
-        const completedAt = work.work_completed_at ? new Date(work.work_completed_at).getTime() : null;
-        const isHistoricalDay = endOfDay < Date.now();
-        const legacyLaterCheckout = isHistoricalDay && checkedOutAt !== null && checkedOutAt > endOfDay;
-        const completedByDayEnd = completedAt !== null
-          ? completedAt <= endOfDay
-          : (work.work_completed || work.status === "completed") && !legacyLaterCheckout;
-        if (completedByDayEnd) return false;
-
-        const activelyCheckedIn = Boolean(work.checked_in_at);
-        const inProgress = work.status === "in_progress";
-        if (!activelyCheckedIn && !inProgress) return false;
-        const base = work.checked_in_at || work.scheduled_at;
-        return !base || new Date(base).getTime() <= endOfDay;
-      })
-      .map((work) => {
+    return businessStates.stayingVehicles
+      .map((state) => {
+        const work = state.work;
         const vehicle = vehicleMap.get(work.vehicle_id) || null;
         const customer = vehicle?.customer_id ? customerMap.get(vehicle.customer_id) || null : null;
-        return { work, vehicle, customer };
+        return { work, vehicle, customer, inboundDay: state.inboundDay, inboundEntry: state.inboundEntry };
       })
       .sort((a, b) => {
         if (a.work.is_urgent !== b.work.is_urgent) return a.work.is_urgent ? -1 : 1;
@@ -335,7 +328,7 @@ export default function SchedulePage() {
         const bd = b.work.expected_completion_date || "9999-12-31";
         return ad.localeCompare(bd);
       });
-  }, [workOrders, vehicleMap, customerMap, day]);
+  }, [businessStates.stayingVehicles, vehicleMap, customerMap]);
 
   async function toggleCompleted(entry: ScheduleEntry) {
     const next = !entry.completed;
@@ -402,23 +395,19 @@ export default function SchedulePage() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const stayReason = String(form.get("stay_reason") || "").trim();
-    const plannedDeliveryDate = String(form.get("planned_delivery_date") || "").trim() || null;
     try {
-      const { data, error } = await supabase.rpc("set_work_order_stay_info", {
-        p_work_order_id: work.id,
-        p_stay_reason: stayReason || null,
-        p_planned_delivery_date: plannedDeliveryDate,
-        p_actor: "schedule",
-      });
+      const { error } = await supabase
+        .from("work_orders")
+        .update({ stay_reason: stayReason || null, updated_at: new Date().toISOString() })
+        .eq("id", work.id);
       if (error) throw error;
       setWorkOrders((old) => old.map((x) => x.id === work.id ? {
         ...x,
-        stay_reason: data?.stayReason || null,
-        planned_delivery_date: data?.plannedDeliveryDate || null,
+        stay_reason: stayReason || null,
       } : x));
-      setMessage("滞留理由・納車予定日を保存しました。");
+      setMessage("滞留理由を保存しました。納車予定は予約変更画面から登録してください。");
     } catch (error: any) {
-      setMessage(safeActionError("滞留情報の保存", error));
+      setMessage(safeActionError("滞留理由の保存", error));
     }
   }
 
@@ -490,7 +479,7 @@ export default function SchedulePage() {
   }
 
   function renderStayingVehicle(item: typeof stayingVehicles[number]) {
-    const { work, vehicle, customer } = item;
+    const { work, vehicle, customer, inboundDay, inboundEntry } = item;
     return (
       <article
         key={work.id}
@@ -507,14 +496,14 @@ export default function SchedulePage() {
         </div>
         <div className="stayInfo">
           <div className="stayReason"><b>滞留理由</b><span>{work.stay_reason || "未登録"}</span></div>
-          <div className="stayDelivery"><b>納車予定日</b><span>{work.planned_delivery_date || "未定"}</span></div>
+          <div className="stayDelivery"><b>納車予定</b><span>未登録</span></div>
           {work.worker_name && <div className="stayReason"><b>作業担当</b><span>{work.worker_name}</span></div>}
           {work.outsource_vendor_name && <div className="stayDelivery"><b>外注先</b><span>{work.outsource_vendor_name}</span></div>}
         </div>
         <div className="meta">
           {work.worker_name && <span>担当 {work.worker_name}</span>}
-          <span className={stayDayCount(work.checked_in_at || work.scheduled_at, day) && (stayDayCount(work.checked_in_at || work.scheduled_at, day) || 0) >= 3 ? "stayAge alert" : "stayAge"}>
-            入庫 {stayDayCount(work.checked_in_at || work.scheduled_at, day) || 1}日目
+          <span className={stayDayCount(inboundDay, day) && (stayDayCount(inboundDay, day) || 0) >= 3 ? "stayAge alert" : "stayAge"}>
+            入庫 {stayDayCount(inboundDay, day) || 1}日目
           </span>
           <span>完成予定 {work.expected_completion_date || "未定"}</span>
         </div>
@@ -525,10 +514,8 @@ export default function SchedulePage() {
             <label>滞留理由
               <input name="stay_reason" defaultValue={work.stay_reason || ""} list="stay-reason-options" placeholder="例：部品待ち" />
             </label>
-            <label>納車予定日
-              <input name="planned_delivery_date" type="date" defaultValue={work.planned_delivery_date || ""} />
-            </label>
-            <button type="submit">保存</button>
+            <button type="submit">滞留理由を保存</button>
+            <button type="button" onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(inboundEntry.id))}>納車予定を登録・変更</button>
           </form>
         </details>
       </article>
