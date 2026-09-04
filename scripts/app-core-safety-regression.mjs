@@ -184,7 +184,7 @@ assert(reportPrint.includes("grid-template-columns:35.5% 35.8% 28.7%"), "planned
 assert(reportPrint.includes("grid-template-rows:repeat(17"), "planned-delivery section must use all 17 rows present in the supplied A3 PDF");
 assert(reportPrint.includes("bodyShopGrid") && reportPrint.includes("grid-template-columns:10.8% 33.6% 22.1% 11.3% 22.2%"), "body-shop entries must align to the supplied A3 PDF factory / customer / vehicle / intake / deadline columns");
 assert(reportPrint.includes("stayingGrid") && reportPrint.includes("grid-template-columns:9.9% 29.9% 40.1% 10% 10.1%"), "staying entries must align to the supplied A3 PDF staff / customer / vehicle(work) / intake / deadline columns");
-assert(reportPrint.includes('className="entryDeadline"') && reportPrint.includes("deliveryDeadlineParts"), "inbound daily-report rows must use the original two-line deadline area");
+assert(reportPrint.includes('deadlineStack(deadline, "entryDeadline")') && reportPrint.includes("deliveryDeadlineParts"), "inbound daily-report rows must use the original two-line deadline area");
 assert(reportPrint.includes('time: "中"') && reportPrint.includes("jstDeadlineTime"), "daily report deadlines must render day + exact hour or day + 中 without a year");
 assert(reportPrint.includes("selectDailyReportSecondaryWorks(workOrders, day, entries)"), "daily report body-shop selection must know same-day inbound/delivery entries");
 assert(dailyReportTemplate.includes('paperSize: "A3"') && dailyReportTemplate.includes("widthMm: 297") && dailyReportTemplate.includes("heightMm: 420"), "daily report template must stay fixed to actual A3 portrait size");
