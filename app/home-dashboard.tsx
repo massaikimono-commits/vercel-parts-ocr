@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase";
 import { dailyReportTimeLabel } from "./schedule/print-rules";
+import { classifyVehicleBusinessStates, type BusinessScheduleEntry } from "./schedule/business-vehicle-state";
 
 type ScheduleEntry = {
   id: string;
@@ -18,6 +19,7 @@ type ScheduleEntry = {
 
 type WorkOrder = {
   id: string;
+  vehicle_id: string;
   reason: string;
   status: string;
   work_completed: boolean;
@@ -120,6 +122,7 @@ function scheduleTimeLabel(entry: ScheduleEntry) {
 export default function HomeDashboard({ onLogout }: { onLogout: () => void | Promise<unknown> }) {
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [weekEntries, setWeekEntries] = useState<ScheduleEntry[]>([]);
+  const [stateEntries, setStateEntries] = useState<BusinessScheduleEntry[]>([]);
   const [works, setWorks] = useState<WorkOrder[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -148,17 +151,19 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     const bounds = jstBounds(today);
     const weekStart = mondayOf(today);
     const weekEnd = addDays(weekStart, 7);
-    const [entryRes, weekEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
+    const [entryRes, weekEntryRes, stateEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", new Date(weekStart + "T00:00:00+09:00").toISOString()).lt("starts_at", new Date(weekEnd + "T00:00:00+09:00").toISOString()).order("starts_at", { ascending: true }),
-      supabase.from("work_orders").select("id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,outsource_vendor_name,checked_out_at").neq("status", "cancelled"),
+      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode").in("entry_type", ["pickup", "customer_visit", "delivery"]),
+      supabase.from("work_orders").select("id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,outsource_vendor_name,checked_out_at").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
     ]);
-    const firstError = [entryRes.error, weekEntryRes.error, workRes.error, vehicleRes.error, customerRes.error].find(Boolean);
+    const firstError = [entryRes.error, weekEntryRes.error, stateEntryRes.error, workRes.error, vehicleRes.error, customerRes.error].find(Boolean);
     if (firstError) setLoadError("スケジュールを取得できません。詳細画面で再確認してください。");
     if (!entryRes.error) setEntries((entryRes.data || []) as ScheduleEntry[]);
     if (!weekEntryRes.error) setWeekEntries((weekEntryRes.data || []) as ScheduleEntry[]);
+    if (!stateEntryRes.error) setStateEntries((stateEntryRes.data || []) as BusinessScheduleEntry[]);
     if (!workRes.error) setWorks((workRes.data || []) as WorkOrder[]);
     if (!vehicleRes.error) setVehicles((vehicleRes.data || []) as Vehicle[]);
     if (!customerRes.error) setCustomers((customerRes.data || []) as Customer[]);
@@ -264,6 +269,18 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       return true;
     });
   }, [todayRows]);
+
+  const businessStates = useMemo(
+    () => classifyVehicleBusinessStates(works, stateEntries, todayJst()),
+    [works, stateEntries],
+  );
+
+  const topStayingRows = useMemo(() => businessStates.stayingVehicles.map((state) => {
+    const work = state.work;
+    const vehicle = vehicleMap.get(work.vehicle_id) || null;
+    const customer = vehicle?.customer_id ? customerMap.get(vehicle.customer_id) || null : null;
+    return { state, work, vehicle, customer };
+  }), [businessStates.stayingVehicles, vehicleMap, customerMap]);
 
   function customerName(customer: Customer | null) {
     return customer?.schedule_display_name || customer?.company_name || customer?.name || "お客様未登録";
@@ -392,6 +409,25 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             );
           })}
         </div>
+      </section>
+
+      <section className="homeStaying" aria-label="滞留車両">
+        <div className="homeStayingHead">
+          <div><span>納車予定未登録</span><h2>滞留車両</h2></div>
+          <strong>{topStayingRows.length}台</strong>
+        </div>
+        {busy ? <div className="homeStayingEmpty">読込中…</div> : topStayingRows.length === 0 ? (
+          <div className="homeStayingEmpty">現在の滞留車両はありません。</div>
+        ) : (
+          <div className="homeStayingGrid">
+            {topStayingRows.map(({ state, work, vehicle, customer }) => (
+              <button key={work.id} onClick={() => openTodayWork(work.id)}>
+                <span><b>{customerName(customer)}</b><small>{last4(vehicle)}　{work.reason}</small></span>
+                <span><b>入庫 {Number(state.inboundDay.slice(5,7))}/{Number(state.inboundDay.slice(8,10))}</b><small>{work.worker_name ? "担当 " + work.worker_name : "担当未設定"}</small></span>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="mobileToday">
