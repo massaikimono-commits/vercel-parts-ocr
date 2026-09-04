@@ -69,6 +69,9 @@ jobs:
       - name: Run photo OCR pass-budget regression
         run: node scripts/photo-ocr-pass-budget-regression.mjs
 
+      - name: Run photo OCR entry guard regression
+        run: node scripts/photo-ocr-entry-guard-regression.mjs
+
       - name: Run parts-slip regression
         run: npm run test:parts
 
