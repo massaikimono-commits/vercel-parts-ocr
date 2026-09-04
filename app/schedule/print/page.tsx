@@ -8,7 +8,6 @@ import { supabase } from "../../supabase";
 import { buildDailyReportPreviewModel } from "../daily-report-print-model";
 import { collectDailyReportMessages, selectDailyReportSecondaryWorks } from "../daily-report-secondary-sections";
 import { dailyReportTimeLabel } from "../print-rules";
-import { DAILY_REPORT_TEMPLATE, dailyReportRowSlots, type DailyReportRegion } from "../daily-report-template";
 
 type Entry = {
   id: string;
@@ -54,12 +53,52 @@ type PreviewEntry = Entry & {
   workCompleted: boolean;
 };
 
+type BodyShopTimelineEntry = {
+  work_order_id: string | null;
+  entry_type: "pickup" | "delivery";
+  starts_at: string;
+};
+
+type PrintRegion = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 const LABEL: Record<Entry["entry_type"], string> = {
   delivery: "納車",
   pickup: "引取",
   customer_visit: "来社",
   onsite_repair: "出張",
 };
+
+// 日報印刷プレビュー専用。共通予定画面へ影響させない。
+const PRINT_LAYOUT = {
+  page: { widthMm: 297, heightMm: 420 },
+  rows: { count: 23, top: 260 / 2482, bottom: 1734 / 2482, groupHeight: 67 / 2482 },
+  regions: {
+    delivery: { x: 77 / 1755, y: 260 / 2482, width: (876 - 77) / 1755, height: (1801 - 260) / 2482 },
+    inbound: { x: 929 / 1755, y: 260 / 2482, width: (1704 - 929) / 1755, height: (1801 - 260) / 2482 },
+    messages: { x: 239 / 1755, y: 1802 / 2482, width: (1142 - 239) / 1755, height: (1935 - 1802) / 2482 },
+    stayingVehicles: { x: 130 / 1755, y: 2037 / 2482, width: (663 - 130) / 1755, height: (2404 - 2037) / 2482 },
+    bodyShopVehicles: { x: 716 / 1755, y: 2037 / 2482, width: (1142 - 716) / 1755, height: (2404 - 2037) / 2482 },
+    plannedDeliveries: { x: 1195 / 1755, y: 1836 / 2482, width: (1704 - 1195) / 1755, height: (2404 - 1836) / 2482 },
+  },
+  columns: {
+    delivery: [266 / 799, 160 / 799, 160 / 799, 213 / 799],
+    inbound: [266 / 775, 160 / 775, 164 / 775, 185 / 775],
+    stayingVehicles: [53 / 533, 160 / 533, 213 / 533, 53 / 533, 54 / 533],
+    bodyShopVehicles: [53 / 426, 160 / 426, 106 / 426, 54 / 426, 53 / 426],
+    plannedDeliveries: [213 / 509, 164 / 509, 132 / 509],
+  },
+  secondaryRows: { stayingVehicles: 11, bodyShopVehicles: 11, plannedDeliveries: 17 },
+  date: {
+    month: { x: 286 / 1755, y: 72 / 2482, width: 42 / 1755, height: 72 / 2482 },
+    day: { x: 407 / 1755, y: 72 / 2482, width: 42 / 1755, height: 72 / 2482 },
+    weekday: { x: 520 / 1755, y: 72 / 2482, width: 42 / 1755, height: 72 / 2482 },
+  },
+} as const;
 
 function jstDay(value = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(value);
