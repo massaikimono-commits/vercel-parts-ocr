@@ -268,51 +268,10 @@ export default function DailyReportPrintPage() {
   const slots = printRowSlots();
   const printedDate = useMemo(() => reportDateParts(day), [day]);
   const messages = useMemo(() => collectDailyReportMessages(entries), [entries]);
-  const deliveryVehicleIds = useMemo(
-    () => new Set(
-      enriched
-        .filter((entry) => entry.entry_type === "delivery" && entry.vehicle_id)
-        .map((entry) => entry.vehicle_id as string),
-    ),
-    [enriched],
+  const businessStates = useMemo(
+    () => classifyVehicleBusinessStates(workOrders, stateEntries, day),
+    [workOrders, stateEntries, day],
   );
-  const secondary = useMemo(
-    () => selectDailyReportSecondaryWorks(workOrders, day, deliveryVehicleIds),
-    [workOrders, day, deliveryVehicleIds],
-  );
-
-  const bodyShopRows = useMemo(() => {
-    const timelineByWork = new Map<string, BodyShopTimelineEntry[]>();
-    for (const event of bodyShopTimeline) {
-      if (!event.work_order_id) continue;
-      const rows = timelineByWork.get(event.work_order_id) || [];
-      rows.push(event);
-      timelineByWork.set(event.work_order_id, rows);
-    }
-
-    const persistent = workOrders.filter((work) => {
-      if (!isBodyShopReason(work.reason) || deliveryVehicleIds.has(work.vehicle_id)) return false;
-      const timeline = timelineByWork.get(work.id) || [];
-      let latestPickup = -Infinity;
-      let latestDelivery = -Infinity;
-      for (const event of timeline) {
-        const at = new Date(event.starts_at).getTime();
-        if (event.entry_type === "pickup") latestPickup = Math.max(latestPickup, at);
-        if (event.entry_type === "delivery") latestDelivery = Math.max(latestDelivery, at);
-      }
-      return Number.isFinite(latestPickup) && latestPickup > latestDelivery;
-    });
-
-    const merged = [...secondary.bodyShopVehicles, ...persistent];
-    const seenVehicleIds = new Set<string>();
-    return merged.filter((work) => {
-      if (deliveryVehicleIds.has(work.vehicle_id) || seenVehicleIds.has(work.vehicle_id)) return false;
-      seenVehicleIds.add(work.vehicle_id);
-      return true;
-    }).sort((a, b) =>
-      (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31")
-    );
-  }, [bodyShopTimeline, deliveryVehicleIds, secondary.bodyShopVehicles, workOrders]);
 
   function customerForVehicle(vehicleId: string) {
     const vehicle = vehicleMap.get(vehicleId);
