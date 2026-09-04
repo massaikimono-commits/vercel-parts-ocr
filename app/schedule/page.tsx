@@ -95,27 +95,25 @@ function timeLabel(entry: ScheduleEntry) {
   return dailyReportTimeLabel(entry);
 }
 
-function dueParts(work: WorkOrder | null) {
-  if (work?.planned_delivery_at) {
-    const d = new Date(work.planned_delivery_at);
-    return {
-      date: new Intl.DateTimeFormat("ja-JP", {
-        timeZone: "Asia/Tokyo",
-        month: "numeric",
-        day: "numeric",
-      }).format(d),
-      time: new Intl.DateTimeFormat("ja-JP", {
-        timeZone: "Asia/Tokyo",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      }).format(d),
-    };
-  }
-  const day = work?.planned_delivery_date || work?.expected_completion_date || "";
-  if (!day) return { date: "", time: "" };
-  const m = day.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return { date: m ? `${Number(m[2])}/${Number(m[3])}` : day, time: "" };
+function dueParts(delivery: BusinessScheduleEntry | null) {
+  if (!delivery) return { date: "", time: "" };
+  const d = new Date(delivery.starts_at);
+  const date = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    month: "numeric",
+    day: "numeric",
+  }).format(d);
+  if (delivery.print_time_mode === "unspecified") return { date, time: "中" };
+  if (delivery.print_time_mode === "morning") return { date, time: "A中" };
+  return {
+    date,
+    time: new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(d),
+  };
 }
 
 function hourInJst(value: string) {
@@ -269,6 +267,16 @@ export default function SchedulePage() {
   const workMap = useMemo(() => new Map(workOrders.map((x) => [x.id, x])), [workOrders]);
   const vehicleMap = useMemo(() => new Map(vehicles.map((x) => [x.id, x])), [vehicles]);
   const customerMap = useMemo(() => new Map(customers.map((x) => [x.id, x])), [customers]);
+  const stateEntriesByWork = useMemo(() => {
+    const map = new Map<string, BusinessScheduleEntry[]>();
+    for (const row of stateEntries) {
+      if (!row.work_order_id) continue;
+      const rows = map.get(row.work_order_id) || [];
+      rows.push(row);
+      map.set(row.work_order_id, rows);
+    }
+    return map;
+  }, [stateEntries]);
 
   const enriched = useMemo(() => entries.map((entry) => {
     const work = entry.work_order_id ? workMap.get(entry.work_order_id) || null : null;
@@ -585,7 +593,12 @@ export default function SchedulePage() {
     const visitLabel = entry.entry_type === "customer_visit" || entry.entry_type === "onsite_repair"
       ? ENTRY_LABEL[entry.entry_type]
       : "";
-    const due = side === "inbound" ? dueParts(work) : { date: "", time: "" };
+    const deliveryEntry = work
+      ? [...(stateEntriesByWork.get(work.id) || [])]
+          .filter((row) => row.entry_type === "delivery")
+          .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0] || null
+      : null;
+    const due = side === "inbound" ? dueParts(deliveryEntry) : { date: "", time: "" };
 
     return (
       <article
