@@ -472,9 +472,32 @@ export default function ScheduleEditPage(){
               <input list="stay-reasons" value={stayReason} onChange={(e)=>setStayReason(e.target.value)} placeholder="例：部品待ち" />
               <datalist id="stay-reasons">{STAY_REASON_SUGGESTIONS.map(x=><option key={x} value={x} />)}</datalist>
             </label>
-            <label>納車予定日<input type="date" value={plannedDeliveryDate} onChange={(e)=>setPlannedDeliveryDate(e.target.value)} /></label>
           </div>
-          <small>候補から選んでも自由入力でも保存できます。</small>
+          {entry.entry_type==="delivery" ? (
+            <div className="deliveryEditNotice">この予定自体が納車予定です。上の「日付・時間」から変更してください。</div>
+          ) : (
+            <div className="deliveryPlan">
+              <label className="deliveryToggle">
+                <input type="checkbox" checked={deliveryEnabled} onChange={(e)=>{setDeliveryEnabled(e.target.checked);resetWarningsForTargetChange();}} />
+                納車予定を登録する
+              </label>
+              {deliveryEnabled && <div className="grid stayGrid">
+                <label>納車予定日
+                  <input type="date" value={deliveryDay} onChange={(e)=>{setDeliveryDay(e.target.value);resetWarningsForTargetChange();}} />
+                </label>
+                <label>納車指定
+                  <select value={deliveryMode} onChange={(e)=>{setDeliveryMode(e.target.value as "unspecified"|"exact");resetWarningsForTargetChange();}}>
+                    <option value="unspecified">中</option>
+                    <option value="exact">時間指定</option>
+                  </select>
+                </label>
+                {deliveryMode==="exact" && <label>納車時間
+                  <input type="time" min="08:30" max="17:30" step="1800" value={deliveryTime} onChange={(e)=>{setDeliveryTime(e.target.value);resetWarningsForTargetChange();}} />
+                </label>}
+              </div>}
+            </div>
+          )}
+          <small>納車予定の正本は schedule_entries の「納車」予定です。「中」も正式な納車予定として扱います。</small>
         </section>}
         {!!warnings.length && <div className="warnings"><b>確認が必要</b>{warnings.map((w,i)=><div key={i}>・{w}</div>)}<button onClick={()=>void save(true)}>警告を確認して変更</button></div>}
         <button className="primary" disabled={busy} onClick={()=>void save(false)}>空きチェックして変更</button>
@@ -494,7 +517,7 @@ export default function ScheduleEditPage(){
     </section>
     <style jsx global>{`
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select,textarea{font:inherit}
-      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:4px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:18px}.targetPreview small{color:#627083;line-height:1.5}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}.cancelOpen{margin-top:12px;width:100%;color:#b42318;border-color:#efb5af}.cancelBox{margin-top:14px;padding:14px;border:1px solid #efb5af;border-radius:14px;background:#fff7f6}.cancelBox p{color:#7a3d37;line-height:1.5}.cancelBox label{display:grid;gap:6px;font-weight:800;color:#7a3d37}.cancelBox textarea{min-height:86px;resize:vertical;border:1px solid #d9a6a0;border-radius:10px;padding:11px;background:#fff}.cancelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.cancelActions .danger{background:#c4322b;border-color:#c4322b;color:#fff}.cancelActions button:disabled{opacity:.5}@media(max-width:600px){.grid{grid-template-columns:1fr}}
+      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:4px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:18px}.targetPreview small{color:#627083;line-height:1.5}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.deliveryPlan{margin-top:12px;padding-top:12px;border-top:1px solid #dbe3ed}.deliveryToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;gap:8px!important;font-weight:900!important;color:#2f5f9f!important}.deliveryToggle input{width:20px;height:20px}.deliveryEditNotice{margin-top:12px;padding:10px 12px;border-radius:10px;background:#eef6ff;color:#45637f;font-weight:700}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}.cancelOpen{margin-top:12px;width:100%;color:#b42318;border-color:#efb5af}.cancelBox{margin-top:14px;padding:14px;border:1px solid #efb5af;border-radius:14px;background:#fff7f6}.cancelBox p{color:#7a3d37;line-height:1.5}.cancelBox label{display:grid;gap:6px;font-weight:800;color:#7a3d37}.cancelBox textarea{min-height:86px;resize:vertical;border:1px solid #d9a6a0;border-radius:10px;padding:11px;background:#fff}.cancelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.cancelActions .danger{background:#c4322b;border-color:#c4322b;color:#fff}.cancelActions button:disabled{opacity:.5}@media(max-width:600px){.grid{grid-template-columns:1fr}}
     `}</style>
   </main>;
 }
