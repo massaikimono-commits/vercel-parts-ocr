@@ -6,8 +6,9 @@ import { safeActionError } from "../../lib/client-security";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
 import { buildDailyReportPreviewModel } from "../daily-report-print-model";
-import { collectDailyReportMessages, selectDailyReportSecondaryWorks } from "../daily-report-secondary-sections";
+import { collectDailyReportMessages } from "../daily-report-secondary-sections";
 import { dailyReportTimeLabel } from "../print-rules";
+import { classifyVehicleBusinessStates, deliveryTimeLabel, type BusinessScheduleEntry, type BusinessVehicleState } from "../business-vehicle-state";
 
 type Entry = {
   id: string;
@@ -51,12 +52,6 @@ type PreviewEntry = Entry & {
   plannedDeliveryDate: string | null;
   expectedCompletionDate: string | null;
   workCompleted: boolean;
-};
-
-type BodyShopTimelineEntry = {
-  work_order_id: string | null;
-  entry_type: "pickup" | "delivery";
-  starts_at: string;
 };
 
 type PrintRegion = {
@@ -173,32 +168,6 @@ function reportDateParts(day: string) {
   };
 }
 
-function isBodyShopReason(reason: string | null | undefined) {
-  const value = (reason || "").trim();
-  return value.includes("板金") || value.includes("鈑金");
-}
-
-function stayDayCountForReport(work: WorkOrder, day: string) {
-  if (!work.checked_in_at) return null;
-  const checkedInDay = jstDay(new Date(work.checked_in_at));
-  const start = new Date(`${checkedInDay}T00:00:00+09:00`).getTime();
-  const reportDay = new Date(`${day}T00:00:00+09:00`).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(reportDay) || reportDay < start) return null;
-  return Math.floor((reportDay - start) / 86400000) + 1;
-}
-
-function workCompletedOnReportDay(work: WorkOrder, day: string) {
-  const { end } = bounds(day);
-  const endMs = new Date(end).getTime();
-  if (work.work_completed_at) {
-    return new Date(work.work_completed_at).getTime() < endMs;
-  }
-  const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
-  const legacyLaterCheckout = endMs < Date.now() && checkedOutAt !== null && checkedOutAt >= endMs;
-  if (legacyLaterCheckout) return false;
-  return work.work_completed || work.status === "completed";
-}
-
 function regionStyle(region: PrintRegion) {
   return {
     left: `${region.x * 100}%`,
@@ -235,7 +204,7 @@ export default function DailyReportPrintPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [bodyShopTimeline, setBodyShopTimeline] = useState<BodyShopTimelineEntry[]>([]);
+  const [stateEntries, setStateEntries] = useState<BusinessScheduleEntry[]>([]);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [message, setMessage] = useState("日報データを読み込みます。");
 
