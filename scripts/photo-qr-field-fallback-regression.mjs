@@ -32,4 +32,9 @@ expect(
   /fuel:\s*"燃料の種類"/.test(source),
 );
 
+expect(
+  "numeric profile OCR requires agreement from both passes",
+  /unique\.length === 1 && \(categorical \|\| values\.length >= 2\)/.test(source),
+);
+
 console.log("photo QR field fallback regression: ok");
