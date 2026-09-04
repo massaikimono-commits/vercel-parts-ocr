@@ -72,6 +72,9 @@ jobs:
       - name: Run photo OCR entry guard regression
         run: node scripts/photo-ocr-entry-guard-regression.mjs
 
+      - name: Run photo QR field fallback regression
+        run: node scripts/photo-qr-field-fallback-regression.mjs
+
       - name: Run parts-slip regression
         run: npm run test:parts
 
