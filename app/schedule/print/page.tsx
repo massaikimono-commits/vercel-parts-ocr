@@ -213,36 +213,20 @@ export default function DailyReportPrintPage() {
   async function load() {
     const { start, end } = bounds(day);
     try {
-      const [scheduleRes, vehicleRes, customerRes, workRes, settingRes] = await Promise.all([
+      const [scheduleRes, stateEntryRes, vehicleRes, customerRes, workRes, settingRes] = await Promise.all([
         supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,completed,notes,print_time_mode,print_time_label_override").gte("starts_at", start).lt("starts_at", end),
+        supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode").in("entry_type", ["pickup", "customer_visit", "delivery"]),
         supabase.from("vehicles").select("id,customer_id,registration_number,registration_number_last4"),
         supabase.from("customers").select("id,name,company_name,schedule_display_name"),
-        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,outsource_vendor_name,expected_completion_date,planned_delivery_at,planned_delivery_date,stay_reason,checked_in_at,checked_out_at,status,work_completed,work_completed_at"),
+        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,outsource_vendor_name,expected_completion_date,planned_delivery_at,planned_delivery_date,stay_reason,checked_in_at,checked_out_at,status,work_completed,work_completed_at").neq("status", "cancelled"),
         supabase.from("app_settings").select("setting_value").eq("setting_key", "daily_report_template").maybeSingle(),
       ]);
-      for (const res of [scheduleRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
-      const loadedWorks = (workRes.data || []) as WorkOrder[];
+      for (const res of [scheduleRes, stateEntryRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
       setEntries((scheduleRes.data || []) as Entry[]);
+      setStateEntries((stateEntryRes.data || []) as BusinessScheduleEntry[]);
       setVehicles((vehicleRes.data || []) as Vehicle[]);
       setCustomers((customerRes.data || []) as Customer[]);
-      setWorkOrders(loadedWorks);
-
-      const bodyShopWorkIds = loadedWorks
-        .filter((work) => isBodyShopReason(work.reason))
-        .map((work) => work.id);
-      if (bodyShopWorkIds.length) {
-        const timelineRes = await supabase
-          .from("schedule_entries")
-          .select("work_order_id,entry_type,starts_at")
-          .in("work_order_id", bodyShopWorkIds)
-          .in("entry_type", ["pickup", "delivery"])
-          .lt("starts_at", end)
-          .order("starts_at", { ascending: true });
-        if (timelineRes.error) throw timelineRes.error;
-        setBodyShopTimeline((timelineRes.data || []) as BodyShopTimelineEntry[]);
-      } else {
-        setBodyShopTimeline([]);
-      }
+      setWorkOrders((workRes.data || []) as WorkOrder[]);
 
       const value = settingRes.data?.setting_value as any;
       setBackgroundUrl(typeof value?.backgroundUrl === "string" && value.backgroundUrl ? value.backgroundUrl : null);
@@ -274,7 +258,7 @@ export default function DailyReportPrintPage() {
       plannedDeliveryAt: work?.planned_delivery_at || null,
       plannedDeliveryDate: work?.planned_delivery_date || null,
       expectedCompletionDate: work?.expected_completion_date || null,
-      workCompleted: work ? workCompletedOnReportDay(work, day) : false,
+      workCompleted: Boolean(work?.work_completed || work?.status === "completed"),
     };
   }), [entries, vehicleMap, customerMap, workMap]);
 
