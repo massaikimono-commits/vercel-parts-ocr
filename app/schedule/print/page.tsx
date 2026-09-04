@@ -8,6 +8,7 @@ import { supabase } from "../../supabase";
 import { buildDailyReportPreviewModel } from "../daily-report-print-model";
 import { collectDailyReportMessages } from "../daily-report-secondary-sections";
 import { dailyReportTimeLabel } from "../print-rules";
+import { dailyReportWorkCode } from "../daily-report-work-code";
 import { classifyVehicleBusinessStates, deliveryTimeLabel, type BusinessScheduleEntry, type BusinessVehicleState } from "../business-vehicle-state";
 
 type Entry = {
@@ -29,6 +30,7 @@ type WorkOrder = {
   id: string;
   vehicle_id: string;
   reason: string;
+  inspection_schedule_type: "schedule" | "legal_6m" | "legal_12m" | null;
   worker_name: string | null;
   outsource_vendor_name: string | null;
   expected_completion_date: string | null;
@@ -41,6 +43,7 @@ type PreviewEntry = Entry & {
   customerName: string;
   last4: string;
   reason: string;
+  inspectionScheduleType: "schedule" | "legal_6m" | "legal_12m" | null;
   workerName: string;
   outsourceVendorName: string;
   deliveryEntry: BusinessScheduleEntry | null;
@@ -204,7 +207,7 @@ export default function DailyReportPrintPage() {
         supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode").in("entry_type", ["pickup", "customer_visit", "delivery"]),
         supabase.from("vehicles").select("id,customer_id,registration_number,registration_number_last4"),
         supabase.from("customers").select("id,name,company_name,schedule_display_name"),
-        supabase.from("work_orders").select("id,vehicle_id,reason,worker_name,outsource_vendor_name,expected_completion_date,stay_reason,status,work_completed").neq("status", "cancelled"),
+        supabase.from("work_orders").select("id,vehicle_id,reason,inspection_schedule_type,worker_name,outsource_vendor_name,expected_completion_date,stay_reason,status,work_completed").neq("status", "cancelled"),
         supabase.from("app_settings").select("setting_value").eq("setting_key", "daily_report_template").maybeSingle(),
       ]);
       for (const res of [scheduleRes, stateEntryRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
@@ -254,6 +257,7 @@ export default function DailyReportPrintPage() {
         return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
       })(),
       reason: work?.reason || "",
+      inspectionScheduleType: work?.inspection_schedule_type || null,
       workerName: work?.worker_name || "",
       outsourceVendorName: work?.outsource_vendor_name || "",
       deliveryEntry,
@@ -292,7 +296,7 @@ export default function DailyReportPrintPage() {
         <div className="reportCustomer">{entry.customerName}</div>
         <div className="reportVehicle">
           <b>{entry.last4}</b>
-          <small>{entry.reason || ""}</small>
+          <small>{dailyReportWorkCode(entry.reason, entry.inspectionScheduleType)}</small>
         </div>
         <div className="reportTime">{dailyReportTimeLabel(entry)}</div>
         <div className="reportProgress" aria-hidden="true" />
@@ -308,7 +312,7 @@ export default function DailyReportPrintPage() {
         <div className="reportCustomer">{entry.customerName}</div>
         <div className="reportVehicle">
           <b>{entry.last4}</b>
-          <small>{entry.reason || ""}</small>
+          <small>{dailyReportWorkCode(entry.reason, entry.inspectionScheduleType)}</small>
         </div>
         <div className="reportTime">
           {(entry.entry_type === "customer_visit" || entry.entry_type === "onsite_repair") && (
@@ -344,7 +348,7 @@ export default function DailyReportPrintPage() {
       >
         <span>{work.worker_name || ""}</span>
         <span>{customerForVehicle(work.vehicle_id)}</span>
-        <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{work.reason || ""}</small></span>
+        <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{dailyReportWorkCode(work.reason, work.inspection_schedule_type)}</small></span>
         <span>{String(Number(state.inboundDay.slice(8, 10)))}</span>
         <span>{shortDay(work.expected_completion_date)}</span>
       </div>
@@ -384,7 +388,7 @@ export default function DailyReportPrintPage() {
         )}
       >
         <span>{customerForVehicle(work.vehicle_id)}</span>
-        <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{work.reason || ""}</small></span>
+        <span className="vehicleWork"><b>{last4ForVehicle(work.vehicle_id)}</b><small>{dailyReportWorkCode(work.reason, work.inspection_schedule_type)}</small></span>
         <span className="secondaryDue"><b>{deliveryDay}</b><small>{deliveryTimeLabel(state.deliveryEntry)}</small></span>
       </div>
     );
