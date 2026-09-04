@@ -222,6 +222,11 @@ assert(home.includes("dailyReportTimeLabel(entry)"), "home schedule cards must s
 assert(home.includes("print_time_mode,print_time_label_override"), "home schedule query must load flexible time metadata");
 assert(schedule.includes("focusWorkId") && schedule.includes("data-work-id"), "daily schedule must support focused work navigation");
 assert(schedule.includes("focusedWork"), "focused work must be visually obvious");
+assert(schedule.includes('type ViewFilter = "all" | "notStarted" | "inProgress" | "urgent" | "unassigned"'), "daily schedule must keep quick work-state filters explicit");
+assert(schedule.includes('aria-label="予定の表示絞り込み"') && schedule.includes("担当未設定"), "daily schedule must expose quick filters for unfinished work");
+assert(schedule.includes("filteredMorning") && schedule.includes("filteredAfternoon") && schedule.includes("filteredStayingVehicles"), "daily schedule filters must apply to scheduled and staying vehicles");
+assert(schedule.includes("画面表示のみ絞り込み中"), "daily schedule must state that quick filters affect screen display only");
+assert(schedule.includes('className="viewFilters noPrint"'), "daily schedule quick filters must never alter printed output");
 assert(schedule.includes('pickup: ""'), "daily schedule must omit the basic pickup label");
 assert(schedule.includes('onsite_repair: "出張"'), "daily schedule must show onsite work as 出張");
 assert(schedule.includes('entry.entry_type === "onsite_repair"'), "only onsite schedules may keep the standalone schedule completion control");
