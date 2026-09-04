@@ -26,7 +26,7 @@ assert.doesNotMatch(printPage, /legal_3m/, "日報側にもlegal_3mを追加し�
 assert.match(printPage, /\.reportVehicle small\{[^}]*color:#000/, "上部の入庫要因コードは黒文字");
 assert.match(printPage, /\.secondaryRow \.vehicleWork small\{[^}]*position:absolute;left:67%;top:0;width:29%;height:50%/, "滞留・納車予定のコードは車番を動かさず同じ行の既存括弧位置へ重ねる");
 assert.match(printPage, /<span className="vehicleWork"><b>\{last4ForVehicle\(work\.vehicle_id\)\}<\/b><small>\{dailyReportWorkCode/, "下部は車番とコードだけを出しアプリ側で括弧を描画しない");
-assert.doesNotMatch(printPage, /<small>\([^<]*dailyReportWorkCode|dailyReportWorkCode\([^\n]+\)\}/, "コード文字列へ新しい括弧を追加しない");
+assert.doesNotMatch(printPage, /[（(]\s*\{dailyReportWorkCode|dailyReportWorkCode\([^)]*\)\}\s*[）)]/, "コード文字列へ新しい括弧を追加しない");
 assert.match(printPage, /entry\.entry_type === "customer_visit" && <span className="reportVisitVehicleLabel">来社<\/span>/, "通常来社は車番左側へ来社と表示");
 assert.match(printPage, /entry\.entry_type === "onsite_repair" && \(/, "出張の既存時間側ラベルは維持");
 assert.doesNotMatch(newPage, /作業待ち|来社待ち/, "作業待ちはDB対応まで予定登録へ追加しない");
