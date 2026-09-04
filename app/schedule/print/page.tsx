@@ -67,9 +67,20 @@ function jstHour(value: string) {
   return Number(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Tokyo", hour: "2-digit", hour12: false }).format(new Date(value)));
 }
 
-function jstTime(value: string | null) {
-  if (!value) return "";
-  return new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
+function jstDayNumber(value: string) {
+  return Number(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Tokyo", day: "numeric" }).format(new Date(value)));
+}
+
+function jstDeadlineTime(value: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(value));
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
+  return minute ? `${hour}時${minute}分` : `${hour}時`;
 }
 
 function stayDayCountForReport(work: WorkOrder, day: string) {
@@ -163,7 +174,12 @@ export default function DailyReportPrintPage() {
   const model = useMemo(() => buildDailyReportPreviewModel(morning, afternoon), [morning, afternoon]);
   const slots = dailyReportRowSlots();
   const messages = useMemo(() => collectDailyReportMessages(entries), [entries]);
-  const secondary = useMemo(() => selectDailyReportSecondaryWorks(workOrders, day), [workOrders, day]);
+  const secondary = useMemo(() => selectDailyReportSecondaryWorks(workOrders, day, entries), [workOrders, day, entries]);
+  const deliveryEntryMap = useMemo(() => new Map(
+    entries
+      .filter((entry) => entry.entry_type === "delivery" && entry.work_order_id)
+      .map((entry) => [String(entry.work_order_id), entry]),
+  ), [entries]);
 
   function customerForVehicle(vehicleId: string) {
     const vehicle = vehicleMap.get(vehicleId);
@@ -176,18 +192,61 @@ export default function DailyReportPrintPage() {
     return vehicle?.registration_number_last4 || vehicle?.registration_number?.match(/(\d{4})(?!.*\d)/)?.[1] || "----";
   }
 
-  function cell(entry: PreviewEntry | null) {
-    if (!entry) return null;
-    return <div className="entry"><b>{dailyReportTimeLabel(entry)} {entry.customerName}</b><span>{entry.last4} {entry.reason} {LABEL[entry.entry_type]}</span>{entry.workCompleted && <strong>○</strong>}</div>;
+  function deliveryDeadlineParts(work: WorkOrder | null) {
+    if (!work) return null;
+    const deliveryEntry = deliveryEntryMap.get(work.id);
+    if (deliveryEntry) {
+      return {
+        day: String(jstDayNumber(deliveryEntry.starts_at)),
+        time: deliveryEntry.print_time_mode === "exact" ? jstDeadlineTime(deliveryEntry.starts_at) : "中",
+      };
+    }
+    if (work.planned_delivery_at) {
+      return {
+        day: String(jstDayNumber(work.planned_delivery_at)),
+        time: jstDeadlineTime(work.planned_delivery_at),
+      };
+    }
+    if (work.planned_delivery_date) {
+      return { day: String(Number(work.planned_delivery_date.slice(-2))), time: "中" };
+    }
+    return null;
   }
 
-  function workLine(work: WorkOrder, prefix = "") {
+  function deliveryDeadlineLabel(work: WorkOrder) {
+    const parts = deliveryDeadlineParts(work);
+    return parts ? `${parts.day} ${parts.time}` : "";
+  }
+
+  function cell(entry: PreviewEntry | null) {
+    if (!entry) return null;
+    const work = entry.work_order_id ? workMap.get(entry.work_order_id) || null : null;
+    const deadline = entry.entry_type === "delivery" ? null : deliveryDeadlineParts(work);
+    return <div className="entry">
+      <b className="entryName">{entry.customerName}</b>
+      <span className="entryTimeText">{dailyReportTimeLabel(entry)}</span>
+      <span className="entryPlate">{entry.last4}</span>
+      <span className="entryReason">{entry.reason}</span>
+      <span className="entryKind">{LABEL[entry.entry_type]}</span>
+      {deadline && <span className="entryDeadline"><b>{deadline.day}</b><em>{deadline.time}</em></span>}
+      {entry.workCompleted && <strong className="entryDone">○</strong>}
+    </div>;
+  }
+
+  function secondaryWorkItem(work: WorkOrder, kind: "staying" | "bodyShop" | "planned") {
     const stayDays = stayDayCountForReport(work, day);
-    const stayAge = stayDays ? ` 入庫:${stayDays}日目` : "";
-    const completion = work.expected_completion_date ? ` 完成:${work.expected_completion_date}` : "";
-    const stay = work.stay_reason ? ` ${work.stay_reason}` : "";
-    const deliveryDay = work.planned_delivery_date ? ` 納車:${work.planned_delivery_date}` : "";
-    return `${prefix}${customerForVehicle(work.vehicle_id)} ${last4ForVehicle(work.vehicle_id)} ${work.reason}${stayAge}${stay}${completion}${deliveryDay}`.trim();
+    const detail = [
+      last4ForVehicle(work.vehicle_id),
+      work.reason,
+      stayDays ? `入庫${stayDays}日目` : "",
+      work.stay_reason || "",
+    ].filter(Boolean).join(" ");
+    const deadline = deliveryDeadlineLabel(work);
+    return <div className={`secondaryItem ${kind}`} key={work.id}>
+      <b className="secondaryName">{customerForVehicle(work.vehicle_id)}</b>
+      <span className="secondaryDetail">{detail}</span>
+      {deadline && <strong className="secondaryDeadline">{deadline}</strong>}
+    </div>;
   }
 
   return (
@@ -217,20 +276,20 @@ export default function DailyReportPrintPage() {
           {messages.map((note, index) => <div key={`${note}-${index}`}>{note}</div>)}
         </div>
         <div className="secondary staying" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.stayingVehicles)}>
-          {secondary.stayingVehicles.map((work) => <div key={work.id}>{workLine(work)}</div>)}
+          {secondary.stayingVehicles.map((work) => secondaryWorkItem(work, "staying"))}
         </div>
         <div className="secondary bodyShop" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.bodyShopVehicles)}>
-          {secondary.bodyShopVehicles.map((work) => <div key={work.id}>{workLine(work)}</div>)}
+          {secondary.bodyShopVehicles.map((work) => secondaryWorkItem(work, "bodyShop"))}
         </div>
         <div className="secondary planned" style={regionStyle(DAILY_REPORT_TEMPLATE.regions.plannedDeliveries)}>
-          {secondary.plannedDeliveries.map((work) => <div key={work.id}>{workLine(work, `${jstTime(work.planned_delivery_at)} `)}</div>)}
+          {secondary.plannedDeliveries.map((work) => secondaryWorkItem(work, "planned"))}
         </div>
 
         {!backgroundUrl && <div className="placeholder">既存「日報用紙」背景待ち<br /><small>配置確認専用プレビュー</small></div>}
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:2.5%;z-index:2}.delivery,.inbound{position:absolute;height:100%;display:flex;align-items:center;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.entry{width:100%;display:grid;grid-template-columns:1fr auto;column-gap:8px;align-items:center;white-space:nowrap;font-size:clamp(7px,1.05vw,13px)}.entry b{overflow:hidden;text-overflow:ellipsis}.entry span{grid-column:1;color:#4b5563;font-size:.8em;overflow:hidden;text-overflow:ellipsis}.entry strong{grid-column:2;grid-row:1/3;font-size:1.4em}.secondary{position:absolute;z-index:2;overflow:hidden;font-size:clamp(6px,.8vw,10px);line-height:1.3;padding:2px}.secondary>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none}.date{font-size:3.2mm}.entry{font-size:2.5mm}.secondary{font-size:2.1mm;padding:.4mm}}`}</style>
+        *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#182235;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}.toolbar{max-width:1100px;margin:16px auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar button,.toolbar input{border:1px solid #cbd5e1;background:white;border-radius:10px;padding:9px 12px}.toolbar button{font-weight:800;color:#2367d1}.toolbar button:disabled{opacity:.45;cursor:not-allowed}.warning,.overflow{max-width:1100px;margin:10px auto;padding:12px 14px;border-radius:12px;background:#fff8dd;border:1px solid #ead486}.overflow{background:#fff0ee;border-color:#efb4ad}.sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420;margin:18px auto 60px;background:white;box-shadow:0 10px 35px #0002;overflow:hidden}.background{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}.date{position:absolute;left:${DAILY_REPORT_TEMPLATE.regions.date.x * 100}%;top:${DAILY_REPORT_TEMPLATE.regions.date.y * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.date.width * 100}%;height:${DAILY_REPORT_TEMPLATE.regions.date.height * 100}%;font-size:1.4vw;font-weight:800;display:flex;align-items:center;z-index:2}.row{position:absolute;left:0;width:100%;height:2.5%;z-index:2}.delivery,.inbound{position:absolute;height:100%;overflow:hidden}.delivery{left:${DAILY_REPORT_TEMPLATE.regions.delivery.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.delivery.width * 100}%}.inbound{left:${DAILY_REPORT_TEMPLATE.regions.inbound.x * 100}%;width:${DAILY_REPORT_TEMPLATE.regions.inbound.width * 100}%}.entry{position:relative;width:100%;height:100%;white-space:nowrap;font-size:clamp(7px,1.05vw,13px)}.entryName{position:absolute;left:18%;top:0;width:56%;height:48%;display:flex;align-items:flex-start;overflow:hidden;text-overflow:ellipsis;font-weight:900;line-height:1}.entryTimeText,.entryPlate,.entryReason,.entryKind{position:absolute;bottom:0;height:48%;display:flex;align-items:flex-end;overflow:hidden;text-overflow:ellipsis;color:#374151;font-size:.78em;line-height:1}.entryTimeText{left:0;width:16%;font-weight:800}.entryPlate{left:18%;width:17%;font-weight:800}.entryReason{left:38%;width:24%;justify-content:center;font-weight:900}.entryKind{left:64%;width:12%;justify-content:center;font-weight:800}.entryDeadline{position:absolute;right:1%;top:0;width:20%;height:100%;display:grid;grid-template-rows:1fr 1fr;align-items:center;justify-items:center;line-height:1;font-size:.76em;font-style:normal}.entryDeadline b,.entryDeadline em{font:inherit;font-weight:900;font-style:normal}.entryDone{position:absolute;right:0;top:0;font-size:1.3em;line-height:1}.secondary{position:absolute;z-index:2;overflow:hidden;font-size:clamp(6px,.8vw,10px);line-height:1.15;padding:2px}.secondaryItem{position:relative;min-height:2.45em;padding:0 1px 1px;overflow:hidden}.secondaryName{display:block;height:1.12em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:900}.secondaryDetail{display:block;height:1.05em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#4b5563}.secondaryDeadline{position:absolute;right:1px;bottom:0;background:#fff;padding-left:3px;font-weight:900}.planned .secondaryItem{min-height:2.5em}.planned .secondaryName{height:1.18em}.planned .secondaryDeadline{left:0;right:auto;bottom:0;padding:0;font-size:1.05em}.placeholder{position:absolute;inset:8%;display:flex;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:28px;border:2px dashed #cbd5e1;pointer-events:none}.placeholder small{font-size:16px}@page{size:A3 portrait;margin:0}@media print{body{background:white}.noPrint{display:none!important}.sheet{width:297mm;height:420mm;margin:0;box-shadow:none}.date{font-size:3.2mm}.entry{font-size:2.5mm}.secondary{font-size:2.1mm;padding:.4mm}.entryName{top:.15mm}.entryReason{font-size:2.05mm}.entryDeadline{font-size:1.95mm}.secondaryName{font-size:2.2mm}.secondaryDeadline{font-size:2.1mm}}`}</style>
     </main>
   );
 }

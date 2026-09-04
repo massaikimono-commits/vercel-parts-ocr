@@ -1,5 +1,8 @@
 export type DailyReportSecondaryEntry = {
   notes?: string | null;
+  vehicle_id?: string | null;
+  work_order_id?: string | null;
+  entry_type?: "delivery" | "pickup" | "customer_visit" | "onsite_repair";
 };
 
 export type DailyReportSecondaryWork = {
@@ -13,6 +16,7 @@ export type DailyReportSecondaryWork = {
   checked_in_at?: string | null;
   checked_out_at?: string | null;
   planned_delivery_at?: string | null;
+  planned_delivery_date?: string | null;
   expected_completion_date?: string | null;
 };
 
@@ -73,14 +77,37 @@ export function collectDailyReportMessages(entries: DailyReportSecondaryEntry[])
   return messages;
 }
 
-export function selectDailyReportSecondaryWorks<T extends DailyReportSecondaryWork>(works: T[], day: string) {
+export function selectDailyReportSecondaryWorks<T extends DailyReportSecondaryWork>(
+  works: T[],
+  day: string,
+  entries: DailyReportSecondaryEntry[] = [],
+) {
   const { start, end } = dayBoundsJst(day);
   const active = works.filter((work) => isActiveWorkshopWork(work, end));
-  const bodyShopVehicleIds = new Set(active.filter((work) => isBodyShopReason(work.reason)).map((work) => work.vehicle_id));
+  const scheduledInboundWorkIds = new Set(
+    entries
+      .filter((entry) => entry.entry_type !== "delivery" && entry.work_order_id)
+      .map((entry) => String(entry.work_order_id)),
+  );
+  const deliveryVehicleIds = new Set(
+    entries
+      .filter((entry) => entry.entry_type === "delivery" && entry.vehicle_id)
+      .map((entry) => String(entry.vehicle_id)),
+  );
+  const activeBodyShopVehicleIds = new Set(
+    active.filter((work) => isBodyShopReason(work.reason)).map((work) => work.vehicle_id),
+  );
+  const bodyShopVehicleIds = new Set(
+    works
+      .filter((work) => isBodyShopReason(work.reason))
+      .filter((work) => activeBodyShopVehicleIds.has(work.vehicle_id) || scheduledInboundWorkIds.has(work.id))
+      .map((work) => work.vehicle_id),
+  );
 
   const bodyShopVehicles = uniqueByVehicle(
-    active
+    works
       .filter((work) => bodyShopVehicleIds.has(work.vehicle_id))
+      .filter((work) => !deliveryVehicleIds.has(work.vehicle_id))
       .sort((a, b) => (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31")),
   );
 
@@ -93,13 +120,20 @@ export function selectDailyReportSecondaryWorks<T extends DailyReportSecondaryWo
   const plannedDeliveries = uniqueByVehicle(
     works
       .filter((work) => {
-        if (!work.planned_delivery_at || work.status === "cancelled") return false;
+        if ((!work.planned_delivery_at && !work.planned_delivery_date) || work.status === "cancelled") return false;
         const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
         if (checkedOutAt !== null && checkedOutAt < end) return false;
-        const value = new Date(work.planned_delivery_at).getTime();
-        return value >= start && value < end;
+        if (work.planned_delivery_at) {
+          const value = new Date(work.planned_delivery_at).getTime();
+          return value >= start && value < end;
+        }
+        return work.planned_delivery_date === day;
       })
-      .sort((a, b) => new Date(a.planned_delivery_at || 0).getTime() - new Date(b.planned_delivery_at || 0).getTime()),
+      .sort((a, b) => {
+        const av = a.planned_delivery_at ? new Date(a.planned_delivery_at).getTime() : start;
+        const bv = b.planned_delivery_at ? new Date(b.planned_delivery_at).getTime() : start;
+        return av - bv;
+      }),
   );
 
   return { stayingVehicles, bodyShopVehicles, plannedDeliveries };

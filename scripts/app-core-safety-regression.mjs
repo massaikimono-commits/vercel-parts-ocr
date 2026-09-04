@@ -172,7 +172,12 @@ assert(!home.includes('href="/work-complete"') && !home.includes('href="/deliver
 assert(schedule.includes("work_completed_at"), "daily schedule must evaluate completion by selected day");
 assert(schedule.includes("checkedOutAt !== null && checkedOutAt <= endOfDay"), "historical daily schedule must keep later checkouts");
 assert(reportPrint.includes("workCompletedOnReportDay"), "daily report completion mark must use selected-day semantics");
+assert(reportPrint.includes('className="entryName"') && reportPrint.includes('className="entryReason"'), "daily report rows must keep customer names high and print intake reason in its dedicated form field");
+assert(reportPrint.includes('className="entryDeadline"') && reportPrint.includes("deliveryDeadlineParts"), "inbound daily-report rows must use the original two-line deadline area");
+assert(reportPrint.includes('time: "中"') && reportPrint.includes("jstDeadlineTime"), "daily report deadlines must render day + exact hour or day + 中 without a year");
+assert(reportPrint.includes("selectDailyReportSecondaryWorks(workOrders, day, entries)"), "daily report body-shop selection must know same-day inbound/delivery entries");
 assert(secondary.includes("work_completed_at"), "daily report secondary sections must use completion timestamp");
+assert(secondary.includes("scheduledInboundWorkIds") && secondary.includes("deliveryVehicleIds"), "daily report body-shop section must allow inbound+body-shop but exclude delivery+body-shop");
 assert(loaners.includes('supabase.rpc("set_loaner_vehicle_operational_status"'), "loaner operational status must use guarded RPC");
 assert(loaners.includes('supabase.rpc("rental_company_cancellation_queue"'), "loaner board must load the rental-company cancellation queue");
 assert(loaners.includes('supabase.rpc("finalize_rental_company_cancellation"'), "loaner board must expose the existing rental cancellation finalizer");

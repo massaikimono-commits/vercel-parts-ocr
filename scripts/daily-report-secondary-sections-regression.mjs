@@ -7,9 +7,14 @@ assert.match(source, /collectDailyReportMessages/, "伝達事項は既存予定�
 assert.match(source, /normalized\.includes\("板金"\)/, "板金表記の車両を鈑金車両欄へ分類する");
 assert.match(source, /normalized\.includes\("鈑金"\)/, "鈑金表記の車両も鈑金車両欄へ分類する");
 assert.match(source, /bodyShopVehicleIds/, "同一車両に一般整備と鈑金作業があっても鈑金車両欄を優先する");
+assert.match(source, /scheduledInboundWorkIds/, "当日の引取・来社・出張予定に紐づく板金作業は入庫前でも板金車両欄へ出す");
+assert.match(source, /entry\.entry_type !== "delivery"/, "板金車両欄へ追加する当日予定は納車以外だけを対象にする");
+assert.match(source, /deliveryVehicleIds/, "当日の納車欄へ出る車両を板金車両欄の除外候補として保持する");
+assert.match(source, /!deliveryVehicleIds\.has\(work\.vehicle_id\)/, "納車欄に表示される板金車両は板金車両欄から除外する");
 assert.match(source, /uniqueByVehicle/, "滞留・鈑金・納車予定は車両単位で重複表示しない");
 assert.match(source, /!bodyShopVehicleIds\.has\(work\.vehicle_id\)/, "鈑金車両を一般の滞留車両欄へ重複表示しない");
 assert.match(source, /planned_delivery_at/, "納車予定車両は既存planned_delivery_atを再利用する");
+assert.match(source, /planned_delivery_date/, "時刻未定の納期は既存planned_delivery_dateも利用する");
 assert.match(source, /checkedOutAt !== null && checkedOutAt < end/, "選択日中までに出庫済みの車両を納車予定欄へ残さない");
 assert.match(source, /const checkedOutAt = work\.checked_out_at \? new Date\(work\.checked_out_at\)\.getTime\(\) : null/, "後日出庫は時刻比較で判定する");
 assert.match(source, /work\.status === "cancelled"/, "キャンセル済みデータを帳票欄へ出さない");
