@@ -2,65 +2,6 @@ export type DailyReportSecondaryEntry = {
   notes?: string | null;
 };
 
-export type DailyReportSecondaryWork = {
-  id: string;
-  vehicle_id: string;
-  reason: string;
-  status: string;
-  work_completed: boolean;
-  work_completed_at?: string | null;
-  scheduled_at?: string | null;
-  checked_in_at?: string | null;
-  checked_out_at?: string | null;
-  planned_delivery_at?: string | null;
-  expected_completion_date?: string | null;
-};
-
-function dayBoundsJst(day: string) {
-  const start = new Date(`${day}T00:00:00+09:00`);
-  return {
-    start: start.getTime(),
-    end: start.getTime() + 24 * 60 * 60 * 1000,
-  };
-}
-
-function isActiveWorkshopWork(work: DailyReportSecondaryWork, endOfDay: number) {
-  if (work.status === "cancelled") return false;
-
-  const activeFrom = work.checked_in_at || work.scheduled_at;
-  const active = Boolean(work.checked_in_at) || work.status === "in_progress" || work.status === "completed";
-  if (!active || (activeFrom && new Date(activeFrom).getTime() >= endOfDay)) return false;
-
-  // Evaluate checkout and completion as they stood at the selected day's end.
-  // Later checkout/completion must not erase a vehicle from an older daily report.
-  const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
-  if (checkedOutAt !== null && checkedOutAt < endOfDay) return false;
-
-  if (work.work_completed_at) {
-    if (new Date(work.work_completed_at).getTime() < endOfDay) return false;
-  } else if (work.work_completed || work.status === "completed") {
-    const isHistoricalDay = endOfDay < Date.now();
-    const legacyLaterCheckout = isHistoricalDay && checkedOutAt !== null && checkedOutAt >= endOfDay;
-    if (!legacyLaterCheckout) return false;
-  }
-
-  return true;
-}
-
-function isBodyShopReason(reason: string) {
-  const normalized = reason.trim();
-  return normalized.includes("板金") || normalized.includes("鈑金");
-}
-
-function uniqueByVehicle<T extends DailyReportSecondaryWork>(works: T[]) {
-  const seen = new Set<string>();
-  return works.filter((work) => {
-    if (seen.has(work.vehicle_id)) return false;
-    seen.add(work.vehicle_id);
-    return true;
-  });
-}
-
 export function collectDailyReportMessages(entries: DailyReportSecondaryEntry[]) {
   const seen = new Set<string>();
   const messages: string[] = [];
@@ -71,44 +12,4 @@ export function collectDailyReportMessages(entries: DailyReportSecondaryEntry[])
     messages.push(note);
   }
   return messages;
-}
-
-export function selectDailyReportSecondaryWorks<T extends DailyReportSecondaryWork>(
-  works: T[],
-  day: string,
-  deliveryVehicleIds: ReadonlySet<string> = new Set(),
-) {
-  const { start, end } = dayBoundsJst(day);
-  const active = works.filter((work) => isActiveWorkshopWork(work, end));
-  const bodyShopVehicleIds = new Set(active.filter((work) => isBodyShopReason(work.reason)).map((work) => work.vehicle_id));
-
-  const bodyShopVehicles = uniqueByVehicle(
-    active
-      // 引取欄との重複は許可する。
-      // ただし同じ車両が当日の「納車」欄に載ったら、下部の板金車両欄からは外す。
-      .filter((work) => bodyShopVehicleIds.has(work.vehicle_id) && !deliveryVehicleIds.has(work.vehicle_id))
-      .sort((a, b) => (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31")),
-  );
-
-  const stayingVehicles = uniqueByVehicle(
-    active
-      .filter((work) => !bodyShopVehicleIds.has(work.vehicle_id))
-      .sort((a, b) => (a.expected_completion_date || "9999-12-31").localeCompare(b.expected_completion_date || "9999-12-31")),
-  );
-
-  const plannedDeliveries = uniqueByVehicle(
-    works
-      .filter((work) => {
-        if (!work.planned_delivery_at || work.status === "cancelled") return false;
-        const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
-        if (checkedOutAt !== null && checkedOutAt < end) return false;
-        const value = new Date(work.planned_delivery_at).getTime();
-        // 当日の納車は上部の「納車」欄に出るため、右下の
-        // 「納車予定車両」欄は翌日以降だけを対象にする。
-        return value >= end;
-      })
-      .sort((a, b) => new Date(a.planned_delivery_at || 0).getTime() - new Date(b.planned_delivery_at || 0).getTime()),
-  );
-
-  return { stayingVehicles, bodyShopVehicles, plannedDeliveries };
 }
