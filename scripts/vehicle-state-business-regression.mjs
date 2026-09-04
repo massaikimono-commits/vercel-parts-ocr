@@ -3,6 +3,9 @@ import fs from "node:fs";
 import ts from "typescript";
 
 const source = fs.readFileSync(new URL("../app/schedule/business-vehicle-state.ts", import.meta.url), "utf8");
+const daySource = fs.readFileSync(new URL("../app/schedule/page.tsx", import.meta.url), "utf8");
+const printSource = fs.readFileSync(new URL("../app/schedule/print/page.tsx", import.meta.url), "utf8");
+const homeSource = fs.readFileSync(new URL("../app/home-dashboard.tsx", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -94,5 +97,12 @@ const entry = (id, workId, type, day, mode = "unspecified") => ({
   const rows = [entry("G-in", "G", "pickup", "2026-08-31")];
   assert.equal(mod.classifyVehicleBusinessStates(works, rows, "2026-09-01").stayingVehicles.length, 1);
 }
+
+assert.doesNotMatch(source, /checked_in_at|checked_out_at|delivery_completed|planned_delivery_at|planned_delivery_date|work_completed/, "共通業務判定は旧入庫/完了/補助納車列を参照しない");
+assert.match(daySource, /classifyVehicleBusinessStates\(workOrders, stateEntries, day\)/, "日別予定は共通業務判定を使う");
+assert.doesNotMatch(daySource, /checked_in_at|planned_delivery_at|planned_delivery_date|delivery_completed/, "日別滞留へ旧入庫/補助納車列を戻さない");
+assert.match(printSource, /classifyVehicleBusinessStates\(workOrders, stateEntries, day\)/, "日報は共通業務判定を使う");
+assert.doesNotMatch(printSource, /checked_in_at|checked_out_at|planned_delivery_at|planned_delivery_date|delivery_completed/, "日報判定へ旧列を戻さない");
+assert.match(homeSource, /classifyVehicleBusinessStates\(works, stateEntries, todayJst\(\)\)/, "トップ滞留は共通業務判定を使う");
 
 console.log("vehicle state business regression: ok");
