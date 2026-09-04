@@ -48,6 +48,12 @@ type ExternalVendor = {
   short_name:string|null;
 };
 
+type DeliveryTarget = {
+  startsAt:string;
+  endsAt:string;
+  mode:"exact"|"unspecified";
+};
+
 function dateKey(value:string){
   return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(value));
 }
@@ -204,6 +210,98 @@ export default function ScheduleEditPage(){
     return selectedOption ? `${day} ${selectedOption.displayLabel || selectedOption.label}` : `${day} 時間候補なし`;
   },[day,entry,selectedOption,onsiteMode,onsiteTime]);
 
+  function buildDeliveryTarget():DeliveryTarget|null {
+    if(!deliveryEnabled) return null;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDay)) throw new Error("納車予定日を入力してください。");
+    const time=deliveryMode==="unspecified" ? "13:00" : deliveryTime;
+    if(deliveryMode==="exact" && !/^\d{2}:\d{2}$/.test(time)) throw new Error("納車時間を入力してください。");
+    const startsAt=jstIso(deliveryDay,time);
+    return {
+      startsAt,
+      endsAt:plusMinutes(startsAt,30),
+      mode:deliveryMode,
+    };
+  }
+
+  async function preflightDelivery(target:DeliveryTarget,override:boolean){
+    const {data,error}=await supabase.rpc("schedule_slot_check_v2",{
+      p_entry_type:"delivery",
+      p_starts_at:target.startsAt,
+      p_ends_at:target.endsAt,
+      p_reason:reason||null,
+      p_exclude_entry_id:deliveryEntry?.id||null,
+      p_print_time_mode:target.mode,
+    });
+    if(error) throw error;
+    const hard=Array.isArray(data?.hard_errors)?data.hard_errors.map(String):[];
+    const warns=Array.isArray(data?.warnings)?data.warnings.map(String):[];
+    if(!data?.allowed || hard.length){
+      setMessage("納車予定を登録できません: "+(hard.length?hard.join(" / "):"時間条件を確認してください。"));
+      return false;
+    }
+    if(data?.override_required && !override){
+      setWarnings(warns);
+      setMessage("納車予定に警告があります。内容を確認してください。");
+      return false;
+    }
+    return true;
+  }
+
+  async function syncDeliveryPlan(target:DeliveryTarget|null){
+    if(!entry?.work_order_id) return;
+
+    if(!target){
+      if(deliveryEntry){
+        const {error:deleteError}=await supabase.from("schedule_entries").delete().eq("id",deliveryEntry.id);
+        if(deleteError) throw deleteError;
+      }
+      const {error:syncError}=await supabase.from("work_orders").update({
+        planned_delivery_at:null,
+        planned_delivery_date:null,
+        updated_at:new Date().toISOString(),
+      }).eq("id",entry.work_order_id);
+      if(syncError) throw syncError;
+      setDeliveryEntry(null);
+      setPlannedDeliveryDate("");
+      return;
+    }
+
+    if(deliveryEntry){
+      const {data,error}=await supabase.rpc("reschedule_schedule_entry_v2",{
+        p_entry_id:deliveryEntry.id,
+        p_starts_at:target.startsAt,
+        p_ends_at:target.endsAt,
+        p_print_time_mode:target.mode,
+        p_stay_reason:stayReason.trim()||null,
+        p_planned_delivery_date:deliveryDay,
+        p_actor:"schedule-edit-delivery",
+        p_allow_warning_override:true,
+      });
+      if(error) throw error;
+      const hard=Array.isArray(data?.hardErrors)?data.hardErrors.map(String):[];
+      if(hard.length || !data?.updated) throw new Error(hard.join(" / ") || "納車予定を変更できませんでした。");
+      setDeliveryEntry({...deliveryEntry,starts_at:target.startsAt,ends_at:target.endsAt,print_time_mode:target.mode});
+    }else{
+      const {data,error}=await supabase.from("schedule_entries").insert({
+        vehicle_id:entry.vehicle_id,
+        work_order_id:entry.work_order_id,
+        entry_type:"delivery",
+        starts_at:target.startsAt,
+        ends_at:target.endsAt,
+        print_time_mode:target.mode,
+      }).select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode").single();
+      if(error) throw error;
+      setDeliveryEntry(data as Entry);
+      const {error:syncError}=await supabase.from("work_orders").update({
+        planned_delivery_at:target.startsAt,
+        planned_delivery_date:deliveryDay,
+        updated_at:new Date().toISOString(),
+      }).eq("id",entry.work_order_id);
+      if(syncError) throw syncError;
+    }
+    setPlannedDeliveryDate(deliveryDay);
+  }
+
   async function save(override=false){
     if(!entry){return;}
     if(entry.entry_type!=="onsite_repair" && !selectedOption){
@@ -234,13 +332,26 @@ export default function ScheduleEditPage(){
         endsAt=new Date(new Date(startsAt).getTime()+duration).toISOString();
         mode=entry.print_time_mode;
       }
+      const deliveryTarget=entry.work_order_id && entry.entry_type!=="delivery" ? buildDeliveryTarget() : null;
+      if(deliveryTarget){
+        const mainDay=dateKey(startsAt);
+        const deliveryTargetDay=dateKey(deliveryTarget.startsAt);
+        if(deliveryTargetDay<mainDay || (deliveryTarget.mode==="exact" && deliveryTargetDay===mainDay && new Date(deliveryTarget.startsAt).getTime()<new Date(endsAt).getTime())){
+          setMessage("納車予定は入庫・作業予定の終了後に設定してください。");
+          return;
+        }
+        if(!(await preflightDelivery(deliveryTarget,override))) return;
+      }
+
       const {data,error}=await supabase.rpc("reschedule_schedule_entry_v2",{
         p_entry_id:entry.id,
         p_starts_at:startsAt,
         p_ends_at:endsAt,
         p_print_time_mode:mode,
         p_stay_reason:entry.work_order_id ? stayReason.trim()||null : null,
-        p_planned_delivery_date:entry.work_order_id ? plannedDeliveryDate||null : null,
+        p_planned_delivery_date:entry.work_order_id
+          ? (entry.entry_type==="delivery" ? day : (deliveryTarget ? deliveryDay : null))
+          : null,
         p_actor:"schedule-edit",
         p_allow_warning_override:override,
       });
@@ -263,8 +374,9 @@ export default function ScheduleEditPage(){
             p_actor:"schedule-edit",
           });
           if(assignmentError) throw assignmentError;
+          if(entry.entry_type!=="delivery") await syncDeliveryPlan(deliveryTarget);
         }
-        setMessage("予約と滞留情報を一括変更しました。予約変更と滞留情報は履歴にも保存しました。");
+        setMessage("予約と納車予定を変更しました。滞留判定は納車予定の有無から自動更新されます。");
         window.setTimeout(()=>location.assign("/schedule?day="+day),350);
       }
     }catch(error:any){
