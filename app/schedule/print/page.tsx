@@ -137,17 +137,45 @@ function compactDeliveryTime(value: string) {
   return minute === 0 ? `${hour}時` : `${hour}時${minute}分`;
 }
 
+function exactDueParts(value: string) {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(value));
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
+  return {
+    day: String(Number(parts.find((part) => part.type === "day")?.value || "0")),
+    hour: String(Number(parts.find((part) => part.type === "hour")?.value || "0")),
+    minute: minute ? String(minute) : "",
+    broad: "",
+  };
+}
+
 function dueParts(entry: PreviewEntry) {
-  if (entry.plannedDeliveryAt) {
-    const day = new Intl.DateTimeFormat("ja-JP", {
+  if (entry.plannedDeliveryAt) return exactDueParts(entry.plannedDeliveryAt);
+  if (entry.plannedDeliveryDate) return { day: shortDay(entry.plannedDeliveryDate), hour: "", minute: "", broad: "中" };
+  if (entry.expectedCompletionDate) return { day: shortDay(entry.expectedCompletionDate), hour: "", minute: "", broad: "中" };
+  return { day: "", hour: "", minute: "", broad: "" };
+}
+
+function reportDateParts(day: string) {
+  const date = new Date(`${day}T00:00:00+09:00`);
+  return {
+    month: String(Number(day.slice(5, 7))),
+    day: String(Number(day.slice(8, 10))),
+    weekday: new Intl.DateTimeFormat("ja-JP", {
       timeZone: "Asia/Tokyo",
-      day: "numeric",
-    }).format(new Date(entry.plannedDeliveryAt));
-    return { day, time: compactDeliveryTime(entry.plannedDeliveryAt) };
-  }
-  if (entry.plannedDeliveryDate) return { day: shortDay(entry.plannedDeliveryDate), time: "中" };
-  if (entry.expectedCompletionDate) return { day: shortDay(entry.expectedCompletionDate), time: "中" };
-  return { day: "", time: "" };
+      weekday: "short",
+    }).format(date).replace("曜日", ""),
+  };
+}
+
+function isBodyShopReason(reason: string | null | undefined) {
+  const value = (reason || "").trim();
+  return value.includes("板金") || value.includes("鈑金");
 }
 
 function stayDayCountForReport(work: WorkOrder, day: string) {
@@ -171,7 +199,7 @@ function workCompletedOnReportDay(work: WorkOrder, day: string) {
   return work.work_completed || work.status === "completed";
 }
 
-function regionStyle(region: DailyReportRegion) {
+function regionStyle(region: PrintRegion) {
   return {
     left: `${region.x * 100}%`,
     top: `${region.y * 100}%`,
@@ -191,6 +219,12 @@ function secondaryRowStyle(columns: readonly number[], rowCount: number) {
   };
 }
 
+function printRowSlots() {
+  const { count, top, bottom } = PRINT_LAYOUT.rows;
+  const step = count <= 1 ? 0 : (bottom - top) / (count - 1);
+  return Array.from({ length: count }, (_, index) => ({ index, y: top + step * index }));
+}
+
 export default function DailyReportPrintPage() {
   const [day, setDay] = useState(() => {
     if (typeof window === "undefined") return jstDay();
@@ -201,6 +235,7 @@ export default function DailyReportPrintPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+  const [bodyShopTimeline, setBodyShopTimeline] = useState<BodyShopTimelineEntry[]>([]);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [message, setMessage] = useState("日報データを読み込みます。");
 
@@ -217,10 +252,29 @@ export default function DailyReportPrintPage() {
         supabase.from("app_settings").select("setting_value").eq("setting_key", "daily_report_template").maybeSingle(),
       ]);
       for (const res of [scheduleRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
+      const loadedWorks = (workRes.data || []) as WorkOrder[];
       setEntries((scheduleRes.data || []) as Entry[]);
       setVehicles((vehicleRes.data || []) as Vehicle[]);
       setCustomers((customerRes.data || []) as Customer[]);
-      setWorkOrders((workRes.data || []) as WorkOrder[]);
+      setWorkOrders(loadedWorks);
+
+      const bodyShopWorkIds = loadedWorks
+        .filter((work) => isBodyShopReason(work.reason))
+        .map((work) => work.id);
+      if (bodyShopWorkIds.length) {
+        const timelineRes = await supabase
+          .from("schedule_entries")
+          .select("work_order_id,entry_type,starts_at")
+          .in("work_order_id", bodyShopWorkIds)
+          .in("entry_type", ["pickup", "delivery"])
+          .lt("starts_at", end)
+          .order("starts_at", { ascending: true });
+        if (timelineRes.error) throw timelineRes.error;
+        setBodyShopTimeline((timelineRes.data || []) as BodyShopTimelineEntry[]);
+      } else {
+        setBodyShopTimeline([]);
+      }
+
       const value = settingRes.data?.setting_value as any;
       setBackgroundUrl(typeof value?.backgroundUrl === "string" && value.backgroundUrl ? value.backgroundUrl : null);
       setMessage(`${scheduleRes.data?.length || 0}件を既存日報の配置ルールで確認できます。`);
@@ -258,7 +312,8 @@ export default function DailyReportPrintPage() {
   const morning = enriched.filter((x) => jstHour(x.starts_at) < 12);
   const afternoon = enriched.filter((x) => jstHour(x.starts_at) >= 12);
   const model = useMemo(() => buildDailyReportPreviewModel(morning, afternoon), [morning, afternoon]);
-  const slots = dailyReportRowSlots();
+  const slots = printRowSlots();
+  const printedDate = useMemo(() => reportDateParts(day), [day]);
   const messages = useMemo(() => collectDailyReportMessages(entries), [entries]);
   const deliveryVehicleIds = useMemo(
     () => new Set(
