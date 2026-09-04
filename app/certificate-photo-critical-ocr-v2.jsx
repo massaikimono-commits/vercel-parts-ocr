@@ -288,7 +288,7 @@ export default function CertificatePhotoCriticalOcrV2() {
         const currentPrefix = compact(currentChassis).toUpperCase().split("-")[0] || "";
         const needChassis = !qrPriority.chassisNumber && (!currentChassis || (fam && currentPrefix && currentPrefix !== fam));
         const profileLabels = [
-          "車名","自動車の種別","用途","自家用・事業用の別","車体の形状","乗車定員","最大積載量 kg"
+          "車名","自動車の種別","用途","自家用・事業用の別","車体の形状","乗車定員","最大積載量 kg","燃料の種類"
         ];
         const needProfile = profileLabels.some((label) => !fieldValue(label));
         const needOutput = !fieldValue("総排気量又は定格出力");
