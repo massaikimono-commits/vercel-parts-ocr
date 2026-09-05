@@ -5,6 +5,7 @@ import { prepareDocumentImage } from "./lib/document-image-pipeline";
 import { TOP_HEADER_CROPS, parseTopHeaderText } from "./lib/certificate-fast-top-header.mjs";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
+const SUPPORTED_PATHS = new Set(["/vehicle-workflow-fast", "/vehicle-workflow-v2"]);
 
 function normalize(value = "") {
   return String(value || "").normalize("NFKC").replace(/\u3000/g, " ").replace(/\r/g, "").trim();
@@ -73,7 +74,7 @@ function dispatchPatch(patch) {
 
 export default function CertificateFastTopHeaderRecovery() {
   useEffect(() => {
-    if (location.pathname !== "/vehicle-workflow-fast") return;
+    if (!SUPPORTED_PATHS.has(location.pathname)) return;
     let pending = null;
     let scanId = 0;
     let timer = 0;
