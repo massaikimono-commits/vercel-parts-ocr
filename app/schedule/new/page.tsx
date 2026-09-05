@@ -132,6 +132,12 @@ async function nextBusinessDay(day: string) {
   return data?.business_date ? String(data.business_date) : "";
 }
 
+function naturalLast4(value: string | null | undefined) {
+  const raw = (value || "").trim();
+  if (!raw) return "";
+  return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
+}
+
 function extractWarnings(check: any) {
   return {
     allowed: Boolean(check?.allowed),
@@ -916,7 +922,7 @@ export default function ScheduleNewPage() {
                   }}
                 >
                   <b>{row.customerName || row.companyName || "お客様未紐付け"}</b>
-                  <span>{row.registrationNumber || ("下4桁 " + (row.registrationLast4 || "----"))}　{[row.maker,row.model].filter(Boolean).join(" ")}</span>
+                  <span>{row.registrationNumber || ("下4桁 " + (naturalLast4(row.registrationLast4) || "----"))}　{[row.maker,row.model].filter(Boolean).join(" ")}</span>
                   <small style={{color:"#69778a"}}>{[row.phone, row.chassisNumber].filter(Boolean).join(" / ")}</small>
                 </button>
               ))}
