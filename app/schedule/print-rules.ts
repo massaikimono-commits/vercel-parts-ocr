@@ -45,10 +45,12 @@ export function dailyReportTimeLabel(row: DailyReportEntryLike) {
     return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   }
   if (
-    row.entry_type === "pickup"
+    (row.entry_type === "pickup" || row.entry_type === "customer_visit")
     && (row.print_time_mode === "morning" || (row.print_time_mode === "unspecified" && isMorningJst(row.starts_at)))
   ) return "A中";
-  if (row.entry_type === "pickup" && row.print_time_mode === "unspecified") return "午後";
+  if ((row.entry_type === "pickup" || row.entry_type === "customer_visit") && row.print_time_mode === "unspecified") return "午後";
+  if (row.entry_type === "onsite_repair" && row.print_time_mode === "morning") return "午前中";
+  if (row.entry_type === "onsite_repair" && row.print_time_mode === "unspecified") return "午後中";
   if (row.entry_type === "delivery" && row.print_time_mode === "unspecified") return "中";
   return row.print_time_mode === "morning" ? "午前" : "時間未定";
 }
@@ -59,12 +61,24 @@ export function sortDailyReportInbound<T extends DailyReportEntryLike>(rows: T[]
     const bOrder = b.entry_type === "delivery" ? 99 : INBOUND_TYPE_ORDER[b.entry_type];
     const typeDiff = aOrder - bOrder;
     if (typeDiff) return typeDiff;
+
+    const modeOrder = (row: DailyReportEntryLike) =>
+      row.print_time_mode === "exact" ? 0 : row.print_time_mode === "morning" ? 1 : 2;
+    const modeDiff = modeOrder(a) - modeOrder(b);
+    if (modeDiff) return modeDiff;
+
     return timeValue(a) - timeValue(b);
   });
 }
 
 export function sortDailyReportDeliveries<T extends DailyReportEntryLike>(rows: T[]) {
-  return [...rows].sort((a, b) => timeValue(a) - timeValue(b));
+  return [...rows].sort((a, b) => {
+    const modeOrder = (row: DailyReportEntryLike) =>
+      row.print_time_mode === "exact" ? 0 : row.print_time_mode === "morning" ? 1 : 2;
+    const modeDiff = modeOrder(a) - modeOrder(b);
+    if (modeDiff) return modeDiff;
+    return timeValue(a) - timeValue(b);
+  });
 }
 
 export function stackDailyReportRows<T>(rows: T[], period: DailyReportPeriod) {

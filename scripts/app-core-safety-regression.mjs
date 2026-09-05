@@ -23,10 +23,14 @@ function assert(condition, message) {
     process.exit(1);
   }
 }
-assert(scheduleNew.includes('supabase.rpc("find_schedule_registration_duplicates"'), "schedule registration must check duplicates");
-assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_v2"'), "schedule registration must be atomic");
+assert(scheduleNew.includes("sameDayVehicleScheduleWarnings"), "schedule registration must check same-vehicle same-day duplicates");
+assert(scheduleNew.includes('.from("schedule_entries")'), "same-day duplicate guard must inspect schedule entries");
+assert(scheduleNew.includes('"それでも登録する"'), "same-day duplicate warning must require explicit override");
+assert(!scheduleNew.includes('find_schedule_registration_duplicates'), "manual-entry customer/vehicle candidate duplicate flow must stay removed");
+assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_v2"'), "single schedule registration must remain atomic");
+assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_batch_v1"'), "multi-vehicle schedule registration must remain atomic");
+assert(scheduleNew.includes("p_items: batchItems"), "multi-vehicle atomic registration must use the JSONB batch payload");
 assert(scheduleNew.includes("p_existing_vehicle_id"), "existing vehicle reuse must remain supported");
-assert(scheduleNew.includes("Number(x.score) >= 70"), "exact-name/company duplicate candidates must require an explicit reuse/new decision");
 assert(scheduleNew.includes("納車予定は入庫・作業予定の終了後"), "delivery must not precede inbound/work end");
 assert(!scheduleNew.includes('supabase.rpc("create_manual_schedule_registration"'), "legacy partial schedule RPC must not be used");
 assert(!scheduleNew.includes('.from("schedule_entries").insert({'), "delivery insert must stay inside atomic RPC");
@@ -36,10 +40,11 @@ assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
 assert(!inspectionPrint.includes("printAndMark"), "print must not pre-mark printed");
 assert(home.includes("checked_out_at"), "home workload must exclude checked-out work");
-assert(schedule.includes("work_completed_at"), "daily schedule must evaluate completion by selected day");
-assert(schedule.includes("checkedOutAt !== null && checkedOutAt <= endOfDay"), "historical daily schedule must keep later checkouts");
+assert(schedule.includes("classifyVehicleBusinessStates"), "daily schedule must use the shared business-state classifier");
+assert(schedule.includes("businessStates.stayingVehicles"), "daily schedule staying vehicles must come from the confirmed schedule-based staying rule");
+assert(!schedule.includes("activelyCheckedIn"), "daily schedule staying logic must not fall back to legacy checked-in state");
 assert(reportPrint.includes("workCompletedOnReportDay"), "daily report completion mark must use selected-day semantics");
-assert(secondary.includes("work_completed_at"), "daily report secondary sections must use completion timestamp");
+assert(secondary.includes("collectDailyReportMessages"), "daily report secondary helper must remain limited to message collection; staying/body-shop/planned-delivery state comes from the shared business classifier");
 assert(loaners.includes('supabase.rpc("set_loaner_vehicle_operational_status"'), "loaner operational status must use guarded RPC");
 assert(!loaners.includes('.from("loaner_vehicles").update({'), "loaner status must not bypass guarded RPC");
 assert(week.includes("要確認日のみ表示"), "weekly schedule must offer problem-day filtering");
@@ -55,7 +60,7 @@ assert(workload.includes('location.assign("/schedule/edit?id="'), "workload deta
 assert(!workload.includes('href="/work-complete"') && !workload.includes('href="/delivery-complete"'), "workload actions must not introduce standalone completion menus");
 assert(scheduleSearch.includes('.normalize("NFKC")'), "schedule search must normalize full-width input");
 assert(scheduleSearch.includes("searchDigits"), "schedule search must normalize phone/last4 digits before querying");
-assert(scheduleSearch.includes("全角数字・全角英数字"), "schedule search must tell staff normalized input is supported");
+assert(scheduleSearch.includes("数字1〜4桁だけの入力はナンバー下4桁専用検索"), "schedule search must explain short numeric plate-only search");
 assert(home.includes("openTodayWork"), "mobile home work cards must open the matching schedule work");
 assert(schedule.includes("focusWorkId") && schedule.includes("data-work-id"), "daily schedule must support focused work navigation");
 assert(schedule.includes("focusedWork"), "focused work must be visually obvious");
@@ -84,5 +89,5 @@ assert(cancellationSql.includes("revoke all on function public.cancel_schedule_e
 assert(scheduleEdit.includes('supabase.rpc("cancel_schedule_entry_v1"'), "reservation edit screen must call the cancellation RPC");
 assert(scheduleEdit.includes("取消理由（任意）"), "reservation cancellation reason must remain optional");
 assert(scheduleEdit.includes("p_reason:cancelReason.trim() || null"), "blank cancellation reasons must be sent as null");
-assert(scheduleEdit.includes("取消を確定"), "reservation cancellation must require an explicit confirmation step");
+assert(scheduleEdit.includes("この入庫予定一式を取消"), "reservation cancellation must require an explicit work-order-set confirmation step");
 console.log("app-core safety regression passed");

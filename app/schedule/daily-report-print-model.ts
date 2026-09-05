@@ -1,4 +1,4 @@
-import { allocateDailyReportPeriod } from "./daily-report-allocation";
+import { allocateDailyReportDay } from "./daily-report-allocation";
 import { DAILY_REPORT_TEMPLATE } from "./daily-report-template";
 import type { DailyReportEntryLike } from "./print-rules";
 
@@ -16,23 +16,19 @@ export type DailyReportPreviewModel<T extends DailyReportEntryLike> = {
   };
 };
 
-// Builds the row model consumed by the existing daily-report print preview.
-// The original daily-report PDF stays outside the public repository; this model
-// only determines which schedule entry belongs in each existing form row/cell.
 export function buildDailyReportPreviewModel<T extends DailyReportEntryLike>(
   morningRows: T[],
   afternoonRows: T[],
 ): DailyReportPreviewModel<T> {
-  const morning = allocateDailyReportPeriod(morningRows, "morning");
-  const afternoon = allocateDailyReportPeriod(afternoonRows, "afternoon");
+  const day = allocateDailyReportDay(morningRows, afternoonRows);
 
   const deliveryBySlot = new Map<number, T>();
   const inboundBySlot = new Map<number, T>();
 
-  for (const placed of [...morning.deliveries, ...afternoon.deliveries]) {
+  for (const placed of day.deliveries) {
     deliveryBySlot.set(placed.slotIndex, placed.entry);
   }
-  for (const placed of [...morning.inbound, ...afternoon.inbound]) {
+  for (const placed of day.inbound) {
     inboundBySlot.set(placed.slotIndex, placed.entry);
   }
 
@@ -42,9 +38,6 @@ export function buildDailyReportPreviewModel<T extends DailyReportEntryLike>(
       delivery: deliveryBySlot.get(slotIndex) || null,
       inbound: inboundBySlot.get(slotIndex) || null,
     })),
-    overflow: {
-      deliveries: [...morning.overflow.deliveries, ...afternoon.overflow.deliveries],
-      inbound: [...morning.overflow.inbound, ...afternoon.overflow.inbound],
-    },
+    overflow: day.overflow,
   };
 }

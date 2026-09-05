@@ -22,6 +22,12 @@ type Staff = {
   short_name: string | null;
 };
 
+type ExternalVendor = {
+  id: string;
+  display_name: string;
+  short_name: string | null;
+};
+
 type Vehicle = {
   id: string;
   customer_id: string | null;
@@ -59,6 +65,27 @@ function plusMinutes(iso: string, minutes: number) {
   return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString();
 }
 
+function addDay(day: string, delta: number) {
+  const d = new Date(`${day}T00:00:00+09:00`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+}
+
+async function nextBusinessDay(day: string) {
+  const { data, error } = await supabase
+    .from("business_calendar")
+    .select("business_date")
+    .gt("business_date", day)
+    .eq("is_business_day", true)
+    .order("business_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.business_date ? String(data.business_date) : "";
+}
+
 function extractCheck(value: any) {
   return {
     allowed: Boolean(value?.allowed),
@@ -77,10 +104,14 @@ export default function ActiveVehicleSchedulePage() {
   const [inspectionScheduleType, setInspectionScheduleType] = useState("");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [timeKey, setTimeKey] = useState("");
+  const [onsiteMode, setOnsiteMode] = useState<"exact" | "morning" | "unspecified">("exact");
   const [onsiteTime, setOnsiteTime] = useState("09:00");
   const [onsiteDuration, setOnsiteDuration] = useState("60");
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffId, setStaffId] = useState("");
+  const [vendors, setVendors] = useState<ExternalVendor[]>([]);
+  const [vendorId, setVendorId] = useState("");
+  const [vendorName, setVendorName] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [needsLoaner, setNeedsLoaner] = useState(false);
   const [notes, setNotes] = useState("");
@@ -96,19 +127,45 @@ export default function ActiveVehicleSchedulePage() {
   useEffect(() => {
     void loadActiveVehicle();
     void loadStaff();
+    void loadVendors();
   }, []);
 
   useEffect(() => {
+    if (reason !== "点検" && inspectionScheduleType) setInspectionScheduleType("");
     void loadMainOptions();
-  }, [day, entryType]);
+  }, [day, entryType, reason]);
 
   useEffect(() => {
-    setDeliveryDay((old) => old || day);
-  }, [day]);
+    let active = true;
+    async function applyDefaultDeliveryDay() {
+      if (reason !== "車検") {
+        if (reason === "点検") setDeliveryKey("");
+        setDeliveryDay(day);
+        return;
+      }
+      try {
+        const next = await nextBusinessDay(day);
+        if (!active) return;
+        setDeliveryKey("");
+        if (next) {
+          setDeliveryDay(next);
+        } else {
+          setDeliveryDay("");
+          setMessage("年間予定表に翌営業日がありません。納車日を選択してください。");
+        }
+      } catch (error: any) {
+        if (!active) return;
+        setDeliveryDay("");
+        setMessage(safeActionError("翌営業日の読み込み", error));
+      }
+    }
+    void applyDefaultDeliveryDay();
+    return () => { active = false; };
+  }, [day, reason]);
 
   useEffect(() => {
     if (addDelivery) void loadDeliveryOptions();
-  }, [deliveryDay, addDelivery]);
+  }, [deliveryDay, addDelivery, reason]);
 
   async function loadActiveVehicle() {
     try {
@@ -148,6 +205,16 @@ export default function ActiveVehicleSchedulePage() {
     if (!error) setStaff((data || []) as Staff[]);
   }
 
+  async function loadVendors() {
+    const { data, error } = await supabase
+      .from("external_vendors")
+      .select("id,display_name,short_name")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .order("display_name", { ascending: true });
+    if (!error) setVendors((data || []) as ExternalVendor[]);
+  }
+
   async function loadMainOptions() {
     if (entryType === "onsite_repair") {
       setTimeOptions([]);
@@ -178,7 +245,13 @@ export default function ActiveVehicleSchedulePage() {
     }
     const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
     setDeliveryOptions(options);
-    setDeliveryKey((old) => options.some((x) => x.key === old) ? old : options[0]?.key || "");
+    setDeliveryKey((old) => {
+      if (options.some((x) => x.key === old)) return old;
+      const preferredBroad = (reason === "点検" || reason === "車検")
+        ? options.find((x) => x.mode === "unspecified")
+        : null;
+      return preferredBroad?.key || options[0]?.key || "";
+    });
   }
 
   const selectedTime = useMemo(() => timeOptions.find((x) => x.key === timeKey) || null, [timeOptions, timeKey]);
@@ -186,6 +259,12 @@ export default function ActiveVehicleSchedulePage() {
 
   function mainTimes() {
     if (entryType === "onsite_repair") {
+      if (onsiteMode === "morning") {
+        return { startsAt: jstIso(day, "08:30"), endsAt: jstIso(day, "12:00"), printMode: "morning" as const };
+      }
+      if (onsiteMode === "unspecified") {
+        return { startsAt: jstIso(day, "13:00"), endsAt: jstIso(day, "17:00"), printMode: "unspecified" as const };
+      }
       const startsAt = jstIso(day, onsiteTime);
       return {
         startsAt,
@@ -201,13 +280,14 @@ export default function ActiveVehicleSchedulePage() {
     };
   }
 
-  async function checkSlot(entry: string, startsAt: string, endsAt: string) {
-    const { data, error } = await supabase.rpc("schedule_slot_check", {
+  async function checkSlot(entry: string, startsAt: string, endsAt: string, printMode: string) {
+    const { data, error } = await supabase.rpc("schedule_slot_check_v2", {
       p_entry_type: entry,
       p_starts_at: startsAt,
       p_ends_at: endsAt,
       p_reason: reason,
       p_exclude_entry_id: null,
+      p_print_time_mode: printMode,
     });
     if (error) throw error;
     return extractCheck(data);
@@ -232,9 +312,9 @@ export default function ActiveVehicleSchedulePage() {
 
     setBusy(true);
     try {
-      const mainCheck = await checkSlot(entryType, main.startsAt, main.endsAt);
+      const mainCheck = await checkSlot(entryType, main.startsAt, main.endsAt, main.printMode);
       const deliveryCheck = addDelivery && selectedDelivery
-        ? await checkSlot("delivery", selectedDelivery.startsAt, selectedDelivery.endsAt)
+        ? await checkSlot("delivery", selectedDelivery.startsAt, selectedDelivery.endsAt, selectedDelivery.mode)
         : { allowed: true, overrideRequired: false, hardErrors: [] as string[], warnings: [] as string[] };
 
       const hardErrors = [...mainCheck.hardErrors, ...deliveryCheck.hardErrors];
@@ -277,13 +357,15 @@ export default function ActiveVehicleSchedulePage() {
       });
       if (scheduleError) throw scheduleError;
 
-      if (staffId) {
-        const { error: staffError } = await supabase.rpc("set_work_order_worker", {
+      if (staffId || vendorId || vendorName.trim()) {
+        const { error: assignmentError } = await supabase.rpc("set_work_order_assignment", {
           p_work_order_id: work.id,
-          p_staff_id: staffId,
+          p_staff_id: staffId || null,
+          p_vendor_id: (reason === "板金塗装" || reason === "一般整備") ? (vendorId || null) : null,
+          p_vendor_name: (reason === "板金塗装" || reason === "一般整備") ? (vendorName.trim() || null) : null,
           p_actor: "active-vehicle-schedule",
         });
-        if (staffError) throw staffError;
+        if (assignmentError) throw assignmentError;
       }
 
       if (addDelivery && selectedDelivery) {
@@ -338,18 +420,34 @@ export default function ActiveVehicleSchedulePage() {
         <h2>① 入庫予定</h2>
         <div className="grid">
           <label>日付<input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label>
-          <label>区分<select value={entryType} onChange={(e) => setEntryType(e.target.value as EntryType)}><option value="pickup">引き取り</option><option value="customer_visit">来社</option><option value="onsite_repair">出張整備</option></select></label>
+          <label>区分<select value={entryType} onChange={(e) => setEntryType(e.target.value as EntryType)}><option value="pickup">引取</option><option value="customer_visit">来社</option><option value="onsite_repair">出張整備</option></select></label>
           <label>入庫要因<select value={reason} onChange={(e) => setReason(e.target.value as Reason)}><option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option></select></label>
           {entryType === "onsite_repair" ? (
             <>
-              <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
-              <label>作業枠<select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}><option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option></select></label>
+              <label>出張時間
+                <select value={onsiteMode} onChange={(e) => setOnsiteMode(e.target.value as "exact" | "morning" | "unspecified")}>
+                  <option value="exact">時間指定</option><option value="morning">午前中</option><option value="unspecified">午後中</option>
+                </select>
+              </label>
+              {onsiteMode === "exact" && <>
+                <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
+                <label>作業枠<select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}><option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option></select></label>
+              </>}
             </>
           ) : (
             <label className="wide">時間<select value={timeKey} onChange={(e) => setTimeKey(e.target.value)}>{!timeOptions.length && <option value="">候補なし</option>}{timeOptions.map((x) => <option value={x.key} key={x.key}>{x.label}</option>)}</select></label>
           )}
-          {(reason === "点検" || reason === "車検") && <label>点検区分<select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}><option value="">未指定</option><option value="schedule">スケジュール点検</option><option value="legal_6m">法定6ヶ月</option><option value="legal_12m">法定12ヶ月</option></select></label>}
+          {reason === "点検" && <label>点検区分<select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}><option value="">未指定</option><option value="schedule">スケジュール点検</option><option value="legal_6m">法定6ヶ月点検</option><option value="legal_12m">法定12ヶ月点検</option></select></label>}
           <label>作業担当<select value={staffId} onChange={(e) => setStaffId(e.target.value)}><option value="">未選択</option>{staff.map((x) => <option key={x.id} value={x.id}>{x.short_name || x.display_name}</option>)}</select></label>
+          {(reason === "一般整備" || reason === "板金塗装") && <>
+            <label>外注先
+              <select value={vendorId} onChange={(e) => { setVendorId(e.target.value); if (e.target.value) setVendorName(""); }}>
+                <option value="">自社作業 / 未選択 / 直接入力</option>
+                {vendors.map((x) => <option key={x.id} value={x.id}>{x.short_name || x.display_name}</option>)}
+              </select>
+            </label>
+            {!vendorId && <label>外注先名（必要な時だけ）<input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：ガラス業者、電装業者、○○鈑金" /></label>}
+          </>}
           <div className="flags"><label><input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} /> 急ぎ</label><label><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} /> 代車あり</label></div>
           <label className="wide">備考<textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>

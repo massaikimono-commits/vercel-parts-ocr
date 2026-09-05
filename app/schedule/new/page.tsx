@@ -53,22 +53,7 @@ type PickupCapacity = {
   morning_pickup_over: boolean;
 };
 
-type DuplicateCustomerCandidate = {
-  customerId: string;
-  displayName: string;
-  phone: string | null;
-  score: number;
-};
 
-type DuplicateVehicleCandidate = {
-  vehicleId: string;
-  customerId: string | null;
-  registrationNumber: string | null;
-  registrationLast4: string | null;
-  maker: string | null;
-  model: string | null;
-  score: number;
-};
 type RegisteredVehicleOption = {
   vehicleId: string;
   customerId: string | null;
@@ -86,7 +71,7 @@ type RegisteredVehicleOption = {
 
 const ENTRY_LABEL: Record<EntryType, string> = {
   delivery: "納車",
-  pickup: "引き取り",
+  pickup: "引取",
   customer_visit: "来社",
   onsite_repair: "出張整備",
 };
@@ -108,6 +93,36 @@ function plusMinutes(iso: string, minutes: number) {
   return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString();
 }
 
+function addDay(day: string, delta: number) {
+  const d = new Date(`${day}T00:00:00+09:00`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+async function nextBusinessDay(day: string) {
+  const { data, error } = await supabase
+    .from("business_calendar")
+    .select("business_date")
+    .gt("business_date", day)
+    .eq("is_business_day", true)
+    .order("business_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.business_date ? String(data.business_date) : "";
+}
+
+function naturalLast4(value: string | null | undefined) {
+  const raw = (value || "").trim();
+  if (!raw) return "";
+  return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
+}
+
 function extractWarnings(check: any) {
   return {
     allowed: Boolean(check?.allowed),
@@ -119,8 +134,8 @@ function extractWarnings(check: any) {
 
 export default function ScheduleNewPage() {
   const [day, setDay] = useState(todayJst());
-  const [entryType, setEntryType] = useState<EntryType>("customer_visit");
-  const [reason, setReason] = useState<Reason>("車検");
+  const [entryType, setEntryType] = useState<EntryType>("pickup");
+  const [reason, setReason] = useState<Reason>("点検");
   const [customerName, setCustomerName] = useState("");
   const [customerType, setCustomerType] = useState<"individual" | "company">("individual");
   const [companyName, setCompanyName] = useState("");
@@ -138,11 +153,10 @@ export default function ScheduleNewPage() {
   const [isUrgent, setIsUrgent] = useState(false);
   const [needsLoaner, setNeedsLoaner] = useState(false);
   const [notes, setNotes] = useState("");
-  const [inspectionScheduleType, setInspectionScheduleType] = useState("");
+  const [inspectionScheduleType, setInspectionScheduleType] = useState("schedule");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [selectedTimeKey, setSelectedTimeKey] = useState("");
-  const [onsiteTime, setOnsiteTime] = useState("09:00");
-  const [onsiteDuration, setOnsiteDuration] = useState("60");
+  const [showAfternoonOptions, setShowAfternoonOptions] = useState(false);
 
   const [addDelivery, setAddDelivery] = useState(true);
   const [deliveryDay, setDeliveryDay] = useState(todayJst());
@@ -154,14 +168,11 @@ export default function ScheduleNewPage() {
   const [busy, setBusy] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [message, setMessage] = useState("お客様・車両を選んでから、入庫内容と日時を登録します。");
+  const [successMessage, setSuccessMessage] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [hardErrors, setHardErrors] = useState<string[]>([]);
-  const [duplicateCustomers, setDuplicateCustomers] = useState<DuplicateCustomerCandidate[]>([]);
-  const [duplicateVehicles, setDuplicateVehicles] = useState<DuplicateVehicleCandidate[]>([]);
   const [existingCustomerId, setExistingCustomerId] = useState("");
   const [existingVehicleId, setExistingVehicleId] = useState("");
-  const [duplicateDecisionFingerprint, setDuplicateDecisionFingerprint] = useState("");
-  const [duplicateBypassFingerprint, setDuplicateBypassFingerprint] = useState("");
   const [registeredSearch, setRegisteredSearch] = useState("");
   const [registeredVehicles, setRegisteredVehicles] = useState<RegisteredVehicleOption[]>([]);
   const [registeredVehiclesLoading, setRegisteredVehiclesLoading] = useState(false);
@@ -173,13 +184,47 @@ export default function ScheduleNewPage() {
   }, []);
 
   useEffect(() => {
-    setDeliveryDay(day);
-  }, [day]);
+    if (!successMessage) return;
+    scrollToTopAfterSuccessfulRegistration();
+  }, [successMessage]);
 
   useEffect(() => {
+    let active = true;
+    async function applyDefaultDeliveryDay() {
+      if (reason !== "車検") {
+        if (reason === "点検") setDeliveryTimeKey("");
+        setDeliveryDay(day);
+        return;
+      }
+      try {
+        const next = await nextBusinessDay(day);
+        if (!active) return;
+        setDeliveryTimeKey("");
+        if (next) {
+          setDeliveryDay(next);
+        } else {
+          setDeliveryDay("");
+          setMessage("年間予定表に翌営業日がありません。納車日を選択してください。");
+        }
+      } catch (error: any) {
+        if (!active) return;
+        setDeliveryDay("");
+        setMessage(safeActionError("翌営業日の読み込み", error));
+      }
+    }
+    void applyDefaultDeliveryDay();
+    return () => { active = false; };
+  }, [day, reason]);
+
+  useEffect(() => {
+    if (reason !== "点検" && inspectionScheduleType) setInspectionScheduleType("");
     void loadCapacity();
     void loadMainOptions();
   }, [day, entryType, reason]);
+
+  useEffect(() => {
+    setShowAfternoonOptions(false);
+  }, [day, entryType]);
 
   useEffect(() => {
     if (entryType === "delivery") {
@@ -287,24 +332,119 @@ export default function ScheduleNewPage() {
   async function loadMainOptions() {
     setLoadingOptions(true);
     try {
+      const checkedOption = async (option: TimeOption) => {
+        const { data, error } = await supabase.rpc("schedule_slot_check_v2", {
+          p_entry_type: entryType,
+          p_starts_at: option.startsAt,
+          p_ends_at: option.endsAt,
+          p_reason: reason,
+          p_exclude_entry_id: null,
+          p_print_time_mode: option.mode,
+        });
+        if (error) throw error;
+        const status = !Boolean(data?.allowed)
+          ? "blocked"
+          : Boolean(data?.override_required)
+            ? "warning"
+            : "open";
+        return {
+          ...option,
+          availability: status as "open" | "warning" | "blocked",
+          warnings: Array.isArray(data?.warnings) ? data.warnings.map(String) : [],
+          hardErrors: Array.isArray(data?.hard_errors) ? data.hard_errors.map(String) : [],
+          conflicts: Number(data?.conflicts || 0),
+        };
+      };
+
+      const exactOption = (time: string, group: "morning" | "afternoon", durationMinutes: number, displayLabel?: string): TimeOption => {
+        const startsAt = jstIso(day, time);
+        return {
+          key: `exact_${time.replace(":", "")}`,
+          label: time,
+          displayLabel: displayLabel || time,
+          group,
+          mode: "exact",
+          startsAt,
+          endsAt: plusMinutes(startsAt, durationMinutes),
+          durationMinutes,
+        };
+      };
+
+      let options: TimeOption[] = [];
+
       if (entryType === "onsite_repair") {
-        setTimeOptions([]);
-        setSelectedTimeKey("");
-        return;
+        const morningTimes = ["08:30","09:00","09:30","10:00","10:30","11:00"];
+        const afternoonTimes = ["13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00"];
+        const raw: TimeOption[] = [
+          ...morningTimes.map((time) => exactOption(time, "morning", time === "17:00" ? 30 : 60)),
+          {
+            key: "morning_unspecified",
+            label: "A中",
+            displayLabel: "A中",
+            group: "morning",
+            mode: "morning",
+            startsAt: jstIso(day, "09:00"),
+            endsAt: jstIso(day, "10:00"),
+            durationMinutes: 60,
+          },
+          ...afternoonTimes.map((time) => exactOption(time, "afternoon", time === "17:00" ? 30 : 60)),
+          {
+            key: "afternoon_unspecified",
+            label: "中",
+            displayLabel: "中",
+            group: "afternoon",
+            mode: "unspecified",
+            startsAt: jstIso(day, "13:00"),
+            endsAt: jstIso(day, "14:00"),
+            durationMinutes: 60,
+          },
+        ];
+        options = await Promise.all(raw.map(checkedOption));
+      } else {
+        const { data, error } = await supabase.rpc("schedule_time_availability", {
+          p_day: day,
+          p_entry_type: entryType,
+          p_reason: reason,
+        });
+        if (error) throw error;
+        options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
+
+        if (entryType === "pickup" && !options.some((x) => x.group === "afternoon" && x.mode === "exact")) {
+          const afternoonTimes = ["13:00","14:00","15:00","16:00","17:00"];
+          const afternoonExact = await Promise.all(
+            afternoonTimes.map((time) => checkedOption(
+              exactOption(
+                time,
+                "afternoon",
+                time === "17:00" ? 30 : 60,
+                Number(time.slice(3)) === 0
+                  ? `${Number(time.slice(0,2))}時まで`
+                  : `${Number(time.slice(0,2))}時${time.slice(3)}分まで`
+              )
+            ))
+          );
+          const afternoonBroad = options.filter((x) => x.group === "afternoon" && x.mode === "unspecified");
+          options = [
+            ...options.filter((x) => !(x.group === "afternoon" && x.mode === "unspecified")),
+            ...afternoonExact,
+            ...afternoonBroad,
+          ];
+        }
+
+        options = options.map((option) => (
+          option.mode === "unspecified" && option.group === "afternoon"
+            ? { ...option, label: "中", displayLabel: "中" }
+            : option
+        ));
       }
-      const { data, error } = await supabase.rpc("schedule_time_availability", {
-        p_day: day,
-        p_entry_type: entryType,
-        p_reason: reason,
-      });
-      if (error) throw error;
-      const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
+
       setTimeOptions(options);
       setSelectedTimeKey((old) => {
         const oldOption = options.find((x) => x.key === old);
         if (oldOption && oldOption.availability !== "blocked") return old;
-        return options.find((x) => x.availability === "open")?.key
-          || options.find((x) => x.availability === "warning")?.key
+        const morningOptions = options.filter((x) => x.group === "morning");
+        return morningOptions.find((x) => x.availability === "open")?.key
+          || morningOptions.find((x) => x.availability === "warning")?.key
           || "";
       });
     } catch (error: any) {
@@ -332,7 +472,11 @@ export default function ScheduleNewPage() {
     setDeliveryTimeKey((old) => {
       const oldOption = options.find((x) => x.key === old);
       if (oldOption && oldOption.availability !== "blocked") return old;
-      return options.find((x) => x.availability === "open")?.key
+      const preferredBroad = (reason === "点検" || reason === "車検")
+        ? options.find((x) => x.mode === "unspecified" && x.availability !== "blocked")
+        : null;
+      return preferredBroad?.key
+        || options.find((x) => x.availability === "open")?.key
         || options.find((x) => x.availability === "warning")?.key
         || "";
     });
@@ -349,40 +493,12 @@ export default function ScheduleNewPage() {
   );
 
   function mainTimes() {
-    if (entryType !== "onsite_repair") {
-      if (!selectedTime) return null;
-      return {
-        startsAt: selectedTime.startsAt,
-        endsAt: selectedTime.endsAt,
-        printMode: selectedTime.mode,
-      };
-    }
-    const startsAt = jstIso(day, onsiteTime);
+    if (!selectedTime) return null;
     return {
-      startsAt,
-      endsAt: plusMinutes(startsAt, Math.max(30, Number(onsiteDuration) || 60)),
-      printMode: "exact" as const,
+      startsAt: selectedTime.startsAt,
+      endsAt: selectedTime.endsAt,
+      printMode: selectedTime.mode,
     };
-  }
-
-  function makeDuplicateFingerprint(values: {
-    customerName: string;
-    companyName: string;
-    phone: string;
-    registrationNumber: string;
-    registrationLast4: string;
-  }) {
-    return [
-      values.customerName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
-      values.companyName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
-      values.phone.normalize("NFKC").replace(/\\D/g, ""),
-      values.registrationNumber.normalize("NFKC").replace(/[\\s　・･-]+/g, "").toUpperCase(),
-      values.registrationLast4.normalize("NFKC").replace(/[^0-9A-Za-z]/g, "").toUpperCase(),
-    ].join("|");
-  }
-
-  function duplicateFingerprint() {
-    return makeDuplicateFingerprint({ customerName, companyName, phone, registrationNumber, registrationLast4 });
   }
 
   const filteredRegisteredVehicles = useMemo(() => {
@@ -415,16 +531,6 @@ export default function ScheduleNewPage() {
     setRegistrationLast4(last4);
     setMaker(row.maker);
     setModel(row.model);
-    setDuplicateCustomers([]);
-    setDuplicateVehicles([]);
-    setDuplicateBypassFingerprint("");
-    setDuplicateDecisionFingerprint(makeDuplicateFingerprint({
-      customerName: row.customerName || row.companyName,
-      companyName: row.companyName,
-      phone: row.phone,
-      registrationNumber: row.registrationNumber,
-      registrationLast4: last4,
-    }));
   }
 
   function toggleRegisteredVehicle(row: RegisteredVehicleOption) {
@@ -440,7 +546,7 @@ export default function ScheduleNewPage() {
       if (nextPrimary) {
         applyRegisteredVehicle(nextPrimary, nextIds);
         setMessage(nextIds.length > 1
-          ? `同じお客様の車両を ${nextIds.length}台選択しています。`
+          ? `${nextIds.length}台選択しています。別のお客様・別車両でも共通条件でまとめて登録できます。`
           : "登録済みのお客様・車両を予定へ反映しました。");
       } else {
         setSelectedVehicleIds([]);
@@ -451,71 +557,55 @@ export default function ScheduleNewPage() {
       return;
     }
 
-    const selectedRows = selectedVehicleIds
-      .map((id) => registeredVehicles.find((vehicle) => vehicle.vehicleId === id))
-      .filter(Boolean) as RegisteredVehicleOption[];
-    const currentCustomerId = selectedRows[0]?.customerId || "";
-
-    if (selectedVehicleIds.length > 0 && currentCustomerId !== row.customerId) {
-      applyRegisteredVehicle(row, [row.vehicleId]);
-      setMessage("別のお客様を選択したため、車両選択を切り替えました。同じお客様の車両は続けて複数台選べます。");
-      return;
-    }
-
     const nextIds = [...selectedVehicleIds, row.vehicleId];
     applyRegisteredVehicle(row, nextIds);
     setMessage(nextIds.length > 1
-      ? `同じお客様の車両を ${nextIds.length}台選択しました。共通の入庫内容・日時でまとめて登録できます。`
-      : "登録済みのお客様・車両を予定へ反映しました。続けて同じお客様の別車両も選択できます。");
+      ? `${nextIds.length}台選択しました。別のお客様・別車両でも、共通の日付・区分/時間・入庫要因・納車予定でまとめて登録できます。`
+      : "登録済みのお客様・車両を予定へ反映しました。別のお客様・別車両も続けて選択できます。");
   }
 
-  async function checkDuplicateRegistration() {
-    const { data, error } = await supabase.rpc("find_schedule_registration_duplicates", {
-      p_customer_name: customerName.trim() || null,
-      p_company_name: companyName.trim() || null,
-      p_phone: phone.trim() || null,
-      p_registration_number: registrationNumber.trim() || null,
-      p_registration_last4: registrationLast4.trim() || null,
-      p_chassis_number: null,
-    });
+  async function sameDayVehicleScheduleWarnings(vehicleIds: string[]) {
+    const ids = [...new Set(vehicleIds.filter(Boolean))];
+    if (!ids.length) return [] as string[];
+
+    const dayStart = jstIso(day, "00:00");
+    const nextDayStart = jstIso(addDay(day, 1), "00:00");
+    const { data, error } = await supabase
+      .from("schedule_entries")
+      .select("id,vehicle_id,entry_type,starts_at")
+      .in("vehicle_id", ids)
+      .gte("starts_at", dayStart)
+      .lt("starts_at", nextDayStart);
     if (error) throw error;
 
-    const customerCandidates = (Array.isArray(data?.customerCandidates) ? data.customerCandidates : []) as DuplicateCustomerCandidate[];
-    const vehicleCandidates = (Array.isArray(data?.vehicleCandidates) ? data.vehicleCandidates : []) as DuplicateVehicleCandidate[];
-    const strongCustomerIds = new Set(customerCandidates.filter((x) => Number(x.score) >= 100).map((x) => x.customerId));
-    const pairedCustomerIds = new Set(
-      customerCandidates
-        .filter((c) => Number(c.score) >= 70 && vehicleCandidates.some((v) => v.customerId === c.customerId && Number(v.score) >= 50))
-        .map((c) => c.customerId)
+    const scheduledVehicleIds = new Set(
+      (data || []).map((row: any) => String(row.vehicle_id || "")).filter(Boolean)
     );
-    const strongCustomers = customerCandidates.filter((x) => Number(x.score) >= 70 || strongCustomerIds.has(x.customerId) || pairedCustomerIds.has(x.customerId));
-    const strongVehicles = vehicleCandidates.filter((x) => Number(x.score) >= 100 || (x.customerId ? pairedCustomerIds.has(x.customerId) : false));
 
-    if (!strongCustomers.length && !strongVehicles.length) {
-      setDuplicateCustomers([]);
-      setDuplicateVehicles([]);
-      return true;
-    }
-
-    setDuplicateCustomers(strongCustomers);
-    setDuplicateVehicles(strongVehicles);
-    setExistingCustomerId("");
-    setExistingVehicleId("");
-    setDuplicateDecisionFingerprint("");
-    setMessage("既存のお客様・車両と一致する候補があります。重複登録を防ぐため、使用する既存データか「新規として登録」を選んでください。");
-    return false;
+    return ids
+      .filter((id) => scheduledVehicleIds.has(id))
+      .map((id) => {
+        const row = registeredVehicles.find((vehicle) => vehicle.vehicleId === id);
+        const plateDigits = row?.registrationLast4
+          || row?.registrationNumber.match(/(\d{1,4})(?!.*\d)/)?.[1]
+          || "";
+        const label = naturalLast4(plateDigits) || row?.registrationNumber || "車両";
+        return `同日予定：車番 ${label} は ${day} にすでに予定があります。時間や入庫内容が違っていても同日のため確認してください。`;
+      });
   }
+
 
   async function preflight() {
     const main = mainTimes();
     if (!main) throw new Error("時間を選択してください。");
 
-    const { data, error } = await supabase.rpc("schedule_slot_check", {
+    const { data, error } = await supabase.rpc("schedule_slot_check_v2", {
       p_entry_type: entryType,
       p_starts_at: main.startsAt,
       p_ends_at: main.endsAt,
       p_reason: reason,
       p_exclude_entry_id: null,
+      p_print_time_mode: main.printMode,
     });
     if (error) throw error;
     const mainCheck = extractWarnings(data);
@@ -526,12 +616,13 @@ export default function ScheduleNewPage() {
       if (new Date(selectedDelivery.startsAt).getTime() < new Date(main.endsAt).getTime()) {
         throw new Error("納車予定は入庫・作業予定の終了後に設定してください。");
       }
-      const { data: deliveryData, error: deliveryError } = await supabase.rpc("schedule_slot_check", {
+      const { data: deliveryData, error: deliveryError } = await supabase.rpc("schedule_slot_check_v2", {
         p_entry_type: "delivery",
         p_starts_at: selectedDelivery.startsAt,
         p_ends_at: selectedDelivery.endsAt,
         p_reason: reason,
         p_exclude_entry_id: null,
+        p_print_time_mode: selectedDelivery.mode,
       });
       if (deliveryError) throw deliveryError;
       deliveryCheck = extractWarnings(deliveryData);
@@ -546,10 +637,59 @@ export default function ScheduleNewPage() {
     };
   }
 
-  async function submit(allowOverride = false) {
+  function scrollToTopAfterSuccessfulRegistration() {
+    // iPhone Safariではフォームの再描画・入力フォーカス解除後にスクロール位置が戻ることがあるため、
+    // 成功時だけ複数タイミングで先頭位置を確定する。
+    const jumpToTop = () => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(jumpToTop);
+    });
+    window.setTimeout(jumpToTop, 80);
+    window.setTimeout(jumpToTop, 240);
+  }
+
+  function resetAfterSuccessfulRegistration() {
+    setEntryType("pickup");
+    setReason("点検");
+    setCustomerName("");
+    setCustomerType("individual");
+    setCompanyName("");
+    setPhone("");
+    setScheduleDisplayName("");
+    setRegistrationNumber("");
+    setRegistrationLast4("");
+    setMaker("");
+    setModel("");
+    setStaffId("");
+    setVendorId("");
+    setVendorName("");
+    setIsUrgent(false);
+    setNeedsLoaner(false);
+    setNotes("");
+    setInspectionScheduleType("schedule");
+    setSelectedTimeKey("");
+    setShowAfternoonOptions(false);
+    setAddDelivery(true);
+    setDeliveryDay(day);
+    setDeliveryTimeKey("");
+    setRegisteredSearch("");
+    setSelectedVehicleIds([]);
+    setExistingVehicleId("");
+    setExistingCustomerId("");
     setWarnings([]);
     setHardErrors([]);
-    if (!customerName.trim()) {
+  }
+
+  async function submit(allowOverride = false) {
+    setSuccessMessage("");
+    setWarnings([]);
+    setHardErrors([]);
+    if (selectedVehicleIds.length <= 1 && !customerName.trim()) {
       setHardErrors(["お客様名を入力してください。"]);
       return;
     }
@@ -564,9 +704,8 @@ export default function ScheduleNewPage() {
         const selectedRows = selectedVehicleIds
           .map((id) => registeredVehicles.find((vehicle) => vehicle.vehicleId === id))
           .filter(Boolean) as RegisteredVehicleOption[];
-        const customerIds = [...new Set(selectedRows.map((row) => row.customerId).filter(Boolean))];
-        if (selectedRows.length !== selectedVehicleIds.length || customerIds.length !== 1) {
-          setHardErrors(["複数台登録は、同じお客様に紐づく登録済み車両だけを選択してください。"]);
+        if (selectedRows.length !== selectedVehicleIds.length) {
+          setHardErrors(["選択した車両情報を再取得できませんでした。選択し直してください。"]);
           return;
         }
 
@@ -576,37 +715,56 @@ export default function ScheduleNewPage() {
           setMessage("登録できない条件があります。内容を確認してください。");
           return;
         }
-        if (check.overrideRequired && !allowOverride) {
-          setWarnings(check.warnings);
-          setMessage("警告があります。内容を確認してから登録してください。");
+
+        const sameDayWarnings = await sameDayVehicleScheduleWarnings(selectedVehicleIds);
+        if ((check.overrideRequired || sameDayWarnings.length > 0) && !allowOverride) {
+          setWarnings([...check.warnings, ...sameDayWarnings]);
+          setMessage(sameDayWarnings.length
+            ? "同じ車両に同日の予定があります。確認後は「それでも登録する」で登録できます。"
+            : "警告があります。内容を確認してから登録してください。");
           return;
         }
 
+        const batchItems = selectedRows.map((row) => ({
+          vehicleId: row.vehicleId,
+          customerId: row.customerId,
+          customerName: row.customerName || row.companyName || "顧客未割当",
+          customerType: row.customerType || "individual",
+          companyName: row.companyName || null,
+          phone: row.phone || null,
+          scheduleDisplayName: row.scheduleDisplayName || null,
+          registrationNumber: row.registrationNumber || null,
+          registrationLast4: row.registrationLast4 || row.registrationNumber.match(/(\d{1,4})(?!.*\d)/)?.[1] || null,
+          maker: row.maker || null,
+          model: row.model || null,
+          entryType,
+          reason,
+          startsAt: check.main.startsAt,
+          endsAt: check.main.endsAt,
+          staffId: staffId || null,
+          notes: notes.trim() || null,
+          inspectionScheduleType: reason === "点検" ? (inspectionScheduleType || null) : null,
+          printTimeMode: check.main.printMode,
+          isUrgent,
+          needsLoaner,
+          vendorId: (reason === "板金塗装" || reason === "一般整備") ? (vendorId || null) : null,
+          vendorName: (reason === "板金塗装" || reason === "一般整備") ? (vendorName.trim() || null) : null,
+          addDelivery: addDelivery && entryType !== "delivery",
+          deliveryStartsAt: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
+          deliveryEndsAt: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
+          deliveryPrintTimeMode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
+        }));
+
         const { data, error } = await supabase.rpc("create_schedule_registration_batch_v1", {
-          p_vehicle_ids: selectedVehicleIds,
-          p_entry_type: entryType,
-          p_reason: reason,
-          p_starts_at: check.main.startsAt,
-          p_ends_at: check.main.endsAt,
-          p_staff_id: staffId || null,
-          p_notes: notes.trim() || null,
-          p_inspection_schedule_type: inspectionScheduleType || null,
-          p_print_time_mode: check.main.printMode,
-          p_is_urgent: isUrgent,
-          p_needs_loaner: needsLoaner,
-          p_vendor_id: reason === "板金塗装" ? (vendorId || null) : null,
-          p_vendor_name: reason === "板金塗装" ? (vendorName.trim() || null) : null,
-          p_add_delivery: addDelivery && entryType !== "delivery",
-          p_delivery_starts_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
-          p_delivery_ends_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
-          p_delivery_print_time_mode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
+          p_day: day,
+          p_items: batchItems,
           p_allow_warning_override: allowOverride,
         });
         if (error) throw error;
 
         const batchHardErrors = Array.isArray(data?.hardErrors) ? data.hardErrors.map(String) : [];
         const batchWarnings = Array.isArray(data?.warnings) ? data.warnings.map(String) : [];
-        if (batchHardErrors.length || data?.allowed === false) {
+        if (batchHardErrors.length || data?.created === false) {
           setHardErrors(batchHardErrors.length ? batchHardErrors : ["複数台の一括登録を完了できませんでした。"]);
           setMessage("複数台のうち登録できない条件があります。1台も登録せずに止めました。");
           return;
@@ -616,22 +774,16 @@ export default function ScheduleNewPage() {
           setMessage("複数台登録に警告があります。内容を確認してください。");
           return;
         }
-        if (!data?.batchCreated) throw new Error("複数台の予定を登録できませんでした。");
+        if (!data?.created) throw new Error("複数台の予定を登録できませんでした。");
 
-        setMessage(`${selectedVehicleIds.length}台の予定をまとめて登録しました。1日の予定へ戻ります。`);
-        window.setTimeout(() => location.assign(`/schedule?day=${day}`), 450);
+        resetAfterSuccessfulRegistration();
+        setMessage("");
+        setSuccessMessage(`${selectedRows.length}台の予定を登録しました。`);
         return;
       }
 
-      const fp = duplicateFingerprint();
-      const decisionIsCurrent = duplicateDecisionFingerprint === fp;
-      const selectedCustomerForSubmit = decisionIsCurrent ? existingCustomerId : "";
-      const selectedVehicleForSubmit = decisionIsCurrent ? existingVehicleId : "";
-
-      if (!selectedCustomerForSubmit && !selectedVehicleForSubmit && duplicateBypassFingerprint !== fp) {
-        const clear = await checkDuplicateRegistration();
-        if (!clear) return;
-      }
+      const selectedCustomerForSubmit = existingCustomerId;
+      const selectedVehicleForSubmit = existingVehicleId;
 
       const check = await preflight();
       if (!check.allowed || check.hardErrors.length) {
@@ -640,16 +792,21 @@ export default function ScheduleNewPage() {
         return;
       }
 
-      if (check.overrideRequired && !allowOverride) {
-        setWarnings(check.warnings);
-        setMessage("警告があります。内容を確認してから登録してください。");
+      const resolvedVehicleId = selectedVehicleForSubmit
+        || (selectedVehicleIds.length === 1 ? selectedVehicleIds[0] : "");
+      const sameDayWarnings = resolvedVehicleId
+        ? await sameDayVehicleScheduleWarnings([resolvedVehicleId])
+        : [];
+      if ((check.overrideRequired || sameDayWarnings.length > 0) && !allowOverride) {
+        setWarnings([...check.warnings, ...sameDayWarnings]);
+        setMessage(sameDayWarnings.length
+          ? "この車両は同じ日にすでに予定があります。確認後は「それでも登録する」で登録できます。"
+          : "警告があります。内容を確認してから登録してください。");
         return;
       }
 
-      const fpNow = duplicateFingerprint();
-      const decisionIsCurrentNow = duplicateDecisionFingerprint === fpNow;
-      const selectedCustomerForSubmitNow = decisionIsCurrentNow ? existingCustomerId : "";
-      const selectedVehicleForSubmitNow = decisionIsCurrentNow ? existingVehicleId : "";
+      const selectedCustomerForSubmitNow = existingCustomerId;
+      const selectedVehicleForSubmitNow = existingVehicleId;
 
       const { data, error } = await supabase.rpc("create_schedule_registration_v2", {
         p_customer_name: customerName.trim(),
@@ -667,7 +824,7 @@ export default function ScheduleNewPage() {
         p_model: model.trim() || null,
         p_staff_id: staffId || null,
         p_notes: notes.trim() || null,
-        p_inspection_schedule_type: inspectionScheduleType || null,
+        p_inspection_schedule_type: reason === "点検" ? (inspectionScheduleType || null) : null,
         p_print_time_mode: check.main.printMode,
         p_is_urgent: isUrgent,
         p_needs_loaner: needsLoaner,
@@ -712,15 +869,16 @@ export default function ScheduleNewPage() {
         const { error: assignmentError } = await supabase.rpc("set_work_order_assignment", {
           p_work_order_id: workOrderId,
           p_staff_id: staffId || null,
-          p_vendor_id: reason === "板金塗装" ? (vendorId || null) : null,
-          p_vendor_name: reason === "板金塗装" ? (vendorName.trim() || null) : null,
+          p_vendor_id: (reason === "板金塗装" || reason === "一般整備") ? (vendorId || null) : null,
+          p_vendor_name: (reason === "板金塗装" || reason === "一般整備") ? (vendorName.trim() || null) : null,
           p_actor: "schedule-registration",
         });
         if (assignmentError) throw assignmentError;
       }
 
-      setMessage("予定を登録しました。1日の予定へ戻ります。");
-      window.setTimeout(() => location.assign(`/schedule?day=${day}`), 350);
+      resetAfterSuccessfulRegistration();
+      setMessage("");
+      setSuccessMessage("予定を登録しました。");
     } catch (error: any) {
       setMessage(safeActionError("予定登録", error));
     } finally {
@@ -743,7 +901,13 @@ export default function ScheduleNewPage() {
       <section className="card">
         <div className="eyebrow">入出庫予定登録</div>
         <h1>予定を追加</h1>
-        <div className="notice">{message}</div>
+        <div className="notice">初入庫は「お客様名＋ナンバー下4桁」だけでも予定登録できます。型式・車台番号・完全な登録番号は、入庫後や車検証読取後に追記できます。</div>
+        {successMessage && (
+          <div className="successBanner" role="status" aria-live="polite">
+            <b>{successMessage}</b>
+            <span>登録日 {day} を引き継いで、他の入力内容はリセットしました。</span>
+          </div>
+        )}
 
         <div className="capacity">
           <div><small>午前 引取</small><b>{capMorningPickup}</b></div>
@@ -752,70 +916,15 @@ export default function ScheduleNewPage() {
           <div><small>午前 車検</small><b>{capInspection}</b></div>
         </div>
 
-        {!!hardErrors.length && (
-          <div className="errors">
-            <b>登録できない項目</b>
-            {hardErrors.map((x, i) => <div key={i}>・{x}</div>)}
-          </div>
-        )}
-        {!!warnings.length && (
-          <div className="warnings">
-            <b>確認が必要です</b>
-            {warnings.map((x, i) => <div key={i}>・{x}</div>)}
-            <button disabled={busy} onClick={() => void submit(true)}>警告を確認して登録</button>
-          </div>
-        )}
       </section>
 
-      {(duplicateCustomers.length > 0 || duplicateVehicles.length > 0) && (
-        <section className="card">
-          <h2>重複候補の確認</h2>
-          <div className="notice">既存のお客様・車両を選ぶと、新しい仮顧客・仮車両を増やさず予定だけ登録します。</div>
-          <div style={{display:"grid",gap:8,marginTop:12}}>
-            {duplicateVehicles.map((v) => (
-              <button type="button" key={v.vehicleId} onClick={() => {
-                setSelectedVehicleIds([v.vehicleId]);
-                setExistingVehicleId(v.vehicleId);
-                setExistingCustomerId(v.customerId || "");
-                setDuplicateDecisionFingerprint(duplicateFingerprint());
-                setDuplicateBypassFingerprint("");
-                setMessage("既存車両を使用して予定を登録します。");
-              }}>
-                既存車両を使う：{v.registrationNumber || `下4桁 ${v.registrationLast4 || "----"}`} {[v.maker,v.model].filter(Boolean).join(" ")}
-              </button>
-            ))}
-            {duplicateCustomers.map((c) => (
-              <button type="button" key={c.customerId} onClick={() => {
-                setSelectedVehicleIds([]);
-                setExistingVehicleId("");
-                setExistingCustomerId(c.customerId);
-                setDuplicateDecisionFingerprint(duplicateFingerprint());
-                setDuplicateBypassFingerprint("");
-                setMessage("既存顧客に新しい車両を追加して予定を登録します。");
-              }}>
-                既存顧客を使う：{c.displayName}{c.phone ? ` / ${c.phone}` : ""}
-              </button>
-            ))}
-            <button type="button" onClick={() => {
-              setSelectedVehicleIds([]);
-              setExistingVehicleId("");
-              setExistingCustomerId("");
-              setDuplicateDecisionFingerprint("");
-              setDuplicateBypassFingerprint(duplicateFingerprint());
-              setMessage("候補とは別のお客様・車両として新規登録します。");
-            }}>
-              候補とは別なので新規として登録
-            </button>
-          </div>
-        </section>
-      )}
 
       <section className="card">
         <h2>① お客様・車両</h2>
         <div style={{margin:"12px 0 16px",padding:"14px",border:"1px solid #c9d8ee",borderRadius:14,background:"#f8fbff"}}>
           <b style={{display:"block",marginBottom:6}}>登録済みのお客様・車両から選ぶ</b>
           <div style={{color:"#607086",fontSize:13,lineHeight:1.6,marginBottom:10}}>
-            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。同じお客様の車両は続けて複数台選択できます。
+            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。別のお客様・別車両でも続けて複数台選択できます。
           </div>
           <input
             value={registeredSearch}
@@ -843,8 +952,11 @@ export default function ScheduleNewPage() {
                     gap:3,
                   }}
                 >
-                  <b>{row.customerName || row.companyName || "お客様未紐付け"}</b>
-                  <span>{row.registrationNumber || ("下4桁 " + (row.registrationLast4 || "----"))}　{[row.maker,row.model].filter(Boolean).join(" ")}</span>
+                  <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+                    <b>{row.customerName || row.companyName || "お客様未紐付け"}</b>
+                    <strong style={{fontSize:20}}>{naturalLast4(row.registrationLast4 || row.registrationNumber.match(/(\d{1,4})(?!.*\d)/)?.[1] || "") || "----"}</strong>
+                  </div>
+                  <span>{[row.registrationNumber, row.maker, row.model].filter(Boolean).join("　") || "詳細情報は入庫後に追記できます"}</span>
                   <small style={{color:"#69778a"}}>{[row.phone, row.chassisNumber].filter(Boolean).join(" / ")}</small>
                 </button>
               ))}
@@ -853,7 +965,7 @@ export default function ScheduleNewPage() {
           {selectedVehicleIds.length > 0 && (
             <div className="selectedVehiclesSummary">
               <b>選択中：{selectedVehicleIds.length}台</b>
-              <span>{selectedVehicleIds.length > 1 ? "共通の入庫内容・日時で一括登録します。各車両の登録番号・型式は保存済み情報を使用します。" : "同じお客様の別車両を続けて選べます。"}</span>
+              <span>{selectedVehicleIds.length > 1 ? "別のお客様・別車両を、共通の日付・区分/時間・入庫要因・納車予定で一括登録します。各車両の顧客・車両情報は保存済み情報を使用します。" : "別のお客様・別車両も続けて選べます。"}</span>
               <button type="button" onClick={() => {
                 setSelectedVehicleIds([]);
                 setExistingVehicleId("");
@@ -890,7 +1002,7 @@ export default function ScheduleNewPage() {
         <div className="grid">
           <label>区分
             <select value={entryType} onChange={(e) => setEntryType(e.target.value as EntryType)}>
-              <option value="pickup">引き取り</option>
+              <option value="pickup">引取</option>
               <option value="customer_visit">来社</option>
               <option value="onsite_repair">出張整備</option>
               <option value="delivery">納車</option>
@@ -901,13 +1013,13 @@ export default function ScheduleNewPage() {
               <option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option>
             </select>
           </label>
-          {(reason === "点検" || reason === "車検") && (
+          {reason === "点検" && (
             <label>点検区分
               <select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}>
                 <option value="">未指定</option>
-                <option value="schedule">通常予定</option>
-                <option value="legal_6m">法定6ヶ月</option>
-                <option value="legal_12m">法定12ヶ月</option>
+                <option value="schedule">スケジュール点検</option>
+                <option value="legal_6m">法定6ヶ月点検</option>
+                <option value="legal_12m">法定12ヶ月点検</option>
               </select>
             </label>
           )}
@@ -919,19 +1031,19 @@ export default function ScheduleNewPage() {
               ))}
             </select>
           </label>
-          {reason === "板金塗装" && (
+          {(reason === "板金塗装" || reason === "一般整備") && (
             <>
               <label>外注先
                 <select value={vendorId} onChange={(e) => { setVendorId(e.target.value); if (e.target.value) setVendorName(""); }}>
-                  <option value="">未選択 / 直接入力</option>
+                  <option value="">自社作業 / 未選択 / 直接入力</option>
                   {vendors.map((vendor) => (
                     <option key={vendor.id} value={vendor.id}>{vendor.short_name || vendor.display_name}</option>
                   ))}
                 </select>
               </label>
               {!vendorId && (
-                <label>外注先名（直接入力）
-                  <input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：○○鈑金" />
+                <label>外注先名（必要な時だけ）
+                  <input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：ガラス業者、電装業者、○○鈑金" />
                 </label>
               )}
             </>
@@ -940,7 +1052,7 @@ export default function ScheduleNewPage() {
             <label className="switch"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />急ぎ</label>
             <label className="switch"><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} />代車あり</label>
             <button type="button" onClick={() => location.assign("/settings/staff")}>社員名を管理</button>
-            {reason === "板金塗装" && <button type="button" onClick={() => location.assign("/settings/vendors")}>外注先を管理</button>}
+            {(reason === "板金塗装" || reason === "一般整備") && <button type="button" onClick={() => location.assign("/settings/vendors")}>外注先を管理</button>}
           </div>
           <label className="wide">備考<textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>
@@ -951,19 +1063,19 @@ export default function ScheduleNewPage() {
         <div className="grid">
           <label>日付<input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label>
 
-          {entryType !== "onsite_repair" ? (
-            <div className="wide availabilityBlock">
-              <div className="availabilityTitle">
-                <b>時間・空き状況</b>
-                <span className="legend"><i className="dot openDot" />○ 空き　<i className="dot warnDot" />△ 要確認　<i className="dot blockedDot" />× 不可</span>
-              </div>
-              {loadingOptions ? (
-                <div className="availabilityLoading">空き時間を確認中…</div>
-              ) : !timeOptions.length ? (
-                <div className="availabilityLoading">時間候補がありません。</div>
-              ) : (
+          <div className="wide availabilityBlock">
+            <div className="availabilityTitle">
+              <b>時間・空き状況</b>
+              <span className="legend"><i className="dot openDot" />○ 空き　<i className="dot warnDot" />△ 要確認　<i className="dot blockedDot" />× 不可</span>
+            </div>
+            {loadingOptions ? (
+              <div className="availabilityLoading">空き時間を確認中…</div>
+            ) : !timeOptions.length ? (
+              <div className="availabilityLoading">時間候補がありません。</div>
+            ) : (
+              <>
                 <div className="timeGrid">
-                  {timeOptions.map((x) => {
+                  {timeOptions.filter((x) => x.group === "morning").map((x) => {
                     const state = x.availability || "open";
                     const mark = state === "open" ? "○" : state === "warning" ? "△" : "×";
                     const detail = [...(x.hardErrors || []), ...(x.warnings || [])].join(" / ");
@@ -973,26 +1085,56 @@ export default function ScheduleNewPage() {
                         key={x.key}
                         className={`timeSlot ${state} ${selectedTimeKey === x.key ? "selected" : ""}`}
                         disabled={state === "blocked"}
-                        onClick={() => setSelectedTimeKey(x.key)}
+                        onClick={() => {
+                          setSelectedTimeKey(x.key);
+                          setShowAfternoonOptions(false);
+                        }}
                         title={detail || (state === "open" ? "空いています" : "確認が必要です")}
                       >
                         <span>{mark}</span><b>{x.displayLabel || x.label}</b>
                       </button>
                     );
                   })}
+                  <button
+                    type="button"
+                    className={`timeSlot afternoonSelector ${showAfternoonOptions ? "selected" : ""}`}
+                    onClick={() => {
+                      setSelectedTimeKey("");
+                      setShowAfternoonOptions(true);
+                    }}
+                  >
+                    <span>▶</span><b>午後</b>
+                  </button>
                 </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
-              <label>作業枠
-                <select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}>
-                  <option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option>
-                </select>
-              </label>
-            </>
-          )}
+
+                {showAfternoonOptions && (
+                  <div className="afternoonChoices">
+                    <div className="afternoonChoicesTitle">午後の時間指定 または 中</div>
+                    <div className="timeGrid">
+                      {timeOptions.filter((x) => x.group === "afternoon").map((x) => {
+                        const state = x.availability || "open";
+                        const mark = state === "open" ? "○" : state === "warning" ? "△" : "×";
+                        const detail = [...(x.hardErrors || []), ...(x.warnings || [])].join(" / ");
+                        return (
+                          <button
+                            type="button"
+                            key={x.key}
+                            className={`timeSlot ${state} ${selectedTimeKey === x.key ? "selected" : ""}`}
+                            disabled={state === "blocked"}
+                            onClick={() => setSelectedTimeKey(x.key)}
+                            title={detail || (state === "open" ? "空いています" : "確認が必要です")}
+                          >
+                            <span>{mark}</span><b>{x.displayLabel || x.label}</b>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="timeMeaning">「中」はその日の営業時間内で時間指定なしです。</div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </section>
 
@@ -1020,7 +1162,25 @@ export default function ScheduleNewPage() {
         </section>
       )}
 
-      <section className="card">
+      <section className="card actionCard">
+        {!!hardErrors.length && (
+          <div className="errors actionFeedback">
+            <b>登録できない項目</b>
+            {hardErrors.map((x, i) => <div key={i}>・{x}</div>)}
+          </div>
+        )}
+        {!!warnings.length && (
+          <div className="warnings actionFeedback">
+            <b>確認が必要です</b>
+            {warnings.map((x, i) => <div key={i}>・{x}</div>)}
+            <button disabled={busy} onClick={() => void submit(true)}>
+              {warnings.some((x) => x.startsWith("同日予定：")) ? "それでも登録する" : "警告を確認して登録"}
+            </button>
+          </div>
+        )}
+        {message && (
+          <div className="actionMessage" aria-live="polite">{message}</div>
+        )}
         <button className="primary" disabled={busy} onClick={() => void submit(false)}>
           {busy ? "登録中…" : "この内容で予定を登録"}
         </button>
@@ -1040,6 +1200,7 @@ export default function ScheduleNewPage() {
         .availabilityBlock{display:grid;gap:10px}.availabilityTitle{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;color:#5c6878}.legend{font-size:12px;font-weight:800}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.openDot{background:#4f9c68}.warnDot{background:#d69a36}.blockedDot{background:#9aa5b3}.availabilityLoading{background:#f7f9fc;border-radius:12px;padding:14px;color:#78869a}.timeGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.timeSlot{display:flex;gap:5px;justify-content:center;align-items:center;padding:10px 7px;border-radius:12px}.timeSlot.open{background:#f2fbf5;border-color:#9bceb0;color:#236c3b}.timeSlot.warning{background:#fff8ea;border-color:#e5bd73;color:#8a5a08}.timeSlot.blocked{background:#f1f3f6;border-color:#d5dbe3;color:#8a95a3;opacity:.7}.timeSlot.selected{outline:3px solid #2674e8;outline-offset:1px}.timeSlot:disabled{cursor:not-allowed}
         input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
         .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.deliveryGrid{margin-top:12px}
+        .successBanner{margin:14px 0 0;padding:14px 16px;border-radius:14px;background:#edf7ef;border:1px solid #b9ddc2;color:#2f5a39;display:grid;gap:4px}.successBanner b{font-size:18px}.successBanner span{font-size:13px;line-height:1.5}.actionCard{scroll-margin-top:16px}.actionFeedback{margin:0 0 10px}.actionMessage{margin:0 0 10px;padding:12px 14px;border-radius:12px;background:#edf7ef;border:1px solid #c2e5cb;color:#3c5944;line-height:1.6}
         .primary{width:100%;background:#2f6fe4;border-color:#2f6fe4;color:#fff;font-size:18px;padding:16px}
         .errors,.warnings{margin-top:12px;border-radius:12px;padding:13px 14px;line-height:1.7}.errors{background:#fff0f0;border:1px solid #efbcbc;color:#8f2f2f}.warnings{background:#fff8df;border:1px solid #ecd98d;color:#6d5912}.warnings button{margin-top:8px;background:#fff}
         .footnote{color:#6f7c8e;line-height:1.6;margin-bottom:0}

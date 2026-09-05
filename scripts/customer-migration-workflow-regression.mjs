@@ -21,7 +21,9 @@ expect(customer, "/customer-vehicles/bulk-import", "bulk import navigation");
 expect(schedule, "selectedVehicleIds", "multi-vehicle schedule");
 expect(schedule, "toggleRegisteredVehicle", "multi-vehicle schedule");
 expect(schedule, "create_schedule_registration_batch_v1", "multi-vehicle schedule");
-expect(schedule, "同じお客様", "multi-vehicle schedule");
+expect(schedule, "p_items: batchItems", "cross-customer JSONB batch schedule");
+expect(schedule, "customerId: row.customerId", "cross-customer JSONB batch schedule");
+expect(schedule, "別のお客様・別車両", "cross-customer multi-vehicle schedule");
 expect(schedule, "1台も登録せずに止めました", "multi-vehicle atomic failure");
 
 expect(scheduleSql, "create_schedule_registration_batch_v1", "schedule batch sql");
@@ -57,6 +59,6 @@ if (failures.length) {
 
 console.log("PASS customer migration workflow regression");
 console.log("- customer records can be removed without deleting vehicle/work history");
-console.log("- one customer can schedule multiple existing vehicles atomically");
+console.log("- different customers' existing vehicles can be scheduled together through the JSONB batch RPC");
 console.log("- multiple native-text vehicle-certificate PDFs can be reviewed and bulk imported");
 console.log("- bulk workflows remain authenticated and bounded");
