@@ -25,9 +25,9 @@ assert.match(printPage, /inspection_schedule_type/, "日報は既存inspection_s
 assert.doesNotMatch(printPage, /legal_3m/, "日報側にもlegal_3mを追加しない");
 assert.match(printPage, /\.reportVehicle small\{[^}]*color:#000/, "上部の入庫要因コードは黒文字");
 assert.match(printPage, /\.stayingRow \.vehicleWork b\{left:0;width:39%\}/, "滞留車両の車番は元PDFの括弧より左の同一欄を使う");
-assert.match(printPage, /\.stayingRow \.vehicleWork small\{left:39%;width:44%\}/, "滞留車両のコードは元PDF既存括弧内へ同一行で置く");
+assert.match(printPage, /\.stayingRow \.vehicleWork small\{left:50%;width:42%\}/, "滞留車両のコードは元PDF既存括弧中央へ同一行で置く");
 assert.match(printPage, /\.plannedRow \.vehicleWork b\{left:0;width:56%\}/, "納車予定の車番は元PDFの括弧より左の同一欄を使う");
-assert.match(printPage, /\.plannedRow \.vehicleWork small\{left:56%;width:33%\}/, "納車予定のコードは元PDF既存括弧内へ同一行で置く");
+assert.match(printPage, /\.plannedRow \.vehicleWork small\{left:62%;width:34%\}/, "納車予定のコードは元PDF既存括弧中央へ同一行で置く");
 assert.match(printPage, /<span className="vehicleWork"><b>\{last4ForVehicle\(work\.vehicle_id\)\}<\/b><small>\{dailyReportWorkCode/, "下部は車番とコードだけを出しアプリ側で括弧を描画しない");
 assert.doesNotMatch(printPage, /[（(]\s*\{dailyReportWorkCode|dailyReportWorkCode\([^)]*\)\}\s*[）)]/, "コード文字列へ新しい括弧を追加しない");
 assert.match(printPage, /entry\.entry_type === "customer_visit" && <span className="reportVisitVehicleLabel">来社<\/span>/, "通常来社は車番左側へ来社と表示");
@@ -38,7 +38,7 @@ assert.doesNotMatch(businessState, /作業待ち|来社待ち/, "作業待ちは
 assert.match(printPage, /\.secondaryRow \.vehicleWork small\{[^}]*color:#000/, "下部の入庫要因コードは黒文字");
 assert.match(printPage, /\.secondaryDue\{position:relative!important;display:block!important\}/, "納車予定の納期は同一セル同一行を使う");
 assert.match(printPage, /\.secondaryDue b\{left:0;width:28%;font-size:1em\}/, "納期の日付は元PDFの括弧より左へ同一行で置く");
-assert.match(printPage, /\.secondaryDue small\{left:29%;width:59%;font-size:\.9em/, "納期の時間区分は元PDF既存括弧内へ同一行で置く");
+assert.match(printPage, /\.secondaryDue small\{left:45%;width:51%;font-size:\.9em/, "納期の時間区分は元PDF既存括弧中央へ同一行で置く");
 assert.doesNotMatch(printPage, /secondaryDue\{[^}]*grid-template-rows/, "納期を縦2段へ戻さない");
 
 console.log("daily report work-code regression: ok");
