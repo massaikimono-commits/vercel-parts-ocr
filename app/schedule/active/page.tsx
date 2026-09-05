@@ -131,8 +131,9 @@ export default function ActiveVehicleSchedulePage() {
   }, []);
 
   useEffect(() => {
+    if (reason !== "点検" && inspectionScheduleType) setInspectionScheduleType("");
     void loadMainOptions();
-  }, [day, entryType]);
+  }, [day, entryType, reason]);
 
   useEffect(() => {
     let active = true;
@@ -436,7 +437,7 @@ export default function ActiveVehicleSchedulePage() {
           ) : (
             <label className="wide">時間<select value={timeKey} onChange={(e) => setTimeKey(e.target.value)}>{!timeOptions.length && <option value="">候補なし</option>}{timeOptions.map((x) => <option value={x.key} key={x.key}>{x.label}</option>)}</select></label>
           )}
-          {(reason === "点検" || reason === "車検") && <label>点検区分<select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}><option value="">未指定</option><option value="schedule">スケジュール点検</option><option value="legal_6m">法定6ヶ月点検</option><option value="legal_12m">法定12ヶ月点検</option></select></label>}
+          {reason === "点検" && <label>点検区分<select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}><option value="">未指定</option><option value="schedule">スケジュール点検</option><option value="legal_6m">法定6ヶ月点検</option><option value="legal_12m">法定12ヶ月点検</option></select></label>}
           <label>作業担当<select value={staffId} onChange={(e) => setStaffId(e.target.value)}><option value="">未選択</option>{staff.map((x) => <option key={x.id} value={x.id}>{x.short_name || x.display_name}</option>)}</select></label>
           {(reason === "一般整備" || reason === "板金塗装") && <>
             <label>外注先
