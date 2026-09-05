@@ -186,6 +186,11 @@ export default function ScheduleNewPage() {
   }, []);
 
   useEffect(() => {
+    if (!successMessage) return;
+    scrollToTopAfterSuccessfulRegistration();
+  }, [successMessage]);
+
+  useEffect(() => {
     let active = true;
     async function applyDefaultDeliveryDay() {
       if (reason !== "車検") {
@@ -702,7 +707,6 @@ export default function ScheduleNewPage() {
         resetAfterSuccessfulRegistration();
         setMessage("");
         setSuccessMessage(`${selectedRows.length}台の予定を登録しました。`);
-        scrollToTopAfterSuccessfulRegistration();
         return;
       }
 
@@ -803,7 +807,6 @@ export default function ScheduleNewPage() {
       resetAfterSuccessfulRegistration();
       setMessage("");
       setSuccessMessage("予定を登録しました。");
-      scrollToTopAfterSuccessfulRegistration();
     } catch (error: any) {
       setMessage(safeActionError("予定登録", error));
     } finally {
