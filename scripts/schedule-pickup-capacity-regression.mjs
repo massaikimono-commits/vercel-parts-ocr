@@ -42,7 +42,7 @@ for (const expected of [
 for (const expected of [
   'row.entry_type === "pickup" || row.entry_type === "delivery"',
   'return minute === 0 ?',
-  'row.entry_type === "pickup" && row.print_time_mode === "unspecified"',
+  '(row.entry_type === "pickup" || row.entry_type === "customer_visit") && row.print_time_mode === "unspecified"',
   'return "午後"',
 ]) {
   if (!rules.includes(expected)) failures.push("print rules missing: " + expected);
