@@ -10,6 +10,9 @@ assert.match(sql, /rental_provider_status = 'cancellation_requested'/, "rental-c
 assert.match(sql, /return public\.cancel_customer_booking_by_staff\(/, "linked customer booking continues through the existing safe cancellation path");
 
 assert.match(edit, /supabase\.rpc\("cancel_schedule_entry_v1"/, "edit screen keeps the existing cancellation RPC");
+assert.match(edit, /params\.get\("mode"\)==="cancel"/, "cancellation confirmation can be opened directly from search");
+assert.match(edit, /entry && cancelMode && showCancel/, "direct cancel mode reuses the existing confirmation UI");
+assert.doesNotMatch(edit, /onClick=\{\(\)=>setShowCancel\(true\)\}/, "normal edit mode does not duplicate the cancellation entry point");
 assert.match(edit, /\.eq\("work_order_id",e\.work_order_id\)[\s\S]*\.eq\("entry_type","delivery"\)/s, "edit loads related delivery by work order");
 assert.match(edit, /\.eq\("work_order_id",e\.work_order_id\)[\s\S]*\.in\("entry_type",\["pickup","customer_visit","onsite_repair"\]\)/s, "edit loads related inbound schedule by work order");
 
