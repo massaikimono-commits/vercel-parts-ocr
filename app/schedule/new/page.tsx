@@ -423,7 +423,12 @@ export default function ScheduleNewPage() {
               )
             ))
           );
-          options = [...options, ...afternoonExact];
+          const afternoonBroad = options.filter((x) => x.group === "afternoon" && x.mode === "unspecified");
+          options = [
+            ...options.filter((x) => !(x.group === "afternoon" && x.mode === "unspecified")),
+            ...afternoonExact,
+            ...afternoonBroad,
+          ];
         }
 
         options = options.map((option) => (
