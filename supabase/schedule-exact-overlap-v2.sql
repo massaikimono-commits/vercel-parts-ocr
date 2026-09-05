@@ -1,6 +1,6 @@
 -- Schedule overlap/display rule patch (2026-09-03)
 -- Goal:
---   * only exact-time appointments produce overlap warnings
+--   * only exact-time customer_visit appointments produce overlap warnings
 --   * A中 / 午後 / 午前中 / 午後中 never produce overlap warnings
 --   * customer_visit can choose exact time + A中 + 午後
 --   * outsourced 一般整備 is preserved in batch registration
@@ -40,18 +40,18 @@ begin
       and warning_text = '来社予約は通常60分枠、17:00受付のみ30分枠です'
     );
 
-  if v_mode = 'exact' then
+  if v_mode = 'exact' and p_entry_type = 'customer_visit' then
     select count(*)::int
     into v_conflicts
     from public.schedule_entries se
     where (p_exclude_entry_id is null or se.id <> p_exclude_entry_id)
       and se.starts_at < p_ends_at
       and se.ends_at > p_starts_at
-      and se.entry_type = p_entry_type
+      and se.entry_type = 'customer_visit'
       and coalesce(nullif(btrim(se.print_time_mode),''),'exact') = 'exact';
 
     if v_conflicts > 0 then
-      v_warnings := v_warnings || jsonb_build_array('同じ区分の予定が重複しています');
+      v_warnings := v_warnings || jsonb_build_array('来社予定が重複しています');
     end if;
   end if;
 
