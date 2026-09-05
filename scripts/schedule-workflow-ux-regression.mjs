@@ -31,6 +31,12 @@ if (!(customerIndex >= 0 && workIndex > customerIndex && timeIndex > workIndex &
   failures.push("registration: expected customer/vehicle -> work -> date/time -> delivery order");
 }
 
+
+expect(scheduleNew, 'reason === "点検" ? (inspectionScheduleType || null) : null', "inspection schedule type");
+if ((scheduleNew.match(/p_inspection_schedule_type: reason === "点検" \? \(inspectionScheduleType \|\| null\) : null/g) || []).length !== 2) {
+  failures.push("inspection schedule type: both single and batch registration must clear the value outside 点検");
+}
+
 expect(scheduleEdit, "取消理由（任意）", "cancellation");
 expect(scheduleEdit, "p_reason:cancelReason.trim() || null", "cancellation");
 if (scheduleEdit.includes("取消理由（必須）") || scheduleEdit.includes("取消理由を入力してください。")) {
@@ -53,5 +59,6 @@ if (failures.length) {
 console.log("PASS schedule workflow UX regression");
 console.log("- home is weekly-schedule first");
 console.log("- registration starts with customer/vehicle, then work, then date/time");
+console.log("- inspection schedule type is persisted only for reason=点検");
 console.log("- cancellation reason is optional");
 console.log("- daily/weekly schedule labels are distinct and consistent");
