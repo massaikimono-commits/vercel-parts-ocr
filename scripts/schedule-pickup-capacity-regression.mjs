@@ -34,7 +34,7 @@ for (const expected of [
 for (const expected of [
   "displayLabel?:string;",
   "x.displayLabel || x.label",
-  "x.mode === base.print_time_mode",
+  "x.mode===base.print_time_mode",
 ]) {
   if (!edit.includes(expected)) failures.push("schedule/edit missing: " + expected);
 }
