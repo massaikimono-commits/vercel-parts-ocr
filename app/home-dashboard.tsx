@@ -71,12 +71,6 @@ function todayJst() {
   }).format(new Date());
 }
 
-function jstBounds(day: string) {
-  const start = new Date(day + "T00:00:00+09:00");
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  return { start: start.toISOString(), end: end.toISOString() };
-}
-
 function addDays(day: string, delta: number) {
   const d = new Date(day + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + delta);
@@ -101,12 +95,6 @@ function shortDayLabel(day: string) {
   }).format(new Date(day + "T00:00:00Z"));
 }
 
-function timeLabel(value: string) {
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false,
-  }).format(new Date(value));
-}
-
 function reasonOrder(reason: string | null | undefined) {
   if (reason === "点検") return 0;
   if (reason === "一般整備") return 1;
@@ -120,7 +108,6 @@ function scheduleTimeLabel(entry: ScheduleEntry) {
 }
 
 export default function HomeDashboard({ onLogout }: { onLogout: () => void | Promise<unknown> }) {
-  const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [weekEntries, setWeekEntries] = useState<ScheduleEntry[]>([]);
   const [stateEntries, setStateEntries] = useState<BusinessScheduleEntry[]>([]);
   const [works, setWorks] = useState<WorkOrder[]>([]);
@@ -148,20 +135,17 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     setBusy(true);
     setLoadError("");
     const today = todayJst();
-    const bounds = jstBounds(today);
     const weekStart = mondayOf(today);
     const weekEnd = addDays(weekStart, 7);
-    const [entryRes, weekEntryRes, stateEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
-      supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", bounds.start).lt("starts_at", bounds.end).order("starts_at", { ascending: true }),
+    const [weekEntryRes, stateEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").gte("starts_at", new Date(weekStart + "T00:00:00+09:00").toISOString()).lt("starts_at", new Date(weekEnd + "T00:00:00+09:00").toISOString()).order("starts_at", { ascending: true }),
       supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode").in("entry_type", ["pickup", "customer_visit", "delivery"]),
       supabase.from("work_orders").select("id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,outsource_vendor_name,checked_out_at").neq("status", "cancelled"),
       supabase.from("vehicles").select("id,customer_id,registration_number_last4,registration_number"),
       supabase.from("customers").select("id,name,company_name,schedule_display_name"),
     ]);
-    const firstError = [entryRes.error, weekEntryRes.error, stateEntryRes.error, workRes.error, vehicleRes.error, customerRes.error].find(Boolean);
+    const firstError = [weekEntryRes.error, stateEntryRes.error, workRes.error, vehicleRes.error, customerRes.error].find(Boolean);
     if (firstError) setLoadError("スケジュールを取得できません。詳細画面で再確認してください。");
-    if (!entryRes.error) setEntries((entryRes.data || []) as ScheduleEntry[]);
     if (!weekEntryRes.error) setWeekEntries((weekEntryRes.data || []) as ScheduleEntry[]);
     if (!stateEntryRes.error) setStateEntries((stateEntryRes.data || []) as BusinessScheduleEntry[]);
     if (!workRes.error) setWorks((workRes.data || []) as WorkOrder[]);
@@ -173,13 +157,6 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   const workMap = useMemo(() => new Map(works.map((x) => [x.id, x])), [works]);
   const vehicleMap = useMemo(() => new Map(vehicles.map((x) => [x.id, x])), [vehicles]);
   const customerMap = useMemo(() => new Map(customers.map((x) => [x.id, x])), [customers]);
-
-  const todayRows = useMemo(() => entries.map((entry) => {
-    const work = entry.work_order_id ? workMap.get(entry.work_order_id) || null : null;
-    const vehicle = entry.vehicle_id ? vehicleMap.get(entry.vehicle_id) || null : null;
-    const customer = vehicle && vehicle.customer_id ? customerMap.get(vehicle.customer_id) || null : null;
-    return { entry, work, vehicle, customer };
-  }), [entries, workMap, vehicleMap, customerMap]);
 
   const currentWeekDays = useMemo(() => {
     const start = mondayOf(todayJst());
@@ -210,20 +187,6 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     return grouped;
   }, [weekEntries, workMap, vehicleMap, customerMap]);
 
-  const statusCounts = useMemo(() => {
-    const uniqueWorks = new Map<string, WorkOrder>();
-    for (const { work } of todayRows) if (work) uniqueWorks.set(work.id, work);
-    let pending = 0;
-    let inProgress = 0;
-    let completed = 0;
-    for (const work of uniqueWorks.values()) {
-      if (work.work_completed || work.status === "completed") completed += 1;
-      else if (work.status === "in_progress") inProgress += 1;
-      else pending += 1;
-    }
-    return { pending, inProgress, completed };
-  }, [todayRows]);
-
   const workerLoad = useMemo(() => {
     const grouped = new Map<string, { name: string; pending: number; running: number; total: number; urgent: number }>();
     for (const work of works) {
@@ -242,33 +205,6 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       return b.urgent - a.urgent || b.total - a.total || b.running - a.running || a.name.localeCompare(b.name, "ja");
     });
   }, [works]);
-
-  const unfinished = useMemo(() => {
-    const seenWorkIds = new Set<string>();
-    return todayRows.filter(({ work }) => {
-      if (!work || work.work_completed || work.status === "completed" || work?.status === "in_progress" || seenWorkIds.has(work.id)) return false;
-      seenWorkIds.add(work.id);
-      return true;
-    });
-  }, [todayRows]);
-
-  const inProgressRows = useMemo(() => {
-    const seenWorkIds = new Set<string>();
-    return todayRows.filter(({ work }) => {
-      if (!work || work.work_completed || work?.status !== "in_progress" || seenWorkIds.has(work.id)) return false;
-      seenWorkIds.add(work.id);
-      return true;
-    });
-  }, [todayRows]);
-
-  const completedRows = useMemo(() => {
-    const seenWorkIds = new Set<string>();
-    return todayRows.filter(({ work }) => {
-      if (!work || (!work.work_completed && work.status !== "completed") || seenWorkIds.has(work.id)) return false;
-      seenWorkIds.add(work.id);
-      return true;
-    });
-  }, [todayRows]);
 
   const businessStates = useMemo(
     () => classifyVehicleBusinessStates(works, stateEntries, todayJst()),
@@ -312,14 +248,6 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     params.set("filter", "unfinished");
     location.assign("/schedule/workload?" + params.toString());
   }
-
-  const todayCountLabel = busy ? "…" : loadError ? "確認要" : todayRows.length + "件";
-  const inProgressLabel = "作業中";
-  const todayStatusLabel = busy
-    ? "読み込み中"
-    : loadError
-      ? "状態は1日の予定で確認"
-      : `未実施 ${statusCounts.pending}・作業中 ${statusCounts.inProgress}・完了 ${statusCounts.completed}`;
 
   return (
     <main className="homeDash">
