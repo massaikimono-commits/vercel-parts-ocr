@@ -53,12 +53,6 @@ type PickupCapacity = {
   morning_pickup_over: boolean;
 };
 
-type DuplicateCustomerCandidate = {
-  customerId: string;
-  displayName: string;
-  phone: string | null;
-  score: number;
-};
 
 type RegisteredVehicleOption = {
   vehicleId: string;
@@ -178,11 +172,8 @@ export default function ScheduleNewPage() {
   const [message, setMessage] = useState("お客様・車両を選んでから、入庫内容と日時を登録します。");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [hardErrors, setHardErrors] = useState<string[]>([]);
-  const [duplicateCustomers, setDuplicateCustomers] = useState<DuplicateCustomerCandidate[]>([]);
   const [existingCustomerId, setExistingCustomerId] = useState("");
   const [existingVehicleId, setExistingVehicleId] = useState("");
-  const [duplicateDecisionFingerprint, setDuplicateDecisionFingerprint] = useState("");
-  const [duplicateBypassFingerprint, setDuplicateBypassFingerprint] = useState("");
   const [registeredSearch, setRegisteredSearch] = useState("");
   const [registeredVehicles, setRegisteredVehicles] = useState<RegisteredVehicleOption[]>([]);
   const [registeredVehiclesLoading, setRegisteredVehiclesLoading] = useState(false);
@@ -429,25 +420,6 @@ export default function ScheduleNewPage() {
     };
   }
 
-  function makeDuplicateFingerprint(values: {
-    customerName: string;
-    companyName: string;
-    phone: string;
-    registrationNumber: string;
-    registrationLast4: string;
-  }) {
-    return [
-      values.customerName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
-      values.companyName.normalize("NFKC").replace(/[\\s　]+/g, "").toLowerCase(),
-      values.phone.normalize("NFKC").replace(/\\D/g, ""),
-      values.registrationNumber.normalize("NFKC").replace(/[\\s　・･-]+/g, "").toUpperCase(),
-      values.registrationLast4.normalize("NFKC").replace(/[^0-9A-Za-z]/g, "").toUpperCase(),
-    ].join("|");
-  }
-
-  function duplicateFingerprint() {
-    return makeDuplicateFingerprint({ customerName, companyName, phone, registrationNumber, registrationLast4 });
-  }
 
   const filteredRegisteredVehicles = useMemo(() => {
     const q = registeredSearch.normalize("NFKC").trim().toLowerCase();
@@ -479,15 +451,6 @@ export default function ScheduleNewPage() {
     setRegistrationLast4(last4);
     setMaker(row.maker);
     setModel(row.model);
-    setDuplicateCustomers([]);
-    setDuplicateBypassFingerprint("");
-    setDuplicateDecisionFingerprint(makeDuplicateFingerprint({
-      customerName: row.customerName || row.companyName,
-      companyName: row.companyName,
-      phone: row.phone,
-      registrationNumber: row.registrationNumber,
-      registrationLast4: last4,
-    }));
   }
 
   function toggleRegisteredVehicle(row: RegisteredVehicleOption) {
@@ -562,37 +525,6 @@ export default function ScheduleNewPage() {
       });
   }
 
-  async function checkDuplicateRegistration() {
-    const { data, error } = await supabase.rpc("find_schedule_registration_duplicates", {
-      p_customer_name: customerName.trim() || null,
-      p_company_name: companyName.trim() || null,
-      p_phone: phone.trim() || null,
-      p_registration_number: registrationNumber.trim() || null,
-      p_registration_last4: registrationLast4.trim() || null,
-      p_chassis_number: null,
-    });
-    if (error) throw error;
-
-    const customerCandidates = (Array.isArray(data?.customerCandidates) ? data.customerCandidates : []) as DuplicateCustomerCandidate[];
-
-    // 車両そのものの同一判定と、同日予定の重複警告は別機能。
-    // 現在の予定登録フォームには車台番号入力がないため、情報不足の状態で
-    // 登録番号・下4桁などの点数/部分一致から「同じ車両」と断定しない。
-    // 登録済み車両は上の「登録済みのお客様・車両から選ぶ」で明示的に選択する。
-    const strongCustomers = customerCandidates.filter((x) => Number(x.score) >= 70);
-
-    if (!strongCustomers.length) {
-      setDuplicateCustomers([]);
-      return true;
-    }
-
-    setDuplicateCustomers(strongCustomers);
-    setExistingCustomerId("");
-    setExistingVehicleId("");
-    setDuplicateDecisionFingerprint("");
-    setMessage("既存のお客様候補があります。車両の同一判定や同日予定の重複確認とは分けて確認してください。");
-    return false;
-  }
 
   async function preflight() {
     const main = mainTimes();
@@ -717,15 +649,8 @@ export default function ScheduleNewPage() {
         return;
       }
 
-      const fp = duplicateFingerprint();
-      const decisionIsCurrent = duplicateDecisionFingerprint === fp;
-      const selectedCustomerForSubmit = decisionIsCurrent ? existingCustomerId : "";
-      const selectedVehicleForSubmit = decisionIsCurrent ? existingVehicleId : "";
-
-      if (!selectedCustomerForSubmit && !selectedVehicleForSubmit && duplicateBypassFingerprint !== fp) {
-        const clear = await checkDuplicateRegistration();
-        if (!clear) return;
-      }
+      const selectedCustomerForSubmit = existingCustomerId;
+      const selectedVehicleForSubmit = existingVehicleId;
 
       const check = await preflight();
       if (!check.allowed || check.hardErrors.length) {
@@ -747,10 +672,8 @@ export default function ScheduleNewPage() {
         return;
       }
 
-      const fpNow = duplicateFingerprint();
-      const decisionIsCurrentNow = duplicateDecisionFingerprint === fpNow;
-      const selectedCustomerForSubmitNow = decisionIsCurrentNow ? existingCustomerId : "";
-      const selectedVehicleForSubmitNow = decisionIsCurrentNow ? existingVehicleId : "";
+      const selectedCustomerForSubmitNow = existingCustomerId;
+      const selectedVehicleForSubmitNow = existingVehicleId;
 
       const { data, error } = await supabase.rpc("create_schedule_registration_v2", {
         p_customer_name: customerName.trim(),
@@ -856,36 +779,6 @@ export default function ScheduleNewPage() {
 
       </section>
 
-      {duplicateCustomers.length > 0 && (
-        <section className="card">
-          <h2>既存顧客の確認</h2>
-          <div className="notice">顧客の重複確認です。車両の同一判定と「同じ車両＋同じ日」の予定重複は別に扱います。</div>
-          <div style={{display:"grid",gap:8,marginTop:12}}>
-            {duplicateCustomers.map((c) => (
-              <button type="button" key={c.customerId} onClick={() => {
-                setSelectedVehicleIds([]);
-                setExistingVehicleId("");
-                setExistingCustomerId(c.customerId);
-                setDuplicateDecisionFingerprint(duplicateFingerprint());
-                setDuplicateBypassFingerprint("");
-                setMessage("既存顧客に新しい車両を追加して予定を登録します。");
-              }}>
-                既存顧客を使う：{c.displayName}{c.phone ? ` / ${c.phone}` : ""}
-              </button>
-            ))}
-            <button type="button" onClick={() => {
-              setSelectedVehicleIds([]);
-              setExistingVehicleId("");
-              setExistingCustomerId("");
-              setDuplicateDecisionFingerprint("");
-              setDuplicateBypassFingerprint(duplicateFingerprint());
-              setMessage("候補とは別のお客様として新規登録します。");
-            }}>
-              候補とは別なので新規として登録
-            </button>
-          </div>
-        </section>
-      )}
 
       <section className="card">
         <h2>① お客様・車両</h2>
