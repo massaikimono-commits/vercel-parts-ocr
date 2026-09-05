@@ -60,7 +60,7 @@ assert(workload.includes('location.assign("/schedule/edit?id="'), "workload deta
 assert(!workload.includes('href="/work-complete"') && !workload.includes('href="/delivery-complete"'), "workload actions must not introduce standalone completion menus");
 assert(scheduleSearch.includes('.normalize("NFKC")'), "schedule search must normalize full-width input");
 assert(scheduleSearch.includes("searchDigits"), "schedule search must normalize phone/last4 digits before querying");
-assert(scheduleSearch.includes("全角数字・全角英数字"), "schedule search must tell staff normalized input is supported");
+assert(scheduleSearch.includes("数字1〜4桁だけの入力はナンバー下4桁専用検索"), "schedule search must explain short numeric plate-only search");
 assert(home.includes("openTodayWork"), "mobile home work cards must open the matching schedule work");
 assert(schedule.includes("focusWorkId") && schedule.includes("data-work-id"), "daily schedule must support focused work navigation");
 assert(schedule.includes("focusedWork"), "focused work must be visually obvious");
