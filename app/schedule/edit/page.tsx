@@ -558,9 +558,14 @@ export default function ScheduleEditPage(){
         p_actor:"schedule-edit",
       });
       if(error) throw error;
-      setMessage(data?.rentalCancellationPending
-        ? "入庫予定一式を取消しました。レンタカーは業者への取消連絡待ちです。"
-        : "入庫予定一式を取消しました。関連する入庫・納車予定と代車予約も更新しました。");
+      if(data?.rentalCancellationPending){
+        setShowCancel(false);
+        setMessage("取消手続きを開始しました。レンタカーは業者への取消連絡待ちのため、入庫予定一式はまだ取消確定していません。");
+        return;
+      }
+      setMessage(entry.work_order_id
+        ? "入庫予定一式を取消しました。関連する入庫・納車予定と代車予約も更新しました。"
+        : "予定を取消しました。");
       window.setTimeout(()=>location.assign("/schedule?day="+day),700);
     }catch(error:any){
       const detail=String(error?.message||"");
@@ -714,7 +719,7 @@ export default function ScheduleEditPage(){
         </section>}
         {!!warnings.length && <div className="warnings"><b>確認が必要</b>{warnings.map((w,i)=><div key={i}>・{w}</div>)}<button onClick={()=>void save(true)}>警告を確認して変更</button></div>}
         <button className="primary" disabled={busy} onClick={()=>void save(false)}>空きチェックして変更</button>
-        {!showCancel ? <button className="cancelOpen" disabled={busy} onClick={()=>setShowCancel(true)}>この入庫予定一式を取消</button> :
+        {!showCancel ? <button className="cancelOpen" disabled={busy} onClick={()=>setShowCancel(true)}>{entry.work_order_id ? "この入庫予定一式を取消" : "この予定を取消"}</button> :
           <section className="cancelBox">
             <b>予約取消の確認</b>
             <h3>{cancelSetLabel}</h3>
@@ -731,7 +736,7 @@ export default function ScheduleEditPage(){
             </label>
             <div className="cancelActions">
               <button type="button" disabled={busy} onClick={()=>{setShowCancel(false);setCancelReason("");}}>戻る</button>
-              <button type="button" className="danger" disabled={busy} onClick={()=>void cancelReservation()}>この入庫予定一式を取消</button>
+              <button type="button" className="danger" disabled={busy} onClick={()=>void cancelReservation()}>{entry.work_order_id ? "この入庫予定一式を取消" : "この予定を取消"}</button>
             </div>
           </section>}
       </>}
