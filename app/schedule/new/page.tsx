@@ -845,7 +845,7 @@ export default function ScheduleNewPage() {
       <section className="card">
         <div className="eyebrow">入出庫予定登録</div>
         <h1>予定を追加</h1>
-        <div className="notice">{message}</div>
+        <div className="notice">初入庫は「お客様名＋ナンバー下4桁」だけでも予定登録できます。型式・車台番号・完全な登録番号は、入庫後や車検証読取後に追記できます。</div>
 
         <div className="capacity">
           <div><small>午前 引取</small><b>{capMorningPickup}</b></div>
@@ -854,19 +854,6 @@ export default function ScheduleNewPage() {
           <div><small>午前 車検</small><b>{capInspection}</b></div>
         </div>
 
-        {!!hardErrors.length && (
-          <div className="errors">
-            <b>登録できない項目</b>
-            {hardErrors.map((x, i) => <div key={i}>・{x}</div>)}
-          </div>
-        )}
-        {!!warnings.length && (
-          <div className="warnings">
-            <b>確認が必要です</b>
-            {warnings.map((x, i) => <div key={i}>・{x}</div>)}
-            <button disabled={busy} onClick={() => void submit(true)}>{warnings.some((x) => x.startsWith("同日予定：")) ? "それでも登録する" : "警告を確認して登録"}</button>
-          </div>
-        )}
       </section>
 
       {duplicateCustomers.length > 0 && (
@@ -933,8 +920,11 @@ export default function ScheduleNewPage() {
                     gap:3,
                   }}
                 >
-                  <b>{row.customerName || row.companyName || "お客様未紐付け"}</b>
-                  <span>{row.registrationNumber || ("下4桁 " + (naturalLast4(row.registrationLast4) || "----"))}　{[row.maker,row.model].filter(Boolean).join(" ")}</span>
+                  <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+                    <b>{row.customerName || row.companyName || "お客様未紐付け"}</b>
+                    <strong style={{fontSize:20}}>{naturalLast4(row.registrationLast4 || row.registrationNumber.match(/(\d{1,4})(?!.*\d)/)?.[1] || "") || "----"}</strong>
+                  </div>
+                  <span>{[row.registrationNumber, row.maker, row.model].filter(Boolean).join("　") || "詳細情報は入庫後に追記できます"}</span>
                   <small style={{color:"#69778a"}}>{[row.phone, row.chassisNumber].filter(Boolean).join(" / ")}</small>
                 </button>
               ))}
@@ -1121,7 +1111,25 @@ export default function ScheduleNewPage() {
         </section>
       )}
 
-      <section className="card">
+      <section className="card actionCard">
+        {!!hardErrors.length && (
+          <div className="errors actionFeedback">
+            <b>登録できない項目</b>
+            {hardErrors.map((x, i) => <div key={i}>・{x}</div>)}
+          </div>
+        )}
+        {!!warnings.length && (
+          <div className="warnings actionFeedback">
+            <b>確認が必要です</b>
+            {warnings.map((x, i) => <div key={i}>・{x}</div>)}
+            <button disabled={busy} onClick={() => void submit(true)}>
+              {warnings.some((x) => x.startsWith("同日予定：")) ? "それでも登録する" : "警告を確認して登録"}
+            </button>
+          </div>
+        )}
+        {message && (
+          <div className="actionMessage" aria-live="polite">{message}</div>
+        )}
         <button className="primary" disabled={busy} onClick={() => void submit(false)}>
           {busy ? "登録中…" : "この内容で予定を登録"}
         </button>
@@ -1141,6 +1149,7 @@ export default function ScheduleNewPage() {
         .availabilityBlock{display:grid;gap:10px}.availabilityTitle{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;color:#5c6878}.legend{font-size:12px;font-weight:800}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.openDot{background:#4f9c68}.warnDot{background:#d69a36}.blockedDot{background:#9aa5b3}.availabilityLoading{background:#f7f9fc;border-radius:12px;padding:14px;color:#78869a}.timeGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.timeSlot{display:flex;gap:5px;justify-content:center;align-items:center;padding:10px 7px;border-radius:12px}.timeSlot.open{background:#f2fbf5;border-color:#9bceb0;color:#236c3b}.timeSlot.warning{background:#fff8ea;border-color:#e5bd73;color:#8a5a08}.timeSlot.blocked{background:#f1f3f6;border-color:#d5dbe3;color:#8a95a3;opacity:.7}.timeSlot.selected{outline:3px solid #2674e8;outline-offset:1px}.timeSlot:disabled{cursor:not-allowed}
         input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
         .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.deliveryGrid{margin-top:12px}
+        .actionCard{scroll-margin-top:16px}.actionFeedback{margin:0 0 10px}.actionMessage{margin:0 0 10px;padding:12px 14px;border-radius:12px;background:#edf7ef;border:1px solid #c2e5cb;color:#3c5944;line-height:1.6}
         .primary{width:100%;background:#2f6fe4;border-color:#2f6fe4;color:#fff;font-size:18px;padding:16px}
         .errors,.warnings{margin-top:12px;border-radius:12px;padding:13px 14px;line-height:1.7}.errors{background:#fff0f0;border:1px solid #efbcbc;color:#8f2f2f}.warnings{background:#fff8df;border:1px solid #ecd98d;color:#6d5912}.warnings button{margin-top:8px;background:#fff}
         .footnote{color:#6f7c8e;line-height:1.6;margin-bottom:0}
