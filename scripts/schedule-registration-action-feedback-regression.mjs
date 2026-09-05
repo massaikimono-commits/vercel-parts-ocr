@@ -8,11 +8,15 @@ assert.match(source, /if \(selectedVehicleIds\.length <= 1 && !registrationNumbe
 assert.match(source, /<section className="card actionCard">/, "feedback is grouped with the submit action");
 assert.match(source, /className="warnings actionFeedback"/, "warning is beside submit");
 assert.match(source, /className="errors actionFeedback"/, "errors are beside submit");
-assert.match(source, /className="actionMessage" aria-live="polite">\{message\}/, "completion/status message is beside submit");
+assert.match(source, /className="actionMessage" aria-live="polite">\{message\}/, "non-success status message remains beside submit");
 assert.match(source, /"それでも登録する"/, "same-day override is available at the action area");
 
 const topDynamicMessage = /<div className="notice">\{message\}<\/div>/;
-assert.doesNotMatch(source, topDynamicMessage, "dynamic registration result is not shown at page top");
+assert.doesNotMatch(source, topDynamicMessage, "generic dynamic message is not shown at page top");
+assert.match(source, /className="successBanner" role="status" aria-live="polite"/, "registration success is shown at page top");
+assert.match(source, /setSuccessMessage\("予定を登録しました。"\)/, "single registration success uses top success message");
+assert.match(source, /setSuccessMessage\(\`\$\{selectedRows\.length\}台の予定を登録しました。\`\)/, "batch registration success uses top success message");
+assert.match(source, /window\.scrollTo\(\{ top: 0, behavior: "smooth" \}\)/, "successful registration scrolls to page top");
 
 assert.match(source, /<strong style=\{\{fontSize:20\}\}>\{naturalLast4/, "registered vehicle list emphasizes natural last4");
 assert.match(source, /詳細情報は入庫後に追記できます/, "missing vehicle details are allowed for initial intake");
