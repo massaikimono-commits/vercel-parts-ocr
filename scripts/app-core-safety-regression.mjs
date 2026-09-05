@@ -89,5 +89,5 @@ assert(cancellationSql.includes("revoke all on function public.cancel_schedule_e
 assert(scheduleEdit.includes('supabase.rpc("cancel_schedule_entry_v1"'), "reservation edit screen must call the cancellation RPC");
 assert(scheduleEdit.includes("取消理由（任意）"), "reservation cancellation reason must remain optional");
 assert(scheduleEdit.includes("p_reason:cancelReason.trim() || null"), "blank cancellation reasons must be sent as null");
-assert(scheduleEdit.includes("取消を確定"), "reservation cancellation must require an explicit confirmation step");
+assert(scheduleEdit.includes("この入庫予定一式を取消"), "reservation cancellation must require an explicit work-order-set confirmation step");
 console.log("app-core safety regression passed");
