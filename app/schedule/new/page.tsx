@@ -226,6 +226,7 @@ export default function ScheduleNewPage() {
   }, [day, reason]);
 
   useEffect(() => {
+    if (reason !== "点検" && inspectionScheduleType) setInspectionScheduleType("");
     void loadCapacity();
     void loadMainOptions();
   }, [day, entryType, reason]);
@@ -972,7 +973,7 @@ export default function ScheduleNewPage() {
               <option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option>
             </select>
           </label>
-          {(reason === "点検" || reason === "車検") && (
+          {reason === "点検" && (
             <label>点検区分
               <select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}>
                 <option value="">未指定</option>
