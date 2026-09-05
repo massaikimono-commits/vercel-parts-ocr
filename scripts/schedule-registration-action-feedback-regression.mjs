@@ -16,7 +16,12 @@ assert.doesNotMatch(source, topDynamicMessage, "generic dynamic message is not s
 assert.match(source, /className="successBanner" role="status" aria-live="polite"/, "registration success is shown at page top");
 assert.match(source, /setSuccessMessage\("予定を登録しました。"\)/, "single registration success uses top success message");
 assert.match(source, /setSuccessMessage\(\`\$\{selectedRows\.length\}台の予定を登録しました。\`\)/, "batch registration success uses top success message");
-assert.match(source, /window\.scrollTo\(\{ top: 0, behavior: "smooth" \}\)/, "successful registration scrolls to page top");
+assert.match(source, /if \(!successMessage\) return;\s*scrollToTopAfterSuccessfulRegistration\(\);/s, "success-only post-render effect triggers scroll");
+assert.match(source, /window\.scrollTo\(0, 0\)/, "Safari-safe scroll uses numeric scrollTo");
+assert.match(source, /document\.documentElement\.scrollTop = 0/, "document root is forced to top");
+assert.match(source, /document\.body\.scrollTop = 0/, "body scroll position is forced to top");
+assert.match(source, /window\.setTimeout\(jumpToTop, 80\)/, "scroll is retried after render");
+assert.match(source, /window\.setTimeout\(jumpToTop, 240\)/, "scroll is retried after Safari layout settling");
 
 assert.match(source, /<strong style=\{\{fontSize:20\}\}>\{naturalLast4/, "registered vehicle list emphasizes natural last4");
 assert.match(source, /詳細情報は入庫後に追記できます/, "missing vehicle details are allowed for initial intake");
