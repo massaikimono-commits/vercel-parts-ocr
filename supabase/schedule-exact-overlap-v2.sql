@@ -5,7 +5,8 @@
 --   * customer_visit can choose exact time + A中 + 午後
 --   * outsourced 一般整備 is preserved in batch registration
 --
--- Applied to Supabase project wlwbgirumlqatwvilxsz during preview validation.
+-- NOTE: the live Supabase function still has the older same-entry-type exact overlap rule.
+-- This source now represents the deferred target rule and must not be applied until the Netlify-compatible DB release.
 
 create or replace function public.schedule_slot_check_v2(
   p_entry_type text,
