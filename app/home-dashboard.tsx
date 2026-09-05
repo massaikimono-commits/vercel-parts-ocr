@@ -187,6 +187,25 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     return grouped;
   }, [weekEntries, workMap, vehicleMap, customerMap]);
 
+  const todayRows = useMemo(() => {
+    const today = todayJst();
+    return (weekRowsByDay.get(today) || []);
+  }, [weekRowsByDay]);
+
+  const statusCounts = useMemo(() => {
+    const uniqueWorks = new Map<string, WorkOrder>();
+    for (const { work } of todayRows) if (work) uniqueWorks.set(work.id, work);
+    let pending = 0;
+    let inProgress = 0;
+    let completed = 0;
+    for (const work of uniqueWorks.values()) {
+      if (work.work_completed || work.status === "completed") completed += 1;
+      else if (work?.status === "in_progress") inProgress += 1;
+      else pending += 1;
+    }
+    return { pending, inProgress, completed };
+  }, [todayRows]);
+
   const workerLoad = useMemo(() => {
     const grouped = new Map<string, { name: string; pending: number; running: number; total: number; urgent: number }>();
     for (const work of works) {
@@ -358,6 +377,21 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         )}
       </section>
 
+      <section className="homeWorkStatus" aria-label="今日の作業状態">
+        <div className="homeWorkStatusHead"><span>本日の作業状態</span><small>予定一覧は上の1週間スケジュールから確認</small></div>
+        <div className="todayStatusGrid">
+          <button className="statusTile pending" onClick={() => openDay(todayJst())}>
+            <span>作業未実施</span><strong>{statusCounts.pending}</strong><small>台</small>
+          </button>
+          <button className="statusTile progress" onClick={() => openDay(todayJst())}>
+            <span>作業中</span><strong>{statusCounts.inProgress}</strong><small>台</small>
+          </button>
+          <button className="statusTile done" onClick={() => openDay(todayJst())}>
+            <span>作業完了</span><strong>{statusCounts.completed}</strong><small>台</small>
+          </button>
+        </div>
+      </section>
+
       <section className="mobileToday">
         <div className="mobileActions">
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
@@ -416,6 +450,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         .homeWeek{margin-bottom:14px;background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:14px}
         .homeWeekHead{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}.homeWeekHead>div:first-child{display:grid;gap:2px}.homeWeekHead span{font-size:12px;color:#2674e8;font-weight:900}.homeWeekHead h2{margin:0;font-size:22px}.homeWeekHead small{color:#718096}.homeWeekActions{display:flex;gap:7px;flex-wrap:wrap}.homeWeekActions .weekPrimary{background:#2674e8;color:#fff;border-color:#2674e8}
         .homeWeekGrid{display:grid;grid-template-columns:repeat(7,minmax(180px,1fr));gap:7px;overflow-x:auto;padding-bottom:4px}.homeWeekDay{min-width:180px;border:1px solid #dce4ef;border-radius:13px;overflow:hidden;background:#fff;display:flex;flex-direction:column}.homeWeekDay.today{outline:3px solid #2674e8;outline-offset:-2px}.homeWeekDayHead{border:0;border-radius:0;background:#f5f8fc;color:#172033;padding:9px;display:flex;justify-content:space-between}.homeWeekDayHead span{font-size:11px;color:#657386}.homeWeekRows{padding:5px;display:grid;gap:4px;min-height:150px}.homeWeekRow{border:1px solid #e2e8f0;background:#fff;color:#172033;border-radius:8px;padding:6px;text-align:left;display:grid;gap:1px}.homeWeekRow.reason-shaken{background:#fff0f0;border-color:#e99a9a}.homeWeekRow.reason-check{background:#eef5ff;border-color:#9dbce8}.homeWeekRow.reason-repair{background:#fff8d8;border-color:#e4cd67}.homeWeekRow.reason-body{background:#fff;border-color:#cfd8e3}.homeWeekRow b{font-size:10px}.homeWeekRow span{font-size:11px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.homeWeekRow small{font-size:9px;color:#738095;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.homeWeekEmpty{padding:18px 4px;text-align:center;color:#9aa5b3;font-size:11px}.homeWeekMore,.homeWeekAdd{font-size:10px;padding:6px}.homeWeekMore{border:0}.homeWeekAdd{margin:5px;background:#f8fbff}
+        .homeWorkStatus{margin-bottom:14px;background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:12px}.homeWorkStatusHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.homeWorkStatusHead span{font-size:13px;font-weight:900;color:#172033}.homeWorkStatusHead small{font-size:11px;color:#718096}
         .todayStatusGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
         .statusTile{min-width:0;padding:12px 6px;display:grid;grid-template-columns:1fr auto auto;gap:4px;align-items:end;text-align:left;border-width:2px}
         .statusTile span{grid-column:1/-1;font-size:12px;font-weight:900;white-space:nowrap}
