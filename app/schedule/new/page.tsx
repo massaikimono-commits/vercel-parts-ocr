@@ -666,9 +666,12 @@ export default function ScheduleNewPage() {
           setMessage("登録できない条件があります。内容を確認してください。");
           return;
         }
-        if (check.overrideRequired && !allowOverride) {
-          setWarnings(check.warnings);
-          setMessage("警告があります。内容を確認してから登録してください。");
+        const sameDayWarnings = await sameDayVehicleScheduleWarnings(selectedVehicleIds);
+        if ((check.overrideRequired || sameDayWarnings.length > 0) && !allowOverride) {
+          setWarnings([...check.warnings, ...sameDayWarnings]);
+          setMessage(sameDayWarnings.length
+            ? "同じ車両に同日の予定があります。確認後は「それでも登録する」で登録できます。"
+            : "警告があります。内容を確認してから登録してください。");
           return;
         }
 
@@ -731,9 +734,16 @@ export default function ScheduleNewPage() {
         return;
       }
 
-      if (check.overrideRequired && !allowOverride) {
-        setWarnings(check.warnings);
-        setMessage("警告があります。内容を確認してから登録してください。");
+      const resolvedVehicleId = selectedVehicleForSubmit
+        || (selectedVehicleIds.length === 1 ? selectedVehicleIds[0] : "");
+      const sameDayWarnings = resolvedVehicleId
+        ? await sameDayVehicleScheduleWarnings([resolvedVehicleId])
+        : [];
+      if ((check.overrideRequired || sameDayWarnings.length > 0) && !allowOverride) {
+        setWarnings([...check.warnings, ...sameDayWarnings]);
+        setMessage(sameDayWarnings.length
+          ? "この車両は同じ日にすでに予定があります。確認後は「それでも登録する」で登録できます。"
+          : "警告があります。内容を確認してから登録してください。");
         return;
       }
 
@@ -854,28 +864,16 @@ export default function ScheduleNewPage() {
           <div className="warnings">
             <b>確認が必要です</b>
             {warnings.map((x, i) => <div key={i}>・{x}</div>)}
-            <button disabled={busy} onClick={() => void submit(true)}>警告を確認して登録</button>
+            <button disabled={busy} onClick={() => void submit(true)}>{warnings.some((x) => x.startsWith("同日予定：")) ? "それでも登録する" : "警告を確認して登録"}</button>
           </div>
         )}
       </section>
 
-      {(duplicateCustomers.length > 0 || duplicateVehicles.length > 0) && (
+      {duplicateCustomers.length > 0 && (
         <section className="card">
-          <h2>重複候補の確認</h2>
-          <div className="notice">既存のお客様・車両を選ぶと、新しい仮顧客・仮車両を増やさず予定だけ登録します。</div>
+          <h2>既存顧客の確認</h2>
+          <div className="notice">顧客の重複確認です。車両の同一判定と「同じ車両＋同じ日」の予定重複は別に扱います。</div>
           <div style={{display:"grid",gap:8,marginTop:12}}>
-            {duplicateVehicles.map((v) => (
-              <button type="button" key={v.vehicleId} onClick={() => {
-                setSelectedVehicleIds([v.vehicleId]);
-                setExistingVehicleId(v.vehicleId);
-                setExistingCustomerId(v.customerId || "");
-                setDuplicateDecisionFingerprint(duplicateFingerprint());
-                setDuplicateBypassFingerprint("");
-                setMessage("既存車両を使用して予定を登録します。");
-              }}>
-                既存車両を使う：{v.registrationNumber || `下4桁 ${v.registrationLast4 || "----"}`} {[v.maker,v.model].filter(Boolean).join(" ")}
-              </button>
-            ))}
             {duplicateCustomers.map((c) => (
               <button type="button" key={c.customerId} onClick={() => {
                 setSelectedVehicleIds([]);
@@ -894,7 +892,7 @@ export default function ScheduleNewPage() {
               setExistingCustomerId("");
               setDuplicateDecisionFingerprint("");
               setDuplicateBypassFingerprint(duplicateFingerprint());
-              setMessage("候補とは別のお客様・車両として新規登録します。");
+              setMessage("候補とは別のお客様として新規登録します。");
             }}>
               候補とは別なので新規として登録
             </button>
