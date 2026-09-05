@@ -86,7 +86,7 @@ type RegisteredVehicleOption = {
 
 const ENTRY_LABEL: Record<EntryType, string> = {
   delivery: "納車",
-  pickup: "引き取り",
+  pickup: "引取",
   customer_visit: "来社",
   onsite_repair: "出張整備",
 };
@@ -968,7 +968,7 @@ export default function ScheduleNewPage() {
         <div className="grid">
           <label>区分
             <select value={entryType} onChange={(e) => setEntryType(e.target.value as EntryType)}>
-              <option value="pickup">引き取り</option>
+              <option value="pickup">引取</option>
               <option value="customer_visit">来社</option>
               <option value="onsite_repair">出張整備</option>
               <option value="delivery">納車</option>
