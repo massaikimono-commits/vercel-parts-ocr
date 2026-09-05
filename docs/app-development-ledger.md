@@ -186,6 +186,12 @@ Important practical rule:
 Major framework/toolchain dependency upgrades are not "missing app fixes".
 Do not mix major Next/TypeScript/PDF/Tesseract/ZXing/GitHub Action upgrades into the practical-test release without a dedicated compatibility/regression pass.
 
+## Chat handoff rule
+
+- Before an app-development chat becomes too long or unstable, prepare a handoff before switching chats.
+- The handoff must include: current branch/commit, what was changed, what is preview-live vs source-only, current Vercel preview URL if any, pending-fix ledger items, unresolved questions, and the next concrete action.
+- Do not rely on the next chat to rediscover project state from scratch; `docs/app-development-ledger.md` and `docs/pending-fix-ledger.md` are the shared handoff baseline.
+
 ## Workstream completion rule
 
 Before an app-development chat finishes a batch:
@@ -247,3 +253,10 @@ Before an app-development chat finishes a batch:
 - 現在の共有DB `schedule_slot_check_v2` が exact の同一entry_type全般で重複警告を出すことを確認。確定仕様「時間指定の来社×来社のみ警告」と不一致のため保留 #003 を追加。DBは未変更。
 - #003用SQLソースは将来適用できるよう customer_visit exact のみに限定する形へ準備済みだが、ライブSupabaseには未適用。
 - Vercel / Netlifyへの新規デプロイはまだ実施していない。次回は複数修正をまとめて1回のVercel Previewで確認する。
+
+### 2026-09-05 — Post-v1.1 DB-free confirmation pass
+- Reviewed the confirmed post-v1.1 schedule/report changes against `preview/schedule-ux-20260903`.
+- Confirmed the shared `schedule_entries.delivery` business-state source, staying/body-shop/planned-delivery rules, schedule/6m/12m inspection labels and report codes, delivery-plan editing, natural plate display, pickup label cleanup, and deprecated appointment-completion removal are already present.
+- Hardened schedule registration so `inspection_schedule_type` is sent only when `reason=点検`; changing to 車検/一般整備/板金 cannot submit a stale inspection subtype even if UI state has not finished clearing.
+- Added regression coverage for the single-vehicle and batch registration paths.
+- Deferred items remain #001 legal_3m, #002 来社「作業待ち」, #003 来社以外の exact-time 重複警告停止; shared Supabase DB was not changed.
