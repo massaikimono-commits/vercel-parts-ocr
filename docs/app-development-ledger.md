@@ -291,3 +291,26 @@ Before an app-development chat finishes a batch:
 - Deferred DB items remain unchanged: #001 legal_3m, #002 来社「作業待ち」, #003 exact-time overlap warning scope.
 - Next requested action: simplify schedule-search result cards so each work-order set has side-by-side `予約変更` / `予約取消` actions; cancellation should open the existing two-step work-order cancellation confirmation directly from search without weakening safety.
 
+### 2026-09-06 — One-day schedule practical final-pass preview
+- User verified the prior schedule-search card actions and direct cancellation flow.
+- Reviewed the existing one-day schedule implementation against shop-floor requirements instead of rebuilding it.
+- Already present and preserved:
+  - whole schedule card tap opens the linked vehicle via the active-vehicle flow,
+  - no separate “車両を開く” button,
+  - pickup label is blank while 来社 / 出張 are displayed,
+  - card information order is customer → natural last4 + reason → type/time,
+  - work-state control is 未実施 → 作業中 → 作業完了.
+- Fixed only missing/inconsistent behavior:
+  - one-day board header now says “入庫” instead of “引取・来社・出張” so normal pickup wording is not surfaced,
+  - one-day board cards now receive reason colors directly,
+  - 一般整備 is always yellow even when an outsource vendor is set,
+  - 板金 / 板金塗装 remain white,
+  - work state is always visible on the one-day board regardless of the optional card-layout preference,
+  - iPhone daily-board rows/fonts were tightened to show more schedules without oversized text.
+- Added `schedule-one-day-practical-regression.mjs` and wired it into the full build.
+- GitHub OCR regression and Deployment safety guard both GREEN; full Vercel-equivalent build passed.
+- Vercel Preview READY: https://vercel-parts-hvgi4pje2-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=qv3qKPihdW1EuZS1c39gaM4lEvm8xiA8
+- Preview includes `/schedule` and `/customer-vehicles` so card-tap navigation can be tested.
+- Source head before this ledger entry: `e5d7aa856175a18a7c67898ed5dd3f6145d73756`.
+- No DB change. main / Netlify untouched. PR #62 remains Draft/unmerged.
+
