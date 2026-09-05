@@ -23,8 +23,8 @@ assert.match(edit, /entrySummaryLabel\(cancelDeliveryEntry\)/, "delivery summary
 assert.match(edit, /customerSummaryLabel\(customerSummary\)/, "customer summary is shown");
 assert.match(edit, /naturalLast4\(vehicleSummary\?\.registration_number_last4\)/, "natural last4 is shown");
 
-assert.match(edit, /if\(data\?\.rentalCancellationPending\)\{[\s\S]*まだ取消確定していません。/s, "rental pending is not shown as completed");
-assert.match(edit, /if\(data\?\.rentalCancellationPending\)\{[\s\S]*return;/s, "rental pending does not navigate away as a completed cancellation");
+assert.match(edit, /if\(data\?\.rentalCancellationPending && data\?\.cancelled===false\)\{[\s\S]*まだ取消確定していません。/s, "customer-booking rental pending is not shown as completed");
+assert.match(edit, /if\(data\?\.rentalCancellationPending\)\{[\s\S]*入庫予定一式は取消済みです。レンタカーは業者への取消連絡待ちです。/s, "completed staff cancellation can still show rental-provider pending");
 assert.match(edit, /入庫予定一式を取消しました。関連する入庫・納車予定と代車予約も更新しました。/, "completed work-order cancellation reports full-set completion");
 
 console.log("schedule cancellation work-order regression: ok");
