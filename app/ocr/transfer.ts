@@ -19,18 +19,38 @@ function loadImage(file: File) {
   });
 }
 
+function shouldRotatePartsPhoto(img: HTMLImageElement) {
+  // 実写真の黄色伝票・白い部品一覧は横長帳票を縦持ちで撮影したものが多い。
+  // 明確な縦長ピクセルだけを対象にし、すでに横長の画像には触れない。
+  return img.naturalHeight > img.naturalWidth * 1.08;
+}
+
 export async function saveOCRTransferImage(file: File) {
   const img = await loadImage(file);
+  const rotate = shouldRotatePartsPhoto(img);
+  const sourceWidth = rotate ? img.naturalHeight : img.naturalWidth;
+  const sourceHeight = rotate ? img.naturalWidth : img.naturalHeight;
   const maxSide = 1800;
-  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("画像を引き継げませんでした。");
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  if (rotate) {
+    // 固定評価セットでは反時計回り90度で帳票文字が正立する。
+    // 回転後の座標系で元画像全体を描画し、下流OCRへ横長画像を渡す。
+    ctx.save();
+    ctx.translate(0, canvas.height);
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(img, 0, 0, canvas.height, canvas.width);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  }
 
   // sessionStorageの容量に収まりやすいようにOCR用サイズへ縮小。
   const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
