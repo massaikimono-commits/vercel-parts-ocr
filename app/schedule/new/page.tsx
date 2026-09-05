@@ -934,8 +934,8 @@ export default function ScheduleNewPage() {
               <select value={inspectionScheduleType} onChange={(e) => setInspectionScheduleType(e.target.value)}>
                 <option value="">未指定</option>
                 <option value="schedule">スケジュール点検</option>
-                <option value="legal_6m">法定6ヶ月</option>
-                <option value="legal_12m">法定12ヶ月</option>
+                <option value="legal_6m">法定6ヶ月点検</option>
+                <option value="legal_12m">法定12ヶ月点検</option>
               </select>
             </label>
           )}
