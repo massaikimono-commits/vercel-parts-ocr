@@ -40,7 +40,7 @@ assert(schedule.includes("classifyVehicleBusinessStates"), "daily schedule must 
 assert(schedule.includes("businessStates.stayingVehicles"), "daily schedule staying vehicles must come from the confirmed schedule-based staying rule");
 assert(!schedule.includes("activelyCheckedIn"), "daily schedule staying logic must not fall back to legacy checked-in state");
 assert(reportPrint.includes("workCompletedOnReportDay"), "daily report completion mark must use selected-day semantics");
-assert(secondary.includes("work_completed_at"), "daily report secondary sections must use completion timestamp");
+assert(secondary.includes("collectDailyReportMessages"), "daily report secondary helper must remain limited to message collection; staying/body-shop/planned-delivery state comes from the shared business classifier");
 assert(loaners.includes('supabase.rpc("set_loaner_vehicle_operational_status"'), "loaner operational status must use guarded RPC");
 assert(!loaners.includes('.from("loaner_vehicles").update({'), "loaner status must not bypass guarded RPC");
 assert(week.includes("要確認日のみ表示"), "weekly schedule must offer problem-day filtering");
