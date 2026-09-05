@@ -420,7 +420,7 @@ export default function ActiveVehicleSchedulePage() {
         <h2>① 入庫予定</h2>
         <div className="grid">
           <label>日付<input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label>
-          <label>区分<select value={entryType} onChange={(e) => setEntryType(e.target.value as EntryType)}><option value="pickup">引き取り</option><option value="customer_visit">来社</option><option value="onsite_repair">出張整備</option></select></label>
+          <label>区分<select value={entryType} onChange={(e) => setEntryType(e.target.value as EntryType)}><option value="pickup">引取</option><option value="customer_visit">来社</option><option value="onsite_repair">出張整備</option></select></label>
           <label>入庫要因<select value={reason} onChange={(e) => setReason(e.target.value as Reason)}><option>点検</option><option>車検</option><option>一般整備</option><option>板金塗装</option></select></label>
           {entryType === "onsite_repair" ? (
             <>
