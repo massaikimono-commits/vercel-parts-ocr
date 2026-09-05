@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   TOP_HEADER_CROPS,
   parseTopHeaderDate,
@@ -37,5 +38,14 @@ for (const [x, y, w, h] of TOP_HEADER_CROPS) {
 const [, y, , h] = TOP_HEADER_CROPS[0];
 assert.ok(y <= 0.025, "top-header crop must include the real-photo header near 4.3% page height");
 assert.ok(y + h >= 0.13, "top-header crop must extend far enough to include date and document-number cells");
+
+// The actual app entry point is /vehicle-workflow-v2. Keep the missing-only
+// top-header recovery active there as well as on the direct fast test route.
+const recoverySource = readFileSync(
+  new URL("../app/certificate-fast-top-header-recovery.jsx", import.meta.url),
+  "utf8",
+);
+assert.match(recoverySource, /\/vehicle-workflow-v2/, "top-header recovery must run on the active vehicle workflow");
+assert.match(recoverySource, /\/vehicle-workflow-fast/, "top-header recovery must remain available on the fast test route");
 
 console.log("fast top-header regression: ok");
