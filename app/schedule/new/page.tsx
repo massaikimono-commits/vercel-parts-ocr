@@ -558,6 +558,22 @@ export default function ScheduleNewPage() {
     };
   }
 
+  function scrollToTopAfterSuccessfulRegistration() {
+    // iPhone Safariではフォームの再描画・入力フォーカス解除後にスクロール位置が戻ることがあるため、
+    // 成功時だけ複数タイミングで先頭位置を確定する。
+    const jumpToTop = () => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(jumpToTop);
+    });
+    window.setTimeout(jumpToTop, 80);
+    window.setTimeout(jumpToTop, 240);
+  }
+
   function resetAfterSuccessfulRegistration() {
     setEntryType("pickup");
     setReason("点検");
@@ -686,7 +702,7 @@ export default function ScheduleNewPage() {
         resetAfterSuccessfulRegistration();
         setMessage("");
         setSuccessMessage(`${selectedRows.length}台の予定を登録しました。`);
-        requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+        scrollToTopAfterSuccessfulRegistration();
         return;
       }
 
@@ -787,7 +803,7 @@ export default function ScheduleNewPage() {
       resetAfterSuccessfulRegistration();
       setMessage("");
       setSuccessMessage("予定を登録しました。");
-      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+      scrollToTopAfterSuccessfulRegistration();
     } catch (error: any) {
       setMessage(safeActionError("予定登録", error));
     } finally {
