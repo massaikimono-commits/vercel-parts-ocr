@@ -9,9 +9,15 @@ type TimeOption = {
   key:string;
   label:string;
   displayLabel?:string;
+  group?:string;
   mode:"exact"|"morning"|"unspecified";
   startsAt:string;
   endsAt:string;
+  durationMinutes?:number;
+  availability?:"open"|"warning"|"blocked";
+  warnings?:string[];
+  hardErrors?:string[];
+  conflicts?:number;
 };
 
 type Entry = {
@@ -78,9 +84,7 @@ export default function ScheduleEditPage(){
   const [day,setDay]=useState("");
   const [options,setOptions]=useState<TimeOption[]>([]);
   const [selected,setSelected]=useState("");
-  const [onsiteMode,setOnsiteMode]=useState<"exact"|"morning"|"unspecified">("exact");
-  const [onsiteTime,setOnsiteTime]=useState("09:00");
-  const [onsiteDuration,setOnsiteDuration]=useState("60");
+  const [showAfternoonOptions,setShowAfternoonOptions]=useState(false);
   const [stayReason,setStayReason]=useState("");
   const [plannedDeliveryDate,setPlannedDeliveryDate]=useState("");
   const [deliveryEntry,setDeliveryEntry]=useState<Entry|null>(null);
@@ -124,9 +128,7 @@ export default function ScheduleEditPage(){
     if(error){setMessage(safeActionError("予定の読み込み", error));setBusy(false);return;}
     const e=data as Entry;
     setEntry(e);
-    setOnsiteMode(e.print_time_mode==="morning" ? "morning" : e.print_time_mode==="unspecified" ? "unspecified" : "exact");
-    setOnsiteTime(timeKey(e.starts_at));
-    setOnsiteDuration(String(Math.max(30,Math.round((new Date(e.ends_at).getTime()-new Date(e.starts_at).getTime())/60000))));
+    let loadedReason="";
     if(e.work_order_id){
       const [{data:workData,error:workError},{data:deliveryData,error:deliveryError}]=await Promise.all([
         supabase.from("work_orders")
@@ -144,7 +146,8 @@ export default function ScheduleEditPage(){
       if(deliveryError){setMessage("納車予定の読み込みエラー: "+deliveryError.message);setBusy(false);return;}
       const work=(workData||null) as WorkOrder|null;
       const delivery=(deliveryData||null) as Entry|null;
-      setReason(work?.reason||"");
+      loadedReason=work?.reason||"";
+      setReason(loadedReason);
       setStaffId(work?.worker_staff_id||"");
       setVendorId(work?.outsource_vendor_id||"");
       setVendorName(work?.outsource_vendor_id ? "" : (work?.outsource_vendor_name||""));
@@ -158,28 +161,134 @@ export default function ScheduleEditPage(){
     }
     const d=dateKey(e.starts_at);
     setDay(d);
-    await loadOptions(d,e);
+    setShowAfternoonOptions(false);
+    await loadOptions(d,e,loadedReason);
     setBusy(false);
   }
 
-  async function loadOptions(targetDay:string,base=entry){
+  async function loadOptions(targetDay:string,base=entry,targetReason=reason){
     if(!base) return;
-    if(base.entry_type==="onsite_repair"){
+
+    const checkedOption=async(option:TimeOption):Promise<TimeOption>=>{
+      const {data,error}=await supabase.rpc("schedule_slot_check_v2",{
+        p_entry_type:base.entry_type,
+        p_starts_at:option.startsAt,
+        p_ends_at:option.endsAt,
+        p_reason:targetReason||null,
+        p_exclude_entry_id:base.id,
+        p_print_time_mode:option.mode,
+      });
+      if(error) throw error;
+      const availability:TimeOption["availability"]=!Boolean(data?.allowed)
+        ? "blocked"
+        : Boolean(data?.override_required)
+          ? "warning"
+          : "open";
+      return {
+        ...option,
+        availability,
+        warnings:Array.isArray(data?.warnings)?data.warnings.map(String):[],
+        hardErrors:Array.isArray(data?.hard_errors)?data.hard_errors.map(String):[],
+        conflicts:Number(data?.conflicts||0),
+      };
+    };
+
+    const exactOption=(time:string,group:"morning"|"afternoon",durationMinutes:number,displayLabel?:string):TimeOption=>{
+      const startsAt=jstIso(targetDay,time);
+      return {
+        key:`exact_${time.replace(":","")}`,
+        label:time,
+        displayLabel:displayLabel||time,
+        group,
+        mode:"exact",
+        startsAt,
+        endsAt:plusMinutes(startsAt,durationMinutes),
+        durationMinutes,
+      };
+    };
+
+    try{
+      let opts:TimeOption[]=[];
+
+      if(base.entry_type==="onsite_repair"){
+        const morningTimes=["08:30","09:00","09:30","10:00","10:30","11:00"];
+        const afternoonTimes=["13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00"];
+        const raw:TimeOption[]=[
+          ...morningTimes.map(time=>exactOption(time,"morning",60)),
+          {
+            key:"morning_unspecified",
+            label:"A中",
+            displayLabel:"A中",
+            group:"morning",
+            mode:"morning",
+            startsAt:jstIso(targetDay,"09:00"),
+            endsAt:jstIso(targetDay,"10:00"),
+            durationMinutes:60,
+          },
+          ...afternoonTimes.map(time=>exactOption(time,"afternoon",time==="17:00"?30:60)),
+          {
+            key:"afternoon_unspecified",
+            label:"中",
+            displayLabel:"中",
+            group:"afternoon",
+            mode:"unspecified",
+            startsAt:jstIso(targetDay,"13:00"),
+            endsAt:jstIso(targetDay,"14:00"),
+            durationMinutes:60,
+          },
+        ];
+        opts=await Promise.all(raw.map(checkedOption));
+      }else{
+        const {data,error}=await supabase.rpc("schedule_time_options",{p_day:targetDay,p_entry_type:base.entry_type});
+        if(error) throw error;
+        opts=(Array.isArray(data?.options)?data.options:[]) as TimeOption[];
+
+        if(base.entry_type==="pickup" && !opts.some(x=>x.group==="afternoon" && x.mode==="exact")){
+          const afternoonTimes=["13:00","14:00","15:00","16:00","17:00"];
+          const afternoonExact=afternoonTimes.map(time=>exactOption(
+            time,
+            "afternoon",
+            time==="17:00"?30:60,
+            Number(time.slice(3))===0
+              ? `${Number(time.slice(0,2))}時まで`
+              : `${Number(time.slice(0,2))}時${time.slice(3)}分まで`
+          ));
+          const afternoonBroad=opts.filter(x=>x.group==="afternoon" && x.mode==="unspecified");
+          opts=[
+            ...opts.filter(x=>!(x.group==="afternoon" && x.mode==="unspecified")),
+            ...afternoonExact,
+            ...afternoonBroad,
+          ];
+        }
+
+        opts=opts.map(option=>(
+          option.mode==="unspecified" && option.group==="afternoon"
+            ? {...option,label:"中",displayLabel:"中"}
+            : option
+        ));
+
+        opts=await Promise.all(opts.map(checkedOption));
+      }
+
+      setOptions(opts);
+      const current=timeKey(base.starts_at);
+      const sameDay=dateKey(base.starts_at)===targetDay;
+      const match=sameDay
+        ? opts.find(x=>x.mode===base.print_time_mode && (x.mode!=="exact" || timeKey(x.startsAt)===current))
+          || opts.find(x=>timeKey(x.startsAt)===current)
+        : null;
+      const morningOptions=opts.filter(x=>x.group==="morning");
+      setSelected(match?.key
+        || morningOptions.find(x=>x.availability==="open")?.key
+        || morningOptions.find(x=>x.availability==="warning")?.key
+        || opts.find(x=>x.availability==="open")?.key
+        || opts.find(x=>x.availability==="warning")?.key
+        || "");
+    }catch(error:any){
       setOptions([]);
       setSelected("");
-      return;
+      setMessage(safeActionError("時間候補の読み込み", error));
     }
-    const {data,error}=await supabase.rpc("schedule_time_options",{p_day:targetDay,p_entry_type:base.entry_type});
-    if(error){setMessage(safeActionError("時間候補の読み込み", error));return;}
-    const opts=(Array.isArray(data?.options)?data.options:[]) as TimeOption[];
-    setOptions(opts);
-    const current=timeKey(base.starts_at);
-    const sameDay=dateKey(base.starts_at)===targetDay;
-    const match=sameDay
-      ? opts.find(x => x.mode === base.print_time_mode && timeKey(x.startsAt) === current)
-        || opts.find(x => timeKey(x.startsAt) === current)
-      : null;
-    setSelected(match?.key || opts[0]?.key || "");
   }
 
   function resetWarningsForTargetChange(){
@@ -189,8 +298,9 @@ export default function ScheduleEditPage(){
 
   async function changeDay(next:string){
     setDay(next);
+    setShowAfternoonOptions(false);
     resetWarningsForTargetChange();
-    if(entry) await loadOptions(next,entry);
+    if(entry) await loadOptions(next,entry,reason);
   }
 
   const selectedOption=useMemo(()=>options.find(x=>x.key===selected)||null,[options,selected]);
@@ -202,13 +312,8 @@ export default function ScheduleEditPage(){
 
   const targetSummary=useMemo(()=>{
     if(!entry||!day) return "";
-    if(entry.entry_type==="onsite_repair"){
-      if(onsiteMode==="morning") return `${day} 午前中`;
-      if(onsiteMode==="unspecified") return `${day} 午後中`;
-      return `${day} ${onsiteTime}`;
-    }
     return selectedOption ? `${day} ${selectedOption.displayLabel || selectedOption.label}` : `${day} 時間候補なし`;
-  },[day,entry,selectedOption,onsiteMode,onsiteTime]);
+  },[day,entry,selectedOption]);
 
   function buildDeliveryTarget():DeliveryTarget|null {
     if(!deliveryEnabled) return null;
@@ -304,34 +409,15 @@ export default function ScheduleEditPage(){
 
   async function save(override=false){
     if(!entry){return;}
-    if(entry.entry_type!=="onsite_repair" && !selectedOption){
+    if(!selectedOption){
       setMessage("変更先の時間を選択してください。");return;
     }
     setBusy(true);
     setWarnings([]);
     try{
-      let startsAt:string;
-      let endsAt:string;
-      let mode:string;
-      if(selectedOption){
-        startsAt=selectedOption.startsAt; endsAt=selectedOption.endsAt; mode=selectedOption.mode;
-      }else if(entry.entry_type==="onsite_repair"){
-        if(onsiteMode==="morning"){
-          startsAt=jstIso(day,"08:30"); endsAt=jstIso(day,"12:00"); mode="morning";
-        }else if(onsiteMode==="unspecified"){
-          startsAt=jstIso(day,"13:00"); endsAt=jstIso(day,"17:00"); mode="unspecified";
-        }else{
-          startsAt=jstIso(day,onsiteTime);
-          endsAt=plusMinutes(startsAt,Math.max(30,Number(onsiteDuration)||60));
-          mode="exact";
-        }
-      }else{
-        const currentTime=timeKey(entry.starts_at);
-        const duration=new Date(entry.ends_at).getTime()-new Date(entry.starts_at).getTime();
-        startsAt=new Date(day+"T"+currentTime+":00+09:00").toISOString();
-        endsAt=new Date(new Date(startsAt).getTime()+duration).toISOString();
-        mode=entry.print_time_mode;
-      }
+      const startsAt=selectedOption.startsAt;
+      const endsAt=selectedOption.endsAt;
+      const mode=selectedOption.mode;
       const deliveryTarget=entry.work_order_id && entry.entry_type!=="delivery" ? buildDeliveryTarget() : null;
       if(deliveryTarget){
         const mainDay=dateKey(startsAt);
@@ -420,22 +506,69 @@ export default function ScheduleEditPage(){
         <div className="current">現在：<b>{dateKey(entry.starts_at)} {timeKey(entry.starts_at)}</b></div>
         <div className="grid">
           <label>変更日<input type="date" value={day} onChange={(e)=>void changeDay(e.target.value)} /></label>
-          {entry.entry_type!=="onsite_repair" ? <label>変更時間
-            <select value={selected} onChange={(e)=>changeTime(e.target.value)}>
-              {!options.length && <option value="">候補なし</option>}
-              {options.map(x=><option key={x.key} value={x.key}>{x.displayLabel || x.label}</option>)}
-            </select>
-          </label> : <>
-            <label>出張時間
-              <select value={onsiteMode} onChange={(e)=>{setOnsiteMode(e.target.value as "exact"|"morning"|"unspecified");resetWarningsForTargetChange();}}>
-                <option value="exact">時間指定</option><option value="morning">午前中</option><option value="unspecified">午後中</option>
+          {entry.entry_type==="delivery" ? (
+            <label>変更時間
+              <select value={selected} onChange={(e)=>changeTime(e.target.value)}>
+                {!options.length && <option value="">候補なし</option>}
+                {options.map(x=><option key={x.key} value={x.key}>{x.displayLabel || x.label}</option>)}
               </select>
             </label>
-            {onsiteMode==="exact" && <>
-              <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e)=>{setOnsiteTime(e.target.value);resetWarningsForTargetChange();}} /></label>
-              <label>作業枠<select value={onsiteDuration} onChange={(e)=>{setOnsiteDuration(e.target.value);resetWarningsForTargetChange();}}><option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option></select></label>
-            </>}
-          </>}
+          ) : (
+            <div className="wide availabilityBlock">
+              <div className="availabilityTitle">
+                <b>変更時間</b>
+                <span className="legend"><i className="dot openDot" />○ 空き　<i className="dot warnDot" />△ 要確認　<i className="dot blockedDot" />× 不可</span>
+              </div>
+              {!options.length ? (
+                <div className="availabilityLoading">時間候補がありません。</div>
+              ) : (
+                <>
+                  <div className="timeGrid">
+                    {options.filter(x=>x.group==="morning").map(x=>{
+                      const state=x.availability||"open";
+                      const mark=state==="open"?"○":state==="warning"?"△":"×";
+                      const detail=[...(x.hardErrors||[]),...(x.warnings||[])].join(" / ");
+                      return <button
+                        type="button"
+                        key={x.key}
+                        className={`timeSlot ${state} ${selected===x.key?"selected":""}`}
+                        disabled={state==="blocked"}
+                        onClick={()=>{changeTime(x.key);setShowAfternoonOptions(false);}}
+                        title={detail || (state==="open"?"空いています":"確認が必要です")}
+                      ><span>{mark}</span><b>{x.displayLabel || x.label}</b></button>;
+                    })}
+                    <button
+                      type="button"
+                      className={`timeSlot afternoonSelector ${showAfternoonOptions || selectedOption?.group==="afternoon"?"selected":""}`}
+                      onClick={()=>{setShowAfternoonOptions(true);resetWarningsForTargetChange();}}
+                    ><span>▶</span><b>午後</b></button>
+                  </div>
+
+                  {showAfternoonOptions && (
+                    <div className="afternoonChoices">
+                      <div className="afternoonChoicesTitle">午後の時間指定 または 中</div>
+                      <div className="timeGrid">
+                        {options.filter(x=>x.group==="afternoon").map(x=>{
+                          const state=x.availability||"open";
+                          const mark=state==="open"?"○":state==="warning"?"△":"×";
+                          const detail=[...(x.hardErrors||[]),...(x.warnings||[])].join(" / ");
+                          return <button
+                            type="button"
+                            key={x.key}
+                            className={`timeSlot ${state} ${selected===x.key?"selected":""}`}
+                            disabled={state==="blocked"}
+                            onClick={()=>changeTime(x.key)}
+                            title={detail || (state==="open"?"空いています":"確認が必要です")}
+                          ><span>{mark}</span><b>{x.displayLabel || x.label}</b></button>;
+                        })}
+                      </div>
+                      <div className="timeMeaning">「中」はその日の営業時間内で時間指定なしです。</div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
         <div className="targetPreview">
           <span>変更後</span><b>{targetSummary}</b>
@@ -517,7 +650,7 @@ export default function ScheduleEditPage(){
     </section>
     <style jsx global>{`
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select,textarea{font:inherit}
-      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:4px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:18px}.targetPreview small{color:#627083;line-height:1.5}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.deliveryPlan{margin-top:12px;padding-top:12px;border-top:1px solid #dbe3ed}.deliveryToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;gap:8px!important;font-weight:900!important;color:#2f5f9f!important}.deliveryToggle input{width:20px;height:20px}.deliveryEditNotice{margin-top:12px;padding:10px 12px;border-radius:10px;background:#eef6ff;color:#45637f;font-weight:700}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}.cancelOpen{margin-top:12px;width:100%;color:#b42318;border-color:#efb5af}.cancelBox{margin-top:14px;padding:14px;border:1px solid #efb5af;border-radius:14px;background:#fff7f6}.cancelBox p{color:#7a3d37;line-height:1.5}.cancelBox label{display:grid;gap:6px;font-weight:800;color:#7a3d37}.cancelBox textarea{min-height:86px;resize:vertical;border:1px solid #d9a6a0;border-radius:10px;padding:11px;background:#fff}.cancelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.cancelActions .danger{background:#c4322b;border-color:#c4322b;color:#fff}.cancelActions button:disabled{opacity:.5}@media(max-width:600px){.grid{grid-template-columns:1fr}}
+      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.grid .wide{grid-column:1/-1}.availabilityBlock{display:grid;gap:9px}.availabilityTitle{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.legend{font-size:12px;color:#68778a}.dot{display:inline-block;width:9px;height:9px;border-radius:999px;margin:0 3px 0 7px}.openDot{background:#5eaf76}.warnDot{background:#d5a238}.blockedDot{background:#c76a64}.timeGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.timeSlot{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;color:#315678}.timeSlot.open{border-color:#b7d8c0}.timeSlot.warning{border-color:#e2c36f;background:#fffaf0}.timeSlot.blocked{opacity:.55}.timeSlot.selected{border-color:#2674e8;background:#eaf3ff;color:#145dc0;box-shadow:0 0 0 1px #2674e8 inset}.afternoonSelector{border-style:dashed}.afternoonChoices{margin-top:4px;padding-top:12px;border-top:1px dashed #cad5e3}.afternoonChoicesTitle{font-size:13px;font-weight:800;color:#53647b;margin-bottom:8px}.timeMeaning{font-size:12px;color:#64748b;margin-top:8px}.availabilityLoading{font-size:13px;color:#68778a;padding:8px 0}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:4px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:18px}.targetPreview small{color:#627083;line-height:1.5}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.deliveryPlan{margin-top:12px;padding-top:12px;border-top:1px solid #dbe3ed}.deliveryToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;gap:8px!important;font-weight:900!important;color:#2f5f9f!important}.deliveryToggle input{width:20px;height:20px}.deliveryEditNotice{margin-top:12px;padding:10px 12px;border-radius:10px;background:#eef6ff;color:#45637f;font-weight:700}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}.cancelOpen{margin-top:12px;width:100%;color:#b42318;border-color:#efb5af}.cancelBox{margin-top:14px;padding:14px;border:1px solid #efb5af;border-radius:14px;background:#fff7f6}.cancelBox p{color:#7a3d37;line-height:1.5}.cancelBox label{display:grid;gap:6px;font-weight:800;color:#7a3d37}.cancelBox textarea{min-height:86px;resize:vertical;border:1px solid #d9a6a0;border-radius:10px;padding:11px;background:#fff}.cancelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.cancelActions .danger{background:#c4322b;border-color:#c4322b;color:#fff}.cancelActions button:disabled{opacity:.5}@media(max-width:600px){.grid{grid-template-columns:1fr}}
     `}</style>
   </main>;
 }
