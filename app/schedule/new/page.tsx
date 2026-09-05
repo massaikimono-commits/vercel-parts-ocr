@@ -687,8 +687,9 @@ export default function ScheduleNewPage() {
         }
         if (!data?.batchCreated) throw new Error("複数台の予定を登録できませんでした。");
 
-        setMessage(`${selectedVehicleIds.length}台の予定をまとめて登録しました。1日の予定へ戻ります。`);
-        window.setTimeout(() => location.assign(`/schedule?day=${day}`), 450);
+        setMessage(`${selectedVehicleIds.length}台の予定をまとめて登録しました。続けて次の予定を登録できます。`);
+        setWarnings([]);
+        setHardErrors([]);
         return;
       }
 
@@ -788,8 +789,9 @@ export default function ScheduleNewPage() {
         if (assignmentError) throw assignmentError;
       }
 
-      setMessage("予定を登録しました。1日の予定へ戻ります。");
-      window.setTimeout(() => location.assign(`/schedule?day=${day}`), 350);
+      setMessage("予定を登録しました。続けて次の予定を登録できます。");
+      setWarnings([]);
+      setHardErrors([]);
     } catch (error: any) {
       setMessage(safeActionError("予定登録", error));
     } finally {
