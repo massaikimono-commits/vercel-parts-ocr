@@ -431,83 +431,8 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       </section>
 
       <section className="mobileToday">
-        <button className="heroToday" onClick={() => openDay(todayJst())}>
-          <span>今日の予定</span>
-          <strong>{todayCountLabel}</strong>
-          <small>{todayStatusLabel}</small>
-        </button>
-
-        {!busy && !loadError && (
-          <div className="todayStatusGrid" aria-label="今日の作業状態">
-            <button className="statusTile pending" onClick={() => openDay(todayJst())}>
-              <span>作業未実施</span><strong>{statusCounts.pending}</strong><small>台</small>
-            </button>
-            <button className="statusTile progress" onClick={() => openDay(todayJst())}>
-              <span>作業中</span><strong>{statusCounts.inProgress}</strong><small>台</small>
-            </button>
-            <button className="statusTile done" onClick={() => openDay(todayJst())}>
-              <span>作業完了</span><strong>{statusCounts.completed}</strong><small>台</small>
-            </button>
-          </div>
-        )}
-
-        {!busy && !loadError && inProgressRows.length > 0 && (
-          <div className="progressBox">
-            <div className="progressTitle">いま{inProgressLabel} <strong>{inProgressRows.length}件</strong></div>
-            {inProgressRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
-              <button key={work?.id || entry.id} className="progressRow" onClick={() => openTodayWork(work?.id)}>
-                <span className="progressDot">中</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　{last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
-                {work?.is_urgent && <em>急ぎ</em>}
-              </button>
-            ))}
-            {inProgressRows.length > 3 && (
-              <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
-                ほか {inProgressRows.length - 3}件も作業中　→ 1日の予定で確認
-              </button>
-            )}
-          </div>
-        )}
-
-        {!busy && !loadError && unfinished.length > 0 && (
-          <div className="unfinishedBox">
-            <div className="unfinishedTitle">作業未実施 <strong>{unfinished.length}件</strong></div>
-            {unfinished.slice(0, 5).map(({ entry, work, vehicle, customer }) => (
-              <button key={work?.id || entry.id} className="unfinishedRow" onClick={() => openTodayWork(work?.id)}>
-                <span className="statusDot">未</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}</b><small>{last4(vehicle)}　{work?.reason || ""}</small></span>
-                {work?.is_urgent && <em>急ぎ</em>}
-                {work?.needs_loaner && <em>代車</em>}
-              </button>
-            ))}
-            {unfinished.length > 5 && (
-              <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
-                ほか {unfinished.length - 5}件も未完了　→ 1日の予定で確認
-              </button>
-            )}
-          </div>
-        )}
-
-        {!busy && !loadError && completedRows.length > 0 && (
-          <div className="completedBox">
-            <div className="completedTitle">作業完了 <strong>{completedRows.length}件</strong></div>
-            {completedRows.slice(0, 3).map(({ entry, work, vehicle, customer }) => (
-              <button key={work?.id || entry.id} className="completedRow" onClick={() => openTodayWork(work?.id)}>
-                <span className="completedDot">済</span>
-                <span className="uMain"><b>{timeLabel(entry.starts_at)}　{customerName(customer)}　{last4(vehicle)}</b><small>{work?.reason || ""}　担当 {work?.worker_name?.trim() || "未設定"}</small></span>
-              </button>
-            ))}
-            {completedRows.length > 3 && (
-              <button className="unfinishedMore" onClick={() => openDay(todayJst())}>
-                ほか {completedRows.length - 3}件も完了　→ 1日の予定で確認
-              </button>
-            )}
-          </div>
-        )}
-
         <div className="mobileActions">
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
-          <button className="scheduleAction" onClick={() => openDay(todayJst())}>1日の予定</button>
           <button onClick={() => location.assign("/schedule/search")}>名前・電話・下4桁で予定検索</button>
           <button onClick={() => location.assign("/schedule/week")}>1週間のスケジュール</button>
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票読取</button>
@@ -520,10 +445,6 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       <section className="desktopMain">
         <div className="desktopHeroGrid">
           <button className="desktopHero primaryHero" onClick={() => registerDay(todayJst())}><span>予定登録</span><strong>＋ 新しい予定を登録</strong><small>いちばん使う機能</small></button>
-          <button className="desktopHero todayHero" onClick={() => openDay(todayJst())}>
-            <span>今日の予定</span><strong>{todayCountLabel}</strong><small>{todayStatusLabel}</small>
-            {!busy && !loadError && <div className="desktopStatusLine"><b>未実施 {statusCounts.pending}</b><b>作業中 {statusCounts.inProgress}</b><b>完了 {statusCounts.completed}</b></div>}
-          </button>
         </div>
 
         {!busy && !loadError && workerLoad.length > 0 && (
