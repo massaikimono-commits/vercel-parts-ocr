@@ -425,7 +425,7 @@ export default function SchedulePage() {
     if (work.reason === "車検") return "reason-shaken";
     if (work.reason === "点検") return "reason-check";
     if (work.reason === "一般整備") return "reason-repair";
-    if (work.reason === "板金塗装") return "reason-body";
+    if (work.reason === "板金塗装" || String(work.reason) === "板金") return "reason-body";
     return "reason-none";
   }
 
