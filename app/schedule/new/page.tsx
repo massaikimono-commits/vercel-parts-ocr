@@ -134,8 +134,8 @@ function extractWarnings(check: any) {
 
 export default function ScheduleNewPage() {
   const [day, setDay] = useState(todayJst());
-  const [entryType, setEntryType] = useState<EntryType>("customer_visit");
-  const [reason, setReason] = useState<Reason>("車検");
+  const [entryType, setEntryType] = useState<EntryType>("pickup");
+  const [reason, setReason] = useState<Reason>("点検");
   const [customerName, setCustomerName] = useState("");
   const [customerType, setCustomerType] = useState<"individual" | "company">("individual");
   const [companyName, setCompanyName] = useState("");
@@ -153,7 +153,7 @@ export default function ScheduleNewPage() {
   const [isUrgent, setIsUrgent] = useState(false);
   const [needsLoaner, setNeedsLoaner] = useState(false);
   const [notes, setNotes] = useState("");
-  const [inspectionScheduleType, setInspectionScheduleType] = useState("");
+  const [inspectionScheduleType, setInspectionScheduleType] = useState("schedule");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [selectedTimeKey, setSelectedTimeKey] = useState("");
   const [onsiteMode, setOnsiteMode] = useState<"exact" | "morning" | "unspecified">("exact");
@@ -170,6 +170,7 @@ export default function ScheduleNewPage() {
   const [busy, setBusy] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [message, setMessage] = useState("お客様・車両を選んでから、入庫内容と日時を登録します。");
+  const [successMessage, setSuccessMessage] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [hardErrors, setHardErrors] = useState<string[]>([]);
   const [existingCustomerId, setExistingCustomerId] = useState("");
@@ -558,8 +559,8 @@ export default function ScheduleNewPage() {
   }
 
   function resetAfterSuccessfulRegistration() {
-    setEntryType("customer_visit");
-    setReason("車検");
+    setEntryType("pickup");
+    setReason("点検");
     setCustomerName("");
     setCustomerType("individual");
     setCompanyName("");
@@ -575,7 +576,7 @@ export default function ScheduleNewPage() {
     setIsUrgent(false);
     setNeedsLoaner(false);
     setNotes("");
-    setInspectionScheduleType("");
+    setInspectionScheduleType("schedule");
     setSelectedTimeKey("");
     setOnsiteMode("exact");
     setOnsiteTime("09:00");
@@ -592,6 +593,7 @@ export default function ScheduleNewPage() {
   }
 
   async function submit(allowOverride = false) {
+    setSuccessMessage("");
     setWarnings([]);
     setHardErrors([]);
     if (selectedVehicleIds.length <= 1 && !customerName.trim()) {
@@ -682,7 +684,9 @@ export default function ScheduleNewPage() {
         if (!data?.created) throw new Error("複数台の予定を登録できませんでした。");
 
         resetAfterSuccessfulRegistration();
-        setMessage(`${selectedRows.length}台の予定をまとめて登録しました。登録日だけ引き継いで、続けて次の予定を登録できます。`);
+        setMessage("");
+        setSuccessMessage(`${selectedRows.length}台の予定を登録しました。`);
+        requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
         return;
       }
 
@@ -781,7 +785,9 @@ export default function ScheduleNewPage() {
       }
 
       resetAfterSuccessfulRegistration();
-      setMessage("予定を登録しました。登録日だけ引き継いで、続けて次の予定を登録できます。");
+      setMessage("");
+      setSuccessMessage("予定を登録しました。");
+      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
     } catch (error: any) {
       setMessage(safeActionError("予定登録", error));
     } finally {
@@ -805,6 +811,12 @@ export default function ScheduleNewPage() {
         <div className="eyebrow">入出庫予定登録</div>
         <h1>予定を追加</h1>
         <div className="notice">初入庫は「お客様名＋ナンバー下4桁」だけでも予定登録できます。型式・車台番号・完全な登録番号は、入庫後や車検証読取後に追記できます。</div>
+        {successMessage && (
+          <div className="successBanner" role="status" aria-live="polite">
+            <b>{successMessage}</b>
+            <span>登録日 {day} を引き継いで、他の入力内容はリセットしました。</span>
+          </div>
+        )}
 
         <div className="capacity">
           <div><small>午前 引取</small><b>{capMorningPickup}</b></div>
@@ -1078,7 +1090,7 @@ export default function ScheduleNewPage() {
         .availabilityBlock{display:grid;gap:10px}.availabilityTitle{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;color:#5c6878}.legend{font-size:12px;font-weight:800}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.openDot{background:#4f9c68}.warnDot{background:#d69a36}.blockedDot{background:#9aa5b3}.availabilityLoading{background:#f7f9fc;border-radius:12px;padding:14px;color:#78869a}.timeGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.timeSlot{display:flex;gap:5px;justify-content:center;align-items:center;padding:10px 7px;border-radius:12px}.timeSlot.open{background:#f2fbf5;border-color:#9bceb0;color:#236c3b}.timeSlot.warning{background:#fff8ea;border-color:#e5bd73;color:#8a5a08}.timeSlot.blocked{background:#f1f3f6;border-color:#d5dbe3;color:#8a95a3;opacity:.7}.timeSlot.selected{outline:3px solid #2674e8;outline-offset:1px}.timeSlot:disabled{cursor:not-allowed}
         input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
         .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.deliveryGrid{margin-top:12px}
-        .actionCard{scroll-margin-top:16px}.actionFeedback{margin:0 0 10px}.actionMessage{margin:0 0 10px;padding:12px 14px;border-radius:12px;background:#edf7ef;border:1px solid #c2e5cb;color:#3c5944;line-height:1.6}
+        .successBanner{margin:14px 0 0;padding:14px 16px;border-radius:14px;background:#edf7ef;border:1px solid #b9ddc2;color:#2f5a39;display:grid;gap:4px}.successBanner b{font-size:18px}.successBanner span{font-size:13px;line-height:1.5}.actionCard{scroll-margin-top:16px}.actionFeedback{margin:0 0 10px}.actionMessage{margin:0 0 10px;padding:12px 14px;border-radius:12px;background:#edf7ef;border:1px solid #c2e5cb;color:#3c5944;line-height:1.6}
         .primary{width:100%;background:#2f6fe4;border-color:#2f6fe4;color:#fff;font-size:18px;padding:16px}
         .errors,.warnings{margin-top:12px;border-radius:12px;padding:13px 14px;line-height:1.7}.errors{background:#fff0f0;border:1px solid #efbcbc;color:#8f2f2f}.warnings{background:#fff8df;border:1px solid #ecd98d;color:#6d5912}.warnings button{margin-top:8px;background:#fff}
         .footnote{color:#6f7c8e;line-height:1.6;margin-bottom:0}
