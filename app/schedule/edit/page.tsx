@@ -136,15 +136,19 @@ export default function ScheduleEditPage(){
   const [vendorName,setVendorName]=useState("");
   const [message,setMessage]=useState("予約情報を読み込みます。");
   const [warnings,setWarnings]=useState<string[]>([]);
+  const [cancelMode,setCancelMode]=useState(false);
   const [showCancel,setShowCancel]=useState(false);
   const [cancelReason,setCancelReason]=useState("");
   const [busy,setBusy]=useState(true);
 
-  const id=typeof window!=="undefined" ? new URLSearchParams(location.search).get("id") : null;
-
   useEffect(()=>{
+    const params=new URLSearchParams(location.search);
+    const targetId=params.get("id");
+    const directCancel=params.get("mode")==="cancel";
+    setCancelMode(directCancel);
+    setShowCancel(directCancel);
     void loadAssignments();
-    if(id) void loadEntry(id); else { setBusy(false); setMessage("変更する予定が指定されていません。"); }
+    if(targetId) void loadEntry(targetId); else { setBusy(false); setMessage("変更する予定が指定されていません。"); }
   },[]);
 
   async function loadAssignments(){
@@ -587,12 +591,12 @@ export default function ScheduleEditPage(){
   const cancelSetLabel=entry?.work_order_id ? "この入庫予定一式を取消します" : "この予定を取消します";
 
   return <main className="editPage">
-    <header className="top"><button onClick={()=>history.back()}>← 戻る</button><strong>予約変更</strong><b>icb</b></header>
+    <header className="top"><button onClick={()=>history.back()}>← 戻る</button><strong>{cancelMode ? "予約取消" : "予約変更"}</strong><b>icb</b></header>
     <section className="card">
-      <div className="eyebrow">かんたん予約変更</div>
-      <h1>{entry ? LABEL[entry.entry_type] || entry.entry_type : "予約変更"}</h1>
+      <div className="eyebrow">{cancelMode ? "入庫予定一式の取消" : "かんたん予約変更"}</div>
+      <h1>{cancelMode ? "予約取消" : (entry ? LABEL[entry.entry_type] || entry.entry_type : "予約変更")}</h1>
       <div className="notice">{busy?"処理中…":message}</div>
-      {entry && <>
+      {entry && !cancelMode && <>
         <div className="current">現在：<b>{dateKey(entry.starts_at)} {timeKey(entry.starts_at)}</b></div>
         <div className="grid">
           <label>変更日<input type="date" value={day} onChange={(e)=>void changeDay(e.target.value)} /></label>
@@ -724,31 +728,38 @@ export default function ScheduleEditPage(){
         </section>}
         {!!warnings.length && <div className="warnings"><b>確認が必要</b>{warnings.map((w,i)=><div key={i}>・{w}</div>)}<button onClick={()=>void save(true)}>警告を確認して変更</button></div>}
         <button className="primary" disabled={busy} onClick={()=>void save(false)}>空きチェックして変更</button>
-        {!showCancel ? <button className="cancelOpen" disabled={busy} onClick={()=>setShowCancel(true)}>{entry.work_order_id ? "この入庫予定一式を取消" : "この予定を取消"}</button> :
-          <section className="cancelBox">
-            <b>予約取消の確認</b>
-            <h3>{cancelSetLabel}</h3>
-            <div className="cancelSummary">
-              <div><span>お客様名</span><b>{customerSummaryLabel(customerSummary)}</b></div>
-              <div><span>下4桁</span><b>{naturalLast4(vehicleSummary?.registration_number_last4) || "未登録"}</b></div>
-              <div><span>入庫要因</span><b>{reason || "未登録"}</b></div>
-              <div><span>入庫予定</span><b>{entrySummaryLabel(cancelInboundEntry)}</b></div>
-              <div><span>納車予定</span><b>{entrySummaryLabel(cancelDeliveryEntry)}</b></div>
-            </div>
-            <p>同じ work_order_id に紐づく引取・来社・出張・納車予定は1セットとして取消します。紐づく代車予約も既存の取消処理で連動します。この操作は元に戻せません。</p>
-            <label>取消理由（任意）
-              <textarea value={cancelReason} onChange={(e)=>setCancelReason(e.target.value)} placeholder="必要な場合だけ入力：お客様都合、日程再調整など" />
-            </label>
-            <div className="cancelActions">
-              <button type="button" disabled={busy} onClick={()=>{setShowCancel(false);setCancelReason("");}}>戻る</button>
-              <button type="button" className="danger" disabled={busy} onClick={()=>void cancelReservation()}>{entry.work_order_id ? "この入庫予定一式を取消" : "この予定を取消"}</button>
-            </div>
-          </section>}
+
       </>}
+      {entry && cancelMode && showCancel && (
+        <section className="cancelBox directCancelBox">
+          <b>予約取消の確認</b>
+          <h3>{cancelSetLabel}</h3>
+          <div className="cancelSummary">
+            <div><span>お客様名</span><b>{customerSummaryLabel(customerSummary)}</b></div>
+            <div><span>下4桁</span><b>{naturalLast4(vehicleSummary?.registration_number_last4) || "未登録"}</b></div>
+            <div><span>入庫要因</span><b>{reason || "未登録"}</b></div>
+            <div><span>入庫予定</span><b>{entrySummaryLabel(cancelInboundEntry)}</b></div>
+            <div><span>納車予定</span><b>{entrySummaryLabel(cancelDeliveryEntry)}</b></div>
+          </div>
+          <p>同じ work_order_id に紐づく引取・来社・出張・納車予定は1セットとして取消します。紐づく代車予約も既存の取消処理で連動します。この操作は元に戻せません。</p>
+          <label>取消理由（任意）
+            <textarea value={cancelReason} onChange={(e)=>setCancelReason(e.target.value)} placeholder="必要な場合だけ入力：お客様都合、日程再調整など" />
+          </label>
+          <div className="cancelActions">
+            <button type="button" disabled={busy} onClick={()=>history.back()}>戻る</button>
+            <button type="button" className="danger" disabled={busy} onClick={()=>void cancelReservation()}>{entry.work_order_id ? "この入庫予定一式を取消" : "この予定を取消"}</button>
+          </div>
+        </section>
+      )}
+      {entry && cancelMode && !showCancel && (
+        <div className="cancelResultActions">
+          <button type="button" onClick={()=>history.back()}>予定検索へ戻る</button>
+        </div>
+      )}
     </section>
     <style jsx global>{`
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select,textarea{font:inherit}
-      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.grid .wide{grid-column:1/-1}.availabilityBlock{display:grid;gap:9px}.availabilityTitle{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.legend{font-size:12px;color:#68778a}.dot{display:inline-block;width:9px;height:9px;border-radius:999px;margin:0 3px 0 7px}.openDot{background:#5eaf76}.warnDot{background:#d5a238}.blockedDot{background:#c76a64}.timeGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.timeSlot{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;color:#315678}.timeSlot.open{border-color:#b7d8c0}.timeSlot.warning{border-color:#e2c36f;background:#fffaf0}.timeSlot.blocked{opacity:.55}.timeSlot.selected{border-color:#2674e8;background:#eaf3ff;color:#145dc0;box-shadow:0 0 0 1px #2674e8 inset}.afternoonSelector{border-style:dashed}.afternoonChoices{margin-top:4px;padding-top:12px;border-top:1px dashed #cad5e3}.afternoonChoicesTitle{font-size:13px;font-weight:800;color:#53647b;margin-bottom:8px}.timeMeaning{font-size:12px;color:#64748b;margin-top:8px}.availabilityLoading{font-size:13px;color:#68778a;padding:8px 0}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:4px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:18px}.targetPreview small{color:#627083;line-height:1.5}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.deliveryPlan{margin-top:12px;padding-top:12px;border-top:1px solid #dbe3ed}.deliveryToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;gap:8px!important;font-weight:900!important;color:#2f5f9f!important}.deliveryToggle input{width:20px;height:20px}.deliveryEditNotice{margin-top:12px;padding:10px 12px;border-radius:10px;background:#eef6ff;color:#45637f;font-weight:700}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}.cancelOpen{margin-top:12px;width:100%;color:#b42318;border-color:#efb5af}.cancelBox{margin-top:14px;padding:14px;border:1px solid #efb5af;border-radius:14px;background:#fff7f6}.cancelBox h3{margin:8px 0 10px;color:#9b2c25}.cancelSummary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px}.cancelSummary>div{display:grid;gap:3px;padding:9px 10px;border:1px solid #efcbc7;border-radius:10px;background:#fff}.cancelSummary span{font-size:11px;color:#8a5a56;font-weight:800}.cancelSummary b{font-size:14px;color:#4f2f2c}.cancelBox p{color:#7a3d37;line-height:1.5}.cancelBox label{display:grid;gap:6px;font-weight:800;color:#7a3d37}.cancelBox textarea{min-height:86px;resize:vertical;border:1px solid #d9a6a0;border-radius:10px;padding:11px;background:#fff}.cancelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.cancelActions .danger{background:#c4322b;border-color:#c4322b;color:#fff}.cancelActions button:disabled{opacity:.5}@media(max-width:600px){.grid{grid-template-columns:1fr}.cancelSummary{grid-template-columns:1fr}}
+      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.grid .wide{grid-column:1/-1}.availabilityBlock{display:grid;gap:9px}.availabilityTitle{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.legend{font-size:12px;color:#68778a}.dot{display:inline-block;width:9px;height:9px;border-radius:999px;margin:0 3px 0 7px}.openDot{background:#5eaf76}.warnDot{background:#d5a238}.blockedDot{background:#c76a64}.timeGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.timeSlot{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;color:#315678}.timeSlot.open{border-color:#b7d8c0}.timeSlot.warning{border-color:#e2c36f;background:#fffaf0}.timeSlot.blocked{opacity:.55}.timeSlot.selected{border-color:#2674e8;background:#eaf3ff;color:#145dc0;box-shadow:0 0 0 1px #2674e8 inset}.afternoonSelector{border-style:dashed}.afternoonChoices{margin-top:4px;padding-top:12px;border-top:1px dashed #cad5e3}.afternoonChoicesTitle{font-size:13px;font-weight:800;color:#53647b;margin-bottom:8px}.timeMeaning{font-size:12px;color:#64748b;margin-top:8px}.availabilityLoading{font-size:13px;color:#68778a;padding:8px 0}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:4px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:18px}.targetPreview small{color:#627083;line-height:1.5}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.deliveryPlan{margin-top:12px;padding-top:12px;border-top:1px solid #dbe3ed}.deliveryToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;gap:8px!important;font-weight:900!important;color:#2f5f9f!important}.deliveryToggle input{width:20px;height:20px}.deliveryEditNotice{margin-top:12px;padding:10px 12px;border-radius:10px;background:#eef6ff;color:#45637f;font-weight:700}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}.cancelBox{margin-top:14px;padding:14px;border:1px solid #efb5af;border-radius:14px;background:#fff7f6}.cancelBox h3{margin:8px 0 10px;color:#9b2c25}.cancelSummary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px}.cancelSummary>div{display:grid;gap:3px;padding:9px 10px;border:1px solid #efcbc7;border-radius:10px;background:#fff}.cancelSummary span{font-size:11px;color:#8a5a56;font-weight:800}.cancelSummary b{font-size:14px;color:#4f2f2c}.cancelBox p{color:#7a3d37;line-height:1.5}.cancelBox label{display:grid;gap:6px;font-weight:800;color:#7a3d37}.cancelBox textarea{min-height:86px;resize:vertical;border:1px solid #d9a6a0;border-radius:10px;padding:11px;background:#fff}.cancelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.cancelActions .danger{background:#c4322b;border-color:#c4322b;color:#fff}.directCancelBox{margin-top:12px}.cancelResultActions{margin-top:14px}.cancelResultActions button{width:100%}.cancelActions button:disabled{opacity:.5}@media(max-width:600px){.grid{grid-template-columns:1fr}.cancelSummary{grid-template-columns:1fr}}
     `}</style>
   </main>;
 }
