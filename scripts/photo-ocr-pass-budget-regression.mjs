@@ -27,5 +27,9 @@ const worstCasePasses = binaryTwoPassLoops * 2 + tupleTwoPassLoops * 2;
 
 assert.equal(worstCasePasses, 10, "critical fallback OCR must stay within the 10-pass worst-case budget");
 assert.ok(src.includes("if (!needTopRight && !needEngine && !needReg && !needChassis && !needProfile && !needOutput)"), "zero-pass fast path must remain in place");
+assert.ok(
+  src.includes('if ((fieldValue("記録年月日") || patch.recordDate) && (fieldValue("記録事項番号") || patch.documentNumber)) break;'),
+  "top-right OCR must stop after one pass when the already-filled date plus newly recovered document number satisfy both fields"
+);
 
 console.log("photo OCR pass-budget regression: ok");
