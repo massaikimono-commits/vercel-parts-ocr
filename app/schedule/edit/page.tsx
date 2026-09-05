@@ -540,7 +540,7 @@ export default function ScheduleEditPage(){
                     <button
                       type="button"
                       className={`timeSlot afternoonSelector ${showAfternoonOptions || selectedOption?.group==="afternoon"?"selected":""}`}
-                      onClick={()=>{setShowAfternoonOptions(true);resetWarningsForTargetChange();}}
+                      onClick={()=>{setSelected("");setShowAfternoonOptions(true);resetWarningsForTargetChange();}}
                     ><span>▶</span><b>午後</b></button>
                   </div>
 
