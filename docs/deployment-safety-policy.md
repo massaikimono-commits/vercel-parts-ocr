@@ -29,7 +29,14 @@ This repository must fail closed: normal development commits must not automatica
    - Netlify production release requires explicit user approval before using `[deploy netlify production]`.
    - Netlify Preview release requires an intentional preview test decision before using `[deploy netlify preview]`.
 
-5. **Safety changes**
+5. **Database change policy**
+   - Prefer code-only changes that can be validated in Vercel Preview without changing the shared Supabase database.
+   - Changes that require Supabase schema, CHECK constraints, RPC/function definitions, or new persistent fields are normally deferred until Netlify Production can be redeployed with compatible code.
+   - A shared-database change may be made earlier only when its effect on the currently running Netlify Production code and existing data has been explicitly checked and shown to be safe.
+   - Do not create paid preview databases merely to bypass this rule unless the user explicitly approves that cost.
+   - Any deferred DB-dependent change must be recorded in `docs/pending-fix-ledger.md`.
+
+6. **Safety changes**
    - Any change that weakens or removes these locks must be handled as a dedicated safety change and must not be bundled into ordinary feature work.
 
 ## Current incident status
