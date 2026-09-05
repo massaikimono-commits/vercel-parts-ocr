@@ -38,7 +38,6 @@ type WorkOrder = {
   status: string;
   work_completed: boolean;
   work_completed_at: string | null;
-  checked_out_at: string | null;
 };
 
 type PreviewEntry = Entry & {
@@ -124,9 +123,7 @@ function workCompletedOnReportDay(work: WorkOrder, day: string) {
   if (work.work_completed_at) {
     return new Date(work.work_completed_at).getTime() < endMs;
   }
-  const checkedOutAt = work.checked_out_at ? new Date(work.checked_out_at).getTime() : null;
-  const legacyLaterCheckout = endMs < Date.now() && checkedOutAt !== null && checkedOutAt >= endMs;
-  if (legacyLaterCheckout) return false;
+  if (endMs < Date.now()) return false;
   return work.work_completed || work.status === "completed";
 }
 
@@ -221,7 +218,7 @@ export default function DailyReportPrintPage() {
         supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode").in("entry_type", ["pickup", "customer_visit", "delivery"]),
         supabase.from("vehicles").select("id,customer_id,registration_number,registration_number_last4"),
         supabase.from("customers").select("id,name,company_name,schedule_display_name"),
-        supabase.from("work_orders").select("id,vehicle_id,reason,inspection_schedule_type,worker_name,outsource_vendor_name,expected_completion_date,stay_reason,status,work_completed,work_completed_at,checked_out_at").neq("status", "cancelled"),
+        supabase.from("work_orders").select("id,vehicle_id,reason,inspection_schedule_type,worker_name,outsource_vendor_name,expected_completion_date,stay_reason,status,work_completed,work_completed_at").neq("status", "cancelled"),
         supabase.from("app_settings").select("setting_value").eq("setting_key", "daily_report_template").maybeSingle(),
       ]);
       for (const res of [scheduleRes, stateEntryRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
