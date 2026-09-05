@@ -192,6 +192,8 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     return (weekRowsByDay.get(today) || []);
   }, [weekRowsByDay]);
 
+  const inProgressLabel = "作業中";
+
   const statusCounts = useMemo(() => {
     const uniqueWorks = new Map<string, WorkOrder>();
     for (const { work } of todayRows) if (work) uniqueWorks.set(work.id, work);
@@ -384,7 +386,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
             <span>作業未実施</span><strong>{statusCounts.pending}</strong><small>台</small>
           </button>
           <button className="statusTile progress" onClick={() => openDay(todayJst())}>
-            <span>作業中</span><strong>{statusCounts.inProgress}</strong><small>台</small>
+            <span>{inProgressLabel}</span><strong>{statusCounts.inProgress}</strong><small>台</small>
           </button>
           <button className="statusTile done" onClick={() => openDay(todayJst())}>
             <span>作業完了</span><strong>{statusCounts.completed}</strong><small>台</small>
