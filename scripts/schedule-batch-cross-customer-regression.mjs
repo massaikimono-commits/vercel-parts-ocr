@@ -30,6 +30,9 @@ assert.match(source, /setReason\("点検"\)/, "reset reason defaults to inspecti
 assert.match(source, /setInspectionScheduleType\("schedule"\)/, "reset inspection subtype defaults to schedule");
 
 assert.match(source, /resetAfterSuccessfulRegistration\(\);\s*setMessage\(""\);\s*setSuccessMessage\(/s, "successful registration resets before showing top success");
-assert.match(source, /requestAnimationFrame\(\(\) => window\.scrollTo\(\{ top: 0, behavior: "smooth" \}\)\)/, "successful registration scrolls to top");
+assert.match(source, /useEffect\(\(\) => \{\s*if \(!successMessage\) return;\s*scrollToTopAfterSuccessfulRegistration\(\);\s*\}, \[successMessage\]\);/s, "success state scrolls only after render");
+assert.equal((source.match(/setSuccessMessage\(/g) || []).length >= 3, true, "success state is explicit");
+assert.doesNotMatch(source, /setWarnings\([\s\S]{0,300}scrollToTopAfterSuccessfulRegistration\(/, "warning path does not scroll to top");
+assert.doesNotMatch(source, /setHardErrors\([\s\S]{0,300}scrollToTopAfterSuccessfulRegistration\(/, "error path does not scroll to top");
 
 console.log("schedule cross-customer batch regression: ok");
