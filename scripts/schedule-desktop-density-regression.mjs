@@ -8,7 +8,7 @@ for (const expected of [
   "@media screen and (min-width:721px)",
   ".page{max-width:1440px",
   ".scheduleItem{padding:6px 8px",
-  ".itemMain{display:flex;align-items:center",
+  ".itemMain{display:block;min-width:0;flex:1",
   ".customer{font-size:14px",
   ".meta span{padding:2px 5px;font-size:10px",
   "@media(max-width:720px)",
@@ -23,7 +23,8 @@ if (!source.includes("/schedule/print?day=")) {
 
 for (const expected of [
   "@page{size:A3 portrait",
-  ".sheet{width:297mm;height:420mm",
+  ".sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420",
+  ".sheet{width:${PRINT_LAYOUT.page.widthMm}mm;height:${PRINT_LAYOUT.page.heightMm}mm",
 ]) {
   if (!printSource.includes(expected)) failures.push("missing from dedicated print page: " + expected);
 }
@@ -45,4 +46,4 @@ console.log("PASS schedule desktop density regression");
 console.log("- compact layout applies to desktop screen only");
 console.log("- mobile breakpoint remains separate");
 console.log("- schedule print action routes to the dedicated print page");
-console.log("- dedicated print page remains A3 portrait");
+console.log("- dedicated print preview stays proportional and print output remains exact A3 portrait");
