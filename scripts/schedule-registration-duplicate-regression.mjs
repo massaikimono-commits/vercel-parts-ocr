@@ -14,11 +14,12 @@ assert.match(source, /"それでも登録する"/, "same-day warning can be over
 const helperUses = source.match(/sameDayVehicleScheduleWarnings\(/g) || [];
 assert.equal(helperUses.length, 3, "helper is used for function definition, single registration, and batch registration");
 
-assert.doesNotMatch(source, /DuplicateVehicleCandidate/, "score-based vehicle identity candidate type is removed");
-assert.doesNotMatch(source, /duplicateVehicles/, "score-based vehicle candidate UI/state is removed");
-assert.doesNotMatch(source, /vehicleCandidates\.some|strongVehicles|pairedCustomerIds/, "partial/score vehicle identity is not used");
-assert.match(source, /p_chassis_number: null/, "schedule manual form still lacks chassis input and therefore must not assert same vehicle");
-assert.match(source, /車台番号入力がないため、情報不足/, "missing chassis is documented as insufficient vehicle identity information");
-assert.match(source, /顧客の重複確認です。車両の同一判定と「同じ車両＋同じ日」の予定重複は別に扱います。/, "customer duplicate and schedule duplicate are presented separately");
+assert.doesNotMatch(source, /find_schedule_registration_duplicates/, "manual entry does not invoke customer/vehicle candidate duplicate RPC");
+assert.doesNotMatch(source, /既存顧客の確認|既存顧客を使う|候補とは別なので新規として登録/, "manual entry does not show existing-customer candidate confirmation");
+assert.doesNotMatch(source, /DuplicateCustomerCandidate|DuplicateVehicleCandidate|duplicateCustomers|duplicateVehicles/, "candidate duplicate UI/state is removed");
+assert.match(source, /const selectedCustomerForSubmit = existingCustomerId;/, "explicitly selected registered customer is submitted directly");
+assert.match(source, /const selectedVehicleForSubmit = existingVehicleId;/, "explicitly selected registered vehicle is submitted directly");
+assert.match(source, /初入庫は「お客様名＋ナンバー下4桁」だけでも予定登録できます。/, "initial intake guidance allows name + last4");
+assert.match(source, /if \(selectedVehicleIds\.length <= 1 && !registrationNumber\.trim\(\) && !registrationLast4\.trim\(\)\)/, "manual initial intake accepts last4 without full registration");
 
 console.log("schedule registration duplicate regression: ok");
