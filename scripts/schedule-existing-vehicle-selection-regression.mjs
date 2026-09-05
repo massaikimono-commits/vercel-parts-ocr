@@ -18,9 +18,10 @@ for (const expected of [
   'setMaker(row.maker);',
   'setModel(row.model);',
   'selectedVehicleIds.includes(row.vehicleId)',
-  '同じお客様の車両',
+  '別のお客様・別車両',
   'create_schedule_registration_batch_v1',
-  'p_vehicle_ids: selectedVehicleIds',
+  'p_items: batchItems',
+  'customerId: row.customerId',
   'p_existing_customer_id: selectedCustomerForSubmitNow || null',
   'p_existing_vehicle_id: selectedVehicleForSubmitNow || null',
 ]) {
@@ -43,8 +44,11 @@ for (const searchable of [
 if (!source.includes('selectedVehicleIds.length > 1')) {
   failures.push("multi-vehicle branch missing");
 }
-if (!source.includes('customerIds.length !== 1')) {
-  failures.push("same-customer guard missing");
+if (source.includes('customerIds.length !== 1')) {
+  failures.push("obsolete same-customer guard returned");
+}
+if (source.includes('p_vehicle_ids: selectedVehicleIds')) {
+  failures.push("obsolete same-customer UUID[] batch call returned");
 }
 
 if (failures.length) {
@@ -55,6 +59,6 @@ if (failures.length) {
 
 console.log("PASS schedule existing-vehicle selection regression");
 console.log("- registered customer/vehicle records are searchable");
-console.log("- one or more vehicles from the same customer can be selected");
+console.log("- vehicles from different customers can be selected together");
 console.log("- selected vehicle/customer fields are preserved for single registration");
-console.log("- multiple selected vehicles use the atomic batch registration RPC");
+console.log("- multiple selected vehicles use the JSONB atomic batch registration RPC");
