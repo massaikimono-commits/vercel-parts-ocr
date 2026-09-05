@@ -23,10 +23,14 @@ function assert(condition, message) {
     process.exit(1);
   }
 }
-assert(scheduleNew.includes('supabase.rpc("find_schedule_registration_duplicates"'), "schedule registration must check duplicates");
-assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_v2"'), "schedule registration must be atomic");
+assert(scheduleNew.includes("sameDayVehicleScheduleWarnings"), "schedule registration must check same-vehicle same-day duplicates");
+assert(scheduleNew.includes('.from("schedule_entries")'), "same-day duplicate guard must inspect schedule entries");
+assert(scheduleNew.includes('"それでも登録する"'), "same-day duplicate warning must require explicit override");
+assert(!scheduleNew.includes('find_schedule_registration_duplicates'), "manual-entry customer/vehicle candidate duplicate flow must stay removed");
+assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_v2"'), "single schedule registration must remain atomic");
+assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_batch_v1"'), "multi-vehicle schedule registration must remain atomic");
+assert(scheduleNew.includes("p_items: batchItems"), "multi-vehicle atomic registration must use the JSONB batch payload");
 assert(scheduleNew.includes("p_existing_vehicle_id"), "existing vehicle reuse must remain supported");
-assert(scheduleNew.includes("Number(x.score) >= 70"), "exact-name/company duplicate candidates must require an explicit reuse/new decision");
 assert(scheduleNew.includes("納車予定は入庫・作業予定の終了後"), "delivery must not precede inbound/work end");
 assert(!scheduleNew.includes('supabase.rpc("create_manual_schedule_registration"'), "legacy partial schedule RPC must not be used");
 assert(!scheduleNew.includes('.from("schedule_entries").insert({'), "delivery insert must stay inside atomic RPC");
