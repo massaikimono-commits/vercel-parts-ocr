@@ -36,8 +36,9 @@ assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
 assert(!inspectionPrint.includes("printAndMark"), "print must not pre-mark printed");
 assert(home.includes("checked_out_at"), "home workload must exclude checked-out work");
-assert(schedule.includes("work_completed_at"), "daily schedule must evaluate completion by selected day");
-assert(schedule.includes("checkedOutAt !== null && checkedOutAt <= endOfDay"), "historical daily schedule must keep later checkouts");
+assert(schedule.includes("classifyVehicleBusinessStates"), "daily schedule must use the shared business-state classifier");
+assert(schedule.includes("businessStates.stayingVehicles"), "daily schedule staying vehicles must come from the confirmed schedule-based staying rule");
+assert(!schedule.includes("activelyCheckedIn"), "daily schedule staying logic must not fall back to legacy checked-in state");
 assert(reportPrint.includes("workCompletedOnReportDay"), "daily report completion mark must use selected-day semantics");
 assert(secondary.includes("work_completed_at"), "daily report secondary sections must use completion timestamp");
 assert(loaners.includes('supabase.rpc("set_loaner_vehicle_operational_status"'), "loaner operational status must use guarded RPC");
