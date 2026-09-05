@@ -156,9 +156,7 @@ export default function ScheduleNewPage() {
   const [inspectionScheduleType, setInspectionScheduleType] = useState("schedule");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [selectedTimeKey, setSelectedTimeKey] = useState("");
-  const [onsiteMode, setOnsiteMode] = useState<"exact" | "morning" | "unspecified">("exact");
-  const [onsiteTime, setOnsiteTime] = useState("09:00");
-  const [onsiteDuration, setOnsiteDuration] = useState("60");
+  const [showAfternoonOptions, setShowAfternoonOptions] = useState(false);
 
   const [addDelivery, setAddDelivery] = useState(true);
   const [deliveryDay, setDeliveryDay] = useState(todayJst());
@@ -223,6 +221,10 @@ export default function ScheduleNewPage() {
     void loadCapacity();
     void loadMainOptions();
   }, [day, entryType, reason]);
+
+  useEffect(() => {
+    setShowAfternoonOptions(false);
+  }, [day, entryType]);
 
   useEffect(() => {
     if (entryType === "delivery") {
@@ -330,24 +332,114 @@ export default function ScheduleNewPage() {
   async function loadMainOptions() {
     setLoadingOptions(true);
     try {
+      const checkedOption = async (option: TimeOption) => {
+        const { data, error } = await supabase.rpc("schedule_slot_check_v2", {
+          p_entry_type: entryType,
+          p_starts_at: option.startsAt,
+          p_ends_at: option.endsAt,
+          p_reason: reason,
+          p_exclude_entry_id: null,
+          p_print_time_mode: option.mode,
+        });
+        if (error) throw error;
+        const status = !Boolean(data?.allowed)
+          ? "blocked"
+          : Boolean(data?.override_required)
+            ? "warning"
+            : "open";
+        return {
+          ...option,
+          availability: status as "open" | "warning" | "blocked",
+          warnings: Array.isArray(data?.warnings) ? data.warnings.map(String) : [],
+          hardErrors: Array.isArray(data?.hard_errors) ? data.hard_errors.map(String) : [],
+          conflicts: Number(data?.conflicts || 0),
+        };
+      };
+
+      const exactOption = (time: string, group: "morning" | "afternoon", durationMinutes: number, displayLabel?: string): TimeOption => {
+        const startsAt = jstIso(day, time);
+        return {
+          key: `exact_${time.replace(":", "")}`,
+          label: time,
+          displayLabel: displayLabel || time,
+          group,
+          mode: "exact",
+          startsAt,
+          endsAt: plusMinutes(startsAt, durationMinutes),
+          durationMinutes,
+        };
+      };
+
+      let options: TimeOption[] = [];
+
       if (entryType === "onsite_repair") {
-        setTimeOptions([]);
-        setSelectedTimeKey("");
-        return;
+        const morningTimes = ["08:30","09:00","09:30","10:00","10:30","11:00"];
+        const afternoonTimes = ["13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00"];
+        const raw: TimeOption[] = [
+          ...morningTimes.map((time) => exactOption(time, "morning", time === "17:00" ? 30 : 60)),
+          {
+            key: "morning_unspecified",
+            label: "A中",
+            displayLabel: "A中",
+            group: "morning",
+            mode: "morning",
+            startsAt: jstIso(day, "09:00"),
+            endsAt: jstIso(day, "10:00"),
+            durationMinutes: 60,
+          },
+          ...afternoonTimes.map((time) => exactOption(time, "afternoon", time === "17:00" ? 30 : 60)),
+          {
+            key: "afternoon_unspecified",
+            label: "中",
+            displayLabel: "中",
+            group: "afternoon",
+            mode: "unspecified",
+            startsAt: jstIso(day, "13:00"),
+            endsAt: jstIso(day, "14:00"),
+            durationMinutes: 60,
+          },
+        ];
+        options = await Promise.all(raw.map(checkedOption));
+      } else {
+        const { data, error } = await supabase.rpc("schedule_time_availability", {
+          p_day: day,
+          p_entry_type: entryType,
+          p_reason: reason,
+        });
+        if (error) throw error;
+        options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
+
+        if (entryType === "pickup" && !options.some((x) => x.group === "afternoon" && x.mode === "exact")) {
+          const afternoonTimes = ["13:00","14:00","15:00","16:00","17:00"];
+          const afternoonExact = await Promise.all(
+            afternoonTimes.map((time) => checkedOption(
+              exactOption(
+                time,
+                "afternoon",
+                time === "17:00" ? 30 : 60,
+                Number(time.slice(3)) === 0
+                  ? `${Number(time.slice(0,2))}時まで`
+                  : `${Number(time.slice(0,2))}時${time.slice(3)}分まで`
+              )
+            ))
+          );
+          options = [...options, ...afternoonExact];
+        }
+
+        options = options.map((option) => (
+          option.mode === "unspecified" && option.group === "afternoon"
+            ? { ...option, label: "中", displayLabel: "中" }
+            : option
+        ));
       }
-      const { data, error } = await supabase.rpc("schedule_time_availability", {
-        p_day: day,
-        p_entry_type: entryType,
-        p_reason: reason,
-      });
-      if (error) throw error;
-      const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
+
       setTimeOptions(options);
       setSelectedTimeKey((old) => {
         const oldOption = options.find((x) => x.key === old);
         if (oldOption && oldOption.availability !== "blocked") return old;
-        return options.find((x) => x.availability === "open")?.key
-          || options.find((x) => x.availability === "warning")?.key
+        const morningOptions = options.filter((x) => x.group === "morning");
+        return morningOptions.find((x) => x.availability === "open")?.key
+          || morningOptions.find((x) => x.availability === "warning")?.key
           || "";
       });
     } catch (error: any) {
@@ -396,36 +488,13 @@ export default function ScheduleNewPage() {
   );
 
   function mainTimes() {
-    if (entryType !== "onsite_repair") {
-      if (!selectedTime) return null;
-      return {
-        startsAt: selectedTime.startsAt,
-        endsAt: selectedTime.endsAt,
-        printMode: selectedTime.mode,
-      };
-    }
-    if (onsiteMode === "morning") {
-      return {
-        startsAt: jstIso(day, "08:30"),
-        endsAt: jstIso(day, "12:00"),
-        printMode: "morning" as const,
-      };
-    }
-    if (onsiteMode === "unspecified") {
-      return {
-        startsAt: jstIso(day, "13:00"),
-        endsAt: jstIso(day, "17:00"),
-        printMode: "unspecified" as const,
-      };
-    }
-    const startsAt = jstIso(day, onsiteTime);
+    if (!selectedTime) return null;
     return {
-      startsAt,
-      endsAt: plusMinutes(startsAt, Math.max(30, Number(onsiteDuration) || 60)),
-      printMode: "exact" as const,
+      startsAt: selectedTime.startsAt,
+      endsAt: selectedTime.endsAt,
+      printMode: selectedTime.mode,
     };
   }
-
 
   const filteredRegisteredVehicles = useMemo(() => {
     const q = registeredSearch.normalize("NFKC").trim().toLowerCase();
@@ -599,9 +668,7 @@ export default function ScheduleNewPage() {
     setNotes("");
     setInspectionScheduleType("schedule");
     setSelectedTimeKey("");
-    setOnsiteMode("exact");
-    setOnsiteTime("09:00");
-    setOnsiteDuration("60");
+    setShowAfternoonOptions(false);
     setAddDelivery(true);
     setDeliveryDay(day);
     setDeliveryTimeKey("");
@@ -991,19 +1058,19 @@ export default function ScheduleNewPage() {
         <div className="grid">
           <label>日付<input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label>
 
-          {entryType !== "onsite_repair" ? (
-            <div className="wide availabilityBlock">
-              <div className="availabilityTitle">
-                <b>時間・空き状況</b>
-                <span className="legend"><i className="dot openDot" />○ 空き　<i className="dot warnDot" />△ 要確認　<i className="dot blockedDot" />× 不可</span>
-              </div>
-              {loadingOptions ? (
-                <div className="availabilityLoading">空き時間を確認中…</div>
-              ) : !timeOptions.length ? (
-                <div className="availabilityLoading">時間候補がありません。</div>
-              ) : (
+          <div className="wide availabilityBlock">
+            <div className="availabilityTitle">
+              <b>時間・空き状況</b>
+              <span className="legend"><i className="dot openDot" />○ 空き　<i className="dot warnDot" />△ 要確認　<i className="dot blockedDot" />× 不可</span>
+            </div>
+            {loadingOptions ? (
+              <div className="availabilityLoading">空き時間を確認中…</div>
+            ) : !timeOptions.length ? (
+              <div className="availabilityLoading">時間候補がありません。</div>
+            ) : (
+              <>
                 <div className="timeGrid">
-                  {timeOptions.map((x) => {
+                  {timeOptions.filter((x) => x.group === "morning").map((x) => {
                     const state = x.availability || "open";
                     const mark = state === "open" ? "○" : state === "warning" ? "△" : "×";
                     const detail = [...(x.hardErrors || []), ...(x.warnings || [])].join(" / ");
@@ -1013,37 +1080,56 @@ export default function ScheduleNewPage() {
                         key={x.key}
                         className={`timeSlot ${state} ${selectedTimeKey === x.key ? "selected" : ""}`}
                         disabled={state === "blocked"}
-                        onClick={() => setSelectedTimeKey(x.key)}
+                        onClick={() => {
+                          setSelectedTimeKey(x.key);
+                          setShowAfternoonOptions(false);
+                        }}
                         title={detail || (state === "open" ? "空いています" : "確認が必要です")}
                       >
                         <span>{mark}</span><b>{x.displayLabel || x.label}</b>
                       </button>
                     );
                   })}
+                  <button
+                    type="button"
+                    className={`timeSlot afternoonSelector ${showAfternoonOptions ? "selected" : ""}`}
+                    onClick={() => {
+                      setSelectedTimeKey("");
+                      setShowAfternoonOptions(true);
+                    }}
+                  >
+                    <span>▶</span><b>午後</b>
+                  </button>
                 </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <label>出張時間
-                <select value={onsiteMode} onChange={(e) => setOnsiteMode(e.target.value as "exact" | "morning" | "unspecified")}>
-                  <option value="exact">時間指定</option>
-                  <option value="morning">午前中</option>
-                  <option value="unspecified">午後中</option>
-                </select>
-              </label>
-              {onsiteMode === "exact" && (
-                <>
-                  <label>出張開始<input type="time" min="08:30" max="17:00" step="1800" value={onsiteTime} onChange={(e) => setOnsiteTime(e.target.value)} /></label>
-                  <label>作業枠
-                    <select value={onsiteDuration} onChange={(e) => setOnsiteDuration(e.target.value)}>
-                      <option value="30">30分</option><option value="60">60分</option><option value="90">90分</option><option value="120">120分</option>
-                    </select>
-                  </label>
-                </>
-              )}
-            </>
-          )}
+
+                {showAfternoonOptions && (
+                  <div className="afternoonChoices">
+                    <div className="afternoonChoicesTitle">午後の時間指定 または 中</div>
+                    <div className="timeGrid">
+                      {timeOptions.filter((x) => x.group === "afternoon").map((x) => {
+                        const state = x.availability || "open";
+                        const mark = state === "open" ? "○" : state === "warning" ? "△" : "×";
+                        const detail = [...(x.hardErrors || []), ...(x.warnings || [])].join(" / ");
+                        return (
+                          <button
+                            type="button"
+                            key={x.key}
+                            className={`timeSlot ${state} ${selectedTimeKey === x.key ? "selected" : ""}`}
+                            disabled={state === "blocked"}
+                            onClick={() => setSelectedTimeKey(x.key)}
+                            title={detail || (state === "open" ? "空いています" : "確認が必要です")}
+                          >
+                            <span>{mark}</span><b>{x.displayLabel || x.label}</b>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="timeMeaning">「中」はその日の営業時間内で時間指定なしです。</div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </section>
 
