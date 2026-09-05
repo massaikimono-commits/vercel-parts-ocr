@@ -477,22 +477,11 @@ export default function ScheduleNewPage() {
       return;
     }
 
-    const selectedRows = selectedVehicleIds
-      .map((id) => registeredVehicles.find((vehicle) => vehicle.vehicleId === id))
-      .filter(Boolean) as RegisteredVehicleOption[];
-    const currentCustomerId = selectedRows[0]?.customerId || "";
-
-    if (selectedVehicleIds.length > 0 && currentCustomerId !== row.customerId) {
-      applyRegisteredVehicle(row, [row.vehicleId]);
-      setMessage("別のお客様を選択したため、車両選択を切り替えました。同じお客様の車両は続けて複数台選べます。");
-      return;
-    }
-
     const nextIds = [...selectedVehicleIds, row.vehicleId];
     applyRegisteredVehicle(row, nextIds);
     setMessage(nextIds.length > 1
-      ? `同じお客様の車両を ${nextIds.length}台選択しました。共通の入庫内容・日時でまとめて登録できます。`
-      : "登録済みのお客様・車両を予定へ反映しました。続けて同じお客様の別車両も選択できます。");
+      ? `${nextIds.length}台選択しました。別のお客様・別車両でも、共通の日付・区分/時間・入庫要因・納車予定でまとめて登録できます。`
+      : "登録済みのお客様・車両を予定へ反映しました。別のお客様・別車両も続けて選択できます。");
   }
 
   async function sameDayVehicleScheduleWarnings(vehicleIds: string[]) {
@@ -568,10 +557,44 @@ export default function ScheduleNewPage() {
     };
   }
 
+  function resetAfterSuccessfulRegistration() {
+    setEntryType("customer_visit");
+    setReason("車検");
+    setCustomerName("");
+    setCustomerType("individual");
+    setCompanyName("");
+    setPhone("");
+    setScheduleDisplayName("");
+    setRegistrationNumber("");
+    setRegistrationLast4("");
+    setMaker("");
+    setModel("");
+    setStaffId("");
+    setVendorId("");
+    setVendorName("");
+    setIsUrgent(false);
+    setNeedsLoaner(false);
+    setNotes("");
+    setInspectionScheduleType("");
+    setSelectedTimeKey("");
+    setOnsiteMode("exact");
+    setOnsiteTime("09:00");
+    setOnsiteDuration("60");
+    setAddDelivery(true);
+    setDeliveryDay(day);
+    setDeliveryTimeKey("");
+    setRegisteredSearch("");
+    setSelectedVehicleIds([]);
+    setExistingVehicleId("");
+    setExistingCustomerId("");
+    setWarnings([]);
+    setHardErrors([]);
+  }
+
   async function submit(allowOverride = false) {
     setWarnings([]);
     setHardErrors([]);
-    if (!customerName.trim()) {
+    if (selectedVehicleIds.length <= 1 && !customerName.trim()) {
       setHardErrors(["お客様名を入力してください。"]);
       return;
     }
@@ -586,9 +609,8 @@ export default function ScheduleNewPage() {
         const selectedRows = selectedVehicleIds
           .map((id) => registeredVehicles.find((vehicle) => vehicle.vehicleId === id))
           .filter(Boolean) as RegisteredVehicleOption[];
-        const customerIds = [...new Set(selectedRows.map((row) => row.customerId).filter(Boolean))];
-        if (selectedRows.length !== selectedVehicleIds.length || customerIds.length !== 1) {
-          setHardErrors(["複数台登録は、同じお客様に紐づく登録済み車両だけを選択してください。"]);
+        if (selectedRows.length !== selectedVehicleIds.length) {
+          setHardErrors(["選択した車両情報を再取得できませんでした。選択し直してください。"]);
           return;
         }
 
@@ -598,6 +620,7 @@ export default function ScheduleNewPage() {
           setMessage("登録できない条件があります。内容を確認してください。");
           return;
         }
+
         const sameDayWarnings = await sameDayVehicleScheduleWarnings(selectedVehicleIds);
         if ((check.overrideRequired || sameDayWarnings.length > 0) && !allowOverride) {
           setWarnings([...check.warnings, ...sameDayWarnings]);
@@ -607,31 +630,46 @@ export default function ScheduleNewPage() {
           return;
         }
 
+        const batchItems = selectedRows.map((row) => ({
+          vehicleId: row.vehicleId,
+          customerId: row.customerId,
+          customerName: row.customerName || row.companyName || "顧客未割当",
+          customerType: row.customerType || "individual",
+          companyName: row.companyName || null,
+          phone: row.phone || null,
+          scheduleDisplayName: row.scheduleDisplayName || null,
+          registrationNumber: row.registrationNumber || null,
+          registrationLast4: row.registrationLast4 || row.registrationNumber.match(/(\d{1,4})(?!.*\d)/)?.[1] || null,
+          maker: row.maker || null,
+          model: row.model || null,
+          entryType,
+          reason,
+          startsAt: check.main.startsAt,
+          endsAt: check.main.endsAt,
+          staffId: staffId || null,
+          notes: notes.trim() || null,
+          inspectionScheduleType: reason === "点検" ? (inspectionScheduleType || null) : null,
+          printTimeMode: check.main.printMode,
+          isUrgent,
+          needsLoaner,
+          vendorId: (reason === "板金塗装" || reason === "一般整備") ? (vendorId || null) : null,
+          vendorName: (reason === "板金塗装" || reason === "一般整備") ? (vendorName.trim() || null) : null,
+          addDelivery: addDelivery && entryType !== "delivery",
+          deliveryStartsAt: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
+          deliveryEndsAt: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
+          deliveryPrintTimeMode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
+        }));
+
         const { data, error } = await supabase.rpc("create_schedule_registration_batch_v1", {
-          p_vehicle_ids: selectedVehicleIds,
-          p_entry_type: entryType,
-          p_reason: reason,
-          p_starts_at: check.main.startsAt,
-          p_ends_at: check.main.endsAt,
-          p_staff_id: staffId || null,
-          p_notes: notes.trim() || null,
-          p_inspection_schedule_type: reason === "点検" ? (inspectionScheduleType || null) : null,
-          p_print_time_mode: check.main.printMode,
-          p_is_urgent: isUrgent,
-          p_needs_loaner: needsLoaner,
-          p_vendor_id: (reason === "板金塗装" || reason === "一般整備") ? (vendorId || null) : null,
-          p_vendor_name: (reason === "板金塗装" || reason === "一般整備") ? (vendorName.trim() || null) : null,
-          p_add_delivery: addDelivery && entryType !== "delivery",
-          p_delivery_starts_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
-          p_delivery_ends_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
-          p_delivery_print_time_mode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
+          p_day: day,
+          p_items: batchItems,
           p_allow_warning_override: allowOverride,
         });
         if (error) throw error;
 
         const batchHardErrors = Array.isArray(data?.hardErrors) ? data.hardErrors.map(String) : [];
         const batchWarnings = Array.isArray(data?.warnings) ? data.warnings.map(String) : [];
-        if (batchHardErrors.length || data?.allowed === false) {
+        if (batchHardErrors.length || data?.created === false) {
           setHardErrors(batchHardErrors.length ? batchHardErrors : ["複数台の一括登録を完了できませんでした。"]);
           setMessage("複数台のうち登録できない条件があります。1台も登録せずに止めました。");
           return;
@@ -641,11 +679,10 @@ export default function ScheduleNewPage() {
           setMessage("複数台登録に警告があります。内容を確認してください。");
           return;
         }
-        if (!data?.batchCreated) throw new Error("複数台の予定を登録できませんでした。");
+        if (!data?.created) throw new Error("複数台の予定を登録できませんでした。");
 
-        setMessage(`${selectedVehicleIds.length}台の予定をまとめて登録しました。続けて次の予定を登録できます。`);
-        setWarnings([]);
-        setHardErrors([]);
+        resetAfterSuccessfulRegistration();
+        setMessage(`${selectedRows.length}台の予定をまとめて登録しました。登録日だけ引き継いで、続けて次の予定を登録できます。`);
         return;
       }
 
@@ -743,9 +780,8 @@ export default function ScheduleNewPage() {
         if (assignmentError) throw assignmentError;
       }
 
-      setMessage("予定を登録しました。続けて次の予定を登録できます。");
-      setWarnings([]);
-      setHardErrors([]);
+      resetAfterSuccessfulRegistration();
+      setMessage("予定を登録しました。登録日だけ引き継いで、続けて次の予定を登録できます。");
     } catch (error: any) {
       setMessage(safeActionError("予定登録", error));
     } finally {
@@ -785,7 +821,7 @@ export default function ScheduleNewPage() {
         <div style={{margin:"12px 0 16px",padding:"14px",border:"1px solid #c9d8ee",borderRadius:14,background:"#f8fbff"}}>
           <b style={{display:"block",marginBottom:6}}>登録済みのお客様・車両から選ぶ</b>
           <div style={{color:"#607086",fontSize:13,lineHeight:1.6,marginBottom:10}}>
-            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。同じお客様の車両は続けて複数台選択できます。
+            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。別のお客様・別車両でも続けて複数台選択できます。
           </div>
           <input
             value={registeredSearch}
@@ -826,7 +862,7 @@ export default function ScheduleNewPage() {
           {selectedVehicleIds.length > 0 && (
             <div className="selectedVehiclesSummary">
               <b>選択中：{selectedVehicleIds.length}台</b>
-              <span>{selectedVehicleIds.length > 1 ? "共通の入庫内容・日時で一括登録します。各車両の登録番号・型式は保存済み情報を使用します。" : "同じお客様の別車両を続けて選べます。"}</span>
+              <span>{selectedVehicleIds.length > 1 ? "別のお客様・別車両を、共通の日付・区分/時間・入庫要因・納車予定で一括登録します。各車両の顧客・車両情報は保存済み情報を使用します。" : "別のお客様・別車両も続けて選べます。"}</span>
               <button type="button" onClick={() => {
                 setSelectedVehicleIds([]);
                 setExistingVehicleId("");
