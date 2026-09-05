@@ -269,3 +269,25 @@ Before an app-development chat finishes a batch:
 - Customer candidate reuse remains a separate customer-only confirmation.
 - Full registration number differences (including area/class/hiragana/serial) are therefore never collapsed by schedule duplicate logic; schedule duplicate uses the selected existing vehicle ID only.
 - No Supabase schema/function change. main/Netlify untouched.
+
+### 2026-09-06 — Schedule search / edit / cancellation preview handoff
+- User verified on iPhone/Vercel Preview:
+  - schedule registration reset/defaults/top-success flow,
+  - iPhone Safari scroll-to-top after successful registration,
+  - cross-customer multi-vehicle batch registration,
+  - unified inbound time selector in schedule registration,
+  - unified inbound time selector in schedule edit,
+  - schedule search short numeric last4 behavior,
+  - work_order-based schedule search grouping and combined inbound+delivery edit,
+  - work_order-based cancellation including a successful real cancellation test.
+- Current schedule model is explicitly `1 work_order = 1入庫予定一式` for search/edit/cancel:
+  - schedule search groups inbound + delivery by `work_order_id`,
+  - edit loads related delivery by the same `work_order_id`,
+  - existing `cancel_schedule_entry_v1` already deletes all `schedule_entries` for the work order and keeps existing loaner/rental-company safety behavior.
+- Cancellation confirmation now shows customer name, natural last4, reason, inbound plan, and delivery plan, with “この入庫予定一式を取消します”.
+- Latest cancellation practical-test Preview that passed: https://vercel-parts-7878q7o48-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=vcbRHad07CYo0cd76myGyDRY6OfK8zp1
+- Current source head before this ledger update: `e0ec8663f20834fa1b986380bc644540c77a4631`.
+- PR #62 remains Draft/unmerged. main / Netlify / shared Supabase schema/functions were not changed by these UI updates.
+- Deferred DB items remain unchanged: #001 legal_3m, #002 来社「作業待ち」, #003 exact-time overlap warning scope.
+- Next requested action: simplify schedule-search result cards so each work-order set has side-by-side `予約変更` / `予約取消` actions; cancellation should open the existing two-step work-order cancellation confirmation directly from search without weakening safety.
+
