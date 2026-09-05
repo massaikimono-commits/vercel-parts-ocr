@@ -19,10 +19,13 @@ assert.equal(accepted(["5", ""], "seatingCapacity"), "", "one successful numeric
 assert.equal(accepted(["5", "5"], "seatingCapacity"), "5", "numeric seating capacity may be accepted after two-pass agreement");
 assert.equal(accepted(["5", "8"], "seatingCapacity"), "", "conflicting numeric OCR passes must be rejected");
 assert.equal(accepted(["500"], "maxPayloadKg"), "", "numeric max payload must not be accepted from one OCR pass");
+assert.equal(accepted(["500", ""], "maxPayloadKg"), "", "one successful max payload OCR pass plus one empty pass must not count as two-pass agreement");
 assert.equal(accepted(["500", "500"], "maxPayloadKg"), "500", "numeric max payload may be accepted after two-pass agreement");
 assert.equal(accepted(["500", "550"], "maxPayloadKg"), "", "conflicting max payload OCR passes must be rejected");
 assert.equal(accepted(["1.8 L"], "displacementOrRatedOutput"), "", "output/displacement must not be accepted from one OCR pass");
+assert.equal(accepted(["1.8 L", ""], "displacementOrRatedOutput"), "", "one successful output/displacement OCR pass plus one empty pass must not count as two-pass agreement");
 assert.equal(accepted(["1.8 L", "1.8 L"], "displacementOrRatedOutput"), "1.8 L", "output/displacement may be accepted after agreement");
+assert.equal(accepted(["1.8 L", "2.0 L"], "displacementOrRatedOutput"), "", "conflicting output/displacement OCR passes must be rejected");
 
 for (const key of categoricalKeys) {
   assert.ok(src.includes(`\"${key}\"`), `${key} must remain represented in photo profile fallback`);
