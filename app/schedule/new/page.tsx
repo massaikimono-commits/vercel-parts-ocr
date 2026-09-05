@@ -466,7 +466,7 @@ export default function ScheduleNewPage() {
       if (nextPrimary) {
         applyRegisteredVehicle(nextPrimary, nextIds);
         setMessage(nextIds.length > 1
-          ? `同じお客様の車両を ${nextIds.length}台選択しています。`
+          ? `${nextIds.length}台選択しています。別のお客様・別車両でも共通条件でまとめて登録できます。`
           : "登録済みのお客様・車両を予定へ反映しました。");
       } else {
         setSelectedVehicleIds([]);
