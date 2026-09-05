@@ -60,15 +60,6 @@ type DuplicateCustomerCandidate = {
   score: number;
 };
 
-type DuplicateVehicleCandidate = {
-  vehicleId: string;
-  customerId: string | null;
-  registrationNumber: string | null;
-  registrationLast4: string | null;
-  maker: string | null;
-  model: string | null;
-  score: number;
-};
 type RegisteredVehicleOption = {
   vehicleId: string;
   customerId: string | null;
@@ -188,7 +179,6 @@ export default function ScheduleNewPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [hardErrors, setHardErrors] = useState<string[]>([]);
   const [duplicateCustomers, setDuplicateCustomers] = useState<DuplicateCustomerCandidate[]>([]);
-  const [duplicateVehicles, setDuplicateVehicles] = useState<DuplicateVehicleCandidate[]>([]);
   const [existingCustomerId, setExistingCustomerId] = useState("");
   const [existingVehicleId, setExistingVehicleId] = useState("");
   const [duplicateDecisionFingerprint, setDuplicateDecisionFingerprint] = useState("");
@@ -490,7 +480,6 @@ export default function ScheduleNewPage() {
     setMaker(row.maker);
     setModel(row.model);
     setDuplicateCustomers([]);
-    setDuplicateVehicles([]);
     setDuplicateBypassFingerprint("");
     setDuplicateDecisionFingerprint(makeDuplicateFingerprint({
       customerName: row.customerName || row.companyName,
@@ -543,6 +532,36 @@ export default function ScheduleNewPage() {
       : "登録済みのお客様・車両を予定へ反映しました。続けて同じお客様の別車両も選択できます。");
   }
 
+  async function sameDayVehicleScheduleWarnings(vehicleIds: string[]) {
+    const ids = [...new Set(vehicleIds.filter(Boolean))];
+    if (!ids.length) return [] as string[];
+
+    const dayStart = jstIso(day, "00:00");
+    const nextDayStart = jstIso(addDay(day, 1), "00:00");
+    const { data, error } = await supabase
+      .from("schedule_entries")
+      .select("id,vehicle_id,entry_type,starts_at")
+      .in("vehicle_id", ids)
+      .gte("starts_at", dayStart)
+      .lt("starts_at", nextDayStart);
+    if (error) throw error;
+
+    const scheduledVehicleIds = new Set(
+      (data || []).map((row: any) => String(row.vehicle_id || "")).filter(Boolean)
+    );
+
+    return ids
+      .filter((id) => scheduledVehicleIds.has(id))
+      .map((id) => {
+        const row = registeredVehicles.find((vehicle) => vehicle.vehicleId === id);
+        const plateDigits = row?.registrationLast4
+          || row?.registrationNumber.match(/(\d{1,4})(?!.*\d)/)?.[1]
+          || "";
+        const label = naturalLast4(plateDigits) || row?.registrationNumber || "車両";
+        return `同日予定：車番 ${label} は ${day} にすでに予定があります。時間や入庫内容が違っていても同日のため確認してください。`;
+      });
+  }
+
   async function checkDuplicateRegistration() {
     const { data, error } = await supabase.rpc("find_schedule_registration_duplicates", {
       p_customer_name: customerName.trim() || null,
@@ -555,28 +574,23 @@ export default function ScheduleNewPage() {
     if (error) throw error;
 
     const customerCandidates = (Array.isArray(data?.customerCandidates) ? data.customerCandidates : []) as DuplicateCustomerCandidate[];
-    const vehicleCandidates = (Array.isArray(data?.vehicleCandidates) ? data.vehicleCandidates : []) as DuplicateVehicleCandidate[];
-    const strongCustomerIds = new Set(customerCandidates.filter((x) => Number(x.score) >= 100).map((x) => x.customerId));
-    const pairedCustomerIds = new Set(
-      customerCandidates
-        .filter((c) => Number(c.score) >= 70 && vehicleCandidates.some((v) => v.customerId === c.customerId && Number(v.score) >= 50))
-        .map((c) => c.customerId)
-    );
-    const strongCustomers = customerCandidates.filter((x) => Number(x.score) >= 70 || strongCustomerIds.has(x.customerId) || pairedCustomerIds.has(x.customerId));
-    const strongVehicles = vehicleCandidates.filter((x) => Number(x.score) >= 100 || (x.customerId ? pairedCustomerIds.has(x.customerId) : false));
 
-    if (!strongCustomers.length && !strongVehicles.length) {
+    // 車両そのものの同一判定と、同日予定の重複警告は別機能。
+    // 現在の予定登録フォームには車台番号入力がないため、情報不足の状態で
+    // 登録番号・下4桁などの点数/部分一致から「同じ車両」と断定しない。
+    // 登録済み車両は上の「登録済みのお客様・車両から選ぶ」で明示的に選択する。
+    const strongCustomers = customerCandidates.filter((x) => Number(x.score) >= 70);
+
+    if (!strongCustomers.length) {
       setDuplicateCustomers([]);
-      setDuplicateVehicles([]);
       return true;
     }
 
     setDuplicateCustomers(strongCustomers);
-    setDuplicateVehicles(strongVehicles);
     setExistingCustomerId("");
     setExistingVehicleId("");
     setDuplicateDecisionFingerprint("");
-    setMessage("既存のお客様・車両と一致する候補があります。重複登録を防ぐため、使用する既存データか「新規として登録」を選んでください。");
+    setMessage("既存のお客様候補があります。車両の同一判定や同日予定の重複確認とは分けて確認してください。");
     return false;
   }
 
