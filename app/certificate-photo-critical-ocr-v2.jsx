@@ -324,7 +324,7 @@ export default function CertificatePhotoCriticalOcrV2() {
                   const n = docNumber(raw);
                   if (n) patch.documentNumber = n;
                 }
-                if ((!needTopRight || patch.recordDate) && (fieldValue("記録事項番号") || patch.documentNumber)) break;
+                if ((fieldValue("記録年月日") || patch.recordDate) && (fieldValue("記録事項番号") || patch.documentNumber)) break;
               } finally { c.width = 1; c.height = 1; }
             }
           }
