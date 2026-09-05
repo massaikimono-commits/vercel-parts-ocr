@@ -60,6 +60,19 @@ type DeliveryTarget = {
   mode:"exact"|"unspecified";
 };
 
+type VehicleSummary = {
+  id:string;
+  customer_id:string|null;
+  registration_number_last4:string|null;
+};
+
+type CustomerSummary = {
+  id:string;
+  name:string;
+  company_name:string|null;
+  schedule_display_name:string|null;
+};
+
 function dateKey(value:string){
   return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(value));
 }
@@ -76,6 +89,26 @@ function plusMinutes(iso:string,minutes:number){
   return new Date(new Date(iso).getTime()+minutes*60_000).toISOString();
 }
 
+function naturalLast4(value:string|null|undefined){
+  const raw=(value||"").trim();
+  if(!raw) return "";
+  return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
+}
+
+function customerSummaryLabel(customer:CustomerSummary|null){
+  return customer?.schedule_display_name || customer?.company_name || customer?.name || "お客様未登録";
+}
+
+function entrySummaryLabel(entry:Entry|null){
+  if(!entry) return "未登録";
+  const date=new Intl.DateTimeFormat("ja-JP",{
+    timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",weekday:"short",
+  }).format(new Date(entry.starts_at));
+  if(entry.print_time_mode==="morning") return `${LABEL[entry.entry_type]||entry.entry_type} ${date} A中`;
+  if(entry.print_time_mode==="unspecified") return `${LABEL[entry.entry_type]||entry.entry_type} ${date} 中`;
+  return `${LABEL[entry.entry_type]||entry.entry_type} ${date} ${timeKey(entry.starts_at)}`;
+}
+
 const LABEL:Record<string,string>={delivery:"納車",pickup:"引取",customer_visit:"来社",onsite_repair:"出張"};
 const STAY_REASON_SUGGESTIONS=["部品待ち","外注作業待ち","見積確認待ち","お客様連絡待ち","作業待ち"];
 
@@ -88,6 +121,9 @@ export default function ScheduleEditPage(){
   const [stayReason,setStayReason]=useState("");
   const [plannedDeliveryDate,setPlannedDeliveryDate]=useState("");
   const [deliveryEntry,setDeliveryEntry]=useState<Entry|null>(null);
+  const [relatedInboundEntry,setRelatedInboundEntry]=useState<Entry|null>(null);
+  const [vehicleSummary,setVehicleSummary]=useState<VehicleSummary|null>(null);
+  const [customerSummary,setCustomerSummary]=useState<CustomerSummary|null>(null);
   const [deliveryEnabled,setDeliveryEnabled]=useState(false);
   const [deliveryDay,setDeliveryDay]=useState("");
   const [deliveryMode,setDeliveryMode]=useState<"unspecified"|"exact">("unspecified");
@@ -130,9 +166,13 @@ export default function ScheduleEditPage(){
     setEntry(e);
     let loadedReason="";
     if(e.work_order_id){
-      const [{data:workData,error:workError},{data:deliveryData,error:deliveryError}]=await Promise.all([
+      const [
+        {data:workData,error:workError},
+        {data:deliveryData,error:deliveryError},
+        {data:inboundData,error:inboundError},
+      ]=await Promise.all([
         supabase.from("work_orders")
-          .select("id,reason,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name,stay_reason,planned_delivery_date")
+          .select("id,vehicle_id,reason,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name,stay_reason,planned_delivery_date")
           .eq("id",e.work_order_id).maybeSingle(),
         supabase.from("schedule_entries")
           .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
@@ -141,11 +181,21 @@ export default function ScheduleEditPage(){
           .order("starts_at",{ascending:true})
           .limit(1)
           .maybeSingle(),
+        supabase.from("schedule_entries")
+          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
+          .eq("work_order_id",e.work_order_id)
+          .in("entry_type",["pickup","customer_visit","onsite_repair"])
+          .order("starts_at",{ascending:true})
+          .limit(1)
+          .maybeSingle(),
       ]);
       if(workError){setMessage("作業情報の読み込みエラー: "+workError.message);setBusy(false);return;}
       if(deliveryError){setMessage("納車予定の読み込みエラー: "+deliveryError.message);setBusy(false);return;}
+      if(inboundError){setMessage("入庫予定の読み込みエラー: "+inboundError.message);setBusy(false);return;}
       const work=(workData||null) as WorkOrder|null;
       const delivery=(deliveryData||null) as Entry|null;
+      const relatedInbound=(inboundData||null) as Entry|null;
+      setRelatedInboundEntry(relatedInbound);
       loadedReason=work?.reason||"";
       setReason(loadedReason);
       setStaffId(work?.worker_staff_id||"");
@@ -158,6 +208,32 @@ export default function ScheduleEditPage(){
       setDeliveryDay(delivery ? dateKey(delivery.starts_at) : (work?.planned_delivery_date || dateKey(e.starts_at)));
       setDeliveryMode(delivery?.print_time_mode==="exact" ? "exact" : "unspecified");
       setDeliveryTime(delivery ? timeKey(delivery.starts_at) : "15:00");
+
+      const vehicleId=e.vehicle_id || work?.vehicle_id || relatedInbound?.vehicle_id || delivery?.vehicle_id || "";
+      if(vehicleId){
+        const {data:vehicleData,error:vehicleError}=await supabase
+          .from("vehicles")
+          .select("id,customer_id,registration_number_last4")
+          .eq("id",vehicleId)
+          .maybeSingle();
+        if(vehicleError){setMessage("車両情報の読み込みエラー: "+vehicleError.message);setBusy(false);return;}
+        const vehicle=(vehicleData||null) as VehicleSummary|null;
+        setVehicleSummary(vehicle);
+        if(vehicle?.customer_id){
+          const {data:customerData,error:customerError}=await supabase
+            .from("customers")
+            .select("id,name,company_name,schedule_display_name")
+            .eq("id",vehicle.customer_id)
+            .maybeSingle();
+          if(customerError){setMessage("お客様情報の読み込みエラー: "+customerError.message);setBusy(false);return;}
+          setCustomerSummary((customerData||null) as CustomerSummary|null);
+        }else{
+          setCustomerSummary(null);
+        }
+      }else{
+        setVehicleSummary(null);
+        setCustomerSummary(null);
+      }
     }
     const d=dateKey(e.starts_at);
     setDay(d);
@@ -483,8 +559,8 @@ export default function ScheduleEditPage(){
       });
       if(error) throw error;
       setMessage(data?.rentalCancellationPending
-        ? "予約を取消しました。レンタカーは業者への取消連絡待ちです。"
-        : "予約を取消しました。関連する入庫・納車予定と代車予約も更新しました。");
+        ? "入庫予定一式を取消しました。レンタカーは業者への取消連絡待ちです。"
+        : "入庫予定一式を取消しました。関連する入庫・納車予定と代車予約も更新しました。");
       window.setTimeout(()=>location.assign("/schedule?day="+day),700);
     }catch(error:any){
       const detail=String(error?.message||"");
@@ -495,6 +571,10 @@ export default function ScheduleEditPage(){
       setBusy(false);
     }
   }
+
+  const cancelInboundEntry=entry?.entry_type==="delivery" ? relatedInboundEntry : entry;
+  const cancelDeliveryEntry=entry?.entry_type==="delivery" ? entry : deliveryEntry;
+  const cancelSetLabel=entry?.work_order_id ? "この入庫予定一式を取消します" : "この予定を取消します";
 
   return <main className="editPage">
     <header className="top"><button onClick={()=>history.back()}>← 戻る</button><strong>予約変更</strong><b>icb</b></header>
@@ -634,23 +714,31 @@ export default function ScheduleEditPage(){
         </section>}
         {!!warnings.length && <div className="warnings"><b>確認が必要</b>{warnings.map((w,i)=><div key={i}>・{w}</div>)}<button onClick={()=>void save(true)}>警告を確認して変更</button></div>}
         <button className="primary" disabled={busy} onClick={()=>void save(false)}>空きチェックして変更</button>
-        {!showCancel ? <button className="cancelOpen" disabled={busy} onClick={()=>setShowCancel(true)}>この予約を取消</button> :
+        {!showCancel ? <button className="cancelOpen" disabled={busy} onClick={()=>setShowCancel(true)}>この入庫予定一式を取消</button> :
           <section className="cancelBox">
             <b>予約取消の確認</b>
-            <p>同じ作業に紐づく入庫・納車予定と代車予約もまとめて更新します。この操作は元に戻せません。</p>
+            <h3>{cancelSetLabel}</h3>
+            <div className="cancelSummary">
+              <div><span>お客様名</span><b>{customerSummaryLabel(customerSummary)}</b></div>
+              <div><span>下4桁</span><b>{naturalLast4(vehicleSummary?.registration_number_last4) || "未登録"}</b></div>
+              <div><span>入庫要因</span><b>{reason || "未登録"}</b></div>
+              <div><span>入庫予定</span><b>{entrySummaryLabel(cancelInboundEntry)}</b></div>
+              <div><span>納車予定</span><b>{entrySummaryLabel(cancelDeliveryEntry)}</b></div>
+            </div>
+            <p>同じ work_order_id に紐づく引取・来社・出張・納車予定は1セットとして取消します。紐づく代車予約も既存の取消処理で連動します。この操作は元に戻せません。</p>
             <label>取消理由（任意）
               <textarea value={cancelReason} onChange={(e)=>setCancelReason(e.target.value)} placeholder="必要な場合だけ入力：お客様都合、日程再調整など" />
             </label>
             <div className="cancelActions">
               <button type="button" disabled={busy} onClick={()=>{setShowCancel(false);setCancelReason("");}}>戻る</button>
-              <button type="button" className="danger" disabled={busy} onClick={()=>void cancelReservation()}>取消を確定</button>
+              <button type="button" className="danger" disabled={busy} onClick={()=>void cancelReservation()}>この入庫予定一式を取消</button>
             </div>
           </section>}
       </>}
     </section>
     <style jsx global>{`
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select,textarea{font:inherit}
-      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.grid .wide{grid-column:1/-1}.availabilityBlock{display:grid;gap:9px}.availabilityTitle{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.legend{font-size:12px;color:#68778a}.dot{display:inline-block;width:9px;height:9px;border-radius:999px;margin:0 3px 0 7px}.openDot{background:#5eaf76}.warnDot{background:#d5a238}.blockedDot{background:#c76a64}.timeGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.timeSlot{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;color:#315678}.timeSlot.open{border-color:#b7d8c0}.timeSlot.warning{border-color:#e2c36f;background:#fffaf0}.timeSlot.blocked{opacity:.55}.timeSlot.selected{border-color:#2674e8;background:#eaf3ff;color:#145dc0;box-shadow:0 0 0 1px #2674e8 inset}.afternoonSelector{border-style:dashed}.afternoonChoices{margin-top:4px;padding-top:12px;border-top:1px dashed #cad5e3}.afternoonChoicesTitle{font-size:13px;font-weight:800;color:#53647b;margin-bottom:8px}.timeMeaning{font-size:12px;color:#64748b;margin-top:8px}.availabilityLoading{font-size:13px;color:#68778a;padding:8px 0}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:4px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:18px}.targetPreview small{color:#627083;line-height:1.5}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.deliveryPlan{margin-top:12px;padding-top:12px;border-top:1px solid #dbe3ed}.deliveryToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;gap:8px!important;font-weight:900!important;color:#2f5f9f!important}.deliveryToggle input{width:20px;height:20px}.deliveryEditNotice{margin-top:12px;padding:10px 12px;border-radius:10px;background:#eef6ff;color:#45637f;font-weight:700}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}.cancelOpen{margin-top:12px;width:100%;color:#b42318;border-color:#efb5af}.cancelBox{margin-top:14px;padding:14px;border:1px solid #efb5af;border-radius:14px;background:#fff7f6}.cancelBox p{color:#7a3d37;line-height:1.5}.cancelBox label{display:grid;gap:6px;font-weight:800;color:#7a3d37}.cancelBox textarea{min-height:86px;resize:vertical;border:1px solid #d9a6a0;border-radius:10px;padding:11px;background:#fff}.cancelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.cancelActions .danger{background:#c4322b;border-color:#c4322b;color:#fff}.cancelActions button:disabled{opacity:.5}@media(max-width:600px){.grid{grid-template-columns:1fr}}
+      .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.grid .wide{grid-column:1/-1}.availabilityBlock{display:grid;gap:9px}.availabilityTitle{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.legend{font-size:12px;color:#68778a}.dot{display:inline-block;width:9px;height:9px;border-radius:999px;margin:0 3px 0 7px}.openDot{background:#5eaf76}.warnDot{background:#d5a238}.blockedDot{background:#c76a64}.timeGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.timeSlot{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;color:#315678}.timeSlot.open{border-color:#b7d8c0}.timeSlot.warning{border-color:#e2c36f;background:#fffaf0}.timeSlot.blocked{opacity:.55}.timeSlot.selected{border-color:#2674e8;background:#eaf3ff;color:#145dc0;box-shadow:0 0 0 1px #2674e8 inset}.afternoonSelector{border-style:dashed}.afternoonChoices{margin-top:4px;padding-top:12px;border-top:1px dashed #cad5e3}.afternoonChoicesTitle{font-size:13px;font-weight:800;color:#53647b;margin-bottom:8px}.timeMeaning{font-size:12px;color:#64748b;margin-top:8px}.availabilityLoading{font-size:13px;color:#68778a;padding:8px 0}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:4px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:18px}.targetPreview small{color:#627083;line-height:1.5}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.deliveryPlan{margin-top:12px;padding-top:12px;border-top:1px solid #dbe3ed}.deliveryToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;gap:8px!important;font-weight:900!important;color:#2f5f9f!important}.deliveryToggle input{width:20px;height:20px}.deliveryEditNotice{margin-top:12px;padding:10px 12px;border-radius:10px;background:#eef6ff;color:#45637f;font-weight:700}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}.cancelOpen{margin-top:12px;width:100%;color:#b42318;border-color:#efb5af}.cancelBox{margin-top:14px;padding:14px;border:1px solid #efb5af;border-radius:14px;background:#fff7f6}.cancelBox h3{margin:8px 0 10px;color:#9b2c25}.cancelSummary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px}.cancelSummary>div{display:grid;gap:3px;padding:9px 10px;border:1px solid #efcbc7;border-radius:10px;background:#fff}.cancelSummary span{font-size:11px;color:#8a5a56;font-weight:800}.cancelSummary b{font-size:14px;color:#4f2f2c}.cancelBox p{color:#7a3d37;line-height:1.5}.cancelBox label{display:grid;gap:6px;font-weight:800;color:#7a3d37}.cancelBox textarea{min-height:86px;resize:vertical;border:1px solid #d9a6a0;border-radius:10px;padding:11px;background:#fff}.cancelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.cancelActions .danger{background:#c4322b;border-color:#c4322b;color:#fff}.cancelActions button:disabled{opacity:.5}@media(max-width:600px){.grid{grid-template-columns:1fr}.cancelSummary{grid-template-columns:1fr}}
     `}</style>
   </main>;
 }
