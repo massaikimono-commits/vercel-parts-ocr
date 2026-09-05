@@ -232,3 +232,18 @@ Before an app-development chat finishes a batch:
 - Exact full build passed in GitHub before final deployment.
 - Vercel Preview READY: `dpl_DeQ2s7Nu5GzBAjZoqPBBLvhimu73`, source `1f50b4e4e2c27ed6b13aa6883aae83c436f2b1cb`.
 - Preview root returned HTTP 200. Netlify was not changed.
+
+
+### 2026-09-05 — DBを触らない先行修正バッチ
+- Netlify本番が再デプロイ不可の間は、共有Supabase DBを変更せずに進められる修正を優先する運用へ整理。
+- 予定登録の点検区分表示を「スケジュール点検 / 法定6ヶ月点検 / 法定12ヶ月点検」に統一。法定3ヶ月点検はDB制約変更が必要なため保留 #001。
+- 点検区分は `reason=点検` の時だけ表示し、車検では不要な点検区分値を保持しないよう整理。
+- 点検の納車予定初期値は当日「中」、車検は既存 `business_calendar` を読み取って翌営業日「中」を優先するよう変更。DB変更なし。
+- 予定登録成功後に1日の予定へ強制遷移せず、そのまま連続登録できるよう変更。
+- トップページの独立した「今日の予定 / 1日の予定」導線を削除し、1週間スケジュールを主導線として維持。日別詳細は週/月/日付検索から開く。
+- 廃止済みの appointment completion（`schedule_entries.completed`）を1日の予定UIの状態判定から除外。作業状態は work_order の「未実施 → 作業中 → 作業完了」に一本化。
+- 予定検索と登録済み車両ピッカーの下4桁表示を自然表示（例: 0010 → 10）へ統一。
+- 入庫区分表示「引き取り」を「引取」に統一。
+- 現在の共有DB `schedule_slot_check_v2` が exact の同一entry_type全般で重複警告を出すことを確認。確定仕様「時間指定の来社×来社のみ警告」と不一致のため保留 #003 を追加。DBは未変更。
+- #003用SQLソースは将来適用できるよう customer_visit exact のみに限定する形へ準備済みだが、ライブSupabaseには未適用。
+- Vercel / Netlifyへの新規デプロイはまだ実施していない。次回は複数修正をまとめて1回のVercel Previewで確認する。
