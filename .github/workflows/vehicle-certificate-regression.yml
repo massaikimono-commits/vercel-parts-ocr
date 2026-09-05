@@ -72,6 +72,9 @@ jobs:
       - name: Run photo profile confidence regression
         run: node scripts/photo-profile-confidence-regression.mjs
 
+      - name: Run photo profile pass-policy regression
+        run: node scripts/photo-profile-pass-policy-regression.mjs
+
       - name: Run photo OCR entry guard regression
         run: node scripts/photo-ocr-entry-guard-regression.mjs
 
