@@ -33,8 +33,19 @@ if (!(customerIndex >= 0 && workIndex > customerIndex && timeIndex > workIndex &
 
 
 expect(scheduleNew, 'reason === "点検" ? (inspectionScheduleType || null) : null', "inspection schedule type");
-if ((scheduleNew.match(/p_inspection_schedule_type: reason === "点検" \? \(inspectionScheduleType \|\| null\) : null/g) || []).length !== 2) {
-  failures.push("inspection schedule type: both single and batch registration must clear the value outside 点検");
+
+const singleInspectionWrites = (
+  scheduleNew.match(/p_inspection_schedule_type: reason === "点検" \? \(inspectionScheduleType \|\| null\) : null/g) || []
+).length;
+const batchInspectionWrites = (
+  scheduleNew.match(/inspectionScheduleType: reason === "点検" \? \(inspectionScheduleType \|\| null\) : null/g) || []
+).length;
+
+if (singleInspectionWrites !== 1) {
+  failures.push("inspection schedule type: single registration must clear the value outside 点検");
+}
+if (batchInspectionWrites !== 1) {
+  failures.push("inspection schedule type: JSONB batch registration must clear the value outside 点検");
 }
 
 expect(scheduleEdit, "取消理由（任意）", "cancellation");
