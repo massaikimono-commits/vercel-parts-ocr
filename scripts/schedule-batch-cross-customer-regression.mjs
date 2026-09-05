@@ -20,8 +20,16 @@ assert.match(source, /setStaffId\(""\)/, "staff selection resets");
 assert.match(source, /setNotes\(""\)/, "notes reset");
 assert.match(source, /setRegisteredSearch\(""\)/, "vehicle search resets");
 assert.match(source, /setDeliveryTimeKey\(""\)/, "delivery time selection resets");
-assert.match(source, /setDeliveryDay\(day\)/, "registration day is kept as the only carried date basis");
-assert.match(source, /resetAfterSuccessfulRegistration\(\);\s*setMessage\(\`\$\{selectedRows\.length\}台の予定をまとめて登録しました。登録日だけ引き継いで/s, "batch success resets then reports continuation");
-assert.match(source, /resetAfterSuccessfulRegistration\(\);\s*setMessage\("予定を登録しました。登録日だけ引き継いで/s, "single success resets then reports continuation");
+assert.match(source, /setDeliveryDay\(day\)/, "delivery date resets from the kept registration day");
+
+assert.match(source, /useState<EntryType>\("pickup"\)/, "initial entry type defaults to pickup");
+assert.match(source, /useState<Reason>\("点検"\)/, "initial reason defaults to inspection");
+assert.match(source, /useState\("schedule"\)/, "initial inspection subtype defaults to schedule");
+assert.match(source, /setEntryType\("pickup"\)/, "reset entry type defaults to pickup");
+assert.match(source, /setReason\("点検"\)/, "reset reason defaults to inspection");
+assert.match(source, /setInspectionScheduleType\("schedule"\)/, "reset inspection subtype defaults to schedule");
+
+assert.match(source, /resetAfterSuccessfulRegistration\(\);\s*setMessage\(""\);\s*setSuccessMessage\(/s, "successful registration resets before showing top success");
+assert.match(source, /requestAnimationFrame\(\(\) => window\.scrollTo\(\{ top: 0, behavior: "smooth" \}\)\)/, "successful registration scrolls to top");
 
 console.log("schedule cross-customer batch regression: ok");
