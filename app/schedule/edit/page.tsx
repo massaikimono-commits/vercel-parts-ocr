@@ -558,9 +558,14 @@ export default function ScheduleEditPage(){
         p_actor:"schedule-edit",
       });
       if(error) throw error;
-      if(data?.rentalCancellationPending){
+      if(data?.rentalCancellationPending && data?.cancelled===false){
         setShowCancel(false);
         setMessage("取消手続きを開始しました。レンタカーは業者への取消連絡待ちのため、入庫予定一式はまだ取消確定していません。");
+        return;
+      }
+      if(data?.rentalCancellationPending){
+        setMessage("入庫予定一式は取消済みです。レンタカーは業者への取消連絡待ちです。");
+        window.setTimeout(()=>location.assign("/schedule?day="+day),1200);
         return;
       }
       setMessage(entry.work_order_id
