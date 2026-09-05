@@ -260,3 +260,12 @@ Before an app-development chat finishes a batch:
 - Hardened schedule registration so `inspection_schedule_type` is sent only when `reason=点検`; changing to 車検/一般整備/板金 cannot submit a stale inspection subtype even if UI state has not finished clearing.
 - Added regression coverage for the single-vehicle and batch registration paths.
 - Deferred items remain #001 legal_3m, #002 来社「作業待ち」, #003 来社以外の exact-time 重複警告停止; shared Supabase DB was not changed.
+
+
+### 2026-09-05 — Schedule duplicate rule split
+- Confirmed schedule-registration operation: normally select an already-registered customer/vehicle and reflect it into the schedule.
+- Added a separate schedule duplicate warning: same vehicle ID + same JST calendar day warns regardless of time or work reason; user may explicitly choose to register anyway.
+- Vehicle identity/deduplication is not inferred from plate last4 or score. The current manual schedule form has no chassis input, so it is information-insufficient and must not assert that a provisional/manual entry is the same vehicle.
+- Customer candidate reuse remains a separate customer-only confirmation.
+- Full registration number differences (including area/class/hiragana/serial) are therefore never collapsed by schedule duplicate logic; schedule duplicate uses the selected existing vehicle ID only.
+- No Supabase schema/function change. main/Netlify untouched.
