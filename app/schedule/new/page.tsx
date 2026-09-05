@@ -119,6 +119,19 @@ function addDay(day: string, delta: number) {
   }).format(d);
 }
 
+async function nextBusinessDay(day: string) {
+  const { data, error } = await supabase
+    .from("business_calendar")
+    .select("business_date")
+    .gt("business_date", day)
+    .eq("is_business_day", true)
+    .order("business_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.business_date ? String(data.business_date) : "";
+}
+
 function extractWarnings(check: any) {
   return {
     allowed: Boolean(check?.allowed),
@@ -185,7 +198,31 @@ export default function ScheduleNewPage() {
   }, []);
 
   useEffect(() => {
-    setDeliveryDay(reason === "車検" ? addDay(day, 1) : day);
+    let active = true;
+    async function applyDefaultDeliveryDay() {
+      if (reason !== "車検") {
+        if (reason === "点検") setDeliveryTimeKey("");
+        setDeliveryDay(day);
+        return;
+      }
+      try {
+        const next = await nextBusinessDay(day);
+        if (!active) return;
+        setDeliveryTimeKey("");
+        if (next) {
+          setDeliveryDay(next);
+        } else {
+          setDeliveryDay("");
+          setMessage("年間予定表に翌営業日がありません。納車日を選択してください。");
+        }
+      } catch (error: any) {
+        if (!active) return;
+        setDeliveryDay("");
+        setMessage(safeActionError("翌営業日の読み込み", error));
+      }
+    }
+    void applyDefaultDeliveryDay();
+    return () => { active = false; };
   }, [day, reason]);
 
   useEffect(() => {
@@ -344,7 +381,11 @@ export default function ScheduleNewPage() {
     setDeliveryTimeKey((old) => {
       const oldOption = options.find((x) => x.key === old);
       if (oldOption && oldOption.availability !== "blocked") return old;
-      return options.find((x) => x.availability === "open")?.key
+      const preferredBroad = (reason === "点検" || reason === "車検")
+        ? options.find((x) => x.mode === "unspecified" && x.availability !== "blocked")
+        : null;
+      return preferredBroad?.key
+        || options.find((x) => x.availability === "open")?.key
         || options.find((x) => x.availability === "warning")?.key
         || "";
     });
