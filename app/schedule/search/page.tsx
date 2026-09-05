@@ -89,6 +89,12 @@ function customerLabel(c: Customer | null) {
   return c?.schedule_display_name || c?.company_name || c?.name || "お客様未登録";
 }
 
+function naturalLast4(value: string | null | undefined) {
+  const raw = (value || "").trim();
+  if (!raw) return "";
+  return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
+}
+
 function normalizeSearchInput(text: string) {
   return text
     .normalize("NFKC")
@@ -346,7 +352,7 @@ export default function ScheduleSearchPage() {
                     <span>{ENTRY_LABEL[entry.entry_type] || entry.entry_type}{work?.reason ? "・"+work.reason : ""}</span>
                   </div>
                   <div className="meta">
-                    {vehicle?.registration_number_last4 && <span>下4桁 {vehicle.registration_number_last4}</span>}
+                    {vehicle?.registration_number_last4 && <span>下4桁 {naturalLast4(vehicle.registration_number_last4)}</span>}
                     {customer?.phone && <span>{customer.phone}</span>}
                     {work?.worker_name && <span>担当 {work.worker_name}</span>}
                     {work?.outsource_vendor_name && <span>外注 {work.outsource_vendor_name}</span>}
