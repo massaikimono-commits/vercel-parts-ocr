@@ -15,7 +15,6 @@ type ScheduleEntry = {
   entry_type: "delivery" | "pickup" | "customer_visit" | "onsite_repair";
   starts_at: string;
   ends_at: string;
-  completed: boolean;
   notes: string | null;
   print_time_mode: "exact" | "morning" | "unspecified";
   print_time_label_override: string | null;
@@ -222,7 +221,7 @@ export default function SchedulePage() {
       const [scheduleRes, stateEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
         supabase
           .from("schedule_entries")
-          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,completed,notes,print_time_mode,print_time_label_override")
+          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,notes,print_time_mode,print_time_label_override")
           .gte("starts_at", start)
           .lt("starts_at", end)
           .order("starts_at", { ascending: true }),
@@ -332,18 +331,6 @@ export default function SchedulePage() {
         return ad.localeCompare(bd);
       });
   }, [businessStates.stayingVehicles, vehicleMap, customerMap]);
-
-  async function toggleCompleted(entry: ScheduleEntry) {
-    const next = !entry.completed;
-    setEntries((old) => old.map((x) => x.id === entry.id ? { ...x, completed: next } : x));
-    const { error } = await supabase.from("schedule_entries").update({ completed: next }).eq("id", entry.id);
-    if (error) {
-      setEntries((old) => old.map((x) => x.id === entry.id ? { ...x, completed: !next } : x));
-      setMessage(safeActionError("完了状態の保存", error));
-      return;
-    }
-    setMessage(next ? "予定を完了にしました。" : "予定を未完了へ戻しました。");
-  }
 
   async function toggleWorkCompleted(work: WorkOrder) {
     const next = !work.work_completed;
@@ -548,7 +535,7 @@ export default function SchedulePage() {
       <article
         key={entry.id}
         data-work-id={work?.id || undefined}
-        className={`scheduleItem ${reasonClassName(work)} ${!isDelivery && entry.completed ? "done" : ""} ${work?.is_urgent ? "urgentItem" : ""} ${work && focusWorkId === work.id ? "focusedWork" : ""}`}
+        className={`scheduleItem ${reasonClassName(work)} ${work?.is_urgent ? "urgentItem" : ""} ${work && focusWorkId === work.id ? "focusedWork" : ""}`}
         onClick={(event) => openVehicleFromCard(event, vehicle)}
       >
         <div className="itemTop">
