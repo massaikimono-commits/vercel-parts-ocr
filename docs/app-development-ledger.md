@@ -314,3 +314,32 @@ Before an app-development chat finishes a batch:
 - Source head before this ledger entry: `e5d7aa856175a18a7c67898ed5dd3f6145d73756`.
 - No DB change. main / Netlify untouched. PR #62 remains Draft/unmerged.
 
+### 2026-09-06 — One-day schedule direct detail + mobile top compression
+- User requested two practical fixes after iPhone verification:
+  1. one-day schedule cards must open the exact schedule/work-order + vehicle detail, not the generic `/customer-vehicles` list;
+  2. the mobile top area must be substantially shorter so the day board appears almost immediately.
+- No DB/schema/RPC change was required. Existing `schedule_entries`, `work_orders`, `vehicles`, and `customers` columns already provide the requested detail fields.
+- Added `/schedule/detail?entry=...`:
+  - resolves the selected schedule entry and its `work_order_id`,
+  - loads the full work-order schedule set so inbound and delivery are shown together,
+  - shows customer, registration/last4, vehicle/model/model-code/chassis, inbound date/time/type, reason, delivery date/time, worker, work state, and notes,
+  - provides direct `予約変更` and `予約取消` actions using the existing edit/cancel flow,
+  - does not route through the generic customer/vehicle list.
+- One-day schedule planned cards now open `/schedule/detail` directly. Staying-vehicle cards retain their existing vehicle-management behavior.
+- Mobile-only top compression:
+  - compact one-line date + total count,
+  - compact AM / PM / AM-inspection counters,
+  - compact previous/today/next row,
+  - shorter date picker/state row,
+  - compact 4-button row for week / month / new schedule / daily report,
+  - reduced day-board title/header padding.
+- Desktop layout and print CSS were left intact.
+- Added/updated regressions:
+  - `schedule-one-day-practical-regression.mjs`,
+  - `schedule-detail-regression.mjs`,
+  - updated schedule workflow UX regression for the compact button label.
+- GitHub OCR regression GREEN, Deployment safety guard GREEN, full Vercel-equivalent build GREEN.
+- Tested source commit for preview: `dadb178b7214e9eba28314f858a72db7e65e7aaa`.
+- Vercel Preview READY: https://vercel-parts-kreihx3o0-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=BdNLSgnKeBmKGMY6QaDyFF47xgA98BbC
+- main / Netlify / shared Supabase remain unchanged. PR #62 remains Draft/unmerged.
+
