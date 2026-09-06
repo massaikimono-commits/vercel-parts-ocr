@@ -45,7 +45,7 @@ const checks = [
     !/create or replace function public\.assign_loaner_to_booking/i.test(sql)
   ],
   ["vehicle action route exists",
-    /lease-maintenance\?vehicle=/.test(layout) &&
+    /openVehicleScopedRoute\("\/customer-vehicles\/lease-maintenance"\)/.test(layout) &&
     /リースメンテ契約/.test(layout)
   ],
   ["contract UI uses existing table only",
