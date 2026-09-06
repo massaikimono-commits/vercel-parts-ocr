@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase";
 import { safeActionError } from "../lib/client-security";
 
@@ -118,143 +118,417 @@ function customerLabel(c: Customer) {
   return c.companyName || c.name || "顧客名未入力";
 }
 
+const VEHICLE_PAGE_SIZE = 30;
+const VEHICLE_SEARCH_LIMIT = 30;
+const CUSTOMER_SEARCH_LIMIT = 20;
+const PARTS_PAGE_SIZE = 50;
+const PARTS_MARKER_LIMIT = 1000;
+
+const VEHICLE_COLUMNS =
+  "id,customer_id,vehicle_number,registration_number,registration_number_last4,registration_last4,chassis_number,model,model_code,maker,fuel_type,vehicle_type,vehicle_weight,curb_weight_kg";
+const CUSTOMER_COLUMNS =
+  "id,customer_type,name,company_name,phone,email,postal_code,address,notes";
+
+function safeSearchLike(value: string) {
+  return value.normalize("NFKC").trim().replace(/[,%()]/g, " ").replace(/\s+/g, " ");
+}
+
+function normalizeCustomer(row: any): Customer {
+  return {
+    id: String(row.id),
+    type: row.customer_type === "company" ? "company" : "individual",
+    name: String(row.name || ""),
+    companyName: String(row.company_name || ""),
+    phone: String(row.phone || ""),
+    email: String(row.email || ""),
+    postalCode: String(row.postal_code || ""),
+    address: String(row.address || ""),
+    notes: String(row.notes || ""),
+  };
+}
+
+function normalizeVehicle(row: any): Vehicle {
+  return {
+    id: String(row.id),
+    customerId: row.customer_id ? String(row.customer_id) : "",
+    number: String(row.vehicle_number || ""),
+    registration: String(row.registration_number || ""),
+    last4: String(row.registration_number_last4 || row.registration_last4 || ""),
+    chassis: String(row.chassis_number || ""),
+    model: String(row.model || row.model_code || ""),
+    maker: String(row.maker || ""),
+    fuel: String(row.fuel_type || row.vehicle_type || ""),
+    weight: row.vehicle_weight == null
+      ? (row.curb_weight_kg == null ? "" : String(row.curb_weight_kg))
+      : String(row.vehicle_weight),
+  };
+}
+
+function dedupeVehicles(rows: Vehicle[]) {
+  const map = new Map<string, Vehicle>();
+  for (const row of rows) if (!map.has(row.id)) map.set(row.id, row);
+  return [...map.values()];
+}
+
+function dedupeCustomers(rows: Customer[]) {
+  const map = new Map<string, Customer>();
+  for (const row of rows) if (!map.has(row.id)) map.set(row.id, row);
+  return [...map.values()];
+}
+
 export default function CustomerVehiclesPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [cloudParts, setCloudParts] = useState<CloudPart[]>([]);
   const [localParts, setLocalParts] = useState<LocalPart[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
+  const [selectedVehicleSnapshot, setSelectedVehicleSnapshot] = useState<Vehicle | null>(null);
+  const [selectedCustomerSnapshot, setSelectedCustomerSnapshot] = useState<Customer | null>(null);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(true);
+  const [vehicleOffset, setVehicleOffset] = useState(0);
+  const [vehicleHasMore, setVehicleHasMore] = useState(false);
+  const [partsLoading, setPartsLoading] = useState(false);
+  const [cloudPartsOffset, setCloudPartsOffset] = useState(0);
+  const [cloudPartsHasMore, setCloudPartsHasMore] = useState(false);
   const [message, setMessage] = useState("顧客・車両・部品履歴をまとめて確認できます。");
   const [customerEditing, setCustomerEditing] = useState(false);
   const [customerForm, setCustomerForm] = useState<CustomerForm>(blankCustomer);
   const [linkCustomerId, setLinkCustomerId] = useState("");
+  const [linkCustomerSearch, setLinkCustomerSearch] = useState("");
+  const [linkCustomerOptions, setLinkCustomerOptions] = useState<Customer[]>([]);
+  const [linkCustomerLoading, setLinkCustomerLoading] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [deletingCustomer, setDeletingCustomer] = useState(false);
+  const vehicleLoadSeq = useRef(0);
+  const partsLoadSeq = useRef(0);
+  const linkCustomerLoadSeq = useRef(0);
 
   useEffect(() => {
-    void loadData();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void loadVehicleList(query, false);
+    }, query.trim() ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
-  async function loadData() {
+  useEffect(() => {
+    if (!selectedVehicleId) {
+      setLinkCustomerOptions([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void loadLinkCustomers(linkCustomerSearch);
+    }, linkCustomerSearch.trim() ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [selectedVehicleId, linkCustomerSearch]);
+
+  async function loadVehicleList(searchText = "", append = false) {
+    const requestId = ++vehicleLoadSeq.current;
     setBusy(true);
     try {
-      const local = readLocalParts();
-      setLocalParts(local);
-
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setMessage("ログイン後に顧客・車両履歴を読み込みます。");
         return;
       }
 
-      const [customerRes, vehicleRes, partsRes] = await Promise.all([
-        supabase.from("customers").select("*").order("updated_at", { ascending: false }),
-        supabase.from("vehicles").select("*").order("updated_at", { ascending: false }),
-        supabase.from("parts").select("id,vehicle_id,part_name,quantity,list_price,purchase_price,source_text,created_at").order("created_at", { ascending: false }).limit(500),
-      ]);
+      const search = safeSearchLike(searchText);
+      let vehicleRows: any[] = [];
+      let customerRows: any[] = [];
+      let pageRowCount = 0;
 
-      if (customerRes.error) throw customerRes.error;
-      if (vehicleRes.error) throw vehicleRes.error;
-      if (partsRes.error) throw partsRes.error;
+      if (!search) {
+        const offset = append ? vehicleOffset : 0;
+        const { data, error } = await supabase
+          .from("vehicles")
+          .select(VEHICLE_COLUMNS)
+          .order("updated_at", { ascending: false })
+          .range(offset, offset + VEHICLE_PAGE_SIZE - 1);
+        if (error) throw error;
+        vehicleRows = data || [];
+        pageRowCount = vehicleRows.length;
 
-      const customerList: Customer[] = (customerRes.data || []).map((c: any) => ({
-        id: c.id,
-        type: c.customer_type === "company" ? "company" : "individual",
-        name: c.name || "",
-        companyName: c.company_name || "",
-        phone: c.phone || "",
-        email: c.email || "",
-        postalCode: c.postal_code || "",
-        address: c.address || "",
-        notes: c.notes || "",
-      }));
+        if (!append) {
+          try {
+            const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null");
+            if (active?.id && !vehicleRows.some((row: any) => String(row.id) === String(active.id))) {
+              const { data: activeRow, error: activeError } = await supabase
+                .from("vehicles")
+                .select(VEHICLE_COLUMNS)
+                .eq("id", active.id)
+                .maybeSingle();
+              if (activeError) throw activeError;
+              if (activeRow) vehicleRows = [activeRow, ...vehicleRows];
+            }
+          } catch {}
+        }
+      } else {
+        const digits = search.replace(/\D/g, "");
+        const vehicleFilters = [
+          `vehicle_number.ilike.%${search}%`,
+          `registration_number.ilike.%${search}%`,
+          `chassis_number.ilike.%${search}%`,
+          `model.ilike.%${search}%`,
+          `model_code.ilike.%${search}%`,
+          `maker.ilike.%${search}%`,
+        ];
+        if (digits) vehicleFilters.push(`registration_number_last4.ilike.%${digits.slice(-4)}%`);
 
-      const vehicleList: Vehicle[] = (vehicleRes.data || []).map((v: any) => ({
-        id: v.id,
-        customerId: v.customer_id || "",
-        number: v.vehicle_number || "",
-        registration: v.registration_number || "",
-        last4: v.registration_number_last4 || v.registration_last4 || "",
-        chassis: v.chassis_number || "",
-        model: v.model || v.model_code || "",
-        maker: v.maker || "",
-        fuel: v.fuel_type || v.vehicle_type || "",
-        weight: v.vehicle_weight == null ? (v.curb_weight_kg == null ? "" : String(v.curb_weight_kg)) : String(v.vehicle_weight),
-      }));
+        const customerFilters = [
+          `name.ilike.%${search}%`,
+          `company_name.ilike.%${search}%`,
+          `phone.ilike.%${search}%`,
+          `address.ilike.%${search}%`,
+        ];
 
-      let cloud = (partsRes.data || []) as CloudPart[];
-      const alreadySynced = new Set(cloud.map((p) => markerFromSource(p.source_text)).filter(Boolean));
-      const vehicleIds = new Set(vehicleList.map((v) => v.id));
-      const pending = local.filter((p) =>
-        p.id && p.name && p.vehicleId && vehicleIds.has(p.vehicleId) && !alreadySynced.has(p.id)
+        const [vehicleRes, customerRes] = await Promise.all([
+          supabase
+            .from("vehicles")
+            .select(VEHICLE_COLUMNS)
+            .or(vehicleFilters.join(","))
+            .order("updated_at", { ascending: false })
+            .limit(VEHICLE_SEARCH_LIMIT),
+          supabase
+            .from("customers")
+            .select(CUSTOMER_COLUMNS)
+            .or(customerFilters.join(","))
+            .order("updated_at", { ascending: false })
+            .limit(CUSTOMER_SEARCH_LIMIT),
+        ]);
+        if (vehicleRes.error) throw vehicleRes.error;
+        if (customerRes.error) throw customerRes.error;
+        vehicleRows = vehicleRes.data || [];
+        customerRows = customerRes.data || [];
+
+        const matchedCustomerIds = customerRows.map((row: any) => row.id).filter(Boolean);
+        if (matchedCustomerIds.length) {
+          const { data, error } = await supabase
+            .from("vehicles")
+            .select(VEHICLE_COLUMNS)
+            .in("customer_id", matchedCustomerIds)
+            .order("updated_at", { ascending: false })
+            .limit(VEHICLE_SEARCH_LIMIT);
+          if (error) throw error;
+          const merged = new Map<string, any>();
+          for (const row of [...vehicleRows, ...(data || [])]) {
+            if (!merged.has(String(row.id))) merged.set(String(row.id), row);
+          }
+          vehicleRows = [...merged.values()].slice(0, VEHICLE_SEARCH_LIMIT);
+        }
+      }
+
+      const customerIds = [...new Set(vehicleRows.map((row: any) => row.customer_id).filter(Boolean))] as string[];
+      const knownCustomerIds = new Set(customerRows.map((row: any) => String(row.id)));
+      const missingCustomerIds = customerIds.filter((id) => !knownCustomerIds.has(String(id)));
+      if (missingCustomerIds.length) {
+        const { data, error } = await supabase
+          .from("customers")
+          .select(CUSTOMER_COLUMNS)
+          .in("id", missingCustomerIds);
+        if (error) throw error;
+        customerRows = [...customerRows, ...(data || [])];
+      }
+
+      if (requestId !== vehicleLoadSeq.current) return;
+
+      const nextVehicles = dedupeVehicles(vehicleRows.map(normalizeVehicle));
+      const nextCustomers = dedupeCustomers(customerRows.map(normalizeCustomer));
+
+      setVehicles((old) => append ? dedupeVehicles([...old, ...nextVehicles]) : nextVehicles);
+      setCustomers((old) => {
+        if (append) return dedupeCustomers([...old, ...nextCustomers]);
+        const selected = selectedCustomerSnapshot ? [selectedCustomerSnapshot] : [];
+        return dedupeCustomers([...selected, ...nextCustomers]);
+      });
+
+      if (!search) {
+        const nextOffset = append ? vehicleOffset + pageRowCount : pageRowCount;
+        setVehicleOffset(nextOffset);
+        setVehicleHasMore(pageRowCount === VEHICLE_PAGE_SIZE);
+      } else {
+        setVehicleOffset(0);
+        setVehicleHasMore(false);
+      }
+
+      if (!append && !selectedVehicleId) {
+        try {
+          const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null");
+          const activeVehicle = nextVehicles.find((vehicle) =>
+            (active?.id && vehicle.id === String(active.id)) ||
+            (active?.number && vehicle.number === String(active.number))
+          );
+          if (activeVehicle) {
+            const customer = nextCustomers.find((row) => row.id === activeVehicle.customerId) || null;
+            selectVehicle(activeVehicle, customer);
+          }
+        } catch {}
+      }
+
+      setMessage(search
+        ? `検索結果 ${nextVehicles.length}台（最大${VEHICLE_SEARCH_LIMIT}台）`
+        : append
+          ? `最近の車両を${pageRowCount}台追加しました。`
+          : `最近更新した車両を${Math.min(pageRowCount, VEHICLE_PAGE_SIZE)}台表示しています。`
       );
+    } catch (error: any) {
+      if (requestId === vehicleLoadSeq.current) {
+        setMessage(safeActionError("顧客・車両情報の読み込み", error));
+        if (!append) {
+          setVehicles([]);
+          setCustomers(selectedCustomerSnapshot ? [selectedCustomerSnapshot] : []);
+        }
+      }
+    } finally {
+      if (requestId === vehicleLoadSeq.current) setBusy(false);
+    }
+  }
 
-      let syncedCount = 0;
+  async function loadLinkCustomers(searchText = "") {
+    const requestId = ++linkCustomerLoadSeq.current;
+    setLinkCustomerLoading(true);
+    try {
+      const search = safeSearchLike(searchText);
+      let queryBuilder = supabase
+        .from("customers")
+        .select(CUSTOMER_COLUMNS)
+        .order("updated_at", { ascending: false })
+        .limit(CUSTOMER_SEARCH_LIMIT);
+      if (search) {
+        queryBuilder = queryBuilder.or([
+          `name.ilike.%${search}%`,
+          `company_name.ilike.%${search}%`,
+          `phone.ilike.%${search}%`,
+        ].join(","));
+      }
+      const { data, error } = await queryBuilder;
+      if (error) throw error;
+      if (requestId !== linkCustomerLoadSeq.current) return;
+      const options = (data || []).map(normalizeCustomer);
+      if (selectedCustomerSnapshot && !options.some((row) => row.id === selectedCustomerSnapshot.id)) {
+        options.unshift(selectedCustomerSnapshot);
+      }
+      setLinkCustomerOptions(options.slice(0, CUSTOMER_SEARCH_LIMIT + 1));
+    } catch (error: any) {
+      if (requestId === linkCustomerLoadSeq.current) {
+        setMessage(safeActionError("顧客候補の読み込み", error));
+        setLinkCustomerOptions(selectedCustomerSnapshot ? [selectedCustomerSnapshot] : []);
+      }
+    } finally {
+      if (requestId === linkCustomerLoadSeq.current) setLinkCustomerLoading(false);
+    }
+  }
+
+  async function loadVehicleParts(vehicle: Vehicle) {
+    const requestId = ++partsLoadSeq.current;
+    setPartsLoading(true);
+    setCloudParts([]);
+    setCloudPartsOffset(0);
+    setCloudPartsHasMore(false);
+
+    try {
+      const local = readLocalParts().filter((part) =>
+        part.vehicleId === vehicle.id || (!part.vehicleId && part.vehicleNumber === vehicle.number)
+      );
+      setLocalParts(local);
+
+      const markerPromise = local.length
+        ? supabase
+            .from("parts")
+            .select("source_text")
+            .eq("vehicle_id", vehicle.id)
+            .not("source_text", "is", null)
+            .limit(PARTS_MARKER_LIMIT)
+        : Promise.resolve({ data: [], error: null });
+
+      const historyPromise = supabase
+        .from("parts")
+        .select("id,vehicle_id,part_name,quantity,list_price,purchase_price,source_text,created_at")
+        .eq("vehicle_id", vehicle.id)
+        .order("created_at", { ascending: false })
+        .range(0, PARTS_PAGE_SIZE - 1);
+
+      const [markerRes, historyRes] = await Promise.all([markerPromise, historyPromise]);
+      if (markerRes.error) throw markerRes.error;
+      if (historyRes.error) throw historyRes.error;
+
+      const alreadySynced = new Set(
+        (markerRes.data || []).map((row: any) => markerFromSource(row.source_text)).filter(Boolean)
+      );
+      const pending = local.filter((part) => part.id && part.name && !alreadySynced.has(part.id));
+
+      let insertedRows: CloudPart[] = [];
       if (pending.length) {
-        const rows = pending.map((p) => ({
-          vehicle_id: p.vehicleId,
-          part_name: p.name,
-          quantity: numberOrNull(p.qty) ?? 1,
-          list_price: numberOrNull(p.retail),
-          purchase_price: numberOrNull(p.cost),
-          source_text: `${marker(p.id)} ${p.source || ""}`.trim(),
+        const rows = pending.map((part) => ({
+          vehicle_id: vehicle.id,
+          part_name: part.name,
+          quantity: numberOrNull(part.qty) ?? 1,
+          list_price: numberOrNull(part.retail),
+          purchase_price: numberOrNull(part.cost),
+          source_text: `${marker(part.id)} ${part.source || ""}`.trim(),
         }));
-        const { data: inserted, error } = await supabase
+        const { data, error } = await supabase
           .from("parts")
           .insert(rows)
           .select("id,vehicle_id,part_name,quantity,list_price,purchase_price,source_text,created_at");
         if (error) throw error;
-        if (inserted?.length) {
-          syncedCount = inserted.length;
-          cloud = [...(inserted as CloudPart[]), ...cloud];
-        }
+        insertedRows = (data || []) as CloudPart[];
       }
 
-      setCustomers(customerList);
-      setVehicles(vehicleList);
-      setCloudParts(cloud);
-
-      try {
-        const active = JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null");
-        const found = vehicleList.find((v) => v.id === active?.id || v.number === active?.number);
-        if (found) {
-          setSelectedVehicleId(found.id);
-          setLinkCustomerId(found.customerId || "");
-        }
-      } catch {}
-
-      setMessage(
-        syncedCount
-          ? `顧客 ${customerList.length}件・車両 ${vehicleList.length}台を読み込み、部品 ${syncedCount}件をクラウドへ同期しました。`
-          : `顧客 ${customerList.length}件・車両 ${vehicleList.length}台を読み込みました。`
-      );
+      if (requestId !== partsLoadSeq.current) return;
+      const historyRows = (historyRes.data || []) as CloudPart[];
+      const byId = new Map<string, CloudPart>();
+      for (const row of [...insertedRows, ...historyRows]) if (!byId.has(row.id)) byId.set(row.id, row);
+      setCloudParts([...byId.values()]);
+      setCloudPartsOffset(historyRows.length);
+      setCloudPartsHasMore(historyRows.length === PARTS_PAGE_SIZE);
+      if (insertedRows.length) {
+        setMessage(`${vehicleLabel(vehicle)} の端末保存部品 ${insertedRows.length}件をクラウドへ同期しました。`);
+      }
     } catch (error: any) {
-      setMessage(safeActionError("顧客・車両情報の読み込み", error));
+      if (requestId === partsLoadSeq.current) {
+        setMessage(safeActionError("部品履歴の読み込み", error));
+      }
     } finally {
-      setBusy(false);
+      if (requestId === partsLoadSeq.current) setPartsLoading(false);
+    }
+  }
+
+  async function loadMoreVehicleParts() {
+    const vehicle = selectedVehicleSnapshot;
+    if (!vehicle || partsLoading || !cloudPartsHasMore) return;
+    const requestId = ++partsLoadSeq.current;
+    setPartsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("parts")
+        .select("id,vehicle_id,part_name,quantity,list_price,purchase_price,source_text,created_at")
+        .eq("vehicle_id", vehicle.id)
+        .order("created_at", { ascending: false })
+        .range(cloudPartsOffset, cloudPartsOffset + PARTS_PAGE_SIZE - 1);
+      if (error) throw error;
+      if (requestId !== partsLoadSeq.current) return;
+      const rows = (data || []) as CloudPart[];
+      setCloudParts((old) => {
+        const byId = new Map<string, CloudPart>();
+        for (const row of [...old, ...rows]) if (!byId.has(row.id)) byId.set(row.id, row);
+        return [...byId.values()];
+      });
+      setCloudPartsOffset((old) => old + rows.length);
+      setCloudPartsHasMore(rows.length === PARTS_PAGE_SIZE);
+    } catch (error: any) {
+      if (requestId === partsLoadSeq.current) setMessage(safeActionError("部品履歴の追加読み込み", error));
+    } finally {
+      if (requestId === partsLoadSeq.current) setPartsLoading(false);
     }
   }
 
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
-  const filteredVehicles = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return vehicles;
-    const digits = q.replace(/\D/g, "");
-    return vehicles.filter((v) => {
-      const c = customerMap.get(v.customerId);
-      const text = [
-        v.number, v.registration, v.last4, v.chassis, v.model, v.maker,
-        c?.name, c?.companyName, c?.phone, c?.address,
-      ].join(" ").toLowerCase();
-      return text.includes(q) || (digits.length >= 2 && (v.last4 || "").includes(digits.slice(-4)));
-    });
-  }, [vehicles, query, customerMap]);
+  const filteredVehicles = vehicles;
 
-  const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId) || null;
-  const selectedCustomer = selectedVehicle ? customerMap.get(selectedVehicle.customerId) || null : null;
+  const selectedVehicle = selectedVehicleSnapshot || vehicles.find((v) => v.id === selectedVehicleId) || null;
+  const selectedCustomer = selectedCustomerSnapshot
+    || (selectedVehicle ? customerMap.get(selectedVehicle.customerId) || null : null);
 
   const selectedCloudParts = useMemo(
     () => selectedVehicle ? cloudParts.filter((p) => p.vehicle_id === selectedVehicle.id) : [],
@@ -270,9 +544,15 @@ export default function CustomerVehiclesPage() {
     });
   }, [localParts, selectedVehicle, selectedCloudParts]);
 
-  function selectVehicle(v: Vehicle) {
+  function selectVehicle(v: Vehicle, customerOverride?: Customer | null) {
+    const customer = customerOverride === undefined
+      ? (v.customerId ? customerMap.get(v.customerId) || null : null)
+      : customerOverride;
     setSelectedVehicleId(v.id);
+    setSelectedVehicleSnapshot(v);
+    setSelectedCustomerSnapshot(customer);
     setLinkCustomerId(v.customerId || "");
+    setLinkCustomerSearch("");
     setCustomerEditing(false);
     sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
       id: v.id,
@@ -283,6 +563,7 @@ export default function CustomerVehiclesPage() {
       model: v.model,
     }));
     setMessage(`${vehicleLabel(v)} を作業車両に設定しました。`);
+    void loadVehicleParts(v);
   }
 
   function startOCR() {
@@ -344,11 +625,11 @@ export default function CustomerVehiclesPage() {
 
       let saved: any = null;
       if (customerForm.id) {
-        const { data, error } = await supabase.from("customers").update(payload).eq("id", customerForm.id).select("*").single();
+        const { data, error } = await supabase.from("customers").update(payload).eq("id", customerForm.id).select(CUSTOMER_COLUMNS).single();
         if (error) throw error;
         saved = data;
       } else {
-        const { data, error } = await supabase.from("customers").insert(payload).select("*").single();
+        const { data, error } = await supabase.from("customers").insert(payload).select(CUSTOMER_COLUMNS).single();
         if (error) throw error;
         saved = data;
       }
@@ -368,11 +649,11 @@ export default function CustomerVehiclesPage() {
         notes: saved.notes || "",
       };
 
-      setCustomers((prev) => {
-        const exists = prev.some((c) => c.id === normalized.id);
-        return exists ? prev.map((c) => c.id === normalized.id ? normalized : c) : [normalized, ...prev];
-      });
+      setCustomers((prev) => dedupeCustomers([normalized, ...prev]));
       setVehicles((prev) => prev.map((v) => v.id === selectedVehicle.id ? { ...v, customerId: normalized.id } : v));
+      setSelectedVehicleSnapshot({ ...selectedVehicle, customerId: normalized.id });
+      setSelectedCustomerSnapshot(normalized);
+      setLinkCustomerOptions((prev) => dedupeCustomers([normalized, ...prev]).slice(0, CUSTOMER_SEARCH_LIMIT + 1));
       setLinkCustomerId(normalized.id);
       setCustomerEditing(false);
       setMessage(`${customerLabel(normalized)} を保存し、この車両へ紐付けました。`);
@@ -391,8 +672,13 @@ export default function CustomerVehiclesPage() {
     try {
       const { error } = await supabase.from("vehicles").update({ customer_id: linkCustomerId, updated_at: new Date().toISOString() }).eq("id", selectedVehicle.id);
       if (error) throw error;
+      const customer = linkCustomerOptions.find((row) => row.id === linkCustomerId)
+        || customers.find((row) => row.id === linkCustomerId)
+        || null;
       setVehicles((prev) => prev.map((v) => v.id === selectedVehicle.id ? { ...v, customerId: linkCustomerId } : v));
-      const customer = customers.find((c) => c.id === linkCustomerId);
+      setSelectedVehicleSnapshot({ ...selectedVehicle, customerId: linkCustomerId });
+      setSelectedCustomerSnapshot(customer);
+      if (customer) setCustomers((prev) => dedupeCustomers([customer, ...prev]));
       setMessage(`${customer ? customerLabel(customer) : "選択した顧客"} をこの車両へ紐付けました。`);
     } catch (error: any) {
       setMessage(safeActionError("顧客と車両の紐付け", error));
@@ -402,9 +688,16 @@ export default function CustomerVehiclesPage() {
   async function deleteSelectedCustomer() {
     if (!selectedCustomer || deletingCustomer) return;
     const label = customerLabel(selectedCustomer);
-    const linkedCount = vehicles.filter((v) => v.customerId === selectedCustomer.id).length;
+    const { count: linkedCount, error: countError } = await supabase
+      .from("vehicles")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", selectedCustomer.id);
+    if (countError) {
+      setMessage(safeActionError("紐づく車両数の確認", countError));
+      return;
+    }
     const ok = window.confirm(
-      `${label} の顧客情報を削除しますか？\n\n紐づく車両 ${linkedCount}台・予定・作業履歴は削除せず、顧客だけを削除します。車両は「顧客未割り当て」になります。`
+      `${label} の顧客情報を削除しますか？\n\n紐づく車両 ${linkedCount || 0}台・予定・作業履歴は削除せず、顧客だけを削除します。車両は「顧客未割り当て」になります。`
     );
     if (!ok) return;
 
@@ -417,6 +710,9 @@ export default function CustomerVehiclesPage() {
       setVehicles((prev) => prev.map((vehicle) =>
         vehicle.customerId === selectedCustomer.id ? { ...vehicle, customerId: "" } : vehicle
       ));
+      if (selectedVehicle) setSelectedVehicleSnapshot({ ...selectedVehicle, customerId: "" });
+      setSelectedCustomerSnapshot(null);
+      setLinkCustomerOptions((prev) => prev.filter((customer) => customer.id !== selectedCustomer.id));
       setLinkCustomerId("");
       setCustomerEditing(false);
       setCustomerForm(blankCustomer);
@@ -440,7 +736,7 @@ export default function CustomerVehiclesPage() {
       <section className="card">
         <h1>顧客・車両管理</h1>
         <p>お客様名・電話番号・ナンバー下4桁・車台番号・型式から検索し、車両を開くと過去の部品OCR履歴まで確認できます。端末で保存した車両紐付け済み部品はクラウドにも自動同期します。</p>
-        <div className="notice">{busy ? "顧客・車両を読み込み中…" : message}</div>
+        <div className="notice">{busy ? "顧客・車両を検索中…" : message}</div>
         <input
           className="search"
           value={query}
@@ -461,17 +757,22 @@ export default function CustomerVehiclesPage() {
         <div className="vehicleList">
           {filteredVehicles.map((v) => {
             const c = customerMap.get(v.customerId);
-            const localCount = localParts.filter((p) => p.vehicleId === v.id || (!p.vehicleId && p.vehicleNumber === v.number)).length;
-            const cloudCount = cloudParts.filter((p) => p.vehicle_id === v.id).length;
             return (
               <button key={v.id} className={`vehicle ${selectedVehicleId === v.id ? "selected" : ""}`} onClick={() => selectVehicle(v)}>
-                <div className="vehicleTitle"><b>{vehicleLabel(v)}</b><span>部品履歴 {Math.max(localCount, cloudCount)}件</span></div>
+                <div className="vehicleTitle"><b>{vehicleLabel(v)}</b><span>選択して履歴表示</span></div>
                 <div>{c ? customerLabel(c) : "顧客未割り当て"}</div>
                 <small>{[v.maker, v.model, v.chassis].filter(Boolean).join(" / ") || "車両情報未入力"}</small>
               </button>
             );
           })}
         </div>
+        {!query.trim() && vehicleHasMore && (
+          <div className="actions">
+            <button disabled={busy} onClick={() => void loadVehicleList("", true)}>
+              {busy ? "読み込み中…" : `さらに${VEHICLE_PAGE_SIZE}台読み込む`}
+            </button>
+          </div>
+        )}
       </section>
 
       {selectedVehicle && (
@@ -533,16 +834,23 @@ export default function CustomerVehiclesPage() {
                   </p>
                 )}
 
-                {!!customers.length && (
-                  <div className="linkBox">
-                    <label>既存顧客をこの車両へ割り当て</label>
-                    <select value={linkCustomerId} onChange={(e) => setLinkCustomerId(e.target.value)}>
-                      <option value="">顧客を選択</option>
-                      {customers.map((c) => <option key={c.id} value={c.id}>{customerLabel(c)}{c.phone ? ` / ${c.phone}` : ""}</option>)}
-                    </select>
-                    <button onClick={linkExistingCustomer}>この顧客を車両へ紐付け</button>
-                  </div>
-                )}
+                <div className="linkBox">
+                  <label>既存顧客をこの車両へ割り当て</label>
+                  <input
+                    value={linkCustomerSearch}
+                    onChange={(e) => setLinkCustomerSearch(e.target.value)}
+                    placeholder="顧客名 / 会社名 / 電話番号で検索"
+                  />
+                  <select value={linkCustomerId} onChange={(e) => setLinkCustomerId(e.target.value)}>
+                    <option value="">{linkCustomerLoading ? "顧客候補を検索中…" : "顧客を選択"}</option>
+                    {linkCustomerOptions.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customerLabel(customer)}{customer.phone ? ` / ${customer.phone}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <button onClick={linkExistingCustomer}>この顧客を車両へ紐付け</button>
+                </div>
               </>
             )}
 
@@ -568,8 +876,9 @@ export default function CustomerVehiclesPage() {
           </section>
 
           <section className="card">
-            <div className="sectionHead"><h2>部品OCR履歴</h2><span>{totalHistory}件</span></div>
-            {!totalHistory && <div className="empty">この車両の部品履歴はまだありません。</div>}
+            <div className="sectionHead"><h2>部品OCR履歴</h2><span>表示中 {totalHistory}件</span></div>
+            {partsLoading && !totalHistory && <div className="empty">部品履歴を読み込み中…</div>}
+            {!partsLoading && !totalHistory && <div className="empty">この車両の部品履歴はまだありません。</div>}
             <div className="historyList">
               {selectedCloudParts.map((p) => (
                 <div className="history" key={`cloud-${p.id}`}>
@@ -586,12 +895,19 @@ export default function CustomerVehiclesPage() {
                 </div>
               ))}
             </div>
+            {cloudPartsHasMore && (
+              <div className="actions">
+                <button disabled={partsLoading} onClick={() => void loadMoreVehicleParts()}>
+                  {partsLoading ? "読み込み中…" : `さらに${PARTS_PAGE_SIZE}件表示`}
+                </button>
+              </div>
+            )}
           </section>
         </>
       )}
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:920px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button{border:1px solid #cdd7e5;border-radius:12px;background:#fff;color:#2674e8;padding:11px 14px;font-size:15px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}h2{margin:0}h3{font-size:26px;margin:12px 0}p{color:#5d6878;line-height:1.7}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:13px 15px;margin:14px 0}.search,.customerForm input,.customerForm textarea,.linkBox select{width:100%;border:1px solid #cdd7e5;border-radius:12px;padding:14px;font-size:16px;background:#fff;color:#172033}.customerForm textarea{min-height:90px;resize:vertical}.sectionHead,.vehicleTitle,.historyTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.sectionHead span,.vehicleTitle span,.historyTop span,.badge{font-size:13px;border-radius:999px;padding:5px 9px;background:#eef4ff;color:#2f6fe4}.vehicleList,.historyList{display:grid;gap:10px;margin-top:14px}.vehicle{text-align:left;color:#172033;display:grid;gap:5px}.vehicle small{color:#718096;font-weight:500}.vehicle.selected{border:2px solid #2f6fe4;background:#eef4ff}.infoGrid,.customerSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.infoGrid>div,.customerSummary>div{border:1px solid #e0e6ef;border-radius:12px;padding:12px;display:grid;gap:4px}.infoGrid small,.customerSummary small{color:#78869a}.customerSummary .wide{grid-column:1/-1}.address{margin-top:10px;padding:12px;background:#f8fafc;border-radius:12px;color:#5d6878}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.primary{background:#2f6fe4;color:white;border-color:#2f6fe4}.history{border:1px solid #dbe3ee;border-radius:14px;padding:14px;display:grid;gap:9px}.history.local{border-style:dashed}.numbers{display:flex;gap:18px;flex-wrap:wrap;color:#5d6878}.history>small{color:#8a96a7}.empty{margin-top:14px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}.linkBox{margin-top:16px;padding:14px;border:1px solid #e0e6ef;border-radius:14px;display:grid;gap:10px}.linkBox label,.customerForm label{display:grid;gap:6px;color:#5d6878;font-weight:700}.customerForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.customerForm .wide{grid-column:1/-1}.segmented{grid-column:1/-1;display:flex;gap:8px}.segmented button{flex:1}.segmented button.active{background:#2f6fe4;color:#fff;border-color:#2f6fe4}button:disabled{opacity:.55}.customerSummary{margin-top:14px}@media(max-width:650px){.infoGrid,.customerSummary,.customerForm{grid-template-columns:1fr}.customerSummary .wide,.customerForm .wide{grid-column:auto}.sectionHead{align-items:flex-start}.actions button{flex:1 1 100%}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:920px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button{border:1px solid #cdd7e5;border-radius:12px;background:#fff;color:#2674e8;padding:11px 14px;font-size:15px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}h2{margin:0}h3{font-size:26px;margin:12px 0}p{color:#5d6878;line-height:1.7}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:13px 15px;margin:14px 0}.search,.customerForm input,.customerForm textarea,.linkBox input,.linkBox select{width:100%;border:1px solid #cdd7e5;border-radius:12px;padding:14px;font-size:16px;background:#fff;color:#172033}.customerForm textarea{min-height:90px;resize:vertical}.sectionHead,.vehicleTitle,.historyTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.sectionHead span,.vehicleTitle span,.historyTop span,.badge{font-size:13px;border-radius:999px;padding:5px 9px;background:#eef4ff;color:#2f6fe4}.vehicleList,.historyList{display:grid;gap:10px;margin-top:14px}.vehicle{text-align:left;color:#172033;display:grid;gap:5px}.vehicle small{color:#718096;font-weight:500}.vehicle.selected{border:2px solid #2f6fe4;background:#eef4ff}.infoGrid,.customerSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.infoGrid>div,.customerSummary>div{border:1px solid #e0e6ef;border-radius:12px;padding:12px;display:grid;gap:4px}.infoGrid small,.customerSummary small{color:#78869a}.customerSummary .wide{grid-column:1/-1}.address{margin-top:10px;padding:12px;background:#f8fafc;border-radius:12px;color:#5d6878}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.primary{background:#2f6fe4;color:white;border-color:#2f6fe4}.history{border:1px solid #dbe3ee;border-radius:14px;padding:14px;display:grid;gap:9px}.history.local{border-style:dashed}.numbers{display:flex;gap:18px;flex-wrap:wrap;color:#5d6878}.history>small{color:#8a96a7}.empty{margin-top:14px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}.linkBox{margin-top:16px;padding:14px;border:1px solid #e0e6ef;border-radius:14px;display:grid;gap:10px}.linkBox label,.customerForm label{display:grid;gap:6px;color:#5d6878;font-weight:700}.customerForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.customerForm .wide{grid-column:1/-1}.segmented{grid-column:1/-1;display:flex;gap:8px}.segmented button{flex:1}.segmented button.active{background:#2f6fe4;color:#fff;border-color:#2f6fe4}button:disabled{opacity:.55}.customerSummary{margin-top:14px}@media(max-width:650px){.infoGrid,.customerSummary,.customerForm{grid-template-columns:1fr}.customerSummary .wide,.customerForm .wide{grid-column:auto}.sectionHead{align-items:flex-start}.actions button{flex:1 1 100%}}
       `}</style>
     </main>
   );
