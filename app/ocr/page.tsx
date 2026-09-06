@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { consumeOCRTransferImage } from "./transfer";
+import { consumeOCRTransferImage, prepareOCRInputFile } from "./transfer";
 
 type Part = { id: string; name: string; qty: string; retail: string; cost: string; source?: string };
 type CropBox = { x: number; y: number; w: number; h: number };
@@ -109,29 +109,9 @@ function canvasBlob(canvas: HTMLCanvasElement, quality = 0.98) {
 }
 
 async function sourceCanvas(file: File) {
-  const img = await loadImage(file);
-  const rotate = img.naturalHeight > img.naturalWidth * 1.08;
-  const sourceWidth = rotate ? img.naturalHeight : img.naturalWidth;
-  const sourceHeight = rotate ? img.naturalWidth : img.naturalHeight;
-  const maxSide = 2600;
-  const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("画像を処理できませんでした。");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (rotate) {
-    ctx.save();
-    ctx.translate(0, canvas.height);
-    ctx.rotate(-Math.PI / 2);
-    ctx.drawImage(img, 0, 0, canvas.height, canvas.width);
-    ctx.restore();
-  } else {
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  }
-  return canvas;
+  const img = await loadImage(file); const maxSide = 2600; const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(img.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("画像を処理できませんでした。"); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); return canvas;
 }
 
 function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
@@ -215,16 +195,17 @@ export default function HighAccuracyOCRPage() {
 
   async function runOCR(file: File) {
     setBusy(true); setProgress(1); setParts([]); setDebugText(""); setMessage("伝票位置を補正しています…");
-    if (preview) URL.revokeObjectURL(preview); setPreview(URL.createObjectURL(file));
     let worker: any = null;
     try {
-      const source = await sourceCanvas(file); const paper = detectPaperBox(source); const tesseract: any = await import("tesseract.js");
+      const preparedFile = await prepareOCRInputFile(file);
+      if (preview) URL.revokeObjectURL(preview); setPreview(URL.createObjectURL(preparedFile));
+      const source = await sourceCanvas(preparedFile); const paper = detectPaperBox(source); const tesseract: any = await import("tesseract.js");
       worker = await tesseract.createWorker("jpn+eng", 1, { logger: (m: any) => { if (m.status === "recognizing text") setProgress((old) => Math.max(old, Math.min(96, old + Math.max(1, Math.round((m.progress || 0) * 2))))); } });
       const found: Part[] = []; const logs: string[] = [`paper x=${paper.x} y=${paper.y} w=${paper.w} h=${paper.h}`]; const firstRowY = 0.440; const rowStep = 0.100; let emptyRows = 0;
 
-      for (let row = 0; row < 4; row += 1) {
+      for (let row = 0; ; row += 1) {
         const y = firstRowY + row * rowStep; if (y >= 0.88) break;
-        setMessage(`部品表 ${row + 1}行目を読み取り中…`); setProgress((old) => Math.max(old, 8 + row * 20));
+        setMessage(`部品表 ${row + 1}行目を読み取り中…`); setProgress((old) => Math.max(old, Math.min(94, 8 + row * 16)));
         const qtyBox = relativeBox(paper, 0.432, y, 0.040, 0.070); const retailBox = relativeBox(paper, 0.480, y, 0.090, 0.070); const costBox = relativeBox(paper, 0.596, y, 0.080, 0.070); const amountBox = relativeBox(paper, 0.730, y, 0.080, 0.070);
         const nameRead = await readName(worker, tesseract, source, paper, y); const qtyRead = await readNumber(worker, tesseract, source, qtyBox, 99, true); const retailRead = await readNumber(worker, tesseract, source, retailBox, 2000000); const costRead = await readNumber(worker, tesseract, source, costBox, 2000000); const amountRead = await readNumber(worker, tesseract, source, amountBox, 2000000);
         let qty = qtyRead.value; if (!qty && (retailRead.value || costRead.value || amountRead.value)) qty = "1"; if (Number(qty) > 20 && (retailRead.value || costRead.value)) qty = "1";
@@ -250,7 +231,7 @@ export default function HighAccuracyOCRPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}><button onClick={() => location.assign("/")} style={{ border: "1px solid #ccd5e2", background: "#fff", borderRadius: 12, padding: "10px 14px", color: "#2674e8", fontWeight: 700 }}>← メインへ</button><div style={{ fontWeight: 800 }}>icb</div></div>
       <section style={styles.card}>
         <h1 style={styles.title}>部品伝票 高精度OCR</h1>
-        <p style={styles.text}>大一用品商会の伝票は、数字3項目は印字位置から、部品名称はOCR結果と品番辞書を組み合わせて読み取ります。自動判定OCRから来た場合は、同じ写真をそのまま読み取ります。</p>
+        <p style={styles.text}>大一用品商会の伝票は、数字3項目は印字位置から、部品名称はOCR結果と品番辞書を組み合わせて読み取ります。撮影・写真ライブラリ・自動判定のどの入口でも同じ画像前処理を通します。</p>
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
         <input ref={libraryRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
