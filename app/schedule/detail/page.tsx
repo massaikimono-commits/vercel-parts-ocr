@@ -125,7 +125,7 @@ export default function ScheduleDetailPage(){
       setEntry(current);
 
       let workOrder:WorkOrder|null=null;
-      let setEntries:Entry[]=[current];
+      let scheduleSet:Entry[]=[current];
 
       if(current.work_order_id){
         const [{data:workData,error:workError},{data:setData,error:setError}]=await Promise.all([
@@ -141,13 +141,13 @@ export default function ScheduleDetailPage(){
         if(workError) throw workError;
         if(setError) throw setError;
         workOrder=(workData||null) as WorkOrder|null;
-        setEntries=((setData||[]) as Entry[]);
+        scheduleSet=((setData||[]) as Entry[]);
       }
 
       setWork(workOrder);
-      setEntries(setEntries);
+      setEntries(scheduleSet);
 
-      const vehicleId=current.vehicle_id || workOrder?.vehicle_id || setEntries.find(x=>x.vehicle_id)?.vehicle_id || null;
+      const vehicleId=current.vehicle_id || workOrder?.vehicle_id || scheduleSet.find(x=>x.vehicle_id)?.vehicle_id || null;
       if(vehicleId){
         const {data:vehicleData,error:vehicleError}=await supabase
           .from("vehicles")
