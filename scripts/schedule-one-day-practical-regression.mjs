@@ -3,8 +3,8 @@ import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("../app/schedule/page.tsx", import.meta.url), "utf8");
 
-assert.match(source, /className=\{\`dailySlotCard[\s\S]*onClick=\{\(event\) => openVehicleFromCard\(event, vehicle\)\}/s, "whole one-day card opens the linked vehicle");
-assert.match(source, /function openVehicleFromCard\([\s\S]*target\.closest\("button,input,select,textarea,summary,details,form,label,a"\)/s, "interactive controls do not accidentally trigger vehicle navigation");
+assert.match(source, /className=\{\`dailySlotCard[\s\S]*onClick=\{\(event\) => openScheduleDetailFromCard\(event, entry\)\}/s, "whole one-day card opens the linked schedule/vehicle detail");
+assert.match(source, /function openScheduleDetailFromCard\([\s\S]*target\.closest\("button,input,select,textarea,summary,details,form,label,a"\)[\s\S]*\/schedule\/detail\?entry=/s, "schedule cards navigate directly to the detail page while protecting interactive controls");
 assert.doesNotMatch(source, /車両を開く/, "separate vehicle-open button stays removed");
 
 assert.match(source, /pickup: ""/, "pickup label is hidden as the normal operation");
@@ -29,7 +29,10 @@ for (const cls of ["reason-shaken","reason-check","reason-repair","reason-body"]
 assert.match(source, /const label = completed \? "作業完了" : running \? "作業中" : "作業未実施";/, "work state labels remain 未実施 → 作業中 → 作業完了");
 assert.match(source, /<span className="dailyWorkState">\{workStateControl\(work\)\}<\/span>/, "one-day board always shows work state");
 
-assert.match(source, /@media\(max-width:720px\)\{\.dailyBoardRow\{min-height:50px\}/, "mobile one-day rows are compact");
+assert.match(source, /@media\(max-width:720px\)\{\.page\{padding:6px 6px 36px\}[\s\S]*\.dailyBoardRow\{min-height:50px\}/s, "mobile top area and one-day rows are compact");
+assert.match(source, /\.mobileDayLine\{display:flex[\s\S]*font-size:13px/, "mobile date and total count use a compact one-line header");
+assert.match(source, /\.quickNavRow\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/, "week/month/new/report actions are a compact four-button row");
+assert.match(source, /\.secondaryNavRow\{display:grid;grid-template-columns:minmax\(0,1\.4fr\) minmax\(0,1fr\)/, "date picker and state control share a compact row");
 assert.match(source, /\.dailyCellCustomer>b\{font-size:12px\}/, "mobile customer text is compact");
 assert.match(source, /\.dailyCellVehicle>b\{font-size:11px\}/, "mobile last4 text is compact");
 assert.match(source, /\.dailyCellTime>b\{font-size:10px\}/, "mobile time text is compact");
