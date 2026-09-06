@@ -25,6 +25,52 @@ function shouldRotatePartsPhoto(img: HTMLImageElement) {
   return img.naturalHeight > img.naturalWidth * 1.08;
 }
 
+function normalizePartsPhotoIllumination(canvas: HTMLCanvasElement) {
+  // 黄ばみ・照明ムラ・影で文字コントラストが落ちる実写真向けの局所背景補正。
+  // Canvas filter が使えない環境では安全に元画像のまま返す。
+  const sourceCtx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!sourceCtx) return;
+
+  const background = document.createElement("canvas");
+  background.width = canvas.width;
+  background.height = canvas.height;
+  const backgroundCtx = background.getContext("2d", { willReadFrequently: true });
+  if (!backgroundCtx || !("filter" in backgroundCtx)) return;
+
+  backgroundCtx.fillStyle = "#fff";
+  backgroundCtx.fillRect(0, 0, background.width, background.height);
+  backgroundCtx.filter = "blur(25px)";
+  backgroundCtx.drawImage(canvas, 0, 0);
+  backgroundCtx.filter = "none";
+
+  const source = sourceCtx.getImageData(0, 0, canvas.width, canvas.height);
+  const bg = backgroundCtx.getImageData(0, 0, canvas.width, canvas.height);
+  const count = canvas.width * canvas.height;
+  const values = new Uint16Array(count);
+  let min = 255;
+  let max = 0;
+
+  for (let i = 0, p = 0; i < count; i += 1, p += 4) {
+    const gray = Math.round(source.data[p] * 0.20 + source.data[p + 1] * 0.72 + source.data[p + 2] * 0.08);
+    const bgGray = Math.max(16, Math.round(bg.data[p] * 0.20 + bg.data[p + 1] * 0.72 + bg.data[p + 2] * 0.08));
+    const value = Math.max(0, Math.min(255, Math.round((gray * 255) / bgGray)));
+    values[i] = value;
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+
+  const range = Math.max(1, max - min);
+  for (let i = 0, p = 0; i < count; i += 1, p += 4) {
+    let value = Math.round(((values[i] - min) * 255) / range);
+    if (value > 248) value = 255;
+    source.data[p] = value;
+    source.data[p + 1] = value;
+    source.data[p + 2] = value;
+    source.data[p + 3] = 255;
+  }
+  sourceCtx.putImageData(source, 0, 0);
+}
+
 export async function saveOCRTransferImage(file: File) {
   const img = await loadImage(file);
   const rotate = shouldRotatePartsPhoto(img);
@@ -51,6 +97,8 @@ export async function saveOCRTransferImage(file: File) {
   } else {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   }
+
+  normalizePartsPhotoIllumination(canvas);
 
   // sessionStorageの容量に収まりやすいようにOCR用サイズへ縮小。
   const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
