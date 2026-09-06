@@ -381,29 +381,34 @@ export default function VehicleHistoryPage() {
   async function showMore() {
     if (busy) return;
 
-    if (visibleCount < items.length) {
-      setVisibleCount((old) => Math.min(old + DISPLAY_PAGE_SIZE, items.length));
+    // Any source that filled its last page may still contain rows newer than
+    // buffered rows from another source. Load the next bounded source round
+    // before exposing the next unified page so global newest-first order stays correct.
+    if (sourceHasMore && vehicleId) {
+      setBusy(true);
+      try {
+        const pages = await loadSourceRound(vehicleId, sourceRound);
+        const additions = pages.flatMap((page) => page.items);
+        const byKey = new Map(items.map((item) => [item.key, item]));
+        additions.forEach((item) => byKey.set(item.key, item));
+        const merged = sortItems([...byKey.values()]);
+        setItems(merged);
+        setSourceRound((old) => old + 1);
+        setSourceHasMore(pages.some((page) => page.full));
+        setVisibleCount((old) => Math.min(old + DISPLAY_PAGE_SIZE, merged.length));
+        setMessage(`履歴を${Math.min(visibleCount + DISPLAY_PAGE_SIZE, merged.length)}件表示しています。`);
+      } catch (error: any) {
+        setMessage(safeActionError("車両履歴の追加読み込み", error));
+      } finally {
+        setBusy(false);
+      }
       return;
     }
 
-    if (!sourceHasMore || !vehicleId) return;
-
-    setBusy(true);
-    try {
-      const pages = await loadSourceRound(vehicleId, sourceRound);
-      const additions = pages.flatMap((page) => page.items);
-      const byKey = new Map(items.map((item) => [item.key, item]));
-      additions.forEach((item) => byKey.set(item.key, item));
-      const merged = sortItems([...byKey.values()]);
-      setItems(merged);
-      setSourceRound((old) => old + 1);
-      setSourceHasMore(pages.some((page) => page.full));
-      setVisibleCount((old) => Math.min(old + DISPLAY_PAGE_SIZE, merged.length));
-      setMessage(`履歴を${Math.min(visibleCount + DISPLAY_PAGE_SIZE, merged.length)}件表示しています。`);
-    } catch (error: any) {
-      setMessage(safeActionError("車両履歴の追加読み込み", error));
-    } finally {
-      setBusy(false);
+    if (visibleCount < items.length) {
+      const next = Math.min(visibleCount + DISPLAY_PAGE_SIZE, items.length);
+      setVisibleCount(next);
+      setMessage(`履歴を${next}件表示しています。`);
     }
   }
 
