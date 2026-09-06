@@ -343,3 +343,29 @@ Before an app-development chat finishes a batch:
 - Vercel Preview READY: https://vercel-parts-kreihx3o0-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=BdNLSgnKeBmKGMY6QaDyFF47xgA98BbC
 - main / Netlify / shared Supabase remain unchanged. PR #62 remains Draft/unmerged.
 
+### 2026-09-06 — One-day mobile simplification: fixed work state + compact staying/workload
+- User requested one more iPhone-focused cleanup while preserving existing functionality and desktop/print behavior.
+- No DB/schema/RPC change was required.
+- Removed the one-day schedule completion-position selector entirely:
+  - no more “状態 / 名前横 / 詳細欄” UI,
+  - work state is fixed beside the customer name in schedule cards,
+  - the one-day board continues to show work state at all times.
+- Mobile top area is further simplified:
+  - compact date picker only in the secondary row,
+  - previous/today/next and week/month/new/report controls remain compact.
+- Staying vehicles are now a compact mobile list rather than large cards:
+  - each row shows customer, natural last4, reason, work state,
+  - second line shows stay day count, stay reason, delivery status,
+  - worker/outsource/vehicle info remains available in a small extra line when present,
+  - “滞留情報を編集” remains available as a compact disclosure,
+  - tapping the staying row opens the exact `/schedule/detail?entry=...` screen for that work order.
+- Desktop staying-card body remains unchanged through mobile-only show/hide CSS.
+- Mobile workload section now uses one-line compact rows for staff / unfinished / running / urgent counts.
+- Mobile “次の機能へ” buttons use reduced height, padding, and gaps; information/routes remain unchanged.
+- Updated `schedule-one-day-practical-regression.mjs` to guard the fixed state position, removed selector, compact staying list, workload list, and quick actions.
+- First full-build attempt caught a type mismatch for `BusinessScheduleEntry`; fixed the detail opener to accept an entry-id shape without changing runtime behavior.
+- GitHub OCR regression GREEN; Deployment safety guard GREEN; full Vercel-equivalent build GREEN.
+- Tested source commit: `8a3042f7265c00c80d7c547098a8e1cb477d2791`.
+- Vercel Preview READY: https://vercel-parts-kscytczdf-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=GzUyExwggpLjYMUZac8b1rw4mbLr8v1N
+- main / Netlify / shared Supabase unchanged. PR #62 remains Draft/unmerged.
+
