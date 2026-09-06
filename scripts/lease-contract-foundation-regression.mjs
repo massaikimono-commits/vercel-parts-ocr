@@ -1,6 +1,10 @@
 import fs from "node:fs";
 
 const sql = fs.readFileSync("database/lease-maintenance-contract-foundation.sql", "utf8");
+const page = fs.readFileSync("app/customer-vehicles/lease-maintenance/page.tsx", "utf8");
+const layout = fs.readFileSync("app/customer-vehicles/layout.tsx", "utf8");
+const home = fs.readFileSync("app/home-dashboard.tsx", "utf8");
+const schedule = fs.readFileSync("app/schedule/page.tsx", "utf8");
 
 const checks = [
   ["contract table exists", /create table if not exists public\.lease_maintenance_contracts/i.test(sql)],
@@ -39,6 +43,54 @@ const checks = [
     !/alter table public\.loaner_reservations/i.test(sql) &&
     !/create trigger[\s\S]*loaner_reservations/i.test(sql) &&
     !/create or replace function public\.assign_loaner_to_booking/i.test(sql)
+  ],
+  ["vehicle action route exists",
+    /lease-maintenance\?vehicle=/.test(layout) &&
+    /リースメンテ契約/.test(layout)
+  ],
+  ["contract UI uses existing table only",
+    /from\("lease_maintenance_contracts"\)/.test(page) &&
+    !/create table|alter table|create policy/i.test(page)
+  ],
+  ["contract history is vehicle scoped and paged",
+    /\.eq\("vehicle_id", id\)/.test(page) &&
+    /const PAGE_SIZE = 20/.test(page) &&
+    /\.range\(start, start \+ PAGE_SIZE - 1\)/.test(page)
+  ],
+  ["normal screens do not preload lease contracts",
+    !/from\("lease_maintenance_contracts"\)/.test(home) &&
+    !/from\("lease_maintenance_contracts"\)/.test(schedule)
+  ],
+  ["requested contract condition fields are editable",
+    /substitute_car_state/.test(page) &&
+    /substitute_car_eligible_work_types/.test(page) &&
+    /inspection_intervals_months/.test(page) &&
+    /battery_contract_state/.test(page) &&
+    /summer_tire_contract_state/.test(page) &&
+    /winter_tire_contract_state/.test(page) &&
+    /tire_storage_contract_state/.test(page) &&
+    /oil_interval_km/.test(page) &&
+    /tire_maker_names/.test(page)
+  ],
+  ["saving edited contract requires re-review",
+    /needs_review: true/.test(page) &&
+    /reviewed_by: null/.test(page) &&
+    /reviewed_at: null/.test(page)
+  ],
+  ["reviewer comes from authenticated app profile",
+    /from\("app_user_profiles"\)/.test(page) &&
+    /select\("display_name,login_id"\)/.test(page) &&
+    /needs_review: false/.test(page)
+  ],
+  ["existing source document is read on demand only",
+    /source_document_id/.test(page) &&
+    /from\("vehicle_documents"\)/.test(page) &&
+    /createSignedUrl\(document\.storage_path, 300\)/.test(page) &&
+    !/\.upload\(/.test(page)
+  ],
+  ["lease UI does not enforce rental or mutate loaner reservations",
+    !/rpc\("lease_rental_eligibility"/.test(page) &&
+    !/from\("loaner_reservations"\)/.test(page)
   ],
 ];
 
