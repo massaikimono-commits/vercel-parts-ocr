@@ -71,36 +71,31 @@ type ContractForm = {
 
 const PAGE_SIZE = 20;
 const WORK_TYPES = ["点検", "車検", "一般整備", "板金塗装"] as const;
-const CONTRACT_COLUMNS = [
-  "id","vehicle_id","source_document_id","contract_number","contract_start_date","contract_end_date",
-  "substitute_car_state","substitute_car_eligible_work_types","substitute_car_start_day","substitute_car_max_days",
-  "substitute_car_notes","inspection_timing_state","inspection_intervals_months","battery_contract_state",
-  "summer_tire_contract_state","winter_tire_contract_state","tire_storage_contract_state","oil_interval_state",
-  "oil_interval_km","tire_maker_restriction_state","tire_maker_names","notes","needs_review","reviewed_by",
-  "reviewed_at","created_at","updated_at",
-].join(",");
+const CONTRACT_COLUMNS = "id,vehicle_id,source_document_id,contract_number,contract_start_date,contract_end_date,substitute_car_state,substitute_car_eligible_work_types,substitute_car_start_day,substitute_car_max_days,substitute_car_notes,inspection_timing_state,inspection_intervals_months,battery_contract_state,summer_tire_contract_state,winter_tire_contract_state,tire_storage_contract_state,oil_interval_state,oil_interval_km,tire_maker_restriction_state,tire_maker_names,notes,needs_review,reviewed_by,reviewed_at,created_at,updated_at";
 
-const blankForm = (): ContractForm => ({
-  contract_number: "",
-  contract_start_date: "",
-  contract_end_date: "",
-  substitute_car_state: "needs_review",
-  substitute_car_eligible_work_types: [],
-  substitute_car_start_day: "",
-  substitute_car_max_days: "",
-  substitute_car_notes: "",
-  inspection_timing_state: "needs_review",
-  inspection_intervals_months: "",
-  battery_contract_state: "needs_review",
-  summer_tire_contract_state: "needs_review",
-  winter_tire_contract_state: "needs_review",
-  tire_storage_contract_state: "needs_review",
-  oil_interval_state: "needs_review",
-  oil_interval_km: "",
-  tire_maker_restriction_state: "needs_review",
-  tire_maker_names: "",
-  notes: "",
-});
+function blankForm(): ContractForm {
+  return {
+    contract_number: "",
+    contract_start_date: "",
+    contract_end_date: "",
+    substitute_car_state: "needs_review",
+    substitute_car_eligible_work_types: [],
+    substitute_car_start_day: "",
+    substitute_car_max_days: "",
+    substitute_car_notes: "",
+    inspection_timing_state: "needs_review",
+    inspection_intervals_months: "",
+    battery_contract_state: "needs_review",
+    summer_tire_contract_state: "needs_review",
+    winter_tire_contract_state: "needs_review",
+    tire_storage_contract_state: "needs_review",
+    oil_interval_state: "needs_review",
+    oil_interval_km: "",
+    tire_maker_restriction_state: "needs_review",
+    tire_maker_names: "",
+    notes: "",
+  };
+}
 
 function stateLabel(value: FourState) {
   if (value === "yes") return "あり / 対象";
@@ -124,10 +119,19 @@ function vehicleLabel(vehicle: VehicleSummary | null) {
     || "車両";
 }
 
+function todayJst() {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 function contractStatus(contract: LeaseContract | null) {
   if (!contract) return "未登録";
   if (contract.needs_review) return "要確認";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayJst();
   if (!contract.contract_start_date || !contract.contract_end_date) return "期間要確認";
   if (today < contract.contract_start_date) return "開始前";
   if (today > contract.contract_end_date) return "契約終了";
@@ -165,10 +169,7 @@ function positiveInteger(value: string) {
 
 function parseMonths(value: string) {
   return [...new Set(
-    value
-      .split(/[,、\s]+/)
-      .map((x) => Number(x))
-      .filter((x) => Number.isInteger(x) && x > 0),
+    value.split(/[,、\s]+/).map(Number).filter((x) => Number.isInteger(x) && x > 0),
   )].sort((a, b) => a - b);
 }
 
@@ -176,13 +177,7 @@ function parseNames(value: string) {
   return [...new Set(value.split(/[,、\n]+/).map((x) => x.trim()).filter(Boolean))];
 }
 
-function StateSelect({
-  value,
-  onChange,
-}: {
-  value: FourState;
-  onChange: (value: FourState) => void;
-}) {
+function StateSelect({ value, onChange }: { value: FourState; onChange: (value: FourState) => void }) {
   return (
     <select value={value} onChange={(event) => onChange(event.target.value as FourState)}>
       <option value="needs_review">要確認</option>
@@ -223,6 +218,19 @@ export default function LeaseMaintenancePage() {
     [contracts, editingId],
   );
 
+  async function loadContractPage(id: string, start: number) {
+    const { data, error } = await supabase
+      .from("lease_maintenance_contracts")
+      .select(CONTRACT_COLUMNS)
+      .eq("vehicle_id", id)
+      .order("contract_start_date", { ascending: false, nullsFirst: false })
+      .order("contract_end_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .range(start, start + PAGE_SIZE - 1);
+    if (error) throw error;
+    return (data || []) as unknown as LeaseContract[];
+  }
+
   async function loadInitial(id: string) {
     setBusy(true);
     try {
@@ -259,19 +267,6 @@ export default function LeaseMaintenancePage() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function loadContractPage(id: string, start: number) {
-    const { data, error } = await supabase
-      .from("lease_maintenance_contracts")
-      .select(CONTRACT_COLUMNS)
-      .eq("vehicle_id", id)
-      .order("contract_start_date", { ascending: false, nullsFirst: false })
-      .order("contract_end_date", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .range(start, start + PAGE_SIZE - 1);
-    if (error) throw error;
-    return (data || []) as LeaseContract[];
   }
 
   async function loadMore() {
@@ -363,11 +358,10 @@ export default function LeaseMaintenancePage() {
             .single();
 
       if (result.error) throw result.error;
-      const saved = result.data as LeaseContract;
-      const next = editingId
-        ? contracts.map((row) => row.id === saved.id ? saved : row)
-        : [saved, ...contracts];
-      setContracts(next);
+      const saved = result.data as unknown as LeaseContract;
+      setContracts((old) => editingId
+        ? old.map((row) => row.id === saved.id ? saved : row)
+        : [saved, ...old]);
       setEditingId(saved.id);
       setForm(toForm(saved));
       setMessage("契約内容を保存しました。内容確認後に「確認済みにする」を実行してください。");
@@ -418,7 +412,7 @@ export default function LeaseMaintenancePage() {
         .single();
       if (error) throw error;
 
-      const saved = data as LeaseContract;
+      const saved = data as unknown as LeaseContract;
       setContracts((old) => old.map((row) => row.id === saved.id ? saved : row));
       setMessage(`${reviewer} さんの確認済みとして記録しました。`);
     } catch (error: any) {
@@ -479,9 +473,7 @@ export default function LeaseMaintenancePage() {
 
         <div className="summaryActions">
           <button className="primary" onClick={startNew}>＋ 新しい契約を登録</button>
-          {latest?.source_document_id && (
-            <button onClick={() => void openSourceDocument(latest)}>元契約書を開く</button>
-          )}
+          {latest?.source_document_id && <button onClick={() => void openSourceDocument(latest)}>元契約書を開く</button>}
         </div>
       </section>
 
