@@ -3,6 +3,17 @@ import path from "node:path";
 const root = process.cwd();
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const rootPage = read("app","page.tsx");
+const rootLayout = read("app","layout.tsx");
+const vehicleEnhancers = read("app","vehicle-certificate-route-enhancers.tsx");
+const vehicleLayout = read("app","vehicle-workflow","layout.tsx");
+const vehicleFastLayout = read("app","vehicle-workflow-fast","layout.tsx");
+const vehicleV2Layout = read("app","vehicle-workflow-v2","layout.tsx");
+const vehicleV3Layout = read("app","vehicle-workflow-v3","layout.tsx");
+const ocrLayout = read("app","ocr","layout.tsx");
+const partsOcrBatchLinker = read("app","ocr","parts-ocr-batch-linker.tsx");
+const certificatePdfNative = read("app","certificate-pdf-native-reader.jsx");
+const certificateQrFast = read("app","certificate-qr-fast.jsx");
+const partsOcr = read("app","ocr","page.tsx");
 const scheduleNew = read("app","schedule","new","page.tsx");
 const scheduleEdit = read("app","schedule","edit","page.tsx");
 const inspectionPrint = read("app","inspection","print","page.tsx");
@@ -24,6 +35,24 @@ function assert(condition, message) {
     process.exit(1);
   }
 }
+assert(rootLayout.includes("SessionLifetimeGuard") && rootLayout.includes("AuthRouteGuard"), "root layout must keep shared auth/session guards");
+assert(!rootLayout.includes("certificate-"), "root layout must not import vehicle-certificate OCR helpers");
+assert(!rootLayout.includes("photoPickerEnhancer") && !rootLayout.includes("MutationObserver") && !rootLayout.includes("Storage.prototype.setItem"), "root layout must not run OCR DOM/storage enhancers");
+assert(vehicleEnhancers.includes("CertificatePdfNativeReader") && vehicleEnhancers.includes("CertificateQrFast") && vehicleEnhancers.includes("CertificateFinalNativeFix"), "vehicle certificate helper stack must remain available on vehicle routes");
+for (const [name, source] of [
+  ["vehicle-workflow", vehicleLayout],
+  ["vehicle-workflow-fast", vehicleFastLayout],
+  ["vehicle-workflow-v2", vehicleV2Layout],
+  ["vehicle-workflow-v3", vehicleV3Layout],
+]) {
+  assert(source.includes("VehicleCertificateRouteEnhancers"), `${name} must mount the route-scoped certificate helper stack`);
+}
+assert(ocrLayout.includes("PartsOcrBatchLinker"), "parts OCR storage linker must be mounted only under OCR routes");
+assert(partsOcrBatchLinker.includes("Storage.prototype.setItem"), "parts OCR batch linking behavior must be preserved");
+assert(!partsOcrBatchLinker.includes("MutationObserver") && !partsOcrBatchLinker.includes("document.addEventListener"), "parts OCR linker must not reintroduce global DOM observers/listeners");
+assert(certificatePdfNative.includes('import("pdfjs-dist/') && certificatePdfNative.includes('import("@zxing/'), "certificate PDF/QR libraries must remain dynamically imported");
+assert(certificateQrFast.includes('import("@zxing/'), "fast certificate QR library must remain dynamically imported");
+assert(partsOcr.includes('await import("../lib/tesseract-local")'), "parts Tesseract must remain dynamically imported at OCR time");
 assert(!rootPage.includes('supabase.from("customers").select("*").order("created_at"'), "root dashboard must not preload all customers");
 assert(!rootPage.includes('supabase.from("vehicles").select("*").order("created_at"'), "root dashboard must not preload all vehicles");
 assert(home.includes("inbound:schedule_entries!inner()") && home.includes("delivery:schedule_entries()"), "home staying candidates must be filtered by schedule relations on the server");
