@@ -30,11 +30,12 @@ assert.match(printPage, /\.plannedRow \.vehicleWork b\{left:0;width:56%\}/, "納
 assert.match(printPage, /\.plannedRow \.vehicleWork small\{left:62%;width:34%\}/, "納車予定のコードは元PDF既存括弧中央へ同一行で置く");
 assert.match(printPage, /<span className="vehicleWork"><b>\{last4ForVehicle\(work\.vehicle_id\)\}<\/b><small>\{dailyReportWorkCode/, "下部は車番とコードだけを出しアプリ側で括弧を描画しない");
 assert.doesNotMatch(printPage, /[（(]\s*\{dailyReportWorkCode|dailyReportWorkCode\([^)]*\)\}\s*[）)]/, "コード文字列へ新しい括弧を追加しない");
-assert.match(printPage, /entry\.entry_type === "customer_visit" && <span className="reportVisitVehicleLabel">来社<\/span>/, "通常来社は車番左側へ来社と表示");
+assert.match(printPage, /entry\.isWaitingService \? "来社待ち" : "来社"/, "通常来社は来社、作業待ちは来社待ちと同じ位置へ表示");
 assert.match(printPage, /entry\.entry_type === "onsite_repair" && \(/, "出張の既存時間側ラベルは維持");
-assert.doesNotMatch(newPage, /作業待ち|来社待ち/, "作業待ちはDB対応まで予定登録へ追加しない");
-assert.doesNotMatch(printPage, /作業待ち|来社待ち/, "作業待ちはDB対応まで日報へ追加しない");
-assert.doesNotMatch(businessState, /作業待ち|来社待ち/, "作業待ちはDB対応まで滞留判定へ推測追加しない");
+assert.match(newPage, /isWaitingService/ , "予定登録は専用作業待ちフラグを使用する");
+assert.match(printPage, /来社待ち/ , "日報は作業待ち来社を来社待ちと表示する");
+assert.match(businessState, /is_waiting_service/ , "滞留判定は専用作業待ちフラグを使用する");
+assert.doesNotMatch(businessState, /stay_reason.*作業待ち|notes.*作業待ち/, "滞留判定はstay_reasonやnotesから作業待ちを推測しない");
 assert.match(printPage, /\.secondaryRow \.vehicleWork small\{[^}]*color:#000/, "下部の入庫要因コードは黒文字");
 assert.match(printPage, /\.secondaryDue\{position:relative!important;display:block!important\}/, "納車予定の納期は同一セル同一行を使う");
 assert.match(printPage, /\.secondaryDue b\{left:0;width:28%;font-size:1em\}/, "納期の日付は元PDFの括弧より左へ同一行で置く");
