@@ -423,7 +423,7 @@ export default function SchedulePage() {
     setActiveVehicle(vehicle);
   }
 
-  function openScheduleDetailFromCard(event: React.MouseEvent<HTMLElement>, entry: ScheduleEntry) {
+  function openScheduleDetailFromCard(event: React.MouseEvent<HTMLElement>, entry: { id: string }) {
     const target = event.target as HTMLElement;
     if (target.closest("button,input,select,textarea,summary,details,form,label,a")) return;
     location.assign("/schedule/detail?entry=" + encodeURIComponent(entry.id));
