@@ -381,3 +381,16 @@ Before an app-development chat finishes a batch:
 - Added app-core regression guards so root all-master preloads and unscoped top/day related-data reads do not return unnoticed.
 - Shared Supabase schema/RPC/data were not changed. OCR files were not changed. main / Netlify were not changed and no Vercel deployment was triggered.
 - CI on source commit `be9f5cb260daa85e66dbeaebe40c957269813557`: Deployment safety guard GREEN; OCR regression GREEN; one-day practical regression GREEN; app-core safety regression GREEN; full Vercel-equivalent `npm run build` GREEN.
+
+
+### 2026-09-06 — Performance pass ②: route-scope OCR runtime
+- Performance-only change on `preview/schedule-ux-20260903`; UI and OCR recognition behavior were intentionally left unchanged.
+- Removed all 15 vehicle-certificate helper imports from the root layout. The common certificate enhancement stack now lives in `app/vehicle-certificate-route-enhancers.tsx` and is mounted only by `/vehicle-workflow`, `/vehicle-workflow-fast`, `/vehicle-workflow-v2`, and `/vehicle-workflow-v3` route layouts.
+- Kept the existing v2 specialized certificate layout order and mounted the moved common stack after its existing helpers, matching the former root-layout ordering.
+- Removed the root `photoPickerEnhancer` inline runtime. This eliminates its global `MutationObserver`, three document-level pointer/touch/click listeners, and root-level `Storage.prototype.setItem` patch from normal routes.
+- Preserved the parts OCR batch-to-active-vehicle linking behavior with `app/ocr/parts-ocr-batch-linker.tsx`, mounted only under `/ocr/**`. It temporarily patches storage only while OCR routes are mounted and restores the original method on unmount; it does not add a MutationObserver or document event listener.
+- Root layout still mounts `SessionLifetimeGuard` and `AuthRouteGuard`; authentication/session/security common behavior remains global.
+- Existing Tesseract, PDF.js and ZXing dynamic-import behavior remains unchanged; OCR algorithm/preprocessing/extraction files were not edited.
+- Added app-core regression guards to prevent certificate helpers or OCR DOM/storage runtime from returning to RootLayout and to require all vehicle-workflow route layouts to mount the scoped helper stack.
+- Updated security regression to reflect the safer architecture: temporary vehicle context remains sessionStorage-based and runtime `dangerouslySetInnerHTML` is now required to be zero instead of allowing the old root inline enhancer.
+- Shared Supabase schema/RPC/data were not changed. main / Netlify were not changed. Performance pass ③ was not started.
