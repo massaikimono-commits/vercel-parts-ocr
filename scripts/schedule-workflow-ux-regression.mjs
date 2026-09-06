@@ -58,7 +58,7 @@ if (scheduleEdit.includes("disabled={busy||!cancelReason.trim()}")) {
 }
 
 expect(scheduleDay, '<div className="eyebrow">1日の予定</div>', "day schedule");
-expect(scheduleDay, ">1週間のスケジュール</button>", "day schedule");
+expect(scheduleDay, ">1週間</button>", "day schedule");
 expect(scheduleWeek, '<div className="eyebrow">1週間のスケジュール</div>', "week schedule");
 
 if (failures.length) {
