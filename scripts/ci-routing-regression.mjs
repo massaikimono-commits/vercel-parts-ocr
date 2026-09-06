@@ -39,6 +39,7 @@ assert(!ocr.includes("npm run build"), "OCR workflow must not run the full appli
 
 assert(full.includes("name: Full regression"), "explicit full regression workflow must exist");
 assert(full.includes("workflow_dispatch:"), "full regression must be manually dispatchable");
+assert(full.includes("full-regression") && full.includes("ready_for_review"), "draft PRs must have an explicit full-regression route before preview/merge");
 assert(full.includes("push:") && full.includes("- main"), "full regression must run after changes reach main");
 assert(full.includes("run: npm run build"), "full regression must run the complete application regression/build");
 assert(full.includes("qr-photo-contrast-regression.mjs"), "full regression must include extended vehicle OCR fixtures");
