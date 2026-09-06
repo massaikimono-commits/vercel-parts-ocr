@@ -110,6 +110,7 @@ assert(vehicleHistory.includes('.from("work_order_presence_events")') && vehicle
 assert(vehicleHistory.includes('.from("inspection_record_audit")') && vehicleHistory.includes('inspection_job:inspection_jobs!inner') && vehicleHistory.includes('.eq("inspection_job.vehicle_id", id)'), "inspection audit must be scoped through inspection_jobs vehicle_id");
 assert(vehicleHistory.includes('.from("inspection_distance_omission_history")'), "distance omission history must remain in the vehicle timeline");
 assert(vehicleHistory.includes("Promise.all([") && vehicleHistory.includes(".range(start, end)"), "vehicle history sources must load in parallel with bounded paging");
+assert(vehicleHistory.indexOf("if (sourceHasMore && vehicleId)") < vehicleHistory.indexOf("if (visibleCount < items.length)"), "unified history must fetch the next bounded source round before exposing buffered rows");
 assert(!vehicleHistory.includes(".insert(") && !vehicleHistory.includes(".update(") && !vehicleHistory.includes(".delete(") && !vehicleHistory.includes(".upsert("), "unified history must stay read-only");
 for (const source of ["vehicle_action_history","work_order_completion_events","work_order_presence_events","work_order_schedule_changes","inspection_record_audit","inspection_distance_omission_history"]) {
   assert(!home.includes(`from("${source}")`) && !schedule.includes(`from("${source}")`) && !customerVehicles.includes(`from("${source}")`), `normal screens must not preload ${source}`);
