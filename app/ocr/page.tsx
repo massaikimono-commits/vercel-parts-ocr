@@ -109,9 +109,29 @@ function canvasBlob(canvas: HTMLCanvasElement, quality = 0.98) {
 }
 
 async function sourceCanvas(file: File) {
-  const img = await loadImage(file); const maxSide = 2600; const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-  const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(img.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-  const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("画像を処理できませんでした。"); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); return canvas;
+  const img = await loadImage(file);
+  const rotate = img.naturalHeight > img.naturalWidth * 1.08;
+  const sourceWidth = rotate ? img.naturalHeight : img.naturalWidth;
+  const sourceHeight = rotate ? img.naturalWidth : img.naturalHeight;
+  const maxSide = 2600;
+  const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("画像を処理できませんでした。");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (rotate) {
+    ctx.save();
+    ctx.translate(0, canvas.height);
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(img, 0, 0, canvas.height, canvas.width);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  }
+  return canvas;
 }
 
 function detectPaperBox(canvas: HTMLCanvasElement): CropBox {
