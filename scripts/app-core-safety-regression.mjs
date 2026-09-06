@@ -75,8 +75,9 @@ assert(home.includes("const customerIds =") && home.includes('.in("id", customer
 assert(home.includes('.eq("work_completed", false)') && home.includes('.is("checked_out_at", null)'), "home workload query must filter unfinished work on the server");
 assert(home.includes('function entryTypeOrder') && home.includes('type === "customer_visit"') && home.includes('type === "pickup"') && home.includes('type === "onsite_repair"'), "home weekly schedule must define the fixed visit-pickup-onsite ordering");
 assert(home.includes("const typeDiff = entryTypeOrder") && home.includes("const timeDiff = new Date"), "home weekly schedule must sort by entry type before time");
-assert(home.includes('const visitRows = rows.filter(({ entry }) => entry.entry_type === "customer_visit")') && home.includes('来社 {visitRows.length}件'), "home weekly schedule must show customer-visit count and booked times");
-assert(month.includes('const visitCount = rows.filter(({ entry }) => entry.entry_type === "customer_visit").length') && month.includes('来社 {visitCount}件'), "month schedule must show a compact customer-visit count");
+assert(home.includes('entry.entry_type === "customer_visit" && work?.reason === "点検"') && home.includes('来社 {visitRows.length}件'), "home weekly visit summary must count only inspection customer visits");
+assert(week.includes('entry.entry_type === "customer_visit" && work?.reason === "点検"') && week.includes('来社 {visitRows.length}件'), "standalone weekly visit summary must count only inspection customer visits");
+assert(month.includes('entry.entry_type === "customer_visit" && work?.reason === "点検"') && month.includes('来社 {visitCount}件'), "month visit summary must count only inspection customer visits");
 assert(globals.includes(".mobileActions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}") && globals.includes(".mobileActions button{min-height:52px"), "mobile home action grid must remain two-column, compact, and tappable");
 assert(schedule.includes("inbound:schedule_entries!inner()") && schedule.includes("delivery:schedule_entries()"), "daily schedule staying candidates must be filtered by schedule relations on the server");
 assert(schedule.includes('.is("delivery", null)'), "daily schedule staying candidate query must use a delivery anti-join");
@@ -176,6 +177,11 @@ assert(!businessCalendar.includes('.storage.from(') && !businessCalendar.include
 assert(!businessCalendar.includes('.from("customers")') && !businessCalendar.includes('.from("vehicles")') && !businessCalendar.includes('.from("schedule_entries")'), "business calendar route must not load unrelated customer, vehicle, or schedule data");
 assert(scheduleNew.includes('.from("business_calendar")') && scheduleNew.includes('.eq("is_business_day", true)'), "schedule registration must keep using business_calendar is_business_day for next-business-day logic");
 assert(schedule.includes("classifyVehicleBusinessStates"), "daily schedule must use the shared business-state classifier");
+assert(scheduleNew.includes("isWaitingService") && scheduleNew.includes("p_is_waiting_service"), "schedule registration must persist the dedicated waiting-service flag");
+assert(scheduleEdit.includes("isWaitingService") && scheduleEdit.includes("p_is_waiting_service"), "schedule edit must persist the dedicated waiting-service flag");
+assert(!scheduleEdit.includes('"お客様連絡待ち","作業待ち"'), "waiting-service must not be stored through stay_reason suggestions");
+assert(reportPrint.includes('"来社待ち"') && reportPrint.includes("isWaitingService"), "daily report must label waiting-service visits as 来社待ち");
+assert(week.includes("a.work?.is_waiting_service === true") && month.includes("a.work?.is_waiting_service === true"), "visual overlap markers must require waiting-service visits");
 assert(schedule.includes("businessStates.stayingVehicles"), "daily schedule staying vehicles must come from the confirmed schedule-based staying rule");
 assert(!schedule.includes("activelyCheckedIn"), "daily schedule staying logic must not fall back to legacy checked-in state");
 assert(reportPrint.includes("workCompletedOnReportDay"), "daily report completion mark must use selected-day semantics");

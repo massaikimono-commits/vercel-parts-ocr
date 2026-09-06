@@ -28,6 +28,7 @@ type WorkOrder = {
   worker_name: string | null;
   outsource_vendor_name: string | null;
   checked_out_at: string | null;
+  is_waiting_service: boolean;
 };
 
 type Vehicle = {
@@ -147,7 +148,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
     const weekStartIso = new Date(weekStart + "T00:00:00+09:00").toISOString();
     const weekEndIso = new Date(weekEnd + "T00:00:00+09:00").toISOString();
     const stateBefore = new Date(addDays(today, 1) + "T00:00:00+09:00").toISOString();
-    const workColumns = "id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,outsource_vendor_name,checked_out_at";
+    const workColumns = "id,vehicle_id,reason,status,work_completed,is_urgent,needs_loaner,worker_name,outsource_vendor_name,checked_out_at,is_waiting_service";
 
     try {
       const [weekEntryRes, stayingWorkRes, workloadWorkRes] = await Promise.all([
@@ -407,7 +408,9 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         <div className="homeWeekGrid">
           {currentWeekDays.map((day) => {
             const rows = weekRowsByDay.get(day) || [];
-            const visitRows = rows.filter(({ entry }) => entry.entry_type === "customer_visit");
+            const visitRows = rows.filter(({ entry, work }) =>
+              entry.entry_type === "customer_visit" && work?.reason === "点検"
+            );
             const visitTimes = visitRows.map(({ entry }) => scheduleTimeLabel(entry));
             const isToday = day === todayJst();
             return (

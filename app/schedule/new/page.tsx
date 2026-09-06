@@ -183,6 +183,7 @@ export default function ScheduleNewPage() {
   const [vendorName, setVendorName] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
   const [needsLoaner, setNeedsLoaner] = useState(false);
+  const [isWaitingService, setIsWaitingService] = useState(false);
   const [notes, setNotes] = useState("");
   const [inspectionScheduleType, setInspectionScheduleType] = useState("schedule");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
@@ -254,7 +255,13 @@ export default function ScheduleNewPage() {
     if (reason !== "点検" && inspectionScheduleType) setInspectionScheduleType("");
     void loadCapacity();
     void loadMainOptions();
-  }, [day, entryType, reason]);
+  }, [day, entryType, reason, isWaitingService]);
+
+  useEffect(() => {
+    const eligible = reason === "点検" && entryType === "customer_visit";
+    if (!eligible && isWaitingService) setIsWaitingService(false);
+    if (isWaitingService && addDelivery) setAddDelivery(false);
+  }, [reason, entryType, isWaitingService, addDelivery]);
 
   useEffect(() => {
     setShowAfternoonOptions(false);
@@ -428,6 +435,7 @@ export default function ScheduleNewPage() {
           p_reason: reason,
           p_exclude_entry_id: null,
           p_print_time_mode: option.mode,
+          p_is_waiting_service: isWaitingService,
         });
         if (error) throw error;
         const status = !Boolean(data?.allowed)
@@ -493,6 +501,7 @@ export default function ScheduleNewPage() {
           p_day: day,
           p_entry_type: entryType,
           p_reason: reason,
+          p_is_waiting_service: isWaitingService,
         });
         if (error) throw error;
         options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
@@ -684,6 +693,7 @@ export default function ScheduleNewPage() {
       p_reason: reason,
       p_exclude_entry_id: null,
       p_print_time_mode: main.printMode,
+      p_is_waiting_service: isWaitingService,
     });
     if (error) throw error;
     const mainCheck = extractWarnings(data);
@@ -701,6 +711,7 @@ export default function ScheduleNewPage() {
         p_reason: reason,
         p_exclude_entry_id: null,
         p_print_time_mode: selectedDelivery.mode,
+        p_is_waiting_service: false,
       });
       if (deliveryError) throw deliveryError;
       deliveryCheck = extractWarnings(deliveryData);
@@ -748,6 +759,7 @@ export default function ScheduleNewPage() {
     setVendorName("");
     setIsUrgent(false);
     setNeedsLoaner(false);
+    setIsWaitingService(false);
     setNotes("");
     setInspectionScheduleType("schedule");
     setSelectedTimeKey("");
@@ -826,12 +838,13 @@ export default function ScheduleNewPage() {
           printTimeMode: check.main.printMode,
           isUrgent,
           needsLoaner,
+          isWaitingService,
           vendorId: (reason === "板金塗装" || reason === "一般整備") ? (vendorId || null) : null,
           vendorName: (reason === "板金塗装" || reason === "一般整備") ? (vendorName.trim() || null) : null,
-          addDelivery: addDelivery && entryType !== "delivery",
-          deliveryStartsAt: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
-          deliveryEndsAt: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
-          deliveryPrintTimeMode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
+          addDelivery: !isWaitingService && addDelivery && entryType !== "delivery",
+          deliveryStartsAt: !isWaitingService && addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
+          deliveryEndsAt: !isWaitingService && addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
+          deliveryPrintTimeMode: !isWaitingService && addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
         }));
 
         const { data, error } = await supabase.rpc("create_schedule_registration_batch_v1", {
@@ -893,6 +906,7 @@ export default function ScheduleNewPage() {
         p_reason: reason,
         p_starts_at: check.main.startsAt,
         p_ends_at: check.main.endsAt,
+        p_is_waiting_service: isWaitingService,
         p_customer_type: customerType,
         p_company_name: companyName.trim() || null,
         p_phone: phone.trim() || null,
@@ -1138,6 +1152,19 @@ export default function ScheduleNewPage() {
           <div className="flagBox">
             <label className="switch"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />急ぎ</label>
             <label className="switch"><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} />代車あり</label>
+            {reason === "点検" && entryType === "customer_visit" && (
+              <label className="switch waitingSwitch">
+                <input type="checkbox" checked={isWaitingService} onChange={(e) => {
+                  const next = e.target.checked;
+                  setIsWaitingService(next);
+                  if (next) {
+                    setAddDelivery(false);
+                    setDeliveryTimeKey("");
+                  }
+                }} />
+                作業待ち
+              </label>
+            )}
             <button type="button" onClick={() => location.assign("/settings/staff")}>社員名を管理</button>
             {(reason === "板金塗装" || reason === "一般整備") && <button type="button" onClick={() => location.assign("/settings/vendors")}>外注先を管理</button>}
           </div>
@@ -1225,7 +1252,14 @@ export default function ScheduleNewPage() {
         </div>
       </section>
 
-      {entryType !== "delivery" && (
+      {entryType !== "delivery" && isWaitingService && (
+        <section className="card waitingDeliveryNotice">
+          <h2>④ 納車予定</h2>
+          <div className="notice">来社・作業待ちは、その場で点検完了まで待つ運用のため納車予定は登録しません。</div>
+        </section>
+      )}
+
+      {entryType !== "delivery" && !isWaitingService && (
         <section className="card">
           <h2>④ 納車予定</h2>
           <label className="switch">

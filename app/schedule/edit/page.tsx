@@ -40,6 +40,7 @@ type WorkOrder = {
   outsource_vendor_name:string|null;
   stay_reason:string|null;
   planned_delivery_date:string|null;
+  is_waiting_service:boolean;
 };
 
 type StaffMember = {
@@ -110,7 +111,7 @@ function entrySummaryLabel(entry:Entry|null){
 }
 
 const LABEL:Record<string,string>={delivery:"納車",pickup:"引取",customer_visit:"来社",onsite_repair:"出張"};
-const STAY_REASON_SUGGESTIONS=["部品待ち","外注作業待ち","見積確認待ち","お客様連絡待ち","作業待ち"];
+const STAY_REASON_SUGGESTIONS=["部品待ち","外注作業待ち","見積確認待ち","お客様連絡待ち"];
 
 export default function ScheduleEditPage(){
   const [entry,setEntry]=useState<Entry|null>(null);
@@ -125,6 +126,7 @@ export default function ScheduleEditPage(){
   const [vehicleSummary,setVehicleSummary]=useState<VehicleSummary|null>(null);
   const [customerSummary,setCustomerSummary]=useState<CustomerSummary|null>(null);
   const [deliveryEnabled,setDeliveryEnabled]=useState(false);
+  const [isWaitingService,setIsWaitingService]=useState(false);
   const [deliveryDay,setDeliveryDay]=useState("");
   const [deliveryMode,setDeliveryMode]=useState<"unspecified"|"exact">("unspecified");
   const [deliveryTime,setDeliveryTime]=useState("15:00");
@@ -176,7 +178,7 @@ export default function ScheduleEditPage(){
         {data:inboundData,error:inboundError},
       ]=await Promise.all([
         supabase.from("work_orders")
-          .select("id,vehicle_id,reason,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name,stay_reason,planned_delivery_date")
+          .select("id,vehicle_id,reason,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name,stay_reason,planned_delivery_date,is_waiting_service")
           .eq("id",e.work_order_id).maybeSingle(),
         supabase.from("schedule_entries")
           .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
@@ -206,6 +208,7 @@ export default function ScheduleEditPage(){
       setVendorId(work?.outsource_vendor_id||"");
       setVendorName(work?.outsource_vendor_id ? "" : (work?.outsource_vendor_name||""));
       setStayReason(work?.stay_reason||"");
+      setIsWaitingService(Boolean(work?.is_waiting_service));
       setPlannedDeliveryDate(work?.planned_delivery_date||"");
       setDeliveryEntry(delivery);
       setDeliveryEnabled(Boolean(delivery));
@@ -257,6 +260,7 @@ export default function ScheduleEditPage(){
         p_reason:targetReason||null,
         p_exclude_entry_id:base.id,
         p_print_time_mode:option.mode,
+        p_is_waiting_service:isWaitingService,
       });
       if(error) throw error;
       const availability:TimeOption["availability"]=!Boolean(data?.allowed)
@@ -416,6 +420,7 @@ export default function ScheduleEditPage(){
       p_reason:reason||null,
       p_exclude_entry_id:deliveryEntry?.id||null,
       p_print_time_mode:target.mode,
+      p_is_waiting_service:false,
     });
     if(error) throw error;
     const hard=Array.isArray(data?.hard_errors)?data.hard_errors.map(String):[];
@@ -457,6 +462,7 @@ export default function ScheduleEditPage(){
         p_starts_at:target.startsAt,
         p_ends_at:target.endsAt,
         p_print_time_mode:target.mode,
+        p_is_waiting_service:false,
         p_stay_reason:stayReason.trim()||null,
         p_planned_delivery_date:deliveryDay,
         p_actor:"schedule-edit-delivery",
@@ -498,7 +504,7 @@ export default function ScheduleEditPage(){
       const startsAt=selectedOption.startsAt;
       const endsAt=selectedOption.endsAt;
       const mode=selectedOption.mode;
-      const deliveryTarget=entry.work_order_id && entry.entry_type!=="delivery" ? buildDeliveryTarget() : null;
+      const deliveryTarget=!isWaitingService && entry.work_order_id && entry.entry_type!=="delivery" ? buildDeliveryTarget() : null;
       if(deliveryTarget){
         const mainDay=dateKey(startsAt);
         const deliveryTargetDay=dateKey(deliveryTarget.startsAt);
@@ -513,6 +519,7 @@ export default function ScheduleEditPage(){
         p_entry_id:entry.id,
         p_starts_at:startsAt,
         p_ends_at:endsAt,
+        p_is_waiting_service:isWaitingService,
         p_print_time_mode:mode,
         p_stay_reason:entry.work_order_id ? stayReason.trim()||null : null,
         p_planned_delivery_date:entry.work_order_id
@@ -694,13 +701,26 @@ export default function ScheduleEditPage(){
         </section>}
         {entry.work_order_id && <section className="stayBox">
           <b>滞留・納車情報</b>
+          {(reason==="点検" && (entry.entry_type==="customer_visit" || relatedInboundEntry?.entry_type==="customer_visit")) && (
+            <label className="deliveryToggle waitingServiceToggle">
+              <input type="checkbox" checked={isWaitingService} onChange={(ev)=>{
+                const next=ev.target.checked;
+                setIsWaitingService(next);
+                if(next) setDeliveryEnabled(false);
+                resetWarningsForTargetChange();
+              }} />
+              作業待ち（来社したお客様が点検完了まで待つ）
+            </label>
+          )}
           <div className="grid stayGrid">
             <label>滞留理由
               <input list="stay-reasons" value={stayReason} onChange={(e)=>setStayReason(e.target.value)} placeholder="例：部品待ち" />
               <datalist id="stay-reasons">{STAY_REASON_SUGGESTIONS.map(x=><option key={x} value={x} />)}</datalist>
             </label>
           </div>
-          {entry.entry_type==="delivery" ? (
+          {isWaitingService ? (
+            <div className="deliveryEditNotice">来社・作業待ちは納車予定なしで扱います。</div>
+          ) : entry.entry_type==="delivery" ? (
             <div className="deliveryEditNotice">この予定自体が納車予定です。上の「日付・時間」から変更してください。</div>
           ) : (
             <div className="deliveryPlan">

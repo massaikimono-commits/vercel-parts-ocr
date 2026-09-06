@@ -11,8 +11,8 @@ const compiled = ts.transpileModule(source, {
 }).outputText;
 const mod = await import("data:text/javascript;base64," + Buffer.from(compiled).toString("base64"));
 
-const work = (id, reason = "一般整備", status = "scheduled") => ({
-  id, vehicle_id: "v-" + id, reason, status,
+const work = (id, reason = "一般整備", status = "scheduled", isWaitingService = false) => ({
+  id, vehicle_id: "v-" + id, reason, status, is_waiting_service: isWaitingService,
 });
 const entry = (id, workId, type, day, mode = "unspecified") => ({
   id,
@@ -81,6 +81,22 @@ const entry = (id, workId, type, day, mode = "unspecified") => ({
 {
   const works = [work("F")];
   const rows = [entry("F-in", "F", "customer_visit", "2026-08-31")];
+  assert.equal(mod.classifyVehicleBusinessStates(works, rows, "2026-08-31").stayingVehicles.length, 1);
+}
+
+// 点検・来社・作業待ちは納車予定なしでも滞留車両へ入れない。
+{
+  const works = [work("WAIT", "点検", "scheduled", true)];
+  const rows = [entry("WAIT-in", "WAIT", "customer_visit", "2026-08-31", "exact")];
+  const state = mod.classifyVehicleBusinessStates(works, rows, "2026-08-31");
+  assert.equal(state.stayingVehicles.length, 0);
+  assert.equal(state.plannedDeliveries.length, 0);
+}
+
+// 通常の点検・来社は、作業待ちでなければ従来どおり滞留対象。
+{
+  const works = [work("VISIT", "点検", "scheduled", false)];
+  const rows = [entry("VISIT-in", "VISIT", "customer_visit", "2026-08-31", "exact")];
   assert.equal(mod.classifyVehicleBusinessStates(works, rows, "2026-08-31").stayingVehicles.length, 1);
 }
 

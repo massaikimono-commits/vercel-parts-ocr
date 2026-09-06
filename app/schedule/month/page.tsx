@@ -24,6 +24,7 @@ type WorkOrder = {
   worker_name: string | null;
   outsource_vendor_name: string | null;
   is_urgent: boolean;
+  is_waiting_service: boolean;
 };
 
 type Vehicle = {
@@ -168,7 +169,7 @@ export default function MonthlySchedulePage() {
       if (workIds.length) {
         const { data, error } = await supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,worker_name,outsource_vendor_name,is_urgent")
+          .select("id,vehicle_id,reason,worker_name,outsource_vendor_name,is_urgent,is_waiting_service")
           .in("id", workIds);
         if (error) throw error;
         nextWorks = (data || []) as WorkOrder[];
@@ -244,13 +245,22 @@ export default function MonthlySchedulePage() {
     const ids = new Set<string>();
     for (let i = 0; i < rows.length; i++) {
       for (let j = i + 1; j < rows.length; j++) {
-        const a = rows[i].entry;
-        const b = rows[j].entry;
-        if (a.print_time_mode !== "exact" || b.print_time_mode !== "exact") continue;
-        if (a.entry_type !== b.entry_type) continue;
-        if (new Date(a.starts_at) < new Date(b.ends_at) && new Date(a.ends_at) > new Date(b.starts_at)) {
-          ids.add(a.id);
-          ids.add(b.id);
+        const a = rows[i];
+        const b = rows[j];
+        const eligibleA =
+          a.entry.entry_type === "customer_visit" &&
+          a.entry.print_time_mode === "exact" &&
+          a.work?.reason === "点検" &&
+          a.work?.is_waiting_service === true;
+        const eligibleB =
+          b.entry.entry_type === "customer_visit" &&
+          b.entry.print_time_mode === "exact" &&
+          b.work?.reason === "点検" &&
+          b.work?.is_waiting_service === true;
+        if (!eligibleA || !eligibleB) continue;
+        if (new Date(a.entry.starts_at).getTime() === new Date(b.entry.starts_at).getTime()) {
+          ids.add(a.entry.id);
+          ids.add(b.entry.id);
         }
       }
     }
@@ -309,7 +319,9 @@ export default function MonthlySchedulePage() {
         {cells.map((day, index) => {
           if (!day) return <div className="dayCell blank" key={"blank-" + index} />;
           const rows = rowsByDay[day] || [];
-          const visitCount = rows.filter(({ entry }) => entry.entry_type === "customer_visit").length;
+          const visitCount = rows.filter(({ entry, work }) =>
+            entry.entry_type === "customer_visit" && work?.reason === "点検"
+          ).length;
           const overlaps = overlapIds(rows);
           const cal = calendar[day];
           const isToday = day === todayJst();

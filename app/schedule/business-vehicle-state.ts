@@ -14,6 +14,7 @@ export type BusinessWorkOrder = {
   vehicle_id: string;
   reason: string;
   status: string;
+  is_waiting_service?: boolean;
 };
 
 export type BusinessVehicleState<TWork extends BusinessWorkOrder = BusinessWorkOrder> = {
@@ -91,6 +92,12 @@ export function classifyVehicleBusinessStates<TWork extends BusinessWorkOrder>(
       deliveryEntry,
       deliveryDay,
     };
+
+    const isWaitingVisit =
+      work.is_waiting_service === true &&
+      work.reason === "点検" &&
+      inboundEntry.entry_type === "customer_visit";
+    if (isWaitingVisit) continue;
 
     if (isBodyShopReason(work.reason)) {
       // 板金は引取/来社の予定日から、納車予定日の前日まで継続。

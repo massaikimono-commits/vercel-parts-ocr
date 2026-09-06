@@ -38,6 +38,7 @@ type WorkOrder = {
   status: string;
   work_completed: boolean;
   work_completed_at: string | null;
+  is_waiting_service: boolean;
 };
 
 type PreviewEntry = Entry & {
@@ -49,6 +50,7 @@ type PreviewEntry = Entry & {
   outsourceVendorName: string;
   deliveryEntry: BusinessScheduleEntry | null;
   workCompleted: boolean;
+  isWaitingService: boolean;
 };
 
 type PrintRegion = {
@@ -218,7 +220,7 @@ export default function DailyReportPrintPage() {
         supabase.from("schedule_entries").select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode").in("entry_type", ["pickup", "customer_visit", "delivery"]),
         supabase.from("vehicles").select("id,customer_id,registration_number,registration_number_last4"),
         supabase.from("customers").select("id,name,company_name,schedule_display_name"),
-        supabase.from("work_orders").select("id,vehicle_id,reason,inspection_schedule_type,worker_name,outsource_vendor_name,expected_completion_date,stay_reason,status,work_completed,work_completed_at").neq("status", "cancelled"),
+        supabase.from("work_orders").select("id,vehicle_id,reason,inspection_schedule_type,worker_name,outsource_vendor_name,expected_completion_date,stay_reason,status,work_completed,work_completed_at,is_waiting_service").neq("status", "cancelled"),
         supabase.from("app_settings").select("setting_value").eq("setting_key", "daily_report_template").maybeSingle(),
       ]);
       for (const res of [scheduleRes, stateEntryRes, vehicleRes, customerRes, workRes]) if (res.error) throw res.error;
@@ -273,6 +275,7 @@ export default function DailyReportPrintPage() {
       outsourceVendorName: work?.outsource_vendor_name || "",
       deliveryEntry,
       workCompleted: work ? workCompletedOnReportDay(work, day) : false,
+      isWaitingService: Boolean(work?.is_waiting_service),
     };
   }), [entries, vehicleMap, customerMap, workMap, stateEntriesByWork]);
 
@@ -322,7 +325,9 @@ export default function DailyReportPrintPage() {
       <div className="reportEntry inboundEntry">
         <div className="reportCustomer">{entry.customerName}</div>
         <div className="reportVehicle">
-          {entry.entry_type === "customer_visit" && <span className="reportVisitVehicleLabel">来社</span>}
+          {entry.entry_type === "customer_visit" && (
+            <span className="reportVisitVehicleLabel">{entry.isWaitingService ? "来社待ち" : "来社"}</span>
+          )}
           <b>{entry.last4}</b>
           <small>{dailyReportWorkCode(entry.reason, entry.inspectionScheduleType)}</small>
         </div>

@@ -33,6 +33,7 @@ type WorkOrder = {
   stay_reason: string | null;
   is_urgent: boolean;
   needs_loaner: boolean;
+  is_waiting_service: boolean;
 };
 
 type Vehicle = {
@@ -208,7 +209,7 @@ export default function SchedulePage() {
   async function load() {
     setBusy(true);
     const { start, end } = jstBounds(day);
-    const workColumns = "id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,work_completed,checked_out_at,stay_reason,is_urgent,needs_loaner";
+    const workColumns = "id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,work_completed,checked_out_at,stay_reason,is_urgent,needs_loaner,is_waiting_service";
 
     try {
       const [scheduleRes, stayingWorkRes, workloadWorkRes] = await Promise.all([
