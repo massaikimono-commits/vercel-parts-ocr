@@ -58,13 +58,14 @@ export default function CustomerVehiclesLayout({ children }: { children: ReactNo
         <button onClick={() => openActiveVehicleRoute("/inspection/select")}>📝 記録簿</button>
         <button onClick={startPartsOcr}>📷 部品OCR</button>
         <button onClick={() => openActiveVehicleRoute("/parts-data")}>📦 部品履歴</button>
-        <button onClick={() => openVehicleScopedRoute("/customer-vehicles/lease-maintenance")}>リースメンテ契約</button>\n        <button onClick={() => openVehicleScopedRoute("/customer-vehicles/history")}>履歴</button>
+        <button onClick={() => openVehicleScopedRoute("/customer-vehicles/lease-maintenance")}>リースメンテ契約</button>
+        <button onClick={() => openVehicleScopedRoute("/customer-vehicles/history")}>履歴</button>
       </nav>
       <style jsx global>{`
         .activeVehicleDock{position:fixed;right:16px;bottom:18px;z-index:50;display:flex;gap:7px;padding:8px;background:rgba(255,255,255,.96);border:1px solid #d7e0ec;border-radius:18px;box-shadow:0 10px 28px rgba(31,65,120,.18);backdrop-filter:blur(8px)}
         .activeVehicleDock button{border:1px solid #c9d7eb;background:#fff;color:#245ec2;border-radius:12px;padding:11px 13px;font-weight:900;white-space:nowrap}
         .activeVehicleDock button:first-child{background:#2f6fe4;border-color:#245ec2;color:#fff}
-        @media(max-width:720px){.activeVehicleDock{left:8px;right:8px;bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px}.activeVehicleDock button{width:100%;padding:10px 8px}.page{padding-bottom:250px!important}}
+        @media(max-width:720px){.activeVehicleDock{left:8px;right:8px;bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:5px;border-radius:14px}.activeVehicleDock button{width:100%;min-height:40px;padding:7px 6px;border-radius:9px;font-size:12px;line-height:1.15}.page{padding-bottom:220px!important}}
         @media print{.activeVehicleDock{display:none!important}}
       `}</style>
     </>
