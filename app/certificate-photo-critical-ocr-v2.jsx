@@ -81,11 +81,16 @@ function seatingCandidate(text) {
 function payloadCandidate(text, purposeValue = "") {
   if (compact(purposeValue) === "乗用") return "-";
   const t = norm(text);
-  const near = t.match(/最大積載量[\s\S]{0,55}?(-|\d{1,5})\s*(?:kg)?/i);
-  if (!near) return "";
-  if (near[1] === "-") return "-";
-  const n = Number(near[1]);
-  return n >= 0 && n <= 30000 ? String(n) : "";
+  // 軽貨物では「最大積載量」の直後に (100)/(250) など別条件値が印字される。
+  // 単位なし数値を拾うとそれを最大積載量と誤認するため、実重量は kg（OCRの ke/q/9 誤読含む）付きだけを採用する。
+  const near = t.match(/最大積載量[\s\S]{0,90}?(\d{1,5})\s*k\s*[gqe9]/i);
+  if (near) {
+    const n = Number(near[1]);
+    return n >= 0 && n <= 30000 ? String(n) : "";
+  }
+  // 乗用以外でも明示的な「- kg」なら積載なしとして扱う。曖昧な裸数値は採用しない。
+  if (/最大積載量[\s\S]{0,40}?[-ー―]\s*(?:kg)?/i.test(t)) return "-";
+  return "";
 }
 
 function outputCandidate(text) {
