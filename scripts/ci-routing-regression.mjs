@@ -27,6 +27,7 @@ assert(!app.includes("run: npm run test:qr-speed"), "normal app workflow must no
 
 assert(ocr.includes("name: OCR regression"), "OCR compatibility workflow name must remain");
 assert(ocr.includes("Detect OCR change scope"), "OCR workflow must route by changed files");
+assert(ocr.includes("github.event.action") && ocr.includes("synchronize") && ocr.includes("github.event.before") && ocr.includes("github.event.after"), "long-lived PR OCR routing must use only the latest synchronization diff when available");
 assert(ocr.includes("vehicle-certificate-regression:"), "vehicle certificate OCR job must remain");
 assert(ocr.includes("parts-ocr-regression:"), "parts OCR job must remain");
 assert(ocr.includes("needs.regression.outputs.vehicle_ocr == 'true'"), "vehicle OCR job must be change-scoped");
