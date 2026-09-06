@@ -208,8 +208,10 @@ export default function SchedulePage() {
   async function load() {
     setBusy(true);
     const { start, end } = jstBounds(day);
+    const workColumns = "id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,work_completed,checked_out_at,stay_reason,is_urgent,needs_loaner";
+
     try {
-      const [scheduleRes, stateEntryRes, workRes, vehicleRes, customerRes] = await Promise.all([
+      const [scheduleRes, stayingWorkRes, workloadWorkRes] = await Promise.all([
         supabase
           .from("schedule_entries")
           .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,notes,print_time_mode,print_time_label_override")
@@ -217,31 +219,82 @@ export default function SchedulePage() {
           .lt("starts_at", end)
           .order("starts_at", { ascending: true }),
         supabase
-          .from("schedule_entries")
-          .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode")
-          .in("entry_type", ["pickup", "customer_visit", "delivery"]),
+          .from("work_orders")
+          .select(`${workColumns},inbound:schedule_entries!inner(),delivery:schedule_entries()`)
+          .neq("status", "cancelled")
+          .in("inbound.entry_type", ["pickup", "customer_visit"])
+          .lt("inbound.starts_at", end)
+          .eq("delivery.entry_type", "delivery")
+          .is("delivery", null),
         supabase
           .from("work_orders")
-          .select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,work_completed,checked_out_at,stay_reason,is_urgent,needs_loaner")
-          .neq("status", "cancelled"),
-        supabase
-          .from("vehicles")
-          .select("id,customer_id,registration_number,registration_number_last4,vehicle_number,chassis_number,maker,model"),
-        supabase
-          .from("customers")
-          .select("id,name,company_name,phone,schedule_display_name"),
+          .select(workColumns)
+          .neq("status", "cancelled")
+          .neq("status", "completed")
+          .eq("work_completed", false)
+          .is("checked_out_at", null),
       ]);
 
-      for (const result of [scheduleRes, stateEntryRes, workRes, vehicleRes, customerRes]) {
-        if (result.error) throw result.error;
+      const firstStageError = [scheduleRes.error, stayingWorkRes.error, workloadWorkRes.error].find(Boolean);
+      if (firstStageError) throw firstStageError;
+
+      const nextEntries = (scheduleRes.data || []) as ScheduleEntry[];
+      const stayingWorks = (stayingWorkRes.data || []) as unknown as WorkOrder[];
+      const workloadWorks = (workloadWorkRes.data || []) as WorkOrder[];
+
+      const visibleWorkIds = [...new Set(nextEntries.map((entry) => entry.work_order_id).filter(Boolean))] as string[];
+      const stayingWorkIds = stayingWorks.map((work) => work.id);
+      const loadedWorkIds = new Set([...stayingWorkIds, ...workloadWorks.map((work) => work.id)]);
+      const missingVisibleWorkIds = visibleWorkIds.filter((id) => !loadedWorkIds.has(id));
+      const stateWorkIds = [...new Set([...visibleWorkIds, ...stayingWorkIds])];
+      const vehicleIds = [...new Set([
+        ...nextEntries.map((entry) => entry.vehicle_id).filter(Boolean),
+        ...stayingWorks.map((work) => work.vehicle_id).filter(Boolean),
+      ])] as string[];
+
+      const [visibleWorkRes, stateEntryRes, vehicleRes] = await Promise.all([
+        missingVisibleWorkIds.length
+          ? supabase.from("work_orders").select(workColumns).in("id", missingVisibleWorkIds).neq("status", "cancelled")
+          : Promise.resolve({ data: [], error: null }),
+        stateWorkIds.length
+          ? supabase
+              .from("schedule_entries")
+              .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode")
+              .in("work_order_id", stateWorkIds)
+              .in("entry_type", ["pickup", "customer_visit", "delivery"])
+          : Promise.resolve({ data: [], error: null }),
+        vehicleIds.length
+          ? supabase
+              .from("vehicles")
+              .select("id,customer_id,registration_number,registration_number_last4,vehicle_number,chassis_number,maker,model")
+              .in("id", vehicleIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      const secondStageError = [visibleWorkRes.error, stateEntryRes.error, vehicleRes.error].find(Boolean);
+      if (secondStageError) throw secondStageError;
+
+      const nextVehicles = (vehicleRes.data || []) as Vehicle[];
+      const customerIds = [...new Set(nextVehicles.map((vehicle) => vehicle.customer_id).filter(Boolean))] as string[];
+      const customerRes = customerIds.length
+        ? await supabase
+            .from("customers")
+            .select("id,name,company_name,phone,schedule_display_name")
+            .in("id", customerIds)
+        : { data: [], error: null };
+      if (customerRes.error) throw customerRes.error;
+
+      const nextWorksById = new Map<string, WorkOrder>();
+      for (const work of [...stayingWorks, ...workloadWorks, ...((visibleWorkRes.data || []) as WorkOrder[])]) {
+        nextWorksById.set(work.id, work);
       }
 
-      setEntries((scheduleRes.data || []) as ScheduleEntry[]);
+      setEntries(nextEntries);
       setStateEntries((stateEntryRes.data || []) as BusinessScheduleEntry[]);
-      setWorkOrders((workRes.data || []) as WorkOrder[]);
-      setVehicles((vehicleRes.data || []) as Vehicle[]);
+      setWorkOrders([...nextWorksById.values()]);
+      setVehicles(nextVehicles);
       setCustomers((customerRes.data || []) as Customer[]);
-      setMessage(`${scheduleRes.data?.length || 0}件の予定があります。`);
+      setMessage(`${nextEntries.length}件の予定があります。`);
     } catch (error: any) {
       setMessage(safeActionError("予定の読み込み", error));
     } finally {
