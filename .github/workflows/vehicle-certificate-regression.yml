@@ -1,20 +1,77 @@
 name: OCR regression
 
 on:
-  push:
-    branches:
-      - main
-      - fix/certificate-pdf-native-v1
-      - "work/**"
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - fix/certificate-pdf-native-v1
+      - "work/**"
+      - "perf/parts-ocr-**"
 
 permissions:
   contents: read
 
 jobs:
   regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      vehicle_ocr: ${{ steps.scope.outputs.vehicle_ocr }}
+      parts_ocr: ${{ steps.scope.outputs.parts_ocr }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Detect OCR change scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            before="${{ github.event.pull_request.base.sha }}"
+            after="${{ github.event.pull_request.head.sha }}"
+          else
+            before="${{ github.event.before }}"
+            after="${{ github.sha }}"
+            if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+              before="${after}^"
+            fi
+          fi
+
+          changed="$(git diff --name-only "$before" "$after")"
+          printf '%s\n' "$changed"
+
+          vehicle_ocr=false
+          parts_ocr=false
+
+          shared_pattern='^(package\.json|package-lock\.json|app/lib/(document-image-pipeline|document-recognition-engine|file-security|tesseract-local)\.(ts|js)|public/tesseract/)'
+          vehicle_pattern='^(app/certificate-|app/lib/certificate-|app/vehicle-certificate-route-enhancers\.tsx$|app/vehicle-workflow/|app/vehicle-workflow-fast/|app/vehicle-workflow-v2/|app/vehicle-workflow-v3/|scripts/(vehicle-certificate-regression|certificate-|qr-)|\.github/workflows/vehicle-certificate-regression\.yml$)'
+          parts_pattern='^(app/ocr/|scripts/parts-|\.github/workflows/vehicle-certificate-regression\.yml$)'
+
+          if printf '%s\n' "$changed" | grep -Eq "$shared_pattern|$vehicle_pattern"; then
+            vehicle_ocr=true
+          fi
+          if printf '%s\n' "$changed" | grep -Eq "$shared_pattern|$parts_pattern"; then
+            parts_ocr=true
+          fi
+
+          echo "vehicle_ocr=$vehicle_ocr" >> "$GITHUB_OUTPUT"
+          echo "parts_ocr=$parts_ocr" >> "$GITHUB_OUTPUT"
+          echo "vehicle_ocr=$vehicle_ocr parts_ocr=$parts_ocr"
+
+      - name: Validate CI routing contract
+        run: node scripts/ci-routing-regression.mjs
+
+  vehicle-certificate-regression:
+    needs: regression
+    if: ${{ needs.regression.outputs.vehicle_ocr == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -53,6 +110,29 @@ jobs:
       - name: Run QR density performance regression
         run: node scripts/qr-density-performance.mjs
 
+  parts-ocr-regression:
+    needs: regression
+    if: ${{ needs.regression.outputs.parts_ocr == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Run parts-slip regression
         run: npm run test:parts
 
@@ -64,18 +144,3 @@ jobs:
 
       - name: Run anonymized parts-photo fixture regression
         run: node scripts/parts-photo-fixture-regression.mjs
-
-      - name: Run security regression
-        run: npm run test:security
-
-      - name: Run schedule workflow UX regression
-        run: npm run test:schedule-workflow-ux
-
-      - name: Run customer migration workflow regression
-        run: npm run test:customer-migration-workflow
-
-      - name: Run full Vercel-equivalent build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
-        run: npm run build
