@@ -1,14 +1,30 @@
 name: OCR regression
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
-    branches:
-      - fix/certificate-pdf-native-v1
-      - "work/**"
-      - "perf/parts-ocr-**"
+    branches-ignore:
+      - main
+    paths:
+      - "app/certificate-*"
+      - "app/lib/certificate-*"
+      - "app/vehicle-certificate-route-enhancers.tsx"
+      - "app/vehicle-workflow/**"
+      - "app/vehicle-workflow-fast/**"
+      - "app/vehicle-workflow-v2/**"
+      - "app/vehicle-workflow-v3/**"
+      - "app/ocr/**"
+      - "app/lib/document-image-pipeline.ts"
+      - "app/lib/document-recognition-engine.ts"
+      - "app/lib/file-security.ts"
+      - "app/lib/tesseract-local.ts"
+      - "scripts/vehicle-certificate-regression.mjs"
+      - "scripts/certificate-*"
+      - "scripts/qr-*"
+      - "scripts/parts-*"
+      - "public/tesseract/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/vehicle-certificate-regression.yml"
 
 permissions:
   contents: read
@@ -34,25 +50,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            event_before="${{ github.event.before }}"
-            event_after="${{ github.event.after }}"
-            if [[ "${{ github.event.action }}" == "synchronize" && -n "$event_before" && -n "$event_after" ]]; then
-              # Long-lived PRs may already contain older OCR changes. For a new push,
-              # route only the files added by this synchronization event.
-              before="$event_before"
-              after="$event_after"
-            else
-              # Opening/reopening a PR has no incremental before/after pair.
-              before="${{ github.event.pull_request.base.sha }}"
-              after="${{ github.event.pull_request.head.sha }}"
-            fi
-          else
-            before="${{ github.event.before }}"
-            after="${{ github.sha }}"
-            if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
-              before="${after}^"
-            fi
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+          if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="${after}^"
           fi
 
           changed="$(git diff --name-only "$before" "$after")"
