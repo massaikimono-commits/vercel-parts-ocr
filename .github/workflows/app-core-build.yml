@@ -1,16 +1,60 @@
 name: App core build check
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "scripts/**"
+      - "database/**"
+      - "supabase/**"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.mjs"
+      - "tsconfig.json"
+      - ".github/workflows/app-core-build.yml"
+      - ".github/workflows/full-regression.yml"
+      - "!app/certificate-*"
+      - "!app/lib/certificate-*"
+      - "!app/vehicle-certificate-route-enhancers.tsx"
+      - "!app/vehicle-workflow/**"
+      - "!app/vehicle-workflow-fast/**"
+      - "!app/vehicle-workflow-v2/**"
+      - "!app/vehicle-workflow-v3/**"
+      - "!app/ocr/**"
+      - "!scripts/vehicle-certificate-regression.mjs"
+      - "!scripts/certificate-*"
+      - "!scripts/qr-*"
+      - "!scripts/parts-*"
+      - "!public/tesseract/**"
   push:
     branches:
       - work/app-core-v1
     paths:
       - "app/**"
       - "scripts/**"
+      - "database/**"
+      - "supabase/**"
       - "package.json"
+      - "package-lock.json"
       - "next.config.mjs"
       - "tsconfig.json"
       - ".github/workflows/app-core-build.yml"
+      - ".github/workflows/full-regression.yml"
+      - "!app/certificate-*"
+      - "!app/lib/certificate-*"
+      - "!app/vehicle-certificate-route-enhancers.tsx"
+      - "!app/vehicle-workflow/**"
+      - "!app/vehicle-workflow-fast/**"
+      - "!app/vehicle-workflow-v2/**"
+      - "!app/vehicle-workflow-v3/**"
+      - "!app/ocr/**"
+      - "!scripts/vehicle-certificate-regression.mjs"
+      - "!scripts/certificate-*"
+      - "!scripts/qr-*"
+      - "!scripts/parts-*"
+      - "!public/tesseract/**"
 
 permissions:
   contents: read
@@ -28,6 +72,7 @@ jobs:
           fetch-depth: 0
 
       - name: Keep OCR tuning out of app core
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/work/app-core-v1' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -55,11 +100,6 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Run OCR regression checks
-        run: |
-          npm run test:certificate
-          npm run test:parts
-
       - name: Run record regression checks
         run: |
           npm run test:inspection
@@ -72,17 +112,35 @@ jobs:
           npm run test:schedule-print-layout
           npm run test:schedule-work-state
           npm run test:schedule-existing-vehicle
+          npm run test:schedule-desktop-density
+          npm run test:schedule-report-layout
+          npm run test:schedule-pickup-rules
+          npm run test:schedule-workflow-ux
+          npm run test:schedule-registration-duplicate
+          npm run test:schedule-registration-action-feedback
+          npm run test:schedule-batch-cross-customer
+          npm run test:schedule-inbound-time-selector
+          npm run test:schedule-edit-inbound-time-selector
+          npm run test:schedule-search-work-order
+          npm run test:schedule-cancellation-work-order
+          npm run test:schedule-search-actions
+          npm run test:schedule-one-day-practical
+          npm run test:schedule-detail
           npm run test:daily-report-template
           npm run test:daily-report-allocation
           npm run test:daily-report-print-model
           npm run test:daily-report-secondary
-          npm run test:app-core-safety
+          npm run test:daily-report-work-code
+          npm run test:vehicle-business-state
 
-      - name: Run remaining print and OCR safety checks
+      - name: Run app safety and customer regression checks
         run: |
-          npm run test:qr-speed
-          npm run test:parts-layout
           npm run test:paper-sizes
+          npm run test:security
+          npm run test:app-core-safety
+          npm run test:lease-contract-foundation
+          npm run test:customer-migration-workflow
+          node scripts/ci-routing-regression.mjs
 
       - name: Build Next.js app
         env:
