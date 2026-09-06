@@ -7,6 +7,7 @@ import { safeActionError } from "../../lib/client-security";
 
 type EntryType = "delivery" | "pickup" | "customer_visit" | "onsite_repair";
 type Reason = "点検" | "車検" | "一般整備" | "板金塗装";
+type RegisteredSearchMode = "last4" | "customer" | "phone";
 
 type StaffMember = {
   id: string;
@@ -204,6 +205,7 @@ export default function ScheduleNewPage() {
   const [existingCustomerId, setExistingCustomerId] = useState("");
   const [existingVehicleId, setExistingVehicleId] = useState("");
   const [registeredSearch, setRegisteredSearch] = useState("");
+  const [registeredSearchMode, setRegisteredSearchMode] = useState<RegisteredSearchMode>("last4");
   const [registeredVehicles, setRegisteredVehicles] = useState<RegisteredVehicleOption[]>([]);
   const [registeredVehiclesLoading, setRegisteredVehiclesLoading] = useState(true);
   const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
@@ -273,10 +275,10 @@ export default function ScheduleNewPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadRegisteredVehicles(registeredSearch);
+      void loadRegisteredVehicles(registeredSearch, registeredSearchMode);
     }, registeredSearch.trim() ? 300 : 0);
     return () => window.clearTimeout(timer);
-  }, [registeredSearch]);
+  }, [registeredSearch, registeredSearchMode]);
 
   async function loadStaff() {
     const { data, error } = await supabase
@@ -305,7 +307,7 @@ export default function ScheduleNewPage() {
     }
     setVendors((data || []) as ExternalVendor[]);
   }
-  async function loadRegisteredVehicles(searchText = "") {
+  async function loadRegisteredVehicles(searchText = "", searchMode: RegisteredSearchMode = registeredSearchMode) {
     const requestId = ++registeredSearchSeq.current;
     setRegisteredVehiclesLoading(true);
     try {
@@ -321,57 +323,44 @@ export default function ScheduleNewPage() {
           .limit(REGISTERED_RECENT_LIMIT);
         if (error) throw error;
         vehicleRows = data || [];
-      } else {
-        const digits = search.replace(/\D/g, "");
-        const vehicleFilters = [
-          `registration_number.ilike.%${search}%`,
-          `chassis_number.ilike.%${search}%`,
-          `vehicle_number.ilike.%${search}%`,
-          `maker.ilike.%${search}%`,
-          `model.ilike.%${search}%`,
-        ];
-        if (digits) vehicleFilters.push(`registration_number_last4.ilike.%${digits.slice(-4)}%`);
-
-        const customerFilters = [
-          `name.ilike.%${search}%`,
-          `company_name.ilike.%${search}%`,
-          `schedule_display_name.ilike.%${search}%`,
-          `phone.ilike.%${search}%`,
-        ];
-
-        const [vehicleRes, customerRes] = await Promise.all([
-          supabase
+      } else if (searchMode === "last4") {
+        const digits = search.replace(/\D/g, "").slice(-4);
+        if (digits) {
+          const { data, error } = await supabase
             .from("vehicles")
             .select(REGISTERED_VEHICLE_COLUMNS)
-            .or(vehicleFilters.join(","))
+            .ilike("registration_number_last4", `%${digits}%`)
             .order("updated_at", { ascending: false })
-            .limit(REGISTERED_SEARCH_LIMIT),
-          supabase
-            .from("customers")
-            .select(REGISTERED_CUSTOMER_COLUMNS)
-            .or(customerFilters.join(","))
-            .order("updated_at", { ascending: false })
-            .limit(REGISTERED_CUSTOMER_MATCH_LIMIT),
-        ]);
-        if (vehicleRes.error) throw vehicleRes.error;
-        if (customerRes.error) throw customerRes.error;
-        vehicleRows = vehicleRes.data || [];
-        customerRows = customerRes.data || [];
+            .limit(REGISTERED_SEARCH_LIMIT);
+          if (error) throw error;
+          vehicleRows = data || [];
+        }
+      } else {
+        const customerQuery = supabase
+          .from("customers")
+          .select(REGISTERED_CUSTOMER_COLUMNS)
+          .order("updated_at", { ascending: false })
+          .limit(REGISTERED_CUSTOMER_MATCH_LIMIT);
+
+        const { data, error } = searchMode === "customer"
+          ? await customerQuery.or([
+              `name.ilike.%${search}%`,
+              `company_name.ilike.%${search}%`,
+            ].join(","))
+          : await customerQuery.ilike("phone", `%${search}%`);
+        if (error) throw error;
+        customerRows = data || [];
 
         const matchedCustomerIds = customerRows.map((row: any) => row.id).filter(Boolean);
         if (matchedCustomerIds.length) {
-          const { data, error } = await supabase
+          const { data: matchedVehicles, error: vehicleError } = await supabase
             .from("vehicles")
             .select(REGISTERED_VEHICLE_COLUMNS)
             .in("customer_id", matchedCustomerIds)
             .order("updated_at", { ascending: false })
             .limit(REGISTERED_SEARCH_LIMIT);
-          if (error) throw error;
-          const byId = new Map<string, any>();
-          for (const row of [...vehicleRows, ...(data || [])]) {
-            if (!byId.has(String(row.id))) byId.set(String(row.id), row);
-          }
-          vehicleRows = [...byId.values()].slice(0, REGISTERED_SEARCH_LIMIT);
+          if (vehicleError) throw vehicleError;
+          vehicleRows = matchedVehicles || [];
         }
       }
 
@@ -1014,12 +1003,19 @@ export default function ScheduleNewPage() {
         <div style={{margin:"12px 0 16px",padding:"14px",border:"1px solid #c9d8ee",borderRadius:14,background:"#f8fbff"}}>
           <b style={{display:"block",marginBottom:6}}>登録済みのお客様・車両から選ぶ</b>
           <div style={{color:"#607086",fontSize:13,lineHeight:1.6,marginBottom:10}}>
-            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。初期表示は最近更新した20台、検索結果も最大20台です。別のお客様・別車両でも続けて複数台選択できます。
+            検索方法を選んで探します。初期値は「下4桁」です。初期表示は最近更新した20台、検索結果も最大20台です。別のお客様・別車両でも続けて複数台選択できます。
+          </div>
+          <div className="registeredSearchModes" aria-label="登録済み車両の検索方法">
+            <button type="button" className={registeredSearchMode === "last4" ? "active" : ""} onClick={() => setRegisteredSearchMode("last4")}>下4桁</button>
+            <button type="button" className={registeredSearchMode === "customer" ? "active" : ""} onClick={() => setRegisteredSearchMode("customer")}>お客様名</button>
+            <button type="button" className={registeredSearchMode === "phone" ? "active" : ""} onClick={() => setRegisteredSearchMode("phone")}>電話番号</button>
           </div>
           <input
             value={registeredSearch}
             onChange={(e) => setRegisteredSearch(e.target.value)}
-            placeholder="例：1234 / 山田 / 090 / 車台番号"
+            inputMode={registeredSearchMode === "last4" ? "numeric" : registeredSearchMode === "phone" ? "tel" : "text"}
+            maxLength={registeredSearchMode === "last4" ? 4 : undefined}
+            placeholder={registeredSearchMode === "last4" ? "例：10 / 1234" : registeredSearchMode === "customer" ? "例：山田 / 株式会社ICB" : "例：090-1234-5678"}
             style={{width:"100%",marginBottom:10}}
           />
           {registeredVehiclesLoading ? (
@@ -1287,7 +1283,7 @@ export default function ScheduleNewPage() {
         .card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:34px;margin:4px 0 10px}h2{margin:0 0 14px}
         .notice{background:#edf7ef;border:1px solid #c2e5cb;border-radius:12px;padding:12px 14px;color:#3c5944}
         .capacity{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.capacity>div{background:#f6f8fb;border-radius:12px;padding:12px;display:grid}.capacity b{font-size:24px}.capacity small{color:#78869a}
-        .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.selectedVehiclesSummary{margin-top:10px;padding:10px 12px;border:1px solid #bfd3f3;border-radius:12px;background:#eef5ff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.selectedVehiclesSummary span{color:#53647b;font-size:12px;flex:1 1 260px}.selectedVehiclesSummary button{padding:7px 9px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.registeredSearchModes{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:8px}.registeredSearchModes button{padding:9px 7px;color:#53647b}.registeredSearchModes button.active{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.selectedVehiclesSummary{margin-top:10px;padding:10px 12px;border:1px solid #bfd3f3;border-radius:12px;background:#eef5ff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.selectedVehiclesSummary span{color:#53647b;font-size:12px;flex:1 1 260px}.selectedVehiclesSummary button{padding:7px 9px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.grid .wide{grid-column:1/-1}
         .availabilityBlock{display:grid;gap:10px}.availabilityTitle{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;color:#5c6878}.legend{font-size:12px;font-weight:800}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.openDot{background:#4f9c68}.warnDot{background:#d69a36}.blockedDot{background:#9aa5b3}.availabilityLoading{background:#f7f9fc;border-radius:12px;padding:14px;color:#78869a}.timeGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.timeSlot{display:flex;gap:5px;justify-content:center;align-items:center;padding:10px 7px;border-radius:12px}.timeSlot.open{background:#f2fbf5;border-color:#9bceb0;color:#236c3b}.timeSlot.warning{background:#fff8ea;border-color:#e5bd73;color:#8a5a08}.timeSlot.blocked{background:#f1f3f6;border-color:#d5dbe3;color:#8a95a3;opacity:.7}.timeSlot.selected{outline:3px solid #2674e8;outline-offset:1px}.timeSlot:disabled{cursor:not-allowed}
         input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:11px;background:#fff;padding:12px;color:#172033}textarea{min-height:90px;resize:vertical}
         .switch{display:flex;align-items:center;gap:9px;font-weight:800}.switch input{width:auto}.flagBox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.flagBox .switch{color:#27364a}.flagBox button{padding:8px 10px}.deliveryGrid{margin-top:12px}
