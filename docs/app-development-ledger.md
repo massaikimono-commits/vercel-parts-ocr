@@ -394,3 +394,18 @@ Before an app-development chat finishes a batch:
 - Added app-core regression guards to prevent certificate helpers or OCR DOM/storage runtime from returning to RootLayout and to require all vehicle-workflow route layouts to mount the scoped helper stack.
 - Updated security regression to reflect the safer architecture: temporary vehicle context remains sessionStorage-based and runtime `dangerouslySetInnerHTML` is now required to be zero instead of allowing the old root inline enhancer.
 - Shared Supabase schema/RPC/data were not changed. main / Netlify were not changed. Performance pass ③ was not started.
+
+
+### 2026-09-06 — Performance pass ③: on-demand customer / vehicle loading
+- Performance-only change on `preview/schedule-ux-20260903`; no photo-storage/new-feature work was started.
+- `/schedule/new`: removed the initial `customers limit 1000 + vehicles limit 1000` preload. Initial registered-vehicle candidates are now the 20 most recently updated vehicles plus only their related customer rows. Search is debounced (300ms), server-side, and bounded to 20 displayed vehicles; customer-name/company/phone matches and vehicle registration/last4/chassis/maker/model matches are combined with fixed batched queries, not N+1.
+- Multi-vehicle schedule selection now keeps selected vehicle records separately from the current search-result page, so users can search again and add another customer/vehicle without losing already selected rows.
+- `/customer-vehicles`: removed all-customer/all-vehicle startup reads and the global newest-500-parts startup read. Initial list is the 30 most recently updated vehicles plus only their related customers; an active session vehicle may add one explicit ID lookup when it is outside that page.
+- Customer/vehicle search is debounced (300ms), server-side, and returns at most 30 displayed vehicles. Customer-name/company/phone/address and vehicle number/registration/last4/chassis/model/maker searches remain supported.
+- The normal customer/vehicle list uses incremental paging: 30 vehicles at a time. Search results are capped instead of paging an unbounded result set.
+- Parts history is no longer fetched at page open. Selecting a vehicle loads only that vehicle's cloud history, 50 rows at a time, with an incremental “more” action. Local-to-cloud part synchronization is also scoped to the selected vehicle; its marker check is bounded and reads only `source_text`.
+- Existing-customer reassignment no longer depends on an all-customer dropdown. The selected-vehicle detail now searches customer candidates on demand, capped at 20.
+- Customer deletion confirmation now gets the linked-vehicle count from a database count query at action time, so the count stays correct even though only one vehicle page is loaded.
+- Other normal screens were reviewed: week/month schedule, workload, loaner assignment, inspection/select/detail flows already use date/ID/active-vehicle scoped customer/vehicle reads. The daily-report print route still has broad print-only reads and was intentionally left out of performance pass ③.
+- Added app-core performance guards against the former 1000-row schedule preload, all-customer/all-vehicle customer-management preload, global 500-part preload, missing search limits, and loss of paging/debounce.
+- Shared Supabase schema/RPC/data were not changed. OCR logic, main, Netlify and photo-storage features were not changed.
