@@ -28,6 +28,7 @@ const pdfNative = read("app/certificate-pdf-native-reader.jsx");
 const pdfBridge = read("app/certificate-pdf-bridge.jsx");
 const customerVehicles = read("app/customer-vehicles/page.tsx");
 const partsData = read("app/parts-data/page.tsx");
+const partsOcrBatchLinker = read("app/ocr/parts-ocr-batch-linker.tsx");
 const vehicleV3 = read("app/vehicle-workflow-v3/page.tsx");
 const clientSecurity = read("app/lib/client-security.ts");
 const loginHistory = read("app/settings/login-history/page.tsx");
@@ -87,7 +88,7 @@ pass("root dashboard disables caching", netlify.includes('for = "/"') && netlify
 pass("session revalidated on history restore", sessionLifetimeGuard.includes('window.addEventListener("pageshow"'));
 pass("absolute session timeout enforced", sessionLifetimeGuard.includes("12 * 60 * 60 * 1000"));
 pass("idle session timeout enforced", sessionLifetimeGuard.includes("30 * 60 * 1000") && sessionLifetimeGuard.includes("sessionExpired()"));
-pass("temporary vehicle context is session-only", layout.includes("sessionStorage.getItem(ACTIVE_KEY)") && customerVehicles.includes("sessionStorage.setItem(ACTIVE_KEY") && partsData.includes("sessionStorage.getItem(ACTIVE_KEY)") && vehicleFast.includes("sessionStorage.setItem(ACTIVE_KEY") && vehicleV3.includes("sessionStorage.setItem(ACTIVE_KEY"));
+pass("temporary vehicle context is session-only", partsOcrBatchLinker.includes("sessionStorage.getItem(ACTIVE_KEY)") && customerVehicles.includes("sessionStorage.setItem(ACTIVE_KEY") && partsData.includes("sessionStorage.getItem(ACTIVE_KEY)") && vehicleFast.includes("sessionStorage.setItem(ACTIVE_KEY") && vehicleV3.includes("sessionStorage.setItem(ACTIVE_KEY"));
 pass("PDF worker is bundled locally", pdfNative.includes('new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url)') && pdfBridge.includes('new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url)') && !pdfNative.includes("cdn.jsdelivr.net") && !pdfBridge.includes("cdn.jsdelivr.net"));
 pass("oversized image guard", fileSecurity.includes("MAX_IMAGE_PIXELS") && fileSecurity.includes("MAX_IMAGE_EDGE"));
 pass("strict referrer privacy", netlify.includes('Referrer-Policy = "no-referrer"'));
@@ -180,12 +181,9 @@ pass(
 
 pass("no dynamic code execution sinks", !dynamicSinkHit, dynamicSinkHit);
 const normalizedDangerousHtmlFiles = dangerousHtmlFiles.map((file) => file.replaceAll("\\", "/"));
-const unexpectedDangerousHtmlFiles = normalizedDangerousHtmlFiles.filter((file) => file !== "app/layout.tsx");
 pass(
-  "dangerouslySetInnerHTML limited to static layout enhancer",
-  unexpectedDangerousHtmlFiles.length === 0 &&
-    normalizedDangerousHtmlFiles.includes("app/layout.tsx") &&
-    layout.includes("dangerouslySetInnerHTML={{ __html: photoPickerEnhancer }}"),
+  "dangerouslySetInnerHTML not used in app runtime",
+  normalizedDangerousHtmlFiles.length === 0,
   normalizedDangerousHtmlFiles.join(", ")
 );
 
