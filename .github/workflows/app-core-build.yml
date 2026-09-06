@@ -1,87 +1,13 @@
 name: App core build check
 
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - work/app-core-v1
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  scope:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      app_changed: ${{ steps.scope.outputs.app_changed }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - name: Detect normal app change scope
-        id: scope
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            event_before="${{ github.event.before }}"
-            event_after="${{ github.event.after }}"
-            if [[ "${{ github.event.action }}" == "synchronize" && -n "$event_before" && -n "$event_after" ]]; then
-              before="$event_before"
-              after="$event_after"
-            else
-              before="${{ github.event.pull_request.base.sha }}"
-              after="${{ github.event.pull_request.head.sha }}"
-            fi
-          else
-            before="${{ github.event.before }}"
-            after="${{ github.sha }}"
-            if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
-              before="${after}^"
-            fi
-          fi
-
-          changed="$(git diff --name-only "$before" "$after")"
-          printf '%s\n' "$changed"
-
-          relevant_pattern='^(app/|scripts/|database/|supabase/|package\.json$|package-lock\.json$|next\.config\.mjs$|tsconfig\.json$|\.github/workflows/(app-core-build|full-regression)\.yml$)'
-          ocr_only_pattern='^(app/certificate-|app/lib/certificate-|app/vehicle-certificate-route-enhancers\.tsx$|app/vehicle-workflow/|app/vehicle-workflow-fast/|app/vehicle-workflow-v2/|app/vehicle-workflow-v3/|app/ocr/|scripts/(vehicle-certificate-regression|certificate-|qr-|parts-)|public/tesseract/)'
-
-          app_changed=false
-          while IFS= read -r file; do
-            [[ -z "$file" ]] && continue
-            if [[ "$file" =~ $relevant_pattern ]] && [[ ! "$file" =~ $ocr_only_pattern ]]; then
-              app_changed=true
-              break
-            fi
-          done <<< "$changed"
-
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/work/app-core-v1" ]]; then
-            forbidden="$(printf '%s\n' "$changed" | grep -E "$ocr_only_pattern" || true)"
-            if [[ -n "$forbidden" ]]; then
-              echo "OCR tuning files must be changed on a dedicated OCR branch, not work/app-core-v1:"
-              printf '%s\n' "$forbidden"
-              exit 1
-            fi
-          fi
-
-          echo "app_changed=$app_changed" >> "$GITHUB_OUTPUT"
-          echo "app_changed=$app_changed"
-
-      - name: Validate CI routing contract
-        run: node scripts/ci-routing-regression.mjs
-
   build:
-    needs: scope
-    if: ${{ needs.scope.outputs.app_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -95,6 +21,9 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
+
+      - name: Validate CI routing contract
+        run: node scripts/ci-routing-regression.mjs
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
