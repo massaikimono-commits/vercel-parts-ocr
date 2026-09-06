@@ -2,6 +2,7 @@
 
 const IMAGE_KEY = "ocr-auto-transfer-image";
 const NAME_KEY = "ocr-auto-transfer-name";
+const NORMALIZED_SUFFIX = ".ocr-normalized.jpg";
 
 function loadImage(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -71,7 +72,15 @@ function normalizePartsPhotoIllumination(canvas: HTMLCanvasElement) {
   sourceCtx.putImageData(source, 0, 0);
 }
 
-export async function saveOCRTransferImage(file: File) {
+function normalizedName(name: string) {
+  const base = (name || "ocr-input").replace(/\.ocr-normalized\.jpg$/i, "").replace(/\.[^.]+$/, "");
+  return `${base}${NORMALIZED_SUFFIX}`;
+}
+
+export async function prepareOCRInputFile(file: File) {
+  // 自動判定から引き継がれた画像は既に同じ共通前処理済み。二重補正を避ける。
+  if (file.name.toLowerCase().endsWith(NORMALIZED_SUFFIX)) return file;
+
   const img = await loadImage(file);
   const rotate = shouldRotatePartsPhoto(img);
   const sourceWidth = rotate ? img.naturalHeight : img.naturalWidth;
@@ -82,13 +91,12 @@ export async function saveOCRTransferImage(file: File) {
   canvas.width = Math.max(1, Math.round(sourceWidth * scale));
   canvas.height = Math.max(1, Math.round(sourceHeight * scale));
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("画像を引き継げませんでした。");
+  if (!ctx) throw new Error("画像を前処理できませんでした。");
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   if (rotate) {
     // 固定評価セットでは反時計回り90度で帳票文字が正立する。
-    // 回転後の座標系で元画像全体を描画し、下流OCRへ横長画像を渡す。
     ctx.save();
     ctx.translate(0, canvas.height);
     ctx.rotate(-Math.PI / 2);
@@ -99,12 +107,29 @@ export async function saveOCRTransferImage(file: File) {
   }
 
   normalizePartsPhotoIllumination(canvas);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((value) => value ? resolve(value) : reject(new Error("画像を前処理できませんでした。")), "image/jpeg", 0.88);
+  });
+  return new File([blob], normalizedName(file.name), { type: "image/jpeg", lastModified: file.lastModified });
+}
+
+export async function saveOCRTransferImage(file: File) {
+  const prepared = await prepareOCRInputFile(file);
+  const img = await loadImage(prepared);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("画像を引き継げませんでした。");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
 
   // sessionStorageの容量に収まりやすいようにOCR用サイズへ縮小。
   const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
   try {
     sessionStorage.setItem(IMAGE_KEY, dataUrl);
-    sessionStorage.setItem(NAME_KEY, file.name || "ocr-transfer.jpg");
+    sessionStorage.setItem(NAME_KEY, prepared.name);
   } catch {
     // 容量超過時はもう一段小さくして保存。
     const smaller = document.createElement("canvas");
@@ -115,14 +140,14 @@ export async function saveOCRTransferImage(file: File) {
     if (!sctx) throw new Error("画像を引き継げませんでした。");
     sctx.drawImage(canvas, 0, 0, smaller.width, smaller.height);
     sessionStorage.setItem(IMAGE_KEY, smaller.toDataURL("image/jpeg", 0.72));
-    sessionStorage.setItem(NAME_KEY, file.name || "ocr-transfer.jpg");
+    sessionStorage.setItem(NAME_KEY, prepared.name);
   }
 }
 
 export async function consumeOCRTransferImage() {
   const dataUrl = sessionStorage.getItem(IMAGE_KEY);
   if (!dataUrl) return null;
-  const name = sessionStorage.getItem(NAME_KEY) || "ocr-transfer.jpg";
+  const name = sessionStorage.getItem(NAME_KEY) || `ocr-transfer${NORMALIZED_SUFFIX}`;
   sessionStorage.removeItem(IMAGE_KEY);
   sessionStorage.removeItem(NAME_KEY);
 
