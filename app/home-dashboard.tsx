@@ -478,6 +478,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
           <button onClick={() => location.assign("/schedule/search")}>名前・電話・下4桁で予定検索</button>
           <button onClick={() => location.assign("/schedule/week")}>1週間のスケジュール</button>
+          <button onClick={() => location.assign("/loaners")}>代車管理</button>
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票読取</button>
           <button onClick={() => location.assign("/inspection/select")}>記録簿作成</button>
           <button onClick={() => location.assign("/vehicle-workflow")}>車検証読取</button>
