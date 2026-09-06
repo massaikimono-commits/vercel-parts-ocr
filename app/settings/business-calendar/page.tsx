@@ -71,13 +71,6 @@ export default function BusinessCalendarPage() {
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("営業日カレンダーを読み込んでいます。");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [editBusinessDay, setEditBusinessDay] = useState(true);
-  const [editLabel, setEditLabel] = useState("");
-  const [rangeStart, setRangeStart] = useState("");
-  const [rangeEnd, setRangeEnd] = useState("");
-  const [rangeBusinessDay, setRangeBusinessDay] = useState(false);
-  const [rangeLabel, setRangeLabel] = useState("");
   const [importFiscalYear, setImportFiscalYear] = useState(currentFiscalYear);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importFileKind, setImportFileKind] = useState<"image" | "pdf" | "">("");
@@ -89,7 +82,6 @@ export default function BusinessCalendarPage() {
 
   async function loadYear(year: number) {
     setBusy(true);
-    setSelectedDate("");
     const { start, end } = fiscalBounds(year);
     try {
       const { data, error } = await supabase
@@ -134,14 +126,8 @@ export default function BusinessCalendarPage() {
     };
   }, [rows, fiscalYear]);
 
-  const selectedRow = selectedDate ? rowMap.get(selectedDate) || null : null;
-
   function selectDate(date: string) {
-    const row = rowMap.get(date);
-    if (!row) return;
-    setSelectedDate(date);
-    setEditBusinessDay(row.is_business_day);
-    setEditLabel(row.label || "");
+    location.assign(`/schedule?day=${encodeURIComponent(date)}`);
   }
 
   async function stageAnnualCalendarFile(file: File | null) {
@@ -165,81 +151,6 @@ export default function BusinessCalendarPage() {
 
   function openImportFiscalYear() {
     setFiscalYear(importFiscalYear);
-  }
-
-  async function saveSelectedDate() {
-    if (!selectedRow || !selectedDate) return;
-    setSaving(true);
-    try {
-      const { data, error } = await supabase
-        .from("business_calendar")
-        .update({
-          is_business_day: editBusinessDay,
-          label: editLabel.trim() || null,
-          source: "manual",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("business_date", selectedDate)
-        .select(CALENDAR_COLUMNS)
-        .single();
-      if (error) throw error;
-      const saved = data as CalendarRow;
-      setRows((old) => old.map((row) => row.business_date === saved.business_date ? saved : row));
-      setMessage(
-        `${selectedDate} を${saved.is_business_day ? "営業日" : "休業日"}として保存しました。予定登録の営業日判定にもこの値が使われます。`
-      );
-    } catch (error: any) {
-      setMessage(safeActionError("営業日の保存", error));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function applyRange() {
-    const { start, end } = fiscalBounds(fiscalYear);
-    if (!rangeStart || !rangeEnd) {
-      setMessage("範囲の開始日と終了日を選んでください。");
-      return;
-    }
-    if (rangeStart < start || rangeEnd > end || rangeStart > rangeEnd) {
-      setMessage(`${fiscalYear}年度（${start}〜${end}）の範囲内で指定してください。`);
-      return;
-    }
-
-    const labelText = rangeLabel.trim();
-    const statusLabel = rangeBusinessDay ? "営業日" : "休業日";
-    if (!window.confirm(`${rangeStart}〜${rangeEnd} の登録済み日を「${statusLabel}」へ変更します。よろしいですか？`)) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const payload: Record<string, any> = {
-        is_business_day: rangeBusinessDay,
-        source: "manual",
-        updated_at: new Date().toISOString(),
-      };
-      if (labelText) payload.label = labelText;
-
-      const { data, error } = await supabase
-        .from("business_calendar")
-        .update(payload)
-        .gte("business_date", rangeStart)
-        .lte("business_date", rangeEnd)
-        .select(CALENDAR_COLUMNS);
-      if (error) throw error;
-
-      const updated = (data || []) as CalendarRow[];
-      const updatedMap = new Map(updated.map((row) => [row.business_date, row]));
-      setRows((old) => old.map((row) => updatedMap.get(row.business_date) || row));
-      setMessage(
-        `${rangeStart}〜${rangeEnd} の登録済み${updated.length}日を${statusLabel}へ変更しました。${labelText ? ` ラベル「${labelText}」を設定しました。` : " ラベルは既存値を維持しました。"}`
-      );
-    } catch (error: any) {
-      setMessage(safeActionError("営業日の一括保存", error));
-    } finally {
-      setSaving(false);
-    }
   }
 
   return (
@@ -306,6 +217,7 @@ export default function BusinessCalendarPage() {
             <button disabled={busy || saving} onClick={() => setFiscalYear((year) => year - 1)}>← 前年度</button>
             <button disabled={busy || saving || fiscalYear === currentFiscalYear} onClick={() => setFiscalYear(currentFiscalYear)}>今年度</button>
             <button disabled={busy || saving} onClick={() => setFiscalYear((year) => year + 1)}>次年度 →</button>
+            <button className="editEntry" type="button" onClick={() => location.assign("/settings/business-calendar/edit")}>営業日設定・変更</button>
           </div>
         </div>
         <div className="summary">
@@ -339,13 +251,12 @@ export default function BusinessCalendarPage() {
                   const day = index + 1;
                   const date = monthDate(year, month, day);
                   const row = rowMap.get(date);
-                  const selected = selectedDate === date;
                   return (
                     <button
                       type="button"
                       key={date}
-                      disabled={!row || saving}
-                      className={`dayCell ${!row ? "missing" : row.is_business_day ? "open" : "closed"} ${selected ? "selected" : ""}`}
+                      disabled={saving}
+                      className={`dayCell ${!row ? "missing" : row.is_business_day ? "open" : "closed"}`}
                       onClick={() => selectDate(date)}
                       aria-label={`${date} ${!row ? "未登録" : row.is_business_day ? "営業日" : row.label || "休業日"}`}
                     >
@@ -356,73 +267,14 @@ export default function BusinessCalendarPage() {
                 })}
               </div>
 
-              {selectedDate.startsWith(monthPrefix) && selectedRow && (
-                <div className="dayEditor">
-                  <div className="editorHead">
-                    <b>{selectedDate}</b>
-                    <small>
-                      {selectedRow.source === "annual_upload" ? "年間予定表取込" : selectedRow.source === "manual" ? "手動設定" : "システム"}
-                    </small>
-                  </div>
-                  <div className="statusButtons">
-                    <button
-                      type="button"
-                      className={editBusinessDay ? "active openChoice" : ""}
-                      onClick={() => setEditBusinessDay(true)}
-                    >
-                      営業日
-                    </button>
-                    <button
-                      type="button"
-                      className={!editBusinessDay ? "active closedChoice" : ""}
-                      onClick={() => setEditBusinessDay(false)}
-                    >
-                      休業日
-                    </button>
-                  </div>
-                  <label>
-                    ラベル
-                    <input
-                      value={editLabel}
-                      onChange={(event) => setEditLabel(event.target.value)}
-                      placeholder="例：夏季休業 / 年末年始 / 祝日"
-                    />
-                  </label>
-                  {selectedRow.source_document_path && (
-                    <small className="sourcePath">元資料：{selectedRow.source_document_path}</small>
-                  )}
-                  <button className="saveButton" disabled={saving} onClick={() => void saveSelectedDate()}>
-                    {saving ? "保存中…" : "この日の変更を保存"}
-                  </button>
-                </div>
-              )}
             </article>
           );
         })}
       </section>
 
-      <details className="rangeTool">
-        <summary>盆・正月・GWなどを期間でまとめて設定</summary>
-        <div className="rangeBody">
-          <p>登録済みの日だけを変更します。未登録日は新規作成しません。ラベルを空欄にすると既存ラベルを維持します。</p>
-          <div className="rangeGrid">
-            <label>開始日<input type="date" value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} /></label>
-            <label>終了日<input type="date" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} /></label>
-          </div>
-          <div className="statusButtons">
-            <button type="button" className={rangeBusinessDay ? "active openChoice" : ""} onClick={() => setRangeBusinessDay(true)}>営業日</button>
-            <button type="button" className={!rangeBusinessDay ? "active closedChoice" : ""} onClick={() => setRangeBusinessDay(false)}>休業日</button>
-          </div>
-          <label>共通ラベル（任意）<input value={rangeLabel} onChange={(event) => setRangeLabel(event.target.value)} placeholder="例：夏季休業" /></label>
-          <button className="saveButton" disabled={saving} onClick={() => void applyRange()}>
-            {saving ? "保存中…" : "確認して期間設定を保存"}
-          </button>
-        </div>
-      </details>
-
       <section className="helpCard">
-        <b>予定登録との連携</b>
-        <p>予定登録は既存どおり business_calendar の is_business_day を参照します。この画面で保存した変更は同じテーブルへ直接反映されます。</p>
+        <b>カレンダーの使い方</b>
+        <p>日付をタップすると、その日の「1日の予定」を開きます。営業日 / 休業日の手修正は「営業日設定・変更」から行ってください。</p>
       </section>
 
       <style jsx global>{`
