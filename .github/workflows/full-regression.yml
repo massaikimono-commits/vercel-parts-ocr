@@ -2,6 +2,12 @@ name: Full regression
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    types:
+      - labeled
+      - ready_for_review
   push:
     branches:
       - main
@@ -11,6 +17,7 @@ permissions:
 
 jobs:
   full-regression:
+    if: ${{ github.event_name != 'pull_request' || github.event.action == 'ready_for_review' || github.event.label.name == 'full-regression' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
