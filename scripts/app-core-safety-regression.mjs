@@ -17,6 +17,8 @@ const partsOcr = read("app","ocr","page.tsx");
 const scheduleNew = read("app","schedule","new","page.tsx");
 const customerVehicles = read("app","customer-vehicles","page.tsx");
 const vehiclePhotos = read("app","customer-vehicles","photos","page.tsx");
+const vehicleHistory = read("app","customer-vehicles","history","page.tsx");
+const customerVehiclesLayout = read("app","customer-vehicles","layout.tsx");
 const scheduleEdit = read("app","schedule","edit","page.tsx");
 const inspectionPrint = read("app","inspection","print","page.tsx");
 const home = read("app","home-dashboard.tsx");
@@ -100,6 +102,18 @@ assert(vehiclePhotos.includes(".range(start, start + PHOTO_PAGE_SIZE - 1)"), "ve
 assert(vehiclePhotos.includes('.createSignedUrl(photo.storage_path, 300)'), "original vehicle photos must be opened only through short-lived signed URLs");
 assert(!vehiclePhotos.includes("<img") && !vehiclePhotos.includes(".download("), "vehicle photo list must not preload original image bodies");
 assert(!home.includes('from("vehicle_documents")') && !schedule.includes('from("vehicle_documents")'), "normal home and daily schedule must not load vehicle photo metadata");
+assert(customerVehiclesLayout.includes('/customer-vehicles/history'), "selected vehicle action menu must expose unified history");
+assert(vehicleHistory.includes("DISPLAY_PAGE_SIZE = 25") && vehicleHistory.includes("SOURCE_PAGE_SIZE = 25"), "unified vehicle history must keep bounded display and source pages");
+assert(vehicleHistory.includes('.from("vehicle_action_history")') && vehicleHistory.includes('.eq("vehicle_id", id)'), "vehicle action history must be directly scoped to the selected vehicle");
+assert(vehicleHistory.includes('.from("work_order_completion_events")') && vehicleHistory.includes('work_order:work_orders!inner') && vehicleHistory.includes('.eq("work_order.vehicle_id", id)'), "completion history must be scoped through the selected vehicle work orders");
+assert(vehicleHistory.includes('.from("work_order_presence_events")') && vehicleHistory.includes('.from("work_order_schedule_changes")'), "presence and schedule-change event history must remain part of the unified timeline");
+assert(vehicleHistory.includes('.from("inspection_record_audit")') && vehicleHistory.includes('inspection_job:inspection_jobs!inner') && vehicleHistory.includes('.eq("inspection_job.vehicle_id", id)'), "inspection audit must be scoped through inspection_jobs vehicle_id");
+assert(vehicleHistory.includes('.from("inspection_distance_omission_history")'), "distance omission history must remain in the vehicle timeline");
+assert(vehicleHistory.includes("Promise.all([") && vehicleHistory.includes(".range(start, end)"), "vehicle history sources must load in parallel with bounded paging");
+assert(!vehicleHistory.includes(".insert(") && !vehicleHistory.includes(".update(") && !vehicleHistory.includes(".delete(") && !vehicleHistory.includes(".upsert("), "unified history must stay read-only");
+for (const source of ["vehicle_action_history","work_order_completion_events","work_order_presence_events","work_order_schedule_changes","inspection_record_audit","inspection_distance_omission_history"]) {
+  assert(!home.includes(`from("${source}")`) && !schedule.includes(`from("${source}")`) && !customerVehicles.includes(`from("${source}")`), `normal screens must not preload ${source}`);
+}
 assert(scheduleNew.includes("sameDayVehicleScheduleWarnings"), "schedule registration must check same-vehicle same-day duplicates");
 assert(scheduleNew.includes('.from("schedule_entries")'), "same-day duplicate guard must inspect schedule entries");
 assert(scheduleNew.includes('"それでも登録する"'), "same-day duplicate warning must require explicit override");
