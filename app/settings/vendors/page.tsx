@@ -102,18 +102,18 @@ export default function VendorSettingsPage() {
   }
 
   return (
-    <main style={{ maxWidth: 920, margin: "0 auto", padding: "18px 14px 60px", fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+    <main className="settingsPage" style={{ maxWidth: 920, margin: "0 auto", padding: "18px 14px 60px", fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" }}>
+      <header className="settingsTop" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <button onClick={() => history.back()}>← 戻る</button>
         <strong>icb</strong>
       </header>
 
-      <section style={{ background: "#fff", border: "1px solid #d9e0ea", borderRadius: 22, padding: 22, marginBottom: 16 }}>
+      <section className="settingsLead" style={{ background: "#fff", border: "1px solid #d9e0ea", borderRadius: 22, padding: 22, marginBottom: 16 }}>
         <div style={{ fontWeight: 800, color: "#2674e8" }}>外注先設定</div>
         <h1>外注先を管理</h1>
-        <p>板金塗装の予定登録で選択できます。使用停止にしても、過去の作業に保存済みの外注先名は残ります。</p>
-        <div style={{ padding: 12, borderRadius: 12, background: "#edf7ef", marginBottom: 14 }}>{busy ? "処理中…" : message}</div>
-        <div style={{ display: "grid", gap: 9 }}>
+        <p className="settingsIntro">板金塗装の予定登録で選択できます。使用停止にしても、過去の作業に保存済みの外注先名は残ります。</p>
+        <div className="settingsNotice" style={{ padding: 12, borderRadius: 12, background: "#edf7ef", marginBottom: 14 }}>{busy ? "処理中…" : message}</div>
+        <div className="settingsAddForm" style={{ display: "grid", gap: 9 }}>
           <label>外注先名<input value={name} onChange={(e) => setName(e.target.value)} placeholder="例：○○鈑金" /></label>
           <label>一覧表示名<input value={shortName} onChange={(e) => setShortName(e.target.value)} placeholder="例：○○鈑金" /></label>
           <label>メモ<input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="担当者・電話番号など" /></label>
@@ -121,12 +121,12 @@ export default function VendorSettingsPage() {
         </div>
       </section>
 
-      <section style={{ background: "#fff", border: "1px solid #d9e0ea", borderRadius: 22, padding: 22 }}>
+      <section className="settingsListCard" style={{ background: "#fff", border: "1px solid #d9e0ea", borderRadius: 22, padding: 22 }}>
         <h2>外注先一覧</h2>
         {!vendors.length && <div>外注先がまだ登録されていません。</div>}
         <div style={{ display: "grid", gap: 10 }}>
           {vendors.map((vendor) => (
-            <article key={vendor.id} style={{ border: "1px solid #dbe3ee", borderRadius: 14, padding: 14, opacity: vendor.is_active ? 1 : 0.6 }}>
+            <article className="settingsRow" key={vendor.id} style={{ border: "1px solid #dbe3ee", borderRadius: 14, padding: 14, opacity: vendor.is_active ? 1 : 0.6 }}>
               <div style={{ display: "grid", gap: 8 }}>
                 <label>外注先名<input value={vendor.display_name} onChange={(e) => patchVendor(vendor.id, { display_name: e.target.value })} /></label>
                 <label>表示名<input value={vendor.short_name || ""} onChange={(e) => patchVendor(vendor.id, { short_name: e.target.value })} /></label>
@@ -143,6 +143,25 @@ export default function VendorSettingsPage() {
           ))}
         </div>
       </section>
+      <style jsx global>{`
+        @media(max-width:650px){
+          .settingsPage{padding:8px 8px 34px!important}
+          .settingsTop{margin-bottom:7px!important}
+          .settingsTop button{padding:8px 10px;min-height:40px}
+          .settingsLead,.settingsListCard{padding:13px!important;border-radius:16px!important}
+          .settingsLead{margin-bottom:10px!important}
+          .settingsLead>div:first-child{font-size:12px}
+          .settingsLead h1{font-size:23px;line-height:1.2;margin:3px 0 6px}
+          .settingsIntro{display:none}
+          .settingsNotice{padding:8px 10px!important;margin-bottom:8px!important;font-size:13px}
+          .settingsAddForm{gap:6px!important}
+          .settingsAddForm input{padding:10px;margin:3px 0}
+          .settingsAddForm button{min-height:42px;padding:9px 11px}
+          .settingsListCard h2{font-size:19px;margin:0 0 8px}
+          .settingsRow{padding:10px!important;border-radius:12px!important}
+          .settingsRow input{padding:9px;margin:3px 0}
+        }
+      `}</style>
     </main>
   );
 }
