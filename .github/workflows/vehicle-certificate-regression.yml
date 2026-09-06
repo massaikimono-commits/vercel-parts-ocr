@@ -35,8 +35,18 @@ jobs:
           set -euo pipefail
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            before="${{ github.event.pull_request.base.sha }}"
-            after="${{ github.event.pull_request.head.sha }}"
+            event_before="${{ github.event.before }}"
+            event_after="${{ github.event.after }}"
+            if [[ "${{ github.event.action }}" == "synchronize" && -n "$event_before" && -n "$event_after" ]]; then
+              # Long-lived PRs may already contain older OCR changes. For a new push,
+              # route only the files added by this synchronization event.
+              before="$event_before"
+              after="$event_after"
+            else
+              # Opening/reopening a PR has no incremental before/after pair.
+              before="${{ github.event.pull_request.base.sha }}"
+              after="${{ github.event.pull_request.head.sha }}"
+            fi
           else
             before="${{ github.event.before }}"
             after="${{ github.sha }}"
