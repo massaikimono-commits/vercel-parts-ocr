@@ -70,8 +70,11 @@ assert(schedule.includes("const customerIds =") && schedule.includes('.in("id", 
 assert(!scheduleNew.includes(".limit(1000)"), "schedule registration must not preload 1000 customers/vehicles");
 assert(scheduleNew.includes("REGISTERED_RECENT_LIMIT = 20") && scheduleNew.includes("REGISTERED_SEARCH_LIMIT = 20"), "schedule registration must bound recent/search vehicle candidates");
 assert(scheduleNew.includes("registeredSearch.trim() ? 300 : 0"), "schedule registration vehicle search must be debounced");
-assert(scheduleNew.includes('.from("vehicles")') && scheduleNew.includes(".or(vehicleFilters.join(","))"), "schedule registration must search vehicle candidates on demand");
-assert(scheduleNew.includes('.from("customers")') && scheduleNew.includes(".or(customerFilters.join(","))"), "schedule registration must search customer candidates on demand");
+assert(scheduleNew.includes('useState<RegisteredSearchMode>("last4")'), "schedule registration search must default to last4");
+assert(scheduleNew.includes('registeredSearchMode === "last4"') && scheduleNew.includes('.ilike("registration_number_last4"'), "schedule registration last4 mode must query only the last4 field");
+assert(scheduleNew.includes('registeredSearchMode === "customer"') && scheduleNew.includes("name.ilike") && scheduleNew.includes("company_name.ilike"), "schedule registration customer mode must query customer/company names");
+assert(scheduleNew.includes('registeredSearchMode === "phone"') && scheduleNew.includes('.ilike("phone"'), "schedule registration phone mode must query phone only");
+assert(!scheduleNew.includes("vehicleFilters") && !scheduleNew.includes("schedule_display_name.ilike") && !scheduleNew.includes("chassis_number.ilike"), "schedule registration must not restore cross-field vehicle/customer OR search");
 assert(scheduleNew.includes("selectedRegisteredVehicles"), "multi-vehicle selection must survive changing search results");
 assert(!customerVehicles.includes('supabase.from("customers").select("*").order("updated_at"'), "customer/vehicle management must not preload all customers");
 assert(!customerVehicles.includes('supabase.from("vehicles").select("*").order("updated_at"'), "customer/vehicle management must not preload all vehicles");
@@ -79,6 +82,11 @@ assert(!customerVehicles.includes('.from("parts").select("id,vehicle_id,part_nam
 assert(customerVehicles.includes("VEHICLE_PAGE_SIZE = 30") && customerVehicles.includes("VEHICLE_SEARCH_LIMIT = 30"), "customer/vehicle management must bound list/search results");
 assert(customerVehicles.includes(".range(offset, offset + VEHICLE_PAGE_SIZE - 1)"), "customer/vehicle management must page the recent vehicle list");
 assert(customerVehicles.includes("query.trim() ? 300 : 0"), "customer/vehicle search must be debounced");
+assert(customerVehicles.includes('useState<VehicleSearchMode>("last4")'), "customer/vehicle search must default to last4");
+assert(customerVehicles.includes('vehicleSearchMode === "last4"') && customerVehicles.includes('.ilike("registration_number_last4"'), "customer/vehicle last4 mode must query only the last4 field");
+assert(customerVehicles.includes('vehicleSearchMode === "customer"') && customerVehicles.includes("name.ilike") && customerVehicles.includes("company_name.ilike"), "customer/vehicle customer mode must query customer/company names");
+assert(customerVehicles.includes('vehicleSearchMode === "phone"') && customerVehicles.includes('.ilike("phone"'), "customer/vehicle phone mode must query phone only");
+assert(!customerVehicles.includes("vehicleFilters") && !customerVehicles.includes("address.ilike") && !customerVehicles.includes("chassis_number.ilike"), "customer/vehicle search must not restore cross-field OR search");
 assert(customerVehicles.includes('.eq("vehicle_id", vehicle.id)') && customerVehicles.includes("PARTS_PAGE_SIZE = 50"), "parts history must load only after vehicle selection and in bounded pages");
 assert(customerVehicles.includes("loadMoreVehicleParts"), "parts history must support incremental loading");
 assert(customerVehicles.includes("linkCustomerSearch") && customerVehicles.includes("CUSTOMER_SEARCH_LIMIT = 20"), "existing-customer linking must use bounded on-demand customer search");
@@ -121,6 +129,7 @@ assert(scheduleSearch.includes('.normalize("NFKC")'), "schedule search must norm
 assert(scheduleSearch.includes("searchDigits"), "schedule search must normalize phone/last4 digits before querying");
 assert(scheduleSearch.includes("数字1〜4桁だけの入力はナンバー下4桁専用検索"), "schedule search must explain short numeric plate-only search");
 assert(home.includes("openTodayWork"), "mobile home work cards must open the matching schedule work");
+assert((home.match(/location\.assign\("\/customer-vehicles"\)/g) || []).length >= 2, "mobile and desktop home must both expose customer/vehicle management");
 assert(schedule.includes("focusWorkId") && schedule.includes("data-work-id"), "daily schedule must support focused work navigation");
 assert(schedule.includes("focusedWork"), "focused work must be visually obvious");
 assert(workload.includes('params.get("worker")') && workload.includes('params.get("filter")'), "workload page must accept direct worker/state filters");
