@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
 
@@ -68,6 +68,36 @@ type RegisteredVehicleOption = {
   maker: string;
   model: string;
 };
+
+const REGISTERED_RECENT_LIMIT = 20;
+const REGISTERED_SEARCH_LIMIT = 20;
+const REGISTERED_CUSTOMER_MATCH_LIMIT = 20;
+
+const REGISTERED_VEHICLE_COLUMNS =
+  "id,customer_id,registration_number,registration_number_last4,chassis_number,maker,model,vehicle_number";
+const REGISTERED_CUSTOMER_COLUMNS =
+  "id,customer_type,name,company_name,phone,schedule_display_name";
+
+function safeSearchLike(value: string) {
+  return value.normalize("NFKC").trim().replace(/[,%()]/g, " ").replace(/\s+/g, " ");
+}
+
+function registeredVehicleOption(vehicle: any, customer: any): RegisteredVehicleOption {
+  return {
+    vehicleId: String(vehicle.id),
+    customerId: vehicle.customer_id ? String(vehicle.customer_id) : null,
+    customerType: customer?.customer_type === "company" ? "company" : "individual",
+    customerName: String(customer?.name || customer?.company_name || ""),
+    companyName: String(customer?.company_name || ""),
+    scheduleDisplayName: String(customer?.schedule_display_name || ""),
+    phone: String(customer?.phone || ""),
+    registrationNumber: String(vehicle.registration_number || ""),
+    registrationLast4: String(vehicle.registration_number_last4 || ""),
+    chassisNumber: String(vehicle.chassis_number || vehicle.vehicle_number || ""),
+    maker: String(vehicle.maker || ""),
+    model: String(vehicle.model || ""),
+  };
+}
 
 const ENTRY_LABEL: Record<EntryType, string> = {
   delivery: "納車",
@@ -175,8 +205,10 @@ export default function ScheduleNewPage() {
   const [existingVehicleId, setExistingVehicleId] = useState("");
   const [registeredSearch, setRegisteredSearch] = useState("");
   const [registeredVehicles, setRegisteredVehicles] = useState<RegisteredVehicleOption[]>([]);
-  const [registeredVehiclesLoading, setRegisteredVehiclesLoading] = useState(false);
+  const [registeredVehiclesLoading, setRegisteredVehiclesLoading] = useState(true);
   const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
+  const [selectedRegisteredVehicles, setSelectedRegisteredVehicles] = useState<RegisteredVehicleOption[]>([]);
+  const registeredSearchSeq = useRef(0);
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("day");
@@ -237,8 +269,14 @@ export default function ScheduleNewPage() {
   useEffect(() => {
     void loadStaff();
     void loadVendors();
-    void loadRegisteredVehicles();
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadRegisteredVehicles(registeredSearch);
+    }, registeredSearch.trim() ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [registeredSearch]);
 
   async function loadStaff() {
     const { data, error } = await supabase
@@ -267,47 +305,108 @@ export default function ScheduleNewPage() {
     }
     setVendors((data || []) as ExternalVendor[]);
   }
-  async function loadRegisteredVehicles() {
+  async function loadRegisteredVehicles(searchText = "") {
+    const requestId = ++registeredSearchSeq.current;
     setRegisteredVehiclesLoading(true);
     try {
-      const [{ data: customerRows, error: customerError }, { data: vehicleRows, error: vehicleError }] = await Promise.all([
-        supabase
-          .from("customers")
-          .select("id,customer_type,name,company_name,phone,schedule_display_name")
-          .order("updated_at", { ascending: false })
-          .limit(1000),
-        supabase
-          .from("vehicles")
-          .select("id,customer_id,registration_number,registration_number_last4,chassis_number,maker,model,vehicle_number")
-          .order("updated_at", { ascending: false })
-          .limit(1000),
-      ]);
-      if (customerError) throw customerError;
-      if (vehicleError) throw vehicleError;
+      const search = safeSearchLike(searchText);
+      let vehicleRows: any[] = [];
+      let customerRows: any[] = [];
 
-      const customersById = new Map((customerRows || []).map((row: any) => [row.id, row]));
-      const options = (vehicleRows || []).map((vehicle: any): RegisteredVehicleOption => {
-        const customer: any = vehicle.customer_id ? customersById.get(vehicle.customer_id) : null;
-        return {
-          vehicleId: String(vehicle.id),
-          customerId: vehicle.customer_id ? String(vehicle.customer_id) : null,
-          customerType: customer?.customer_type === "company" ? "company" : "individual",
-          customerName: String(customer?.name || customer?.company_name || ""),
-          companyName: String(customer?.company_name || ""),
-          scheduleDisplayName: String(customer?.schedule_display_name || ""),
-          phone: String(customer?.phone || ""),
-          registrationNumber: String(vehicle.registration_number || ""),
-          registrationLast4: String(vehicle.registration_number_last4 || ""),
-          chassisNumber: String(vehicle.chassis_number || vehicle.vehicle_number || ""),
-          maker: String(vehicle.maker || ""),
-          model: String(vehicle.model || ""),
-        };
-      });
-      setRegisteredVehicles(options);
+      if (!search) {
+        const { data, error } = await supabase
+          .from("vehicles")
+          .select(REGISTERED_VEHICLE_COLUMNS)
+          .order("updated_at", { ascending: false })
+          .limit(REGISTERED_RECENT_LIMIT);
+        if (error) throw error;
+        vehicleRows = data || [];
+      } else {
+        const digits = search.replace(/\D/g, "");
+        const vehicleFilters = [
+          `registration_number.ilike.%${search}%`,
+          `chassis_number.ilike.%${search}%`,
+          `vehicle_number.ilike.%${search}%`,
+          `maker.ilike.%${search}%`,
+          `model.ilike.%${search}%`,
+        ];
+        if (digits) vehicleFilters.push(`registration_number_last4.ilike.%${digits.slice(-4)}%`);
+
+        const customerFilters = [
+          `name.ilike.%${search}%`,
+          `company_name.ilike.%${search}%`,
+          `schedule_display_name.ilike.%${search}%`,
+          `phone.ilike.%${search}%`,
+        ];
+
+        const [vehicleRes, customerRes] = await Promise.all([
+          supabase
+            .from("vehicles")
+            .select(REGISTERED_VEHICLE_COLUMNS)
+            .or(vehicleFilters.join(","))
+            .order("updated_at", { ascending: false })
+            .limit(REGISTERED_SEARCH_LIMIT),
+          supabase
+            .from("customers")
+            .select(REGISTERED_CUSTOMER_COLUMNS)
+            .or(customerFilters.join(","))
+            .order("updated_at", { ascending: false })
+            .limit(REGISTERED_CUSTOMER_MATCH_LIMIT),
+        ]);
+        if (vehicleRes.error) throw vehicleRes.error;
+        if (customerRes.error) throw customerRes.error;
+        vehicleRows = vehicleRes.data || [];
+        customerRows = customerRes.data || [];
+
+        const matchedCustomerIds = customerRows.map((row: any) => row.id).filter(Boolean);
+        if (matchedCustomerIds.length) {
+          const { data, error } = await supabase
+            .from("vehicles")
+            .select(REGISTERED_VEHICLE_COLUMNS)
+            .in("customer_id", matchedCustomerIds)
+            .order("updated_at", { ascending: false })
+            .limit(REGISTERED_SEARCH_LIMIT);
+          if (error) throw error;
+          const byId = new Map<string, any>();
+          for (const row of [...vehicleRows, ...(data || [])]) {
+            if (!byId.has(String(row.id))) byId.set(String(row.id), row);
+          }
+          vehicleRows = [...byId.values()].slice(0, REGISTERED_SEARCH_LIMIT);
+        }
+      }
+
+      const missingCustomerIds = [...new Set(
+        vehicleRows.map((row: any) => row.customer_id).filter((id: any) =>
+          id && !customerRows.some((customer: any) => customer.id === id)
+        )
+      )] as string[];
+
+      if (missingCustomerIds.length) {
+        const { data, error } = await supabase
+          .from("customers")
+          .select(REGISTERED_CUSTOMER_COLUMNS)
+          .in("id", missingCustomerIds);
+        if (error) throw error;
+        customerRows = [...customerRows, ...(data || [])];
+      }
+
+      if (requestId !== registeredSearchSeq.current) return;
+      const customersById = new Map(customerRows.map((row: any) => [row.id, row]));
+      setRegisteredVehicles(
+        vehicleRows
+          .slice(0, search ? REGISTERED_SEARCH_LIMIT : REGISTERED_RECENT_LIMIT)
+          .map((vehicle: any) => registeredVehicleOption(
+            vehicle,
+            vehicle.customer_id ? customersById.get(vehicle.customer_id) : null
+          ))
+      );
     } catch (error: any) {
-      setMessage(safeActionError("登録済み車両の読み込み", error));
+      if (requestId === registeredSearchSeq.current) {
+        setMessage(safeActionError("登録済み車両の読み込み", error));
+        setRegisteredVehicles([]);
+      }
     } finally {
-      setRegisteredVehiclesLoading(false);
+      if (requestId === registeredSearchSeq.current) setRegisteredVehiclesLoading(false);
     }
   }
 
@@ -501,21 +600,7 @@ export default function ScheduleNewPage() {
     };
   }
 
-  const filteredRegisteredVehicles = useMemo(() => {
-    const q = registeredSearch.normalize("NFKC").trim().toLowerCase();
-    const normalizedDigits = registeredSearch.normalize("NFKC").replace(/\\D/g, "");
-    const list = !q
-      ? registeredVehicles
-      : registeredVehicles.filter((row) => {
-          const haystack = [
-            row.customerName, row.companyName, row.phone, row.registrationNumber,
-            row.registrationLast4, row.chassisNumber, row.maker, row.model,
-          ].join(" ").normalize("NFKC").toLowerCase();
-          const phoneDigits = row.phone.replace(/\\D/g, "");
-          return haystack.includes(q) || (normalizedDigits.length >= 2 && phoneDigits.includes(normalizedDigits));
-        });
-    return list.slice(0, 20);
-  }, [registeredSearch, registeredVehicles]);
+  const filteredRegisteredVehicles = registeredVehicles;
 
   function applyRegisteredVehicle(row: RegisteredVehicleOption, nextIds: string[]) {
     const last4 = row.registrationLast4 || row.registrationNumber.match(/(\\d{4})(?!.*\\d)/)?.[1] || "";
@@ -535,6 +620,7 @@ export default function ScheduleNewPage() {
 
   function toggleRegisteredVehicle(row: RegisteredVehicleOption) {
     if (!row.customerId) {
+      setSelectedRegisteredVehicles([row]);
       applyRegisteredVehicle(row, [row.vehicleId]);
       setMessage("この車両はお客様未紐付けのため、単独登録として必要な顧客情報を入力してください。");
       return;
@@ -542,7 +628,9 @@ export default function ScheduleNewPage() {
 
     if (selectedVehicleIds.includes(row.vehicleId)) {
       const nextIds = selectedVehicleIds.filter((id) => id !== row.vehicleId);
-      const nextPrimary = registeredVehicles.find((vehicle) => vehicle.vehicleId === nextIds[0]);
+      const nextSelectedRows = selectedRegisteredVehicles.filter((vehicle) => vehicle.vehicleId !== row.vehicleId);
+      setSelectedRegisteredVehicles(nextSelectedRows);
+      const nextPrimary = nextSelectedRows.find((vehicle) => vehicle.vehicleId === nextIds[0]);
       if (nextPrimary) {
         applyRegisteredVehicle(nextPrimary, nextIds);
         setMessage(nextIds.length > 1
@@ -558,6 +646,7 @@ export default function ScheduleNewPage() {
     }
 
     const nextIds = [...selectedVehicleIds, row.vehicleId];
+    setSelectedRegisteredVehicles((old) => [...old.filter((vehicle) => vehicle.vehicleId !== row.vehicleId), row]);
     applyRegisteredVehicle(row, nextIds);
     setMessage(nextIds.length > 1
       ? `${nextIds.length}台選択しました。別のお客様・別車両でも、共通の日付・区分/時間・入庫要因・納車予定でまとめて登録できます。`
@@ -679,6 +768,7 @@ export default function ScheduleNewPage() {
     setDeliveryTimeKey("");
     setRegisteredSearch("");
     setSelectedVehicleIds([]);
+    setSelectedRegisteredVehicles([]);
     setExistingVehicleId("");
     setExistingCustomerId("");
     setWarnings([]);
@@ -702,7 +792,7 @@ export default function ScheduleNewPage() {
     try {
       if (selectedVehicleIds.length > 1) {
         const selectedRows = selectedVehicleIds
-          .map((id) => registeredVehicles.find((vehicle) => vehicle.vehicleId === id))
+          .map((id) => selectedRegisteredVehicles.find((vehicle) => vehicle.vehicleId === id))
           .filter(Boolean) as RegisteredVehicleOption[];
         if (selectedRows.length !== selectedVehicleIds.length) {
           setHardErrors(["選択した車両情報を再取得できませんでした。選択し直してください。"]);
@@ -924,7 +1014,7 @@ export default function ScheduleNewPage() {
         <div style={{margin:"12px 0 16px",padding:"14px",border:"1px solid #c9d8ee",borderRadius:14,background:"#f8fbff"}}>
           <b style={{display:"block",marginBottom:6}}>登録済みのお客様・車両から選ぶ</b>
           <div style={{color:"#607086",fontSize:13,lineHeight:1.6,marginBottom:10}}>
-            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。別のお客様・別車両でも続けて複数台選択できます。
+            お客様名・会社名・電話番号・登録番号・下4桁・車台番号・メーカー・型式で検索できます。初期表示は最近更新した20台、検索結果も最大20台です。別のお客様・別車両でも続けて複数台選択できます。
           </div>
           <input
             value={registeredSearch}
@@ -968,6 +1058,7 @@ export default function ScheduleNewPage() {
               <span>{selectedVehicleIds.length > 1 ? "別のお客様・別車両を、共通の日付・区分/時間・入庫要因・納車予定で一括登録します。各車両の顧客・車両情報は保存済み情報を使用します。" : "別のお客様・別車両も続けて選べます。"}</span>
               <button type="button" onClick={() => {
                 setSelectedVehicleIds([]);
+                setSelectedRegisteredVehicles([]);
                 setExistingVehicleId("");
                 setExistingCustomerId("");
               }}>選択をクリア</button>
