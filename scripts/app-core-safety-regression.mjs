@@ -31,6 +31,7 @@ const loanerWeek = read("app","loaners","week","page.tsx");
 const workload = read("app","schedule","workload","page.tsx");
 const scheduleSearch = read("app","schedule","search","page.tsx");
 const businessCalendar = read("app","settings","business-calendar","page.tsx");
+const businessCalendarEdit = read("app","settings","business-calendar","edit","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.sql");
 const cancellationSql = read("database","cancel-schedule-entry-v1.sql");
@@ -110,6 +111,8 @@ assert(vehicleHistory.includes('.from("work_order_presence_events")') && vehicle
 assert(vehicleHistory.includes('.from("inspection_record_audit")') && vehicleHistory.includes('inspection_job:inspection_jobs!inner') && vehicleHistory.includes('.eq("inspection_job.vehicle_id", id)'), "inspection audit must be scoped through inspection_jobs vehicle_id");
 assert(vehicleHistory.includes('.from("inspection_distance_omission_history")'), "distance omission history must remain in the vehicle timeline");
 assert(vehicleHistory.includes("Promise.all([") && vehicleHistory.includes(".range(start, end)"), "vehicle history sources must load in parallel with bounded paging");
+assert(!customerVehiclesLayout.includes("\\n        <button"), "vehicle action dock must not render a literal \\n token between actions");
+assert(customerVehiclesLayout.includes("min-height:40px") && customerVehiclesLayout.includes("font-size:12px"), "mobile vehicle action dock must stay tappable while using the compact button sizing");
 assert(vehicleHistory.indexOf("if (sourceHasMore && vehicleId)") < vehicleHistory.indexOf("if (visibleCount < items.length)"), "unified history must fetch the next bounded source round before exposing buffered rows");
 assert(!vehicleHistory.includes(".insert(") && !vehicleHistory.includes(".update(") && !vehicleHistory.includes(".delete(") && !vehicleHistory.includes(".upsert("), "unified history must stay read-only");
 for (const source of ["vehicle_action_history","work_order_completion_events","work_order_presence_events","work_order_schedule_changes","inspection_record_audit","inspection_distance_omission_history"]) {
@@ -135,11 +138,16 @@ assert(home.includes("checked_out_at"), "home workload must exclude checked-out 
 assert((home.match(/location\.assign\("\/settings\/business-calendar"\)/g) || []).length >= 2, "mobile and desktop home must both expose business calendar management");
 assert(businessCalendar.includes('.from("business_calendar")'), "business calendar management must use the existing business_calendar table");
 assert(businessCalendar.includes('.gte("business_date", start)') && businessCalendar.includes('.lte("business_date", end)'), "business calendar management must load only the selected fiscal year");
-assert(businessCalendar.includes('.update({') && businessCalendar.includes('source: "manual"'), "business calendar manual edits must update existing rows with the existing manual source value");
+assert(!businessCalendar.includes('.update({'), "normal business calendar must remain read-only");
+assert(businessCalendarEdit.includes('.update({') && businessCalendarEdit.includes('source: "manual"'), "business calendar manual edits must live on the dedicated edit screen and keep the existing manual source value");
+assert(businessCalendar.includes('location.assign(`/schedule?day=${encodeURIComponent(date)}`)'), "normal business calendar date taps must open the selected daily schedule");
+assert(businessCalendar.includes('location.assign("/settings/business-calendar/edit")'), "normal business calendar must expose an explicit edit entry");
+assert(!businessCalendar.includes('className="dayEditor"') && !businessCalendar.includes('className="rangeTool"'), "normal business calendar must not expose inline edit controls");
+assert(businessCalendarEdit.includes('className="dayEditor"') && businessCalendarEdit.includes('className="rangeTool"'), "dedicated business calendar edit screen must retain one-day and range editing");
 assert(businessCalendar.includes("validateDocumentFile") && businessCalendar.includes("{ allowPdf: true }"), "annual calendar file selection must reuse the shared document safety validator");
 assert(businessCalendar.includes('type="file"') && businessCalendar.includes("importFiscalYear"), "annual calendar staging must require a file and explicit fiscal year");
-assert(!businessCalendar.includes('.insert(') && !businessCalendar.includes('.upsert('), "business calendar management must not create missing dates automatically before an import reader is confirmed");
-assert(!businessCalendar.includes('.storage.from(') && !businessCalendar.includes('.storage\n'), "unconfirmed annual calendar imports must not write to Storage");
+assert(!businessCalendar.includes('.insert(') && !businessCalendar.includes('.upsert(') && !businessCalendarEdit.includes('.insert(') && !businessCalendarEdit.includes('.upsert('), "business calendar management must not create missing dates automatically before an import reader is confirmed");
+assert(!businessCalendar.includes('.storage.from(') && !businessCalendar.includes('.storage\n') && !businessCalendarEdit.includes('.storage.from('), "unconfirmed annual calendar imports must not write to Storage");
 assert(!businessCalendar.includes('.from("customers")') && !businessCalendar.includes('.from("vehicles")') && !businessCalendar.includes('.from("schedule_entries")'), "business calendar route must not load unrelated customer, vehicle, or schedule data");
 assert(scheduleNew.includes('.from("business_calendar")') && scheduleNew.includes('.eq("is_business_day", true)'), "schedule registration must keep using business_calendar is_business_day for next-business-day logic");
 assert(schedule.includes("classifyVehicleBusinessStates"), "daily schedule must use the shared business-state classifier");
