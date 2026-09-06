@@ -9,7 +9,8 @@ assert.match(source, /p_items: batchItems/, "JSONB batch overload receives per-v
 assert.match(source, /customerId: row\.customerId/, "each batch item keeps its own customer id");
 assert.match(source, /customerName: row\.customerName \|\| row\.companyName/, "each batch item keeps its own customer identity");
 assert.match(source, /entryType,\s*reason,\s*startsAt: check\.main\.startsAt/s, "shared entry/reason/time are copied to every batch item");
-assert.match(source, /deliveryStartsAt: addDelivery/, "shared delivery plan is copied to every batch item");
+assert.match(source, /isWaitingService,\s*vendorId:/s, "waiting-service flag is copied to every batch item");
+assert.match(source, /deliveryStartsAt: !isWaitingService && addDelivery/, "shared delivery plan is copied only when waiting-service is off");
 assert.match(source, /別のお客様・別車両でも/, "UI explains cross-customer batching");
 
 assert.match(source, /function resetAfterSuccessfulRegistration\(\)/, "success reset helper exists");
