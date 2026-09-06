@@ -40,6 +40,7 @@ const businessCalendar = read("app","settings","business-calendar","page.tsx");
 const businessCalendarEdit = read("app","settings","business-calendar","edit","page.tsx");
 const sql = read("database","app-core-v1-safety-functions.sql");
 const loanerSyncSql = read("database","reschedule-schedule-entry-v2-loaner-sync.sql");
+const waitingServiceSql = read("database","waiting-service-v12.sql");
 const cancellationSql = read("database","cancel-schedule-entry-v1.sql");
 function assert(condition, message) {
   if (!condition) {
@@ -213,6 +214,12 @@ assert(workload.includes("担当変更"), "workload detail must allow staff assi
 assert(workload.includes('worker_staff_id'), "workload staff assignment must preserve the selected staff id");
 assert(sql.includes("create_schedule_registration_v2"), "DB safety manifest must track atomic registration");
 assert(sql.includes("reschedule_schedule_entry_v2"), "DB safety manifest must track atomic reschedule");
+assert(waitingServiceSql.includes("is_waiting_service boolean not null default false"), "v1.2 waiting-service migration must keep a dedicated persistent boolean");
+assert(waitingServiceSql.includes("p_is_waiting_service boolean") && waitingServiceSql.includes("wo.is_waiting_service = true"), "v1.2 slot check must require the dedicated waiting-service flag");
+assert(waitingServiceSql.includes("se.starts_at = p_starts_at") && waitingServiceSql.includes("wo.reason = '点検'"), "v1.2 overlap must require the same exact start time and inspection reason");
+assert(waitingServiceSql.includes("来社・作業待ちには納車予定を登録しません"), "waiting-service registration must reject delivery creation");
+assert(waitingServiceSql.includes("delete from public.schedule_entries") && waitingServiceSql.includes("entry_type='delivery'"), "waiting-service reschedule must clear delivery entries");
+assert(!waitingServiceSql.includes("stay_reason = '作業待ち'") && !waitingServiceSql.includes("notes = '作業待ち'"), "waiting-service migration must never infer or store the flag through stay_reason/notes");
 assert(sql.includes("loaner vehicle is already reserved for this period"), "DB safety manifest must track loaner conflict guard");
 assert(sql.includes("active loaner reservations must be cleared"), "DB safety manifest must track loaner status guard");
 assert(sql.includes("Keeps an active loaner reservation aligned"), "DB safety manifest must track reschedule-to-loaner synchronization");
