@@ -369,3 +369,15 @@ Before an app-development chat finishes a batch:
 - Vercel Preview READY: https://vercel-parts-kscytczdf-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=GzUyExwggpLjYMUZac8b1rw4mbLr8v1N
 - main / Netlify / shared Supabase unchanged. PR #62 remains Draft/unmerged.
 
+
+
+### 2026-09-06 — Performance pass ①: scoped top / one-day data loading
+- Performance-only change on `preview/schedule-ux-20260903`; UI, labels, navigation and practical-test behavior were intentionally left unchanged.
+- Removed the legacy root-page authenticated preload of `customers.select("*")` and `vehicles.select("*")`; the visible root is `HomeDashboard`, so those rows were duplicate/unconsumed reads.
+- Home dashboard and `/schedule` now fetch the visible week/day schedule first, then restrict related work orders, schedule state rows, vehicles and customers to the operational IDs actually needed.
+- Staying-vehicle candidates are filtered server-side using the existing `work_orders -> schedule_entries` relationship: qualifying pickup/customer-visit inbound before the report boundary plus an anti-join for absence of any delivery entry. This preserves long-running stays without imposing an arbitrary lookback window.
+- Workload reads now push the existing unfinished predicates to the database (`status != cancelled/completed`, `work_completed=false`, `checked_out_at is null`) instead of loading all non-cancelled work orders and filtering them in the browser.
+- State-entry reads are constrained by relevant `work_order_id`; vehicle/customer reads are constrained by the derived IDs. Query count remains fixed/batched; no N+1 loop was introduced.
+- Added app-core regression guards so root all-master preloads and unscoped top/day related-data reads do not return unnoticed.
+- Shared Supabase schema/RPC/data were not changed. OCR files were not changed. main / Netlify were not changed and no Vercel deployment was triggered.
+- CI on source commit `be9f5cb260daa85e66dbeaebe40c957269813557`: Deployment safety guard GREEN; OCR regression GREEN; one-day practical regression GREEN; app-core safety regression GREEN; full Vercel-equivalent `npm run build` GREEN.
