@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase";
-import { safeActionError } from "../lib/client-security";
+import { safeActionError, spreadsheetSafeCell } from "../lib/client-security";
 
 type Customer = {
   id: string;
@@ -33,12 +33,15 @@ type Vehicle = {
 type CloudPart = {
   id: string;
   vehicle_id: string;
+  work_order_id: string | null;
+  parts_ocr_item_id: string | null;
   part_name: string;
   quantity: number | string;
   list_price: number | string | null;
   purchase_price: number | string | null;
   source_text: string | null;
   created_at: string;
+  work_order: { id: string; reason: string; status: string } | null;
 };
 
 type LocalPart = {
@@ -99,19 +102,6 @@ function money(value: any) {
   return Number.isFinite(n) ? n.toLocaleString("ja-JP") : String(value);
 }
 
-function numberOrNull(value: string) {
-  const n = Number(String(value || "").replace(/[^\d.-]/g, ""));
-  return Number.isFinite(n) && value !== "" ? n : null;
-}
-
-function marker(id: string) {
-  return `[local-id:${id}]`;
-}
-
-function markerFromSource(source: string | null | undefined) {
-  return source?.match(/\[local-id:([^\]]+)\]/)?.[1] || "";
-}
-
 function vehicleLabel(v: Vehicle) {
   return v.registration || v.number || v.chassis || "車両";
 }
@@ -130,7 +120,6 @@ const VEHICLE_PAGE_SIZE = 30;
 const VEHICLE_SEARCH_LIMIT = 30;
 const CUSTOMER_SEARCH_LIMIT = 20;
 const PARTS_PAGE_SIZE = 50;
-const PARTS_MARKER_LIMIT = 1000;
 
 const VEHICLE_COLUMNS =
   "id,customer_id,vehicle_number,registration_number,registration_number_last4,registration_last4,chassis_number,model,model_code,maker,fuel_type,vehicle_type,vehicle_weight,curb_weight_kg";
@@ -422,99 +411,83 @@ export default function CustomerVehiclesPage() {
     setCloudPartsHasMore(false);
 
     try {
-      const local = readLocalParts().filter((part) =>
-        part.vehicleId === vehicle.id || (!part.vehicleId && part.vehicleNumber === vehicle.number)
+      const local = readLocalParts().filter(
+        (part) =>
+          part.vehicleId === vehicle.id ||
+          (!part.vehicleId && part.vehicleNumber === vehicle.number)
       );
       setLocalParts(local);
 
-      const markerPromise = local.length
-        ? supabase
-            .from("parts")
-            .select("source_text")
-            .eq("vehicle_id", vehicle.id)
-            .not("source_text", "is", null)
-            .limit(PARTS_MARKER_LIMIT)
-        : Promise.resolve({ data: [], error: null });
-
-      const historyPromise = supabase
+      const { data, error } = await supabase
         .from("parts")
-        .select("id,vehicle_id,part_name,quantity,list_price,purchase_price,source_text,created_at")
+        .select(
+          "id,vehicle_id,work_order_id,parts_ocr_item_id,part_name,quantity,list_price,purchase_price,source_text,created_at,work_order:work_orders!parts_work_order_id_fkey(id,reason,status)"
+        )
         .eq("vehicle_id", vehicle.id)
         .order("created_at", { ascending: false })
         .range(0, PARTS_PAGE_SIZE - 1);
 
-      const [markerRes, historyRes] = await Promise.all([markerPromise, historyPromise]);
-      if (markerRes.error) throw markerRes.error;
-      if (historyRes.error) throw historyRes.error;
-
-      const alreadySynced = new Set(
-        (markerRes.data || []).map((row: any) => markerFromSource(row.source_text)).filter(Boolean)
-      );
-      const pending = local.filter((part) => part.id && part.name && !alreadySynced.has(part.id));
-
-      let insertedRows: CloudPart[] = [];
-      if (pending.length) {
-        const rows = pending.map((part) => ({
-          vehicle_id: vehicle.id,
-          part_name: part.name,
-          quantity: numberOrNull(part.qty) ?? 1,
-          list_price: numberOrNull(part.retail),
-          purchase_price: numberOrNull(part.cost),
-          source_text: `${marker(part.id)} ${part.source || ""}`.trim(),
-        }));
-        const { data, error } = await supabase
-          .from("parts")
-          .insert(rows)
-          .select("id,vehicle_id,part_name,quantity,list_price,purchase_price,source_text,created_at");
-        if (error) throw error;
-        insertedRows = (data || []) as CloudPart[];
-      }
-
+      if (error) throw error;
       if (requestId !== partsLoadSeq.current) return;
-      const historyRows = (historyRes.data || []) as CloudPart[];
-      const byId = new Map<string, CloudPart>();
-      for (const row of [...insertedRows, ...historyRows]) if (!byId.has(row.id)) byId.set(row.id, row);
-      setCloudParts([...byId.values()]);
-      setCloudPartsOffset(historyRows.length);
-      setCloudPartsHasMore(historyRows.length === PARTS_PAGE_SIZE);
-      if (insertedRows.length) {
-        setMessage(`${vehicleLabel(vehicle)} の端末保存部品 ${insertedRows.length}件をクラウドへ同期しました。`);
-      }
+
+      const rows = (data || []) as unknown as CloudPart[];
+      setCloudParts(rows);
+      setCloudPartsOffset(rows.length);
+      setCloudPartsHasMore(rows.length === PARTS_PAGE_SIZE);
     } catch (error: any) {
       if (requestId === partsLoadSeq.current) {
         setMessage(safeActionError("部品履歴の読み込み", error));
       }
     } finally {
-      if (requestId === partsLoadSeq.current) setPartsLoading(false);
+      if (requestId === partsLoadSeq.current) {
+        setPartsLoading(false);
+      }
     }
   }
 
   async function loadMoreVehicleParts() {
     const vehicle = selectedVehicleSnapshot;
     if (!vehicle || partsLoading || !cloudPartsHasMore) return;
+
     const requestId = ++partsLoadSeq.current;
     setPartsLoading(true);
+
     try {
       const { data, error } = await supabase
         .from("parts")
-        .select("id,vehicle_id,part_name,quantity,list_price,purchase_price,source_text,created_at")
+        .select(
+          "id,vehicle_id,work_order_id,parts_ocr_item_id,part_name,quantity,list_price,purchase_price,source_text,created_at,work_order:work_orders!parts_work_order_id_fkey(id,reason,status)"
+        )
         .eq("vehicle_id", vehicle.id)
         .order("created_at", { ascending: false })
-        .range(cloudPartsOffset, cloudPartsOffset + PARTS_PAGE_SIZE - 1);
+        .range(
+          cloudPartsOffset,
+          cloudPartsOffset + PARTS_PAGE_SIZE - 1
+        );
+
       if (error) throw error;
       if (requestId !== partsLoadSeq.current) return;
-      const rows = (data || []) as CloudPart[];
+
+      const rows = (data || []) as unknown as CloudPart[];
       setCloudParts((old) => {
         const byId = new Map<string, CloudPart>();
-        for (const row of [...old, ...rows]) if (!byId.has(row.id)) byId.set(row.id, row);
+        for (const row of [...old, ...rows]) {
+          if (!byId.has(row.id)) byId.set(row.id, row);
+        }
         return [...byId.values()];
       });
       setCloudPartsOffset((old) => old + rows.length);
       setCloudPartsHasMore(rows.length === PARTS_PAGE_SIZE);
     } catch (error: any) {
-      if (requestId === partsLoadSeq.current) setMessage(safeActionError("部品履歴の追加読み込み", error));
+      if (requestId === partsLoadSeq.current) {
+        setMessage(
+          safeActionError("部品履歴の追加読み込み", error)
+        );
+      }
     } finally {
-      if (requestId === partsLoadSeq.current) setPartsLoading(false);
+      if (requestId === partsLoadSeq.current) {
+        setPartsLoading(false);
+      }
     }
   }
 
@@ -533,12 +506,13 @@ export default function CustomerVehiclesPage() {
 
   const selectedLocalParts = useMemo(() => {
     if (!selectedVehicle) return [];
-    const cloudMarkers = new Set(selectedCloudParts.map((p) => markerFromSource(p.source_text)).filter(Boolean));
-    return localParts.filter((p) => {
-      const match = p.vehicleId === selectedVehicle.id || (!p.vehicleId && p.vehicleNumber === selectedVehicle.number);
-      return match && !cloudMarkers.has(p.id);
-    });
-  }, [localParts, selectedVehicle, selectedCloudParts]);
+    return localParts.filter(
+      (part) =>
+        part.vehicleId === selectedVehicle.id ||
+        (!part.vehicleId &&
+          part.vehicleNumber === selectedVehicle.number)
+    );
+  }, [localParts, selectedVehicle]);
 
   function selectVehicle(v: Vehicle, customerOverride?: Customer | null) {
     const customer = customerOverride === undefined
@@ -720,6 +694,54 @@ export default function CustomerVehiclesPage() {
     }
   }
 
+  async function copyFormalParts() {
+    if (!selectedCloudParts.length) return;
+    const rows = [
+      ["部品名称", "個数", "定価", "仕入れ"],
+      ...selectedCloudParts.map((part) => [
+        part.part_name,
+        String(part.quantity ?? ""),
+        part.list_price === null ? "" : String(part.list_price),
+        part.purchase_price === null
+          ? ""
+          : String(part.purchase_price),
+      ]),
+    ];
+    await navigator.clipboard?.writeText(
+      rows
+        .map((row) =>
+          row.map(spreadsheetSafeCell).join("\t")
+        )
+        .join("\n")
+    );
+    setMessage(
+      "表示中の正式保存部品をExcel貼り付け用にコピーしました。"
+    );
+  }
+
+  function printFormalParts() {
+    if (!selectedCloudParts.length) return;
+    sessionStorage.setItem(
+      "parts-print-data",
+      JSON.stringify(
+        selectedCloudParts.map((part) => ({
+          id: part.id,
+          name: part.part_name,
+          qty: String(part.quantity ?? ""),
+          retail:
+            part.list_price === null
+              ? ""
+              : String(part.list_price),
+          cost:
+            part.purchase_price === null
+              ? ""
+              : String(part.purchase_price),
+        }))
+      )
+    );
+    location.assign("/parts-print?source=formal");
+  }
+
   const totalHistory = selectedCloudParts.length + selectedLocalParts.length;
 
   return (
@@ -881,19 +903,29 @@ export default function CustomerVehiclesPage() {
 
           <section className="card">
             <div className="sectionHead"><h2>部品OCR履歴</h2><span>表示中 {totalHistory}件</span></div>
+            {!!selectedCloudParts.length && (
+              <div className="actions">
+                <button onClick={() => void copyFormalParts()}>
+                  📋 正式保存4項目をコピー
+                </button>
+                <button onClick={printFormalParts}>
+                  🖨 正式保存部品を印刷へ
+                </button>
+              </div>
+            )}
             {partsLoading && !totalHistory && <div className="empty">部品履歴を読み込み中…</div>}
             {!partsLoading && !totalHistory && <div className="empty">この車両の部品履歴はまだありません。</div>}
             <div className="historyList">
               {selectedCloudParts.map((p) => (
                 <div className="history" key={`cloud-${p.id}`}>
-                  <div className="historyTop"><b>{p.part_name || "名称未入力"}</b><span>クラウド保存</span></div>
+                  <div className="historyTop"><b>{p.part_name || "名称未入力"}</b><span>正式保存</span></div>
                   <div className="numbers"><span>個数 <b>{p.quantity || "-"}</b></span><span>定価 <b>{money(p.list_price)}</b></span><span>仕入れ <b>{money(p.purchase_price)}</b></span></div>
-                  <small>{p.created_at ? new Date(p.created_at).toLocaleString("ja-JP") : ""}</small>
+                  <small>{p.created_at ? new Date(p.created_at).toLocaleString("ja-JP") : ""}{p.work_order ? ` / 関連作業 ${p.work_order.reason}` : ""}{selectedVehicle ? ` / 車両 ${vehicleLabel(selectedVehicle)}` : ""}</small>
                 </div>
               ))}
               {selectedLocalParts.map((p) => (
                 <div className="history local" key={`local-${p.id}`}>
-                  <div className="historyTop"><b>{p.name || "名称未入力"}</b><span>端末保存</span></div>
+                  <div className="historyTop"><b>{p.name || "名称未入力"}</b><span>未確定（端末）</span></div>
                   <div className="numbers"><span>個数 <b>{p.qty || "-"}</b></span><span>定価 <b>{money(p.retail)}</b></span><span>仕入れ <b>{money(p.cost)}</b></span></div>
                   <small>{p.linkedAt ? new Date(p.linkedAt).toLocaleString("ja-JP") : ""}</small>
                 </div>
