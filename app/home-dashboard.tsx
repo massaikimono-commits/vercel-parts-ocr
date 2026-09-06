@@ -478,6 +478,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
           <button onClick={() => location.assign("/schedule/search")}>名前・電話・下4桁で予定検索</button>
           <button onClick={() => location.assign("/schedule/week")}>1週間のスケジュール</button>
+          <button onClick={() => location.assign("/settings/business-calendar")}>営業日カレンダー</button>
           <button onClick={() => location.assign("/loaners")}>代車管理</button>
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票読取</button>
           <button onClick={() => location.assign("/inspection/select")}>記録簿作成</button>
@@ -520,6 +521,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
 
         <div className="desktopTools">
           <button onClick={() => location.assign("/schedule/search")}><b>予定即検索</b><small>名前・電話・下4桁</small></button>
+          <button onClick={() => location.assign("/settings/business-calendar")}><b>営業日カレンダー</b><small>営業日・休業日を管理</small></button>
           <button onClick={() => location.assign("/loaners")}><b>代車管理</b><small>空き・貸出・返却予定</small></button>
           <button onClick={() => location.assign("/ocr/auto")}><b>部品伝票読取</b><small>3番目によく使う</small></button>
           <button onClick={() => location.assign("/inspection/select")}><b>記録簿作成</b><small>記録簿を選んで作成</small></button>
