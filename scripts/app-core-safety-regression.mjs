@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 const root = process.cwd();
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
+const rootPage = read("app","page.tsx");
 const scheduleNew = read("app","schedule","new","page.tsx");
 const scheduleEdit = read("app","schedule","edit","page.tsx");
 const inspectionPrint = read("app","inspection","print","page.tsx");
@@ -23,6 +24,19 @@ function assert(condition, message) {
     process.exit(1);
   }
 }
+assert(!rootPage.includes('supabase.from("customers").select("*").order("created_at"'), "root dashboard must not preload all customers");
+assert(!rootPage.includes('supabase.from("vehicles").select("*").order("created_at"'), "root dashboard must not preload all vehicles");
+assert(home.includes("inbound:schedule_entries!inner()") && home.includes("delivery:schedule_entries()"), "home staying candidates must be filtered by schedule relations on the server");
+assert(home.includes('.is("delivery", null)'), "home staying candidate query must use a delivery anti-join");
+assert(home.includes("const stateWorkIds =") && home.includes('.in("work_order_id", stateWorkIds)'), "home state-entry reads must be restricted to relevant work orders");
+assert(home.includes("const vehicleIds =") && home.includes('.in("id", vehicleIds)'), "home vehicle reads must be restricted to relevant vehicle ids");
+assert(home.includes("const customerIds =") && home.includes('.in("id", customerIds)'), "home customer reads must be restricted to relevant customer ids");
+assert(home.includes('.eq("work_completed", false)') && home.includes('.is("checked_out_at", null)'), "home workload query must filter unfinished work on the server");
+assert(schedule.includes("inbound:schedule_entries!inner()") && schedule.includes("delivery:schedule_entries()"), "daily schedule staying candidates must be filtered by schedule relations on the server");
+assert(schedule.includes('.is("delivery", null)'), "daily schedule staying candidate query must use a delivery anti-join");
+assert(schedule.includes("const stateWorkIds =") && schedule.includes('.in("work_order_id", stateWorkIds)'), "daily schedule state-entry reads must be restricted to relevant work orders");
+assert(schedule.includes("const vehicleIds =") && schedule.includes('.in("id", vehicleIds)'), "daily schedule vehicle reads must be restricted to relevant vehicle ids");
+assert(schedule.includes("const customerIds =") && schedule.includes('.in("id", customerIds)'), "daily schedule customer reads must be restricted to relevant customer ids");
 assert(scheduleNew.includes("sameDayVehicleScheduleWarnings"), "schedule registration must check same-vehicle same-day duplicates");
 assert(scheduleNew.includes('.from("schedule_entries")'), "same-day duplicate guard must inspect schedule entries");
 assert(scheduleNew.includes('"それでも登録する"'), "same-day duplicate warning must require explicit override");
