@@ -16,6 +16,9 @@ function assert(condition, message) {
 }
 
 assert(app.includes("pull_request:") && app.includes("- main"), "normal app workflow must run for PRs to main");
+assert(app.includes("Detect normal app change scope"), "normal app workflow must route by changed files");
+assert(app.includes("github.event.action") && app.includes("synchronize") && app.includes("github.event.before") && app.includes("github.event.after"), "long-lived PR app routing must use only the latest synchronization diff when available");
+assert(app.includes("needs.scope.outputs.app_changed == 'true'"), "heavy app regression must run only for normal app changes");
 assert(app.includes("npm run test:security"), "normal app workflow must run security regression");
 assert(app.includes("npm run test:schedule-workflow-ux"), "normal app workflow must run schedule workflow regression");
 assert(app.includes("npm run test:customer-migration-workflow"), "normal app workflow must run customer migration regression");
