@@ -112,7 +112,10 @@ assert((home.match(/location\.assign\("\/settings\/business-calendar"\)/g) || []
 assert(businessCalendar.includes('.from("business_calendar")'), "business calendar management must use the existing business_calendar table");
 assert(businessCalendar.includes('.gte("business_date", start)') && businessCalendar.includes('.lte("business_date", end)'), "business calendar management must load only the selected fiscal year");
 assert(businessCalendar.includes('.update({') && businessCalendar.includes('source: "manual"'), "business calendar manual edits must update existing rows with the existing manual source value");
-assert(!businessCalendar.includes('.insert(') && !businessCalendar.includes('.upsert('), "business calendar management must not create missing dates automatically");
+assert(businessCalendar.includes("validateDocumentFile") && businessCalendar.includes("{ allowPdf: true }"), "annual calendar file selection must reuse the shared document safety validator");
+assert(businessCalendar.includes('type="file"') && businessCalendar.includes("importFiscalYear"), "annual calendar staging must require a file and explicit fiscal year");
+assert(!businessCalendar.includes('.insert(') && !businessCalendar.includes('.upsert('), "business calendar management must not create missing dates automatically before an import reader is confirmed");
+assert(!businessCalendar.includes('.storage.from(') && !businessCalendar.includes('.storage\n'), "unconfirmed annual calendar imports must not write to Storage");
 assert(!businessCalendar.includes('.from("customers")') && !businessCalendar.includes('.from("vehicles")') && !businessCalendar.includes('.from("schedule_entries")'), "business calendar route must not load unrelated customer, vehicle, or schedule data");
 assert(scheduleNew.includes('.from("business_calendar")') && scheduleNew.includes('.eq("is_business_day", true)'), "schedule registration must keep using business_calendar is_business_day for next-business-day logic");
 assert(schedule.includes("classifyVehicleBusinessStates"), "daily schedule must use the shared business-state classifier");
