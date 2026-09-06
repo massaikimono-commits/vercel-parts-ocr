@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { consumeOCRTransferImage } from "../transfer";
+import { consumeOCRTransferImage, prepareOCRInputFile } from "../transfer";
 
 type Part = {
   id: string;
@@ -32,7 +32,6 @@ type OCRLine = {
 
 type ColumnKey = "name" | "qty" | "retail" | "cost";
 type HeaderMatch = { key: ColumnKey; x: number; label: string };
-
 type CropBox = { x: number; y: number; w: number; h: number };
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -347,11 +346,12 @@ export default function GeneralOCRPage() {
 
   async function runOCR(file: File) {
     setBusy(true); setProgress(1); setParts([]); setRawText(""); setDebug(""); setMessage("用紙全体を解析しています…");
-    if (preview) URL.revokeObjectURL(preview);
-    setPreview(URL.createObjectURL(file));
     let worker: any = null;
     try {
-      const source = await sourceCanvas(file);
+      const preparedFile = await prepareOCRInputFile(file);
+      if (preview) URL.revokeObjectURL(preview);
+      setPreview(URL.createObjectURL(preparedFile));
+      const source = await sourceCanvas(preparedFile);
       const paper = detectPaper(source);
       const enhanced = await makeEnhanced(source, paper);
       const tesseract: any = await import("tesseract.js");
@@ -412,7 +412,7 @@ export default function GeneralOCRPage() {
       </div>
       <section style={styles.card}>
         <h1 style={styles.title}>汎用A4・他社伝票OCR</h1>
-        <p style={styles.text}>A4いっぱいに部品が並ぶ用紙や、まだ登録していない他社伝票向けです。用紙全体をOCRして「部品名称・数量・定価・仕入れ」に近い見出しを探し、表の列位置から複数行をまとめて抽出します。</p>
+        <p style={styles.text}>A4いっぱいに部品が並ぶ用紙や、まだ登録していない他社伝票向けです。撮影・写真ライブラリ・自動判定のどの入口でも共通画像前処理後に、表の列位置から複数行をまとめて抽出します。</p>
         {message && <div style={styles.notice}>{message}{busy ? `（${progress}%）` : ""}</div>}
         <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
         <input ref={libraryRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && runOCR(e.target.files[0])} />
