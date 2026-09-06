@@ -27,8 +27,21 @@
   .desktopTools{grid-template-columns:repeat(2,1fr)}
 }
 @media(max-width:760px){
-  .homeDash{padding:14px 10px 40px}
-  .homeHead{margin-bottom:10px}.homeLogo{font-size:30px}.homeSub{display:none}
+  .homeDash{padding:7px 8px 34px}
+  .homeHead{margin-bottom:5px;min-height:40px}.homeLogo{font-size:27px;line-height:1}.homeSub{display:none}
+  .homeDash .logout{padding:7px 10px;min-height:38px}
+  .homeWeek{padding:8px!important;margin-bottom:9px!important;border-radius:15px!important}
+  .homeWeekHead{display:grid!important;grid-template-columns:1fr!important;gap:5px!important;align-items:start!important;margin-bottom:6px!important}
+  .homeWeekHead>div:first-child{display:block!important}
+  .homeWeekHead span,.homeWeekHead small{display:none!important}
+  .homeWeekHead h2{font-size:17px!important;line-height:1.2!important;margin:0!important}
+  .homeWeekActions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px!important}
+  .homeWeekActions button{min-width:0;padding:7px 4px!important;min-height:40px;font-size:11px;white-space:nowrap}
+  .homeWeekGrid{gap:5px!important;padding-bottom:2px!important}
+  .homeWeekDay{min-width:160px!important;border-radius:11px!important}
+  .homeWeekDayHead{padding:7px!important}
+  .homeWeekRows{min-height:118px!important;padding:4px!important;gap:3px!important}
+  .homeWeekAdd{margin:4px!important;padding:6px!important;min-height:38px}
   .desktopMain{display:none}.mobileToday{display:block}
   .heroToday{width:100%;min-height:190px;border:0;border-radius:24px;padding:24px;background:#2f6fe4;color:#fff;text-align:left;display:flex;flex-direction:column;justify-content:space-between}
   .heroToday span{font-size:22px;font-weight:800}.heroToday strong{font-size:48px;line-height:1}.heroToday small{font-size:16px;font-weight:800}
