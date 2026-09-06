@@ -55,6 +55,8 @@ type LocalPart = {
   linkedAt?: string;
 };
 
+type VehicleSearchMode = "last4" | "customer" | "phone";
+
 type CustomerForm = {
   id: string;
   type: "individual" | "company";
@@ -112,6 +114,12 @@ function markerFromSource(source: string | null | undefined) {
 
 function vehicleLabel(v: Vehicle) {
   return v.registration || v.number || v.chassis || "車両";
+}
+
+function naturalLast4(value: string | null | undefined) {
+  const raw = (value || "").trim();
+  if (!raw) return "";
+  return /^\d+$/.test(raw) ? String(Number(raw)) : raw;
 }
 
 function customerLabel(c: Customer) {
@@ -185,6 +193,7 @@ export default function CustomerVehiclesPage() {
   const [selectedVehicleSnapshot, setSelectedVehicleSnapshot] = useState<Vehicle | null>(null);
   const [selectedCustomerSnapshot, setSelectedCustomerSnapshot] = useState<Customer | null>(null);
   const [query, setQuery] = useState("");
+  const [vehicleSearchMode, setVehicleSearchMode] = useState<VehicleSearchMode>("last4");
   const [busy, setBusy] = useState(true);
   const [vehicleOffset, setVehicleOffset] = useState(0);
   const [vehicleHasMore, setVehicleHasMore] = useState(false);
@@ -206,10 +215,10 @@ export default function CustomerVehiclesPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadVehicleList(query, false);
+      void loadVehicleList(query, false, vehicleSearchMode);
     }, query.trim() ? 300 : 0);
     return () => window.clearTimeout(timer);
-  }, [query]);
+  }, [query, vehicleSearchMode]);
 
   useEffect(() => {
     if (!selectedVehicleId) {
@@ -222,7 +231,7 @@ export default function CustomerVehiclesPage() {
     return () => window.clearTimeout(timer);
   }, [selectedVehicleId, linkCustomerSearch]);
 
-  async function loadVehicleList(searchText = "", append = false) {
+  async function loadVehicleList(searchText = "", append = false, searchMode: VehicleSearchMode = vehicleSearchMode) {
     const requestId = ++vehicleLoadSeq.current;
     setBusy(true);
     try {
@@ -262,58 +271,44 @@ export default function CustomerVehiclesPage() {
             }
           } catch {}
         }
-      } else {
-        const digits = search.replace(/\D/g, "");
-        const vehicleFilters = [
-          `vehicle_number.ilike.%${search}%`,
-          `registration_number.ilike.%${search}%`,
-          `chassis_number.ilike.%${search}%`,
-          `model.ilike.%${search}%`,
-          `model_code.ilike.%${search}%`,
-          `maker.ilike.%${search}%`,
-        ];
-        if (digits) vehicleFilters.push(`registration_number_last4.ilike.%${digits.slice(-4)}%`);
-
-        const customerFilters = [
-          `name.ilike.%${search}%`,
-          `company_name.ilike.%${search}%`,
-          `phone.ilike.%${search}%`,
-          `address.ilike.%${search}%`,
-        ];
-
-        const [vehicleRes, customerRes] = await Promise.all([
-          supabase
+      } else if (searchMode === "last4") {
+        const digits = search.replace(/\D/g, "").slice(-4);
+        if (digits) {
+          const { data, error } = await supabase
             .from("vehicles")
             .select(VEHICLE_COLUMNS)
-            .or(vehicleFilters.join(","))
+            .ilike("registration_number_last4", `%${digits}%`)
             .order("updated_at", { ascending: false })
-            .limit(VEHICLE_SEARCH_LIMIT),
-          supabase
-            .from("customers")
-            .select(CUSTOMER_COLUMNS)
-            .or(customerFilters.join(","))
-            .order("updated_at", { ascending: false })
-            .limit(CUSTOMER_SEARCH_LIMIT),
-        ]);
-        if (vehicleRes.error) throw vehicleRes.error;
-        if (customerRes.error) throw customerRes.error;
-        vehicleRows = vehicleRes.data || [];
-        customerRows = customerRes.data || [];
+            .limit(VEHICLE_SEARCH_LIMIT);
+          if (error) throw error;
+          vehicleRows = data || [];
+        }
+      } else {
+        const customerQuery = supabase
+          .from("customers")
+          .select(CUSTOMER_COLUMNS)
+          .order("updated_at", { ascending: false })
+          .limit(CUSTOMER_SEARCH_LIMIT);
+
+        const { data, error } = searchMode === "customer"
+          ? await customerQuery.or([
+              `name.ilike.%${search}%`,
+              `company_name.ilike.%${search}%`,
+            ].join(","))
+          : await customerQuery.ilike("phone", `%${search}%`);
+        if (error) throw error;
+        customerRows = data || [];
 
         const matchedCustomerIds = customerRows.map((row: any) => row.id).filter(Boolean);
         if (matchedCustomerIds.length) {
-          const { data, error } = await supabase
+          const { data, error: vehicleError } = await supabase
             .from("vehicles")
             .select(VEHICLE_COLUMNS)
             .in("customer_id", matchedCustomerIds)
             .order("updated_at", { ascending: false })
             .limit(VEHICLE_SEARCH_LIMIT);
-          if (error) throw error;
-          const merged = new Map<string, any>();
-          for (const row of [...vehicleRows, ...(data || [])]) {
-            if (!merged.has(String(row.id))) merged.set(String(row.id), row);
-          }
-          vehicleRows = [...merged.values()].slice(0, VEHICLE_SEARCH_LIMIT);
+          if (vehicleError) throw vehicleError;
+          vehicleRows = data || [];
         }
       }
 
@@ -364,8 +359,9 @@ export default function CustomerVehiclesPage() {
         } catch {}
       }
 
+      const searchModeLabel = searchMode === "last4" ? "下4桁" : searchMode === "customer" ? "お客様名" : "電話番号";
       setMessage(search
-        ? `検索結果 ${nextVehicles.length}台（最大${VEHICLE_SEARCH_LIMIT}台）`
+        ? `${searchModeLabel}の検索結果 ${nextVehicles.length}台（最大${VEHICLE_SEARCH_LIMIT}台）`
         : append
           ? `最近の車両を${pageRowCount}台追加しました。`
           : `最近更新した車両を${Math.min(pageRowCount, VEHICLE_PAGE_SIZE)}台表示しています。`
@@ -735,13 +731,20 @@ export default function CustomerVehiclesPage() {
 
       <section className="card">
         <h1>顧客・車両管理</h1>
-        <p>お客様名・電話番号・ナンバー下4桁・車台番号・型式から検索し、車両を開くと過去の部品OCR履歴まで確認できます。端末で保存した車両紐付け済み部品はクラウドにも自動同期します。</p>
+        <p>検索方法を「下4桁・お客様名・電話番号」から選んで車両を探します。初期値は「下4桁」です。車両を開くと過去の部品OCR履歴まで確認でき、端末で保存した車両紐付け済み部品はクラウドにも自動同期します。</p>
         <div className="notice">{busy ? "顧客・車両を検索中…" : message}</div>
+        <div className="vehicleSearchModes" aria-label="車両検索方法">
+          <button type="button" className={vehicleSearchMode === "last4" ? "active" : ""} onClick={() => setVehicleSearchMode("last4")}>下4桁</button>
+          <button type="button" className={vehicleSearchMode === "customer" ? "active" : ""} onClick={() => setVehicleSearchMode("customer")}>お客様名</button>
+          <button type="button" className={vehicleSearchMode === "phone" ? "active" : ""} onClick={() => setVehicleSearchMode("phone")}>電話番号</button>
+        </div>
         <input
           className="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="お客様名 / 電話番号 / 下4桁 / 車台番号 / 型式"
+          inputMode={vehicleSearchMode === "last4" ? "numeric" : vehicleSearchMode === "phone" ? "tel" : "text"}
+          maxLength={vehicleSearchMode === "last4" ? 4 : undefined}
+          placeholder={vehicleSearchMode === "last4" ? "例：10 / 1234" : vehicleSearchMode === "customer" ? "例：山田 / 株式会社ICB" : "例：090-1234-5678"}
         />
         <div className="actions">
           <button onClick={() => location.assign("/customer-vehicles/bulk-import")}>📄 複数PDFをまとめて登録</button>
@@ -759,7 +762,7 @@ export default function CustomerVehiclesPage() {
             const c = customerMap.get(v.customerId);
             return (
               <button key={v.id} className={`vehicle ${selectedVehicleId === v.id ? "selected" : ""}`} onClick={() => selectVehicle(v)}>
-                <div className="vehicleTitle"><b>{vehicleLabel(v)}</b><span>選択して履歴表示</span></div>
+                <div className="vehicleTitle"><b>{vehicleLabel(v)}</b><span>{naturalLast4(v.last4) || "----"} / 選択</span></div>
                 <div>{c ? customerLabel(c) : "顧客未割り当て"}</div>
                 <small>{[v.maker, v.model, v.chassis].filter(Boolean).join(" / ") || "車両情報未入力"}</small>
               </button>
@@ -907,7 +910,7 @@ export default function CustomerVehiclesPage() {
       )}
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:920px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button{border:1px solid #cdd7e5;border-radius:12px;background:#fff;color:#2674e8;padding:11px 14px;font-size:15px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}h2{margin:0}h3{font-size:26px;margin:12px 0}p{color:#5d6878;line-height:1.7}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:13px 15px;margin:14px 0}.search,.customerForm input,.customerForm textarea,.linkBox input,.linkBox select{width:100%;border:1px solid #cdd7e5;border-radius:12px;padding:14px;font-size:16px;background:#fff;color:#172033}.customerForm textarea{min-height:90px;resize:vertical}.sectionHead,.vehicleTitle,.historyTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.sectionHead span,.vehicleTitle span,.historyTop span,.badge{font-size:13px;border-radius:999px;padding:5px 9px;background:#eef4ff;color:#2f6fe4}.vehicleList,.historyList{display:grid;gap:10px;margin-top:14px}.vehicle{text-align:left;color:#172033;display:grid;gap:5px}.vehicle small{color:#718096;font-weight:500}.vehicle.selected{border:2px solid #2f6fe4;background:#eef4ff}.infoGrid,.customerSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.infoGrid>div,.customerSummary>div{border:1px solid #e0e6ef;border-radius:12px;padding:12px;display:grid;gap:4px}.infoGrid small,.customerSummary small{color:#78869a}.customerSummary .wide{grid-column:1/-1}.address{margin-top:10px;padding:12px;background:#f8fafc;border-radius:12px;color:#5d6878}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.primary{background:#2f6fe4;color:white;border-color:#2f6fe4}.history{border:1px solid #dbe3ee;border-radius:14px;padding:14px;display:grid;gap:9px}.history.local{border-style:dashed}.numbers{display:flex;gap:18px;flex-wrap:wrap;color:#5d6878}.history>small{color:#8a96a7}.empty{margin-top:14px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}.linkBox{margin-top:16px;padding:14px;border:1px solid #e0e6ef;border-radius:14px;display:grid;gap:10px}.linkBox label,.customerForm label{display:grid;gap:6px;color:#5d6878;font-weight:700}.customerForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.customerForm .wide{grid-column:1/-1}.segmented{grid-column:1/-1;display:flex;gap:8px}.segmented button{flex:1}.segmented button.active{background:#2f6fe4;color:#fff;border-color:#2f6fe4}button:disabled{opacity:.55}.customerSummary{margin-top:14px}@media(max-width:650px){.infoGrid,.customerSummary,.customerForm{grid-template-columns:1fr}.customerSummary .wide,.customerForm .wide{grid-column:auto}.sectionHead{align-items:flex-start}.actions button{flex:1 1 100%}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:920px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button{border:1px solid #cdd7e5;border-radius:12px;background:#fff;color:#2674e8;padding:11px 14px;font-size:15px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}h2{margin:0}h3{font-size:26px;margin:12px 0}p{color:#5d6878;line-height:1.7}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:13px 15px;margin:14px 0}.search,.customerForm input,.customerForm textarea,.linkBox input,.linkBox select{width:100%;border:1px solid #cdd7e5;border-radius:12px;padding:14px;font-size:16px;background:#fff;color:#172033}.vehicleSearchModes{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0 4px}.vehicleSearchModes button{padding:9px 7px;color:#53647b}.vehicleSearchModes button.active{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.customerForm textarea{min-height:90px;resize:vertical}.sectionHead,.vehicleTitle,.historyTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.sectionHead span,.vehicleTitle span,.historyTop span,.badge{font-size:13px;border-radius:999px;padding:5px 9px;background:#eef4ff;color:#2f6fe4}.vehicleList,.historyList{display:grid;gap:10px;margin-top:14px}.vehicle{text-align:left;color:#172033;display:grid;gap:5px}.vehicle small{color:#718096;font-weight:500}.vehicle.selected{border:2px solid #2f6fe4;background:#eef4ff}.infoGrid,.customerSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.infoGrid>div,.customerSummary>div{border:1px solid #e0e6ef;border-radius:12px;padding:12px;display:grid;gap:4px}.infoGrid small,.customerSummary small{color:#78869a}.customerSummary .wide{grid-column:1/-1}.address{margin-top:10px;padding:12px;background:#f8fafc;border-radius:12px;color:#5d6878}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.primary{background:#2f6fe4;color:white;border-color:#2f6fe4}.history{border:1px solid #dbe3ee;border-radius:14px;padding:14px;display:grid;gap:9px}.history.local{border-style:dashed}.numbers{display:flex;gap:18px;flex-wrap:wrap;color:#5d6878}.history>small{color:#8a96a7}.empty{margin-top:14px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}.linkBox{margin-top:16px;padding:14px;border:1px solid #e0e6ef;border-radius:14px;display:grid;gap:10px}.linkBox label,.customerForm label{display:grid;gap:6px;color:#5d6878;font-weight:700}.customerForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.customerForm .wide{grid-column:1/-1}.segmented{grid-column:1/-1;display:flex;gap:8px}.segmented button{flex:1}.segmented button.active{background:#2f6fe4;color:#fff;border-color:#2f6fe4}button:disabled{opacity:.55}.customerSummary{margin-top:14px}@media(max-width:650px){.infoGrid,.customerSummary,.customerForm{grid-template-columns:1fr}.customerSummary .wide,.customerForm .wide{grid-column:auto}.sectionHead{align-items:flex-start}.actions button{flex:1 1 100%}}
       `}</style>
     </main>
   );
