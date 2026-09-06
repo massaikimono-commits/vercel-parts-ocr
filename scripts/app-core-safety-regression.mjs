@@ -221,7 +221,7 @@ assert(waitingServiceSql.includes("se.starts_at = p_starts_at") && waitingServic
 assert(waitingServiceSql.includes("来社・作業待ちには納車予定を登録しません"), "waiting-service registration must reject delivery creation");
 assert(waitingServiceSql.includes("delete from public.schedule_entries") && waitingServiceSql.includes("entry_type='delivery'"), "waiting-service reschedule must clear delivery entries");
 assert(!waitingServiceSql.includes("stay_reason = '作業待ち'") && !waitingServiceSql.includes("notes = '作業待ち'"), "waiting-service migration must never infer or store the flag through stay_reason/notes");
-assert((scheduleRpcAuthSql.match(/not public\\.request_has_app_secret\\(\\) and not public\\.is_active_app_user\\(\\)/g) || []).length === 6, "all schedule mutation RPC signatures must require app secret or active app user");
+assert(scheduleRpcAuthSql.split("if not public.request_has_app_secret() and not public.is_active_app_user() then").length - 1 === 6, "all schedule mutation RPC signatures must require app secret or active app user");
 assert(!scheduleRpcAuthSql.includes("auth.uid() is null and not public.request_has_app_secret()"), "schedule RPCs must never return to auth.uid-only authorization");
 assert((scheduleRpcAuthSql.match(/raise insufficient_privilege using message = 'not authorized'/g) || []).length === 6, "inactive app users must fail closed before SECURITY DEFINER mutations");
 assert(scheduleRpcAuthSql.includes("SECURITY DEFINER"), "schedule RPC hardening must preserve the intentional SECURITY DEFINER design");
