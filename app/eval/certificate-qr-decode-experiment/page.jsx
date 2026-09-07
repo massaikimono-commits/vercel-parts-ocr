@@ -858,9 +858,6 @@ async function runBaseline(frame, file) {
     win.removeEventListener("vehicle-certificate-qr-fast-ready", onFast);
   }
 }
-function decodePairCanonicalSet(js, zx) {
-  return new Set([js?.success ? js.canonical : "", zx?.success ? zx.canonical : ""].filter(Boolean));
-}
 function samePhysicalPayloadNear(a, b) {
   const near =
     Math.abs(Number(a.x) - Number(b.x)) <= .055 &&
@@ -876,13 +873,18 @@ async function decodeWithConfig({ jsQR, reader, raw, normalized, candidate, conf
   try {
     const js = await decodeJs(jsQR, canvas);
     const zx = await decodeZxing(reader, canvas);
+    const adopted = adoptCanonical(js, zx);
     return {
       jsqrSuccess: js.success,
       zxingSuccess: zx.success,
-      physicalSuccess: js.success || zx.success,
+      jsStructuralPass: Boolean(js.structural?.pass),
+      zxingStructuralPass: Boolean(zx.structural?.pass),
+      physicalSuccess: Boolean(adopted.canonical),
       crossEngineDuplicate: js.success && zx.success && sameCanonical(js.canonical, zx.canonical),
-      crossEngineConflict: js.success && zx.success && !sameCanonical(js.canonical, zx.canonical),
-      canonicalSet: decodePairCanonicalSet(js, zx),
+      crossEngineConflict: adopted.conflict,
+      adoptedEngine: adopted.adoptedEngine,
+      adoptionReason: adopted.adoptionReason,
+      canonicalSet: new Set(adopted.canonical ? [adopted.canonical] : []),
     };
   } finally {
     canvas.width = 1;
@@ -892,11 +894,219 @@ async function decodeWithConfig({ jsQR, reader, raw, normalized, candidate, conf
 function publicAttempt(attempt) {
   return {
     configId: attempt.configId,
-    jsqrSuccess: attempt.jsqrSuccess,
-    zxingSuccess: attempt.zxingSuccess,
-    physicalSuccess: attempt.physicalSuccess,
-    crossEngineDuplicate: attempt.crossEngineDuplicate,
-    crossEngineConflict: attempt.crossEngineConflict,
+    jsqrSuccess: Boolean(attempt.jsqrSuccess),
+    zxingSuccess: Boolean(attempt.zxingSuccess),
+    jsStructuralPass: Boolean(attempt.jsStructuralPass),
+    zxingStructuralPass: Boolean(attempt.zxingStructuralPass),
+    physicalSuccess: Boolean(attempt.physicalSuccess),
+    crossEngineDuplicate: Boolean(attempt.crossEngineDuplicate),
+    crossEngineConflict: Boolean(attempt.crossEngineConflict),
+    adoptedEngine: attempt.adoptedEngine || "none",
+    adoptionReason: attempt.adoptionReason || "none",
+  };
+}
+function createStageStats(configs) {
+  return Object.fromEntries(configs.map((config) => [config.id, {
+    id: config.id,
+    attempts: 0,
+    jsqrSuccesses: 0,
+    zxingSuccesses: 0,
+    jsStructuralPasses: 0,
+    zxingStructuralPasses: 0,
+    physicalSuccesses: 0,
+    crossEngineDuplicateCount: 0,
+    crossEngineConflictCount: 0,
+    netNewCanonicalQrCount: 0,
+  }]));
+}
+function recordAttemptStat(stat, result) {
+  stat.attempts += 1;
+  if (result.jsqrSuccess) stat.jsqrSuccesses += 1;
+  if (result.zxingSuccess) stat.zxingSuccesses += 1;
+  if (result.jsStructuralPass) stat.jsStructuralPasses += 1;
+  if (result.zxingStructuralPass) stat.zxingStructuralPasses += 1;
+  if (result.physicalSuccess) stat.physicalSuccesses += 1;
+  if (result.crossEngineDuplicate) stat.crossEngineDuplicateCount += 1;
+  if (result.crossEngineConflict) stat.crossEngineConflictCount += 1;
+}
+function uniqueAcceptedRows(rows, successKey) {
+  const accepted = [];
+  let duplicatePayloadCandidateCount = 0;
+  for (const row of rows) {
+    if (!row[successKey]) continue;
+    if (accepted.some((known) => samePhysicalPayloadNear(known, row))) {
+      duplicatePayloadCandidateCount += 1;
+      continue;
+    }
+    accepted.push(row);
+  }
+  return { accepted, duplicatePayloadCandidateCount };
+}
+function conflictDetailsFromRows(stage, rows, attemptKey) {
+  const details = [];
+  for (const row of rows) {
+    for (const attempt of row[attemptKey] || []) {
+      if (!attempt.crossEngineConflict) continue;
+      details.push({
+        stage,
+        candidateIndex: row.candidateIndex,
+        configId: attempt.configId,
+        jsStructuralPass: Boolean(attempt.jsStructuralPass),
+        zxingStructuralPass: Boolean(attempt.zxingStructuralPass),
+        adoptedEngine: attempt.adoptedEngine || "none",
+        adoptionReason: attempt.adoptionReason || "none",
+      });
+    }
+  }
+  return details;
+}
+async function runAdaptiveRows({ candidates, configs, jsQR, reader, raw, normalized, successKey, attemptKey }) {
+  const rows = candidates.map((candidate, index) => ({
+    ...candidate,
+    candidateIndex: index + 1,
+    [successKey]: false,
+    [attemptKey]: [],
+    canonicalSet: new Set(),
+  }));
+  const stats = createStageStats(configs);
+  let totalAttempts = 0;
+  let skippedAttemptsByEarlySuccess = 0;
+  for (const row of rows) {
+    for (let configIndex = 0; configIndex < configs.length; configIndex += 1) {
+      const config = configs[configIndex];
+      const result = await decodeWithConfig({ jsQR, reader, raw, normalized, candidate: row, config });
+      totalAttempts += 1;
+      recordAttemptStat(stats[config.id], result);
+      row[attemptKey].push({ configId: config.id, ...result });
+      if (result.physicalSuccess) {
+        row[successKey] = true;
+        for (const canonical of result.canonicalSet) row.canonicalSet.add(canonical);
+        skippedAttemptsByEarlySuccess += configs.length - configIndex - 1;
+        break;
+      }
+      await wait(0);
+    }
+  }
+  const unique = uniqueAcceptedRows(rows, successKey);
+  const seen = new Set();
+  for (const row of unique.accepted) for (const canonical of row.canonicalSet) seen.add(canonical);
+  for (const stat of Object.values(stats)) stat.netNewCanonicalQrCount = 0;
+  for (const row of rows) {
+    if (!row[successKey]) continue;
+    const winning = (row[attemptKey] || []).find((attempt) => attempt.physicalSuccess);
+    if (!winning) continue;
+    const stat = stats[winning.configId];
+    for (const canonical of row.canonicalSet) {
+      // For a single adaptive stage, count one net-new physical canonical per winning candidate.
+      if (canonical) { stat.netNewCanonicalQrCount += 1; break; }
+    }
+  }
+  return {
+    rows,
+    stats: Object.values(stats),
+    totalAttempts,
+    skippedAttemptsByEarlySuccess,
+    physicalUniqueQrCount: unique.accepted.length,
+    duplicatePayloadCandidateCount: unique.duplicatePayloadCandidateCount,
+    conflictDetails: conflictDetailsFromRows(successKey, rows, attemptKey),
+  };
+}
+async function augmentRows({ rows, configs, jsQR, reader, raw, normalized, priorSuccessKeys, successKey, attemptKey }) {
+  const stats = createStageStats(configs);
+  const priorAccepted = [];
+  for (const row of rows) {
+    if (priorSuccessKeys.some((key) => row[key])) priorAccepted.push(row);
+    row[successKey] = false;
+    row[attemptKey] = [];
+  }
+  const canonicalSeen = new Set();
+  for (const row of priorAccepted) for (const canonical of row.canonicalSet || []) canonicalSeen.add(canonical);
+  let totalAttempts = 0;
+  let skippedAttemptsByEarlySuccess = 0;
+
+  for (const row of rows) {
+    if (priorSuccessKeys.some((key) => row[key])) continue;
+    for (let configIndex = 0; configIndex < configs.length; configIndex += 1) {
+      const config = configs[configIndex];
+      const result = await decodeWithConfig({ jsQR, reader, raw, normalized, candidate: row, config });
+      totalAttempts += 1;
+      recordAttemptStat(stats[config.id], result);
+      row[attemptKey].push({ configId: config.id, ...result });
+      if (result.physicalSuccess) {
+        row[successKey] = true;
+        let netNew = false;
+        for (const canonical of result.canonicalSet) {
+          row.canonicalSet.add(canonical);
+          if (!canonicalSeen.has(canonical)) {
+            canonicalSeen.add(canonical);
+            netNew = true;
+          }
+        }
+        if (netNew) stats[config.id].netNewCanonicalQrCount += 1;
+        skippedAttemptsByEarlySuccess += configs.length - configIndex - 1;
+        break;
+      }
+      await wait(0);
+    }
+  }
+
+  const accepted = [];
+  let duplicatePayloadCandidateCount = 0;
+  for (const row of rows) {
+    if (!priorSuccessKeys.some((key) => row[key]) && !row[successKey]) continue;
+    if (accepted.some((known) => samePhysicalPayloadNear(known, row))) {
+      duplicatePayloadCandidateCount += 1;
+      continue;
+    }
+    accepted.push(row);
+  }
+  return {
+    rows,
+    stats: Object.values(stats),
+    totalAttempts,
+    skippedAttemptsByEarlySuccess,
+    physicalUniqueQrCount: accepted.length,
+    duplicatePayloadCandidateCount,
+    conflictDetails: conflictDetailsFromRows(successKey, rows, attemptKey),
+  };
+}
+async function runZxingInvertedProbe({ rows, invertedBundle, raw, normalized }) {
+  const started = performance.now();
+  if (!invertedBundle?.audit?.alsoInvertedEnabled) {
+    return {
+      ...invertedBundle?.audit,
+      testedCandidateCount: 0,
+      structuralPassCount: 0,
+      additionalStructuralPassVsBase: 0,
+      elapsedMs: 0,
+    };
+  }
+  let testedCandidateCount = 0;
+  let structuralPassCount = 0;
+  let additionalStructuralPassVsBase = 0;
+  for (const row of rows) {
+    if (row.coreSuccess) continue;
+    const canvas = cropCandidate(raw, normalized.paper, row, REFINED_CORE_CONFIGS[1]);
+    try {
+      testedCandidateCount += 1;
+      const result = await decodeZxing(invertedBundle.reader, canvas);
+      if (result.success && result.structural?.pass) {
+        structuralPassCount += 1;
+        const baseAttempt = row.coreAttempts.find((attempt) => attempt.configId === REFINED_CORE_CONFIGS[1].id);
+        if (!baseAttempt?.zxingStructuralPass) additionalStructuralPassVsBase += 1;
+      }
+    } finally {
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+    await wait(0);
+  }
+  return {
+    ...invertedBundle.audit,
+    testedCandidateCount,
+    structuralPassCount,
+    additionalStructuralPassVsBase,
+    elapsedMs: Math.round(performance.now() - started),
   };
 }
 async function runMatrix(file) {
@@ -907,248 +1117,120 @@ async function runMatrix(file) {
   const normCtx = norm.getContext("2d", { willReadFrequently: true });
   const normImage = normCtx.getImageData(0, 0, norm.width, norm.height);
 
-  const detectionStarted = performance.now();
-  const rawCandidates = detectCertificateQrDensityCandidates2D(
-    normImage.data,
-    normImage.width,
-    normImage.height,
-    { maxCandidates: 20 }
-  );
-  const conservative = clusterCertificateQrCandidates2D(rawCandidates, {
-    maxCandidates: 10,
-    xTolerance: .030,
-    rowTolerance: .060,
-  });
-  const previousStyle = clusterCertificateQrCandidates2D(rawCandidates, {
-    maxCandidates: 10,
-    xTolerance: .045,
-    rowTolerance: .060,
-  });
-  const candidateDetectionElapsedMs = Math.round(performance.now() - detectionStarted);
-  const candidates = conservative.candidates;
-  const [reader, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
-  const jsQR = jsMod.default || jsMod;
-
-  const rows = candidates.map((candidate, index) => ({
-    candidateIndex: index + 1,
-    x: candidate.x,
-    y: candidate.y,
-    score: candidate.score,
-    mergedPeakCount: candidate.mergedPeakCount || 1,
-    quality: candidateQualityMetrics(raw, normalized.paper, candidate),
-    ensembleAttempts: [],
-    offsetAttempts: [],
-    rescueAttempts: [],
-    canonicalSet: new Set(),
-    ensembleSuccess: false,
-    offsetSuccess: false,
-    rescueSuccess: false,
-  }));
-
-  const ensembleStats = Object.fromEntries(ENSEMBLE_CONFIGS.map((config) => [config.id, {
-    id: config.id,
-    attempts: 0,
-    jsqrSuccesses: 0,
-    zxingSuccesses: 0,
-    physicalSuccesses: 0,
-    crossEngineDuplicateRemovedCount: 0,
-    crossEngineConflictCount: 0,
-  }]));
-  const rescueStats = Object.fromEntries(RESCUE_CONFIGS.map((config) => [config.id, {
-    id: config.id,
-    attempts: 0,
-    jsqrSuccesses: 0,
-    zxingSuccesses: 0,
-    physicalSuccesses: 0,
-    crossEngineDuplicateRemovedCount: 0,
-    crossEngineConflictCount: 0,
-    netNewCanonicalQrCount: 0,
-  }]));
-
-  let totalEnsembleAttempts = 0;
-  let skippedEnsembleAttempts = 0;
-
   try {
-    const ensembleStarted = performance.now();
-    for (const row of rows) {
-      const candidate = candidates[row.candidateIndex - 1];
-      for (let configIndex = 0; configIndex < ENSEMBLE_CONFIGS.length; configIndex += 1) {
-        const config = ENSEMBLE_CONFIGS[configIndex];
-        const result = await decodeWithConfig({ jsQR, reader, raw, normalized, candidate, config });
-        totalEnsembleAttempts += 1;
-        const stat = ensembleStats[config.id];
-        stat.attempts += 1;
-        if (result.jsqrSuccess) stat.jsqrSuccesses += 1;
-        if (result.zxingSuccess) stat.zxingSuccesses += 1;
-        if (result.physicalSuccess) stat.physicalSuccesses += 1;
-        if (result.crossEngineDuplicate) stat.crossEngineDuplicateRemovedCount += 1;
-        if (result.crossEngineConflict) stat.crossEngineConflictCount += 1;
-        row.ensembleAttempts.push({ configId: config.id, ...result });
-        if (result.physicalSuccess) {
-          row.ensembleSuccess = true;
-          for (const canonical of result.canonicalSet) row.canonicalSet.add(canonical);
-          skippedEnsembleAttempts += ENSEMBLE_CONFIGS.length - configIndex - 1;
-          break;
-        }
-        await wait(0);
-      }
+    const detectionStarted = performance.now();
+    const rawCandidates = detectCertificateQrDensityCandidates2D(
+      normImage.data,
+      normImage.width,
+      normImage.height,
+      { maxCandidates: 20 }
+    );
+    const coarse = clusterCertificateQrCandidates2D(rawCandidates, {
+      maxCandidates: 10,
+      xTolerance: .030,
+      rowTolerance: .060,
+    });
+    const candidateDetectionElapsedMs = Math.round(performance.now() - detectionStarted);
+
+    const [readerBundle, invertedBundle, jsMod] = await Promise.all([
+      makeReader(),
+      makeReader({ alsoInverted: true }),
+      import("jsqr"),
+    ]);
+    const jsQR = jsMod.default || jsMod;
+
+    const aStarted = performance.now();
+    const current = await runAdaptiveRows({
+      candidates: coarse.candidates,
+      configs: ENSEMBLE_CONFIGS,
+      jsQR,
+      reader: readerBundle.reader,
+      raw,
+      normalized,
+      successKey: "currentSuccess",
+      attemptKey: "currentAttempts",
+    });
+    const currentEnsembleElapsedMs = Math.round(performance.now() - aStarted);
+
+    const refineStarted = performance.now();
+    const refined = refineQrCandidates(raw, normalized.paper, coarse.candidates);
+    const candidateRefineElapsedMs = Math.round(performance.now() - refineStarted);
+
+    const bStarted = performance.now();
+    const core = await runAdaptiveRows({
+      candidates: refined.refinedCandidates,
+      configs: REFINED_CORE_CONFIGS,
+      jsQR,
+      reader: readerBundle.reader,
+      raw,
+      normalized,
+      successKey: "coreSuccess",
+      attemptKey: "coreAttempts",
+    });
+    const refinedCoreElapsedMs = Math.round(performance.now() - bStarted);
+
+    const zxingInvertedProbe = await runZxingInvertedProbe({
+      rows: core.rows,
+      invertedBundle,
+      raw,
+      normalized,
+    });
+
+    const cStarted = performance.now();
+    const threshold = await augmentRows({
+      rows: core.rows,
+      configs: THRESHOLD_CONFIGS,
+      jsQR,
+      reader: readerBundle.reader,
+      raw,
+      normalized,
+      priorSuccessKeys: ["coreSuccess"],
+      successKey: "thresholdSuccess",
+      attemptKey: "thresholdAttempts",
+    });
+    const thresholdElapsedMs = Math.round(performance.now() - cStarted);
+
+    const dStarted = performance.now();
+    const rescue = await augmentRows({
+      rows: threshold.rows,
+      configs: ROTATE_RESCUE_CONFIGS,
+      jsQR,
+      reader: readerBundle.reader,
+      raw,
+      normalized,
+      priorSuccessKeys: ["coreSuccess", "thresholdSuccess"],
+      successKey: "rotateRescueSuccess",
+      attemptKey: "rotateRescueAttempts",
+    });
+    const rotateRescueElapsedMs = Math.round(performance.now() - dStarted);
+
+    const finalAccepted = [];
+    for (const row of rescue.rows) {
+      if (!(row.coreSuccess || row.thresholdSuccess || row.rotateRescueSuccess)) continue;
+      if (finalAccepted.some((known) => samePhysicalPayloadNear(known, row))) continue;
+      finalAccepted.push(row);
     }
-    const ensembleOnlyElapsedMs = Math.round(performance.now() - ensembleStarted);
-
-    const offsetStarted = performance.now();
-    let offsetActualDecodeAttempts = 0;
-    let offsetSkippedAttemptsBySuccess = 0;
-    const offsetStats = Object.fromEntries(OFFSET_SWEEP.map((offset) => [offset.id, {
-      id: offset.id,
-      dx: offset.dx,
-      dy: offset.dy,
-      attempts: 0,
-      reusedAttempts: 0,
-      physicalSuccesses: 0,
-    }]));
-    for (const row of rows) {
-      if (row.ensembleSuccess) continue;
-      const candidate = candidates[row.candidateIndex - 1];
-      const centerAttempt = row.ensembleAttempts.find((attempt) => attempt.configId === ENSEMBLE_CONFIGS[0].id);
-      row.offsetAttempts.push({
-        offsetId: "center",
-        reused: true,
-        dx: 0,
-        dy: 0,
-        physicalSuccess: Boolean(centerAttempt?.physicalSuccess),
-        jsqrSuccess: Boolean(centerAttempt?.jsqrSuccess),
-        zxingSuccess: Boolean(centerAttempt?.zxingSuccess),
-      });
-      offsetStats.center.attempts += 1;
-      offsetStats.center.reusedAttempts += 1;
-      if (centerAttempt?.physicalSuccess) offsetStats.center.physicalSuccesses += 1;
-      for (let oi = 1; oi < OFFSET_SWEEP.length; oi += 1) {
-        const offset = OFFSET_SWEEP[oi];
-        const shifted = shiftedCandidate(candidate, offset.dx, offset.dy);
-        const result = await decodeWithConfig({
-          jsQR,
-          reader,
-          raw,
-          normalized,
-          candidate: shifted,
-          config: ENSEMBLE_CONFIGS[0],
-        });
-        offsetActualDecodeAttempts += 1;
-        offsetStats[offset.id].attempts += 1;
-        if (result.physicalSuccess) offsetStats[offset.id].physicalSuccesses += 1;
-        row.offsetAttempts.push({
-          offsetId: offset.id,
-          reused: false,
-          dx: offset.dx,
-          dy: offset.dy,
-          ...result,
-        });
-        if (result.physicalSuccess) {
-          row.offsetSuccess = true;
-          for (const canonical of result.canonicalSet) row.canonicalSet.add(canonical);
-          offsetSkippedAttemptsBySuccess += OFFSET_SWEEP.length - oi - 1;
-          break;
-        }
-        await wait(0);
-      }
-    }
-    const offsetSweepElapsedMs = Math.round(performance.now() - offsetStarted);
-
-    const acceptUnique = (includeOffset = true, includeRescue = false) => {
-      const accepted = [];
-      let crossCandidatePayloadDuplicateRemovedCount = 0;
-      for (const row of rows) {
-        const success = row.ensembleSuccess || (includeOffset && row.offsetSuccess) || (includeRescue && row.rescueSuccess);
-        if (!success) continue;
-        if (accepted.some((known) => samePhysicalPayloadNear(known, row))) {
-          crossCandidatePayloadDuplicateRemovedCount += 1;
-          continue;
-        }
-        accepted.push(row);
-      }
-      return { accepted, crossCandidatePayloadDuplicateRemovedCount };
-    };
-
-    const ensembleOnlyUnique = (() => {
-      const accepted = [];
-      let dropped = 0;
-      for (const row of rows) {
-        if (!row.ensembleSuccess) continue;
-        if (accepted.some((known) => samePhysicalPayloadNear(known, row))) dropped += 1;
-        else accepted.push(row);
-      }
-      return { accepted, crossCandidatePayloadDuplicateRemovedCount: dropped };
-    })();
-    const afterOffsetUnique = acceptUnique(true, false);
-
-    const baselineCanonicalsForRescue = new Set();
-    for (const row of afterOffsetUnique.accepted) for (const canonical of row.canonicalSet) baselineCanonicalsForRescue.add(canonical);
-    const rescueCanonicalSeen = new Set(baselineCanonicalsForRescue);
-
-    const rescueStarted = performance.now();
-    let totalRescueAttempts = 0;
-    for (const config of RESCUE_CONFIGS) {
-      const configCanonicalCandidates = [];
-      for (const row of rows) {
-        if (row.ensembleSuccess || row.offsetSuccess) continue;
-        const candidate = candidates[row.candidateIndex - 1];
-        const result = await decodeWithConfig({ jsQR, reader, raw, normalized, candidate, config });
-        totalRescueAttempts += 1;
-        const stat = rescueStats[config.id];
-        stat.attempts += 1;
-        if (result.jsqrSuccess) stat.jsqrSuccesses += 1;
-        if (result.zxingSuccess) stat.zxingSuccesses += 1;
-        if (result.physicalSuccess) stat.physicalSuccesses += 1;
-        if (result.crossEngineDuplicate) stat.crossEngineDuplicateRemovedCount += 1;
-        if (result.crossEngineConflict) stat.crossEngineConflictCount += 1;
-        row.rescueAttempts.push({ configId: config.id, ...result });
-        if (result.physicalSuccess) configCanonicalCandidates.push({ row, result });
-        await wait(0);
-      }
-
-      const localSeen = new Set();
-      for (const { result } of configCanonicalCandidates) {
-        let netNew = false;
-        for (const canonical of result.canonicalSet) {
-          if (!rescueCanonicalSeen.has(canonical) && !localSeen.has(canonical)) {
-            localSeen.add(canonical);
-            netNew = true;
-          }
-        }
-        if (netNew) rescueStats[config.id].netNewCanonicalQrCount += 1;
-      }
-      for (const canonical of localSeen) rescueCanonicalSeen.add(canonical);
-    }
-    const rescueOnlyElapsedMs = Math.round(performance.now() - rescueStarted);
-
-    for (const row of rows) {
-      if (row.ensembleSuccess || row.offsetSuccess) continue;
-      for (const attempt of row.rescueAttempts) {
-        if (!attempt.physicalSuccess) continue;
-        row.rescueSuccess = true;
-        for (const canonical of attempt.canonicalSet || []) row.canonicalSet.add(canonical);
-      }
-    }
-
-    const rescueUnique = acceptUnique(true, true);
-    const decodedItems = rescueUnique.accepted
+    const decodedItems = finalAccepted
       .map((row) => [...row.canonicalSet][0])
       .filter(Boolean)
       .map((data) => ({ data }));
     const decodedRuntime = expectedCertificateQrCount(decodedItems, "");
 
-    const totalExperimentalElapsedMs = Math.round(performance.now() - totalStarted);
+    const allConflicts = [
+      ...current.conflictDetails.map((item) => ({ ...item, stage: "A-current-ensemble" })),
+      ...core.conflictDetails.map((item) => ({ ...item, stage: "B-refined-core" })),
+      ...threshold.conflictDetails.map((item) => ({ ...item, stage: "C-threshold" })),
+      ...rescue.conflictDetails.map((item) => ({ ...item, stage: "D-rotate-rescue" })),
+    ];
+
     return {
       candidateDetection: {
-        dominantRowY: conservative.dominantRowY,
-        rawCandidateCount: conservative.inputCandidateCount,
-        conservativePhysicalCandidateCount: conservative.candidates.length,
-        previousStylePhysicalCandidateCount: previousStyle.candidates.length,
-        candidateCountDeltaVsPreviousStyle: conservative.candidates.length - previousStyle.candidates.length,
-        rowClusterCount: conservative.rowClusterCount,
-        candidatePositionDuplicateRemovedCount: conservative.candidatePositionDuplicateRemovedCount,
-        discardedOffRowCount: conservative.discardedOffRowCount,
-        physicalCandidates: conservative.candidates.map((candidate, index) => ({
+        dominantRowY: coarse.dominantRowY,
+        rawCandidateCount: coarse.inputCandidateCount,
+        coarsePhysicalCandidateCount: coarse.candidates.length,
+        candidatePositionDuplicateRemovedCount: coarse.candidatePositionDuplicateRemovedCount,
+        discardedOffRowCount: coarse.discardedOffRowCount,
+        physicalCandidates: coarse.candidates.map((candidate, index) => ({
           index: index + 1,
           x: candidate.x,
           y: candidate.y,
@@ -1156,65 +1238,96 @@ async function runMatrix(file) {
           mergedPeakCount: candidate.mergedPeakCount || 1,
         })),
       },
-      ensemble: {
-        order: ENSEMBLE_CONFIGS.map((config) => config.id),
-        physicalUniqueQrCount: ensembleOnlyUnique.accepted.length,
-        crossCandidatePayloadDuplicateRemovedCount: ensembleOnlyUnique.crossCandidatePayloadDuplicateRemovedCount,
-        totalAttempts: totalEnsembleAttempts,
-        skippedAttemptsByEarlySuccess: skippedEnsembleAttempts,
-        averageAttemptsPerPhysicalCandidate: candidates.length
-          ? Number((totalEnsembleAttempts / candidates.length).toFixed(3))
-          : 0,
-        stats: Object.values(ensembleStats),
-      },
-      offsetSweep: {
-        offsets: OFFSET_SWEEP.map(({ id, dx, dy }) => ({ id, dx, dy })),
-        physicalUniqueQrCountAfterOffset: afterOffsetUnique.accepted.length,
-        addedPhysicalQrCount: Math.max(0, afterOffsetUnique.accepted.length - ensembleOnlyUnique.accepted.length),
-        actualDecodeAttempts: offsetActualDecodeAttempts,
-        skippedAttemptsBySuccess: offsetSkippedAttemptsBySuccess,
-        stats: Object.values(offsetStats),
-      },
-      rescueStudy: {
-        physicalUniqueQrCountAfterRescue: rescueUnique.accepted.length,
-        addedPhysicalQrCountVsEnsemble: Math.max(0, rescueUnique.accepted.length - ensembleOnlyUnique.accepted.length),
-        addedPhysicalQrCountVsOffset: Math.max(0, rescueUnique.accepted.length - afterOffsetUnique.accepted.length),
-        totalAttempts: totalRescueAttempts,
-        stats: Object.values(rescueStats).map((stat) => ({
-          ...stat,
-          recommendedKeep: stat.netNewCanonicalQrCount > 0,
+      candidateRefinement: {
+        inputCandidateCount: refined.inputCandidateCount,
+        refinedCandidateCount: refined.refinedCandidates.length,
+        qrLikePassCount: refined.qrLikePassCount,
+        weakRejectedCount: refined.weakRejectedCount,
+        overlapDuplicateMergedCount: refined.overlapDuplicateMergedCount,
+        falseOrDuplicateCandidateReductionCount: refined.falseOrDuplicateCandidateReductionCount,
+        refinedCandidates: refined.refinedCandidates.map((candidate) => ({
+          index: candidate.index,
+          x: candidate.x,
+          y: candidate.y,
+          bboxWidthRel: candidate.bboxWidthRel,
+          bboxHeightRel: candidate.bboxHeightRel,
+          squareRatio: candidate.squareRatio,
+          refineOffsetXRel: candidate.refineOffsetXRel,
+          refineOffsetYRel: candidate.refineOffsetYRel,
+          qrLikeScore: candidate.qrLikeScore,
+          localEdgeDensity: candidate.localEdgeDensity,
+          axisBalance: candidate.axisBalance,
+          darkRatio: candidate.darkRatio,
+          score: candidate.score,
+          refinedRawCenterX: candidate.refinedRawCenterX,
+          refinedRawCenterY: candidate.refinedRawCenterY,
+          refinedRawBboxWidth: candidate.refinedRawBboxWidth,
+          refinedRawBboxHeight: candidate.refinedRawBboxHeight,
         })),
+        allDiagnostics: refined.allDiagnostics,
+      },
+      currentEnsemble: {
+        physicalUniqueQrCount: current.physicalUniqueQrCount,
+        totalAttempts: current.totalAttempts,
+        skippedAttemptsByEarlySuccess: current.skippedAttemptsByEarlySuccess,
+        stats: current.stats,
+      },
+      refinedCore: {
+        physicalUniqueQrCount: core.physicalUniqueQrCount,
+        totalAttempts: core.totalAttempts,
+        skippedAttemptsByEarlySuccess: core.skippedAttemptsByEarlySuccess,
+        stats: core.stats,
+      },
+      thresholdStage: {
+        physicalUniqueQrCountAfterThreshold: threshold.physicalUniqueQrCount,
+        addedPhysicalQrCount: Math.max(0, threshold.physicalUniqueQrCount - core.physicalUniqueQrCount),
+        totalAttempts: threshold.totalAttempts,
+        skippedAttemptsByEarlySuccess: threshold.skippedAttemptsByEarlySuccess,
+        stats: threshold.stats,
+      },
+      rotateRescueStage: {
+        physicalUniqueQrCountAfterRescue: rescue.physicalUniqueQrCount,
+        addedPhysicalQrCount: Math.max(0, rescue.physicalUniqueQrCount - threshold.physicalUniqueQrCount),
+        totalAttempts: rescue.totalAttempts,
+        skippedAttemptsByEarlySuccess: rescue.skippedAttemptsByEarlySuccess,
+        stats: rescue.stats,
+      },
+      zxingAudit: {
+        base: readerBundle.audit,
+        invertedProbe: zxingInvertedProbe,
+      },
+      structuralValidation: {
+        rule: "slash-delimited printable vehicle-certificate QR text; ambiguous same-crop engine conflicts are not adopted",
+        crossEngineConflictCount: allConflicts.length,
+        conflicts: allConflicts,
+        adoptedConflictRule: "single structural pass wins; both pass requires structural score lead >=2; otherwise none",
       },
       timing: {
         candidateDetectionElapsedMs,
-        ensembleOnlyElapsedMs,
-        offsetSweepElapsedMs,
-        rescueOnlyElapsedMs,
-        totalExperimentalElapsedMs,
+        currentEnsembleElapsedMs,
+        candidateRefineElapsedMs,
+        refinedCoreElapsedMs,
+        thresholdElapsedMs,
+        rotateRescueElapsedMs,
+        zxingInvertedProbeElapsedMs: zxingInvertedProbe.elapsedMs,
+        totalExperimentalElapsedMs: Math.round(performance.now() - totalStarted),
       },
       decodedRuntimeVehicleKind: decodedRuntime?.kind || null,
       decodedRuntimeExpectedQrCount: Number(decodedRuntime?.count || 0) || null,
-      candidateDiagnostics: rows.map((row) => ({
+      candidateDiagnostics: rescue.rows.map((row) => ({
         candidateIndex: row.candidateIndex,
         x: row.x,
         y: row.y,
-        score: row.score,
-        mergedPeakCount: row.mergedPeakCount,
-        quality: row.quality,
-        ensembleSuccess: row.ensembleSuccess,
-        offsetSuccess: row.offsetSuccess,
-        rescueSuccess: row.rescueSuccess,
-        ensembleAttempts: row.ensembleAttempts.map(publicAttempt),
-        offsetAttempts: row.offsetAttempts.map((attempt) => ({
-          offsetId: attempt.offsetId,
-          reused: Boolean(attempt.reused),
-          dx: Number(attempt.dx || 0),
-          dy: Number(attempt.dy || 0),
-          jsqrSuccess: Boolean(attempt.jsqrSuccess),
-          zxingSuccess: Boolean(attempt.zxingSuccess),
-          physicalSuccess: Boolean(attempt.physicalSuccess),
-        })),
-        rescueAttempts: row.rescueAttempts.map(publicAttempt),
+        bboxWidthRel: row.bboxWidthRel,
+        bboxHeightRel: row.bboxHeightRel,
+        qrLikeScore: row.qrLikeScore,
+        quality: candidateQualityMetrics(raw, normalized.paper, row),
+        coreSuccess: Boolean(row.coreSuccess),
+        thresholdSuccess: Boolean(row.thresholdSuccess),
+        rotateRescueSuccess: Boolean(row.rotateRescueSuccess),
+        coreAttempts: (row.coreAttempts || []).map(publicAttempt),
+        thresholdAttempts: (row.thresholdAttempts || []).map(publicAttempt),
+        rotateRescueAttempts: (row.rotateRescueAttempts || []).map(publicAttempt),
       })),
       normalizeMode: normalized.mode,
       normalizeConfidence: Number(Number(normalized.confidence || 0).toFixed(3)),
