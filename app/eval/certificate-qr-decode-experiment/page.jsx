@@ -2947,6 +2947,7 @@ export default function CertificateQrDecodeExperimentPage() {
       <h1>車検証QR decode A/E geometry 実験</h1>
       <p>Baselineは実際の {PATHNAME} → CertificateQrFast。A=現current ensemble、E=A失敗candidateだけlocal finder/quad推定＋4-module quiet付きperspective rectifyです。</p>
       <p><b>禁止:</b> QR payloadの表示・保存・送信。本ページのsummaryは座標・設定・成功/失敗・件数のみです。</p>
+      <p style={{fontSize:12}}>experimental HEAD: <code>{experimentalHead || "URL head未指定"}</code></p>
 
       <section style={{ border: "1px solid #ccc", borderRadius: 12, padding: 14 }}>
         <input type="file" accept="image/*" multiple disabled={running} onChange={(e) => setFiles([...e.target.files].slice(0, 8))} />
