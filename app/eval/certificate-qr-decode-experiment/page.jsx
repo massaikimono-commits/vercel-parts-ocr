@@ -1222,43 +1222,88 @@ function samePhysicalPayloadNear(a, b) {
   }
   return false;
 }
+async function decodeCanvasPair({ jsQR, reader, canvas }) {
+  const js = await decodeJs(jsQR, canvas);
+  const zx = await decodeZxing(reader, canvas);
+  const adopted = adoptCanonical(js, zx);
+  const samePayloadBothEngines = Boolean(js.success && zx.success && sameCanonical(js.canonical, zx.canonical));
+  return {
+    jsqrSuccess: js.success,
+    zxingSuccess: zx.success,
+    jsStructuralPass: Boolean(js.structural?.pass),
+    zxingStructuralPass: Boolean(zx.structural?.pass),
+    jsStructural: js.structural,
+    zxingStructural: zx.structural,
+    samePayloadBothEngines,
+    physicalSuccess: Boolean(adopted.canonical),
+    crossEngineDuplicate: samePayloadBothEngines,
+    crossEngineConflict: adopted.conflict,
+    adoptedEngine: adopted.adoptedEngine,
+    adoptionReason: adopted.adoptionReason,
+    rawCanonicalSet: new Set([js?.success ? js.canonical : "", zx?.success ? zx.canonical : ""].filter(Boolean)),
+    canonicalSet: new Set(adopted.canonical ? [adopted.canonical] : []),
+  };
+}
 async function decodeWithConfig({ jsQR, reader, raw, normalized, candidate, config }) {
   const canvas = cropCandidate(raw, normalized.paper, candidate, config);
   try {
-    const js = await decodeJs(jsQR, canvas);
-    const zx = await decodeZxing(reader, canvas);
-    const adopted = adoptCanonical(js, zx);
-    const rawCanonicalSet = new Set([js?.success ? js.canonical : "", zx?.success ? zx.canonical : ""].filter(Boolean));
-    return {
-      jsqrSuccess: js.success,
-      zxingSuccess: zx.success,
-      jsStructuralPass: Boolean(js.structural?.pass),
-      zxingStructuralPass: Boolean(zx.structural?.pass),
-      physicalSuccess: Boolean(adopted.canonical),
-      crossEngineDuplicate: js.success && zx.success && sameCanonical(js.canonical, zx.canonical),
-      crossEngineConflict: adopted.conflict,
-      adoptedEngine: adopted.adoptedEngine,
-      adoptionReason: adopted.adoptionReason,
-      rawCanonicalSet,
-      canonicalSet: new Set(adopted.canonical ? [adopted.canonical] : []),
-    };
+    return await decodeCanvasPair({ jsQR, reader, canvas });
   } finally {
     canvas.width = 1;
     canvas.height = 1;
   }
 }
 function publicAttempt(attempt) {
+  const js = attempt?.jsStructural || {};
+  const zx = attempt?.zxingStructural || {};
   return {
     configId: attempt.configId,
     jsqrSuccess: Boolean(attempt.jsqrSuccess),
     zxingSuccess: Boolean(attempt.zxingSuccess),
+    samePayloadBothEngines: Boolean(attempt.samePayloadBothEngines),
     jsStructuralPass: Boolean(attempt.jsStructuralPass),
     zxingStructuralPass: Boolean(attempt.zxingStructuralPass),
+    jsPayloadLength: Number(js.payloadLength || 0),
+    zxingPayloadLength: Number(zx.payloadLength || 0),
+    jsPrintableRatio: Number(js.printableRatio || 0),
+    zxingPrintableRatio: Number(zx.printableRatio || 0),
+    jsSeparatorPattern: js.separatorPattern || "none",
+    zxingSeparatorPattern: zx.separatorPattern || "none",
+    jsRecognizedSchemaClass: js.recognizedSchemaClass || "unknown",
+    zxingRecognizedSchemaClass: zx.recognizedSchemaClass || "unknown",
+    jsStructuralFailReason: js.structuralFailReason || "no-decode",
+    zxingStructuralFailReason: zx.structuralFailReason || "no-decode",
     physicalSuccess: Boolean(attempt.physicalSuccess),
     crossEngineDuplicate: Boolean(attempt.crossEngineDuplicate),
     crossEngineConflict: Boolean(attempt.crossEngineConflict),
     adoptedEngine: attempt.adoptedEngine || "none",
     adoptionReason: attempt.adoptionReason || "none",
+  };
+}
+function structuralFailAuditFromRows(rows, attemptKey) {
+  const samePayloadStructuralFails = [];
+  const singleEngineStructuralFails = [];
+  let ambiguousConflictCount = 0;
+  for (const row of rows || []) {
+    for (const attempt of row?.[attemptKey] || []) {
+      if (attempt.crossEngineConflict && (attempt.adoptionReason === "conflict-ambiguous" || attempt.adoptionReason === "conflict-structural-fail")) {
+        ambiguousConflictCount += 1;
+      }
+      const audit = publicAttempt(attempt);
+      if (attempt.samePayloadBothEngines && !attempt.physicalSuccess) {
+        samePayloadStructuralFails.push({ candidateIndex: row.candidateIndex, ...audit });
+      } else if (!attempt.crossEngineConflict && !attempt.samePayloadBothEngines
+        && (attempt.jsqrSuccess || attempt.zxingSuccess) && !attempt.physicalSuccess) {
+        singleEngineStructuralFails.push({ candidateIndex: row.candidateIndex, ...audit });
+      }
+    }
+  }
+  return {
+    samePayloadStructuralFailCount: samePayloadStructuralFails.length,
+    singleEngineStructuralFailCount: singleEngineStructuralFails.length,
+    ambiguousConflictCount,
+    samePayloadStructuralFails,
+    singleEngineStructuralFails,
   };
 }
 function createStageStats(configs) {
@@ -1485,43 +1530,126 @@ async function augmentRows({ rows, configs, jsQR, reader, raw, normalized, prior
     conflictDetails: conflictDetailsFromRows(successKey, rows, attemptKey),
   };
 }
-async function runZxingInvertedProbe({ rows, invertedBundle, raw, normalized }) {
-  const started = performance.now();
-  if (!invertedBundle?.audit?.alsoInvertedEnabled) {
-    return {
-      ...invertedBundle?.audit,
-      testedCandidateCount: 0,
-      structuralPassCount: 0,
-      additionalStructuralPassVsBase: 0,
-      elapsedMs: 0,
-    };
-  }
-  let testedCandidateCount = 0;
-  let structuralPassCount = 0;
-  let additionalStructuralPassVsBase = 0;
-  for (const row of rows) {
-    if (row.coreSuccess) continue;
-    const canvas = cropCandidate(raw, normalized.paper, row, REFINED_CORE_CONFIGS[1]);
-    try {
-      testedCandidateCount += 1;
-      const result = await decodeZxing(invertedBundle.reader, canvas);
-      if (result.success && result.structural?.pass) {
-        structuralPassCount += 1;
-        const baseAttempt = row.coreAttempts.find((attempt) => attempt.configId === REFINED_CORE_CONFIGS[1].id);
-        if (!baseAttempt?.zxingStructuralPass) additionalStructuralPassVsBase += 1;
-      }
-    } finally {
-      canvas.width = 1;
-      canvas.height = 1;
+async function runGeometryFailOnly({ current, raw, normalized, jsQR, reader }) {
+  const geometryStarted = performance.now();
+  const diagnostics = [];
+  for (const row of current.rows) {
+    if (row.currentSuccess) {
+      diagnostics.push({
+        candidateIndex: row.candidateIndex,
+        x: row.x,
+        y: row.y,
+        skippedBecauseASuccess: true,
+        geometryValid: false,
+        geometryFailReason: "a-success-skip",
+      });
+      continue;
     }
+    const geometry = detectLocalQrGeometry(raw, normalized.paper, row);
+    diagnostics.push({
+      candidateIndex: row.candidateIndex,
+      x: row.x,
+      y: row.y,
+      skippedBecauseASuccess: false,
+      ...geometry,
+      overlapRejected: false,
+    });
     await wait(0);
   }
+
+  const valid = diagnostics
+    .filter((item) => item.geometryValid)
+    .sort((a,b) => Number(b.geometryScore||0)-Number(a.geometryScore||0));
+  const kept = [];
+  let overlapMergedCount = 0;
+  for (const item of valid) {
+    const overlap = kept.find((known) => geometryOverlap(known, item));
+    if (overlap) {
+      item.overlapRejected = true;
+      item.geometryFailReason = "geometry-overlap-duplicate";
+      overlapMergedCount += 1;
+    } else {
+      kept.push(item);
+    }
+  }
+  const geometryElapsedMs = Math.round(performance.now() - geometryStarted);
+
+  const rectifyStarted = performance.now();
+  const stats = createStageStats(GEOMETRY_RECTIFY_CONFIGS);
+  const eRows = [];
+  for (const geometry of kept) {
+    const row = current.rows.find((item) => item.candidateIndex === geometry.candidateIndex);
+    const eRow = {
+      candidateIndex: geometry.candidateIndex,
+      x: row?.x,
+      y: row?.y,
+      geometry,
+      geometrySuccess: false,
+      geometryAttempts: [],
+      canonicalSet: new Set(),
+    };
+    for (let i=0;i<GEOMETRY_RECTIFY_CONFIGS.length;i+=1) {
+      const config=GEOMETRY_RECTIFY_CONFIGS[i];
+      const canvas=rectifyQrGeometry(raw,geometry,config);
+      if (!canvas) continue;
+      try {
+        const result=await decodeCanvasPair({jsQR,reader,canvas});
+        recordAttemptStat(stats[config.id],result);
+        eRow.geometryAttempts.push({configId:config.id,...result});
+        if (result.physicalSuccess) {
+          eRow.geometrySuccess=true;
+          for (const canonical of result.canonicalSet) eRow.canonicalSet.add(canonical);
+          break;
+        }
+      } finally {
+        canvas.width=1;
+        canvas.height=1;
+      }
+      await wait(0);
+    }
+    eRows.push(eRow);
+  }
+  const rectifyDecodeElapsedMs=Math.round(performance.now()-rectifyStarted);
+
+  const aCanonical=canonicalSetFromRows(current.rows,"currentSuccess");
+  const eCanonical=canonicalSetFromRows(eRows,"geometrySuccess");
+  const union=unionCanonicalSets(aCanonical,eCanonical);
+  const netNew=canonicalNetNew(eCanonical,aCanonical);
+  const structuralAudit=structuralFailAuditFromRows(eRows,"geometryAttempts");
+
   return {
-    ...invertedBundle.audit,
-    testedCandidateCount,
-    structuralPassCount,
-    additionalStructuralPassVsBase,
-    elapsedMs: Math.round(performance.now() - started),
+    geometryElapsedMs,
+    rectifyDecodeElapsedMs,
+    aFailedCandidateCount: current.rows.filter((row)=>!row.currentSuccess).length,
+    finderOrQuadEstablishedCandidateCount: valid.length,
+    geometryKeptCandidateCount: kept.length,
+    geometryOverlapMergedCount: overlapMergedCount,
+    falseCandidateReductionCount: diagnostics.filter((item)=>!item.skippedBecauseASuccess && !item.geometryValid).length + overlapMergedCount,
+    eNetNewCanonicalVsA: netNew,
+    finalUnionCanonicalCount: union.size,
+    stats:Object.values(stats),
+    diagnostics:diagnostics.map((item)=>({
+      candidateIndex:item.candidateIndex,
+      x:item.x,
+      y:item.y,
+      skippedBecauseASuccess:Boolean(item.skippedBecauseASuccess),
+      geometryValid:Boolean(item.geometryValid),
+      geometryFailReason:item.geometryFailReason||"unknown",
+      overlapRejected:Boolean(item.overlapRejected),
+      finderCount:Number(item.finderCount||0),
+      geometryScore:Number(item.geometryScore||0),
+      qrDimension:Number(item.qrDimension||0)||null,
+      modulePx:Number(item.modulePx||0)||null,
+      perspectiveScaleSpread:Number(item.perspectiveScaleSpread||0)||null,
+      qrCenter:item.qrCenter||null,
+      findersRaw:item.findersRaw||[],
+      qrQuad:item.qrQuad||[],
+      quietQuad:item.quietQuad||[],
+    })),
+    rows:eRows,
+    structuralAudit,
+    eCanonical,
+    unionCanonical:union,
   };
 }
 async function runMatrix(file) {
@@ -1547,11 +1675,7 @@ async function runMatrix(file) {
     });
     const candidateDetectionElapsedMs = Math.round(performance.now() - detectionStarted);
 
-    const [readerBundle, invertedBundle, jsMod] = await Promise.all([
-      makeReader(),
-      makeReader({ alsoInverted: true }),
-      import("jsqr"),
-    ]);
+    const [readerBundle, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
     const jsQR = jsMod.default || jsMod;
 
     const aStarted = performance.now();
@@ -1565,217 +1689,91 @@ async function runMatrix(file) {
       successKey: "currentSuccess",
       attemptKey: "currentAttempts",
     });
-    const currentEnsembleElapsedMs = Math.round(performance.now() - aStarted);
+    const aElapsedMs = Math.round(performance.now() - aStarted);
 
-    const refineStarted = performance.now();
-    const refined = refineQrCandidates(raw, normalized.paper, coarse.candidates);
-    const candidateRefineElapsedMs = Math.round(performance.now() - refineStarted);
-
-    const bStarted = performance.now();
-    const core = await runAdaptiveRows({
-      candidates: refined.refinedCandidates,
-      configs: REFINED_CORE_CONFIGS,
+    const geometry = await runGeometryFailOnly({
+      current,
+      raw,
+      normalized,
       jsQR,
       reader: readerBundle.reader,
-      raw,
-      normalized,
-      successKey: "coreSuccess",
-      attemptKey: "coreAttempts",
-    });
-    const refinedCoreElapsedMs = Math.round(performance.now() - bStarted);
-
-    const zxingInvertedProbe = await runZxingInvertedProbe({
-      rows: core.rows,
-      invertedBundle,
-      raw,
-      normalized,
     });
 
-    const cStarted = performance.now();
-    const threshold = await augmentRows({
-      rows: core.rows,
-      configs: THRESHOLD_CONFIGS,
-      jsQR,
-      reader: readerBundle.reader,
-      raw,
-      normalized,
-      priorSuccessKeys: ["coreSuccess"],
-      successKey: "thresholdSuccess",
-      attemptKey: "thresholdAttempts",
-    });
-    const thresholdElapsedMs = Math.round(performance.now() - cStarted);
+    const decodedItems=[...geometry.unionCanonical].map((data)=>({data}));
+    const decodedRuntime=expectedCertificateQrCount(decodedItems,"");
+    const aStructuralAudit=structuralFailAuditFromRows(current.rows,"currentAttempts");
+    const allConflicts=current.conflictDetails.map((item)=>({...item,stage:"A-current-ensemble"}));
+    for (const detail of conflictDetailsFromRows("E-geometry-rectify",geometry.rows,"geometryAttempts")) allConflicts.push(detail);
 
-    const dStarted = performance.now();
-    const rescue = await augmentRows({
-      rows: threshold.rows,
-      configs: ROTATE_RESCUE_CONFIGS,
-      jsQR,
-      reader: readerBundle.reader,
-      raw,
-      normalized,
-      priorSuccessKeys: ["coreSuccess", "thresholdSuccess"],
-      successKey: "rotateRescueSuccess",
-      attemptKey: "rotateRescueAttempts",
-    });
-    const rotateRescueElapsedMs = Math.round(performance.now() - dStarted);
-
-    const aCanonical = canonicalSetFromRows(current.rows, "currentSuccess");
-    const bCanonical = canonicalSetFromRows(core.rows, "coreSuccess");
-    const cCanonical = canonicalSetFromRows(threshold.rows, "thresholdSuccess");
-    const dCanonical = canonicalSetFromRows(rescue.rows, "rotateRescueSuccess");
-    const abCanonical = unionCanonicalSets(aCanonical, bCanonical);
-    const abcCanonical = unionCanonicalSets(abCanonical, cCanonical);
-    const abcdCanonical = unionCanonicalSets(abcCanonical, dCanonical);
-    const canonicalFlow = {
-      aCanonicalCount: aCanonical.size,
-      bNetNewCanonicalVsA: canonicalNetNew(bCanonical, aCanonical),
-      abCanonicalCount: abCanonical.size,
-      cNetNewCanonicalVsAB: canonicalNetNew(cCanonical, abCanonical),
-      abcCanonicalCount: abcCanonical.size,
-      dNetNewCanonicalVsABC: canonicalNetNew(dCanonical, abcCanonical),
-      finalUnionCanonicalCount: abcdCanonical.size,
-    };
-
-    const finalAccepted = [];
-    for (const row of rescue.rows) {
-      if (!(row.coreSuccess || row.thresholdSuccess || row.rotateRescueSuccess)) continue;
-      if (finalAccepted.some((known) => samePhysicalPayloadNear(known, row))) continue;
-      finalAccepted.push(row);
-    }
-    const decodedItems = finalAccepted
-      .map((row) => [...row.canonicalSet][0])
-      .filter(Boolean)
-      .map((data) => ({ data }));
-    const decodedRuntime = expectedCertificateQrCount(decodedItems, "");
-
-    const allConflicts = [
-      ...current.conflictDetails.map((item) => ({ ...item, stage: "A-current-ensemble" })),
-      ...core.conflictDetails.map((item) => ({ ...item, stage: "B-refined-core" })),
-      ...threshold.conflictDetails.map((item) => ({ ...item, stage: "C-threshold" })),
-      ...rescue.conflictDetails.map((item) => ({ ...item, stage: "D-rotate-rescue" })),
-    ];
+    const failOnlyExpectedElapsedMs =
+      candidateDetectionElapsedMs + aElapsedMs + geometry.geometryElapsedMs + geometry.rectifyDecodeElapsedMs;
 
     return {
-      candidateDetection: {
-        dominantRowY: coarse.dominantRowY,
-        rawCandidateCount: coarse.inputCandidateCount,
-        coarsePhysicalCandidateCount: coarse.candidates.length,
-        candidatePositionDuplicateRemovedCount: coarse.candidatePositionDuplicateRemovedCount,
-        discardedOffRowCount: coarse.discardedOffRowCount,
-        physicalCandidates: coarse.candidates.map((candidate, index) => ({
-          index: index + 1,
-          x: candidate.x,
-          y: candidate.y,
-          score: candidate.score,
-          mergedPeakCount: candidate.mergedPeakCount || 1,
+      candidateDetection:{
+        dominantRowY:coarse.dominantRowY,
+        rawCandidateCount:coarse.inputCandidateCount,
+        coarsePhysicalCandidateCount:coarse.candidates.length,
+        candidatePositionDuplicateRemovedCount:coarse.candidatePositionDuplicateRemovedCount,
+        discardedOffRowCount:coarse.discardedOffRowCount,
+        physicalCandidates:coarse.candidates.map((candidate,index)=>({
+          index:index+1,x:candidate.x,y:candidate.y,score:candidate.score,mergedPeakCount:candidate.mergedPeakCount||1,
         })),
       },
-      candidateRefinement: {
-        inputCandidateCount: refined.inputCandidateCount,
-        refinedCandidateCount: refined.refinedCandidates.length,
-        qrLikePassCount: refined.qrLikePassCount,
-        weakRejectedCount: refined.weakRejectedCount,
-        overlapDuplicateMergedCount: refined.overlapDuplicateMergedCount,
-        falseOrDuplicateCandidateReductionCount: refined.falseOrDuplicateCandidateReductionCount,
-        refinedCandidates: refined.refinedCandidates.map((candidate) => ({
-          index: candidate.index,
-          x: candidate.x,
-          y: candidate.y,
-          bboxWidthRel: candidate.bboxWidthRel,
-          bboxHeightRel: candidate.bboxHeightRel,
-          squareRatio: candidate.squareRatio,
-          refineOffsetXRel: candidate.refineOffsetXRel,
-          refineOffsetYRel: candidate.refineOffsetYRel,
-          qrLikeScore: candidate.qrLikeScore,
-          localEdgeDensity: candidate.localEdgeDensity,
-          axisBalance: candidate.axisBalance,
-          darkRatio: candidate.darkRatio,
-          score: candidate.score,
-          refinedRawCenterX: candidate.refinedRawCenterX,
-          refinedRawCenterY: candidate.refinedRawCenterY,
-          refinedRawBboxWidth: candidate.refinedRawBboxWidth,
-          refinedRawBboxHeight: candidate.refinedRawBboxHeight,
-        })),
-        allDiagnostics: refined.allDiagnostics,
-      },
-      currentEnsemble: {
-        physicalUniqueQrCount: current.physicalUniqueQrCount,
-        legacyCompatiblePhysicalUniqueQrCount: current.legacyCompatiblePhysicalUniqueQrCount,
-        v4ReferencePhysicalUniqueQrCount: 29,
-        decodeResultDeltaVsV4Reference: current.legacyCompatiblePhysicalUniqueQrCount - 29,
-        structuralAndConflictDeltaVsLegacyCompatible: current.physicalUniqueQrCount - current.legacyCompatiblePhysicalUniqueQrCount,
+      currentEnsemble:{
+        physicalUniqueQrCount:current.physicalUniqueQrCount,
+        legacyCompatiblePhysicalUniqueQrCount:current.legacyCompatiblePhysicalUniqueQrCount,
+        v5ReferenceLegacyCompatiblePhysicalUniqueQrCount:29,
+        decodeResultDeltaVsReference:current.legacyCompatiblePhysicalUniqueQrCount-29,
+        structuralAndConflictDeltaVsLegacyCompatible:current.physicalUniqueQrCount-current.legacyCompatiblePhysicalUniqueQrCount,
         ...current.exclusionDiagnostics,
-        totalAttempts: current.totalAttempts,
-        skippedAttemptsByEarlySuccess: current.skippedAttemptsByEarlySuccess,
-        stats: current.stats,
+        totalAttempts:current.totalAttempts,
+        skippedAttemptsByEarlySuccess:current.skippedAttemptsByEarlySuccess,
+        stats:current.stats,
+        structuralAudit:aStructuralAudit,
       },
-      refinedCore: {
-        physicalUniqueQrCount: core.physicalUniqueQrCount,
-        totalAttempts: core.totalAttempts,
-        skippedAttemptsByEarlySuccess: core.skippedAttemptsByEarlySuccess,
-        stats: core.stats,
+      geometryStage:{
+        aFailedCandidateCount:geometry.aFailedCandidateCount,
+        finderOrQuadEstablishedCandidateCount:geometry.finderOrQuadEstablishedCandidateCount,
+        geometryKeptCandidateCount:geometry.geometryKeptCandidateCount,
+        geometryOverlapMergedCount:geometry.geometryOverlapMergedCount,
+        falseCandidateReductionCount:geometry.falseCandidateReductionCount,
+        eNetNewCanonicalVsA:geometry.eNetNewCanonicalVsA,
+        finalUnionCanonicalCount:geometry.finalUnionCanonicalCount,
+        stats:geometry.stats,
+        diagnostics:geometry.diagnostics,
+        structuralAudit:geometry.structuralAudit,
       },
-      thresholdStage: {
-        physicalUniqueQrCountAfterThreshold: threshold.physicalUniqueQrCount,
-        addedPhysicalQrCount: Math.max(0, threshold.physicalUniqueQrCount - core.physicalUniqueQrCount),
-        totalAttempts: threshold.totalAttempts,
-        skippedAttemptsByEarlySuccess: threshold.skippedAttemptsByEarlySuccess,
-        stats: threshold.stats,
+      structuralValidation:{
+        crossEngineConflictCount:allConflicts.length,
+        ambiguousConflictCount:aStructuralAudit.ambiguousConflictCount+geometry.structuralAudit.ambiguousConflictCount,
+        samePayloadStructuralFailCount:aStructuralAudit.samePayloadStructuralFailCount+geometry.structuralAudit.samePayloadStructuralFailCount,
+        singleEngineStructuralFailCount:aStructuralAudit.singleEngineStructuralFailCount+geometry.structuralAudit.singleEngineStructuralFailCount,
+        samePayloadStructuralFails:[
+          ...aStructuralAudit.samePayloadStructuralFails.map((item)=>({...item,stage:"A-current-ensemble"})),
+          ...geometry.structuralAudit.samePayloadStructuralFails.map((item)=>({...item,stage:"E-geometry-rectify"})),
+        ],
+        singleEngineStructuralFails:[
+          ...aStructuralAudit.singleEngineStructuralFails.map((item)=>({...item,stage:"A-current-ensemble"})),
+          ...geometry.structuralAudit.singleEngineStructuralFails.map((item)=>({...item,stage:"E-geometry-rectify"})),
+        ],
+        conflicts:allConflicts,
+        adoptedConflictRule:"ambiguous conflict remains rejected; structural schema is audited, not loosened",
       },
-      rotateRescueStage: {
-        physicalUniqueQrCountAfterRescue: rescue.physicalUniqueQrCount,
-        addedPhysicalQrCount: Math.max(0, rescue.physicalUniqueQrCount - threshold.physicalUniqueQrCount),
-        totalAttempts: rescue.totalAttempts,
-        skippedAttemptsByEarlySuccess: rescue.skippedAttemptsByEarlySuccess,
-        stats: rescue.stats,
-      },
-      canonicalFlow,
-      zxingAudit: {
-        base: readerBundle.audit,
-        invertedProbe: zxingInvertedProbe,
-      },
-      structuralValidation: {
-        rule: "slash-delimited printable vehicle-certificate QR text; ambiguous same-crop engine conflicts are not adopted",
-        crossEngineConflictCount: allConflicts.length,
-        conflicts: allConflicts,
-        adoptedConflictRule: "single structural pass wins; both pass requires structural score lead >=2; otherwise none",
-      },
-      timing: {
+      timing:{
         candidateDetectionElapsedMs,
-        currentEnsembleElapsedMs,
-        candidateRefineElapsedMs,
-        refinedCoreElapsedMs,
-        thresholdElapsedMs,
-        rotateRescueElapsedMs,
-        zxingInvertedProbeElapsedMs: zxingInvertedProbe.elapsedMs,
-        productionCandidateElapsedMs: Math.max(0, Math.round(performance.now() - totalStarted) - zxingInvertedProbe.elapsedMs),
-        totalExperimentalElapsedMs: Math.round(performance.now() - totalStarted),
+        aElapsedMs,
+        geometryElapsedMs:geometry.geometryElapsedMs,
+        rectifyDecodeElapsedMs:geometry.rectifyDecodeElapsedMs,
+        failOnlyExpectedElapsedMs,
+        totalExperimentalElapsedMs:Math.round(performance.now()-totalStarted),
       },
-      decodedRuntimeVehicleKind: decodedRuntime?.kind || null,
-      decodedRuntimeExpectedQrCount: Number(decodedRuntime?.count || 0) || null,
-      candidateDiagnostics: rescue.rows.map((row) => ({
-        candidateIndex: row.candidateIndex,
-        x: row.x,
-        y: row.y,
-        bboxWidthRel: row.bboxWidthRel,
-        bboxHeightRel: row.bboxHeightRel,
-        qrLikeScore: row.qrLikeScore,
-        quality: candidateQualityMetrics(raw, normalized.paper, row),
-        coreSuccess: Boolean(row.coreSuccess),
-        thresholdSuccess: Boolean(row.thresholdSuccess),
-        rotateRescueSuccess: Boolean(row.rotateRescueSuccess),
-        coreAttempts: (row.coreAttempts || []).map(publicAttempt),
-        thresholdAttempts: (row.thresholdAttempts || []).map(publicAttempt),
-        rotateRescueAttempts: (row.rotateRescueAttempts || []).map(publicAttempt),
-      })),
-      normalizeMode: normalized.mode,
-      normalizeConfidence: Number(Number(normalized.confidence || 0).toFixed(3)),
+      decodedRuntimeVehicleKind:decodedRuntime?.kind||null,
+      decodedRuntimeExpectedQrCount:Number(decodedRuntime?.count||0)||null,
+      normalizeMode:normalized.mode,
+      normalizeConfidence:Number(Number(normalized.confidence||0).toFixed(3)),
     };
   } finally {
-    raw.width = 1;
-    raw.height = 1;
-    norm.width = 1;
-    norm.height = 1;
+    raw.width=1; raw.height=1; norm.width=1; norm.height=1;
   }
 }
 function applyCountingIntegrity(matrix, expectedQrCount) {
