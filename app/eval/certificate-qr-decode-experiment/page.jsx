@@ -23,10 +23,15 @@ const OVERLAY_CLASS_OPTIONS = Object.freeze([
 ]);
 const PRIOR_OVERLAY_CLASSIFICATIONS = Object.freeze({
   "IMG_0942.jpeg#1":"C",
+  "IMG_0942.jpeg#2":"C",
+  "IMG_0942.jpeg#3":"A",
   "IMG_0942.jpeg#4":"B",
+  "IMG_0942.jpeg#5":"A",
+  "IMG_0942.jpeg#6":"A",
   "IMG_0942.jpeg#7":"B",
   "IMG_0942.jpeg#8":"D",
   "IMG_0942.jpeg#9":"B",
+  "IMG_0942.jpeg#10":"B",
   "IMG_0944.jpeg#1":"A",
   "IMG_0944.jpeg#2":"B",
   "IMG_0944.jpeg#3":"B",
