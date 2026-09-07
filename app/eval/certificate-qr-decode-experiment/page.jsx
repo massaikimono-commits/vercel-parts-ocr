@@ -1758,8 +1758,12 @@ function compactConsensusAuditFromRows(rows, attemptKey, paperWidthPxValue) {
       y:row.y,
       center,
       physicalQrConsensusAccepted:Boolean(acceptedAttempt),
-      parserSchemaRecognized:false,
+      parserSchemaRecognized:Boolean(chosen.parserSchemaRecognized),
+      parserSchemaClass:chosen.jsStructural?.parserSchemaClass||chosen.zxingStructural?.parserSchemaClass||"unrecognized",
       compactSchemaClass:chosen.compactSchemaClass||"compact-unconfirmed",
+      candidateAlignmentAvailable:Boolean(chosen.compactCandidateAlignmentAvailable),
+      candidateAligned:Boolean(chosen.compactCandidateAligned),
+      candidateCenterDistanceNormalized:chosen.compactCandidateCenterDistanceNormalized??null,
       payloadLength:Number(chosen.jsStructural?.payloadLength||chosen.zxingStructural?.payloadLength||0),
       printableRatio:Number(chosen.jsStructural?.printableRatio||chosen.zxingStructural?.printableRatio||0),
       asciiVisibleRatio:Number(chosen.jsStructural?.asciiVisibleRatio||chosen.zxingStructural?.asciiVisibleRatio||0),
@@ -1783,6 +1787,11 @@ function compactConsensusAuditFromRows(rows, attemptKey, paperWidthPxValue) {
         duplicate.physicalQrConsensusAccepted=true;
         for(const canonical of candidate.canonicalSet) duplicate.canonicalSet.add(canonical);
       }
+      duplicate.parserSchemaRecognized=duplicate.parserSchemaRecognized||candidate.parserSchemaRecognized;
+      duplicate.candidateAligned=duplicate.candidateAligned||candidate.candidateAligned;
+      if(duplicate.candidateCenterDistanceNormalized==null || (candidate.candidateCenterDistanceNormalized!=null && candidate.candidateCenterDistanceNormalized<duplicate.candidateCenterDistanceNormalized)){
+        duplicate.candidateCenterDistanceNormalized=candidate.candidateCenterDistanceNormalized;
+      }
       continue;
     }
     unique.push({...candidate,canonicalSet:new Set(candidate.canonicalSet)});
@@ -1796,13 +1805,17 @@ function compactConsensusAuditFromRows(rows, attemptKey, paperWidthPxValue) {
   return {
     uniqueCompactCandidateCount:unique.length,
     compactPhysicalConsensusAcceptedCount:unique.filter((item)=>item.physicalQrConsensusAccepted).length,
-    compactParserRecognizedCount:0,
+    compactParserRecognizedCount:unique.filter((item)=>item.parserSchemaRecognized).length,
     diagnostics:unique.map((item)=>({
       candidateIndex:item.candidateIndex,
       rawCenter:item.center?{x:Number(item.center.x.toFixed(2)),y:Number(item.center.y.toFixed(2))}:null,
       physicalQrConsensusAccepted:Boolean(item.physicalQrConsensusAccepted),
-      parserSchemaRecognized:false,
+      parserSchemaRecognized:Boolean(item.parserSchemaRecognized),
+      parserSchemaClass:item.parserSchemaClass||"unrecognized",
       compactSchemaClass:item.compactSchemaClass,
+      candidateAlignmentAvailable:Boolean(item.candidateAlignmentAvailable),
+      candidateAligned:Boolean(item.candidateAligned),
+      candidateCenterDistanceNormalized:item.candidateCenterDistanceNormalized??null,
       payloadLength:item.payloadLength,
       printableRatio:item.printableRatio,
       asciiVisibleRatio:item.asciiVisibleRatio,
