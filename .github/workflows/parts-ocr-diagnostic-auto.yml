@@ -57,7 +57,7 @@ jobs:
 
       - name: Run browser diagnostics
         run: |
-          cat > /tmp/run-parts-diagnostic.cjs <<'NODE'
+          cat > .parts-diagnostic-run.cjs <<'NODE'
           const { chromium } = require('playwright');
 
           async function runOne(page, label, file) {
@@ -93,7 +93,7 @@ jobs:
             process.exit(1);
           });
           NODE
-          node /tmp/run-parts-diagnostic.cjs
+          node .parts-diagnostic-run.cjs
 
       - name: Show app log on failure
         if: failure()
