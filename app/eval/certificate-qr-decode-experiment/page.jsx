@@ -17,6 +17,17 @@ const OVERLAY_CLASS_OPTIONS = Object.freeze([
   { value: "C", label: "C: QR外/通常文字の誤検出" },
   { value: "D", label: "D: QRだがquad/角度/quiet不適切" },
 ]);
+const PRIOR_OVERLAY_CLASSIFICATIONS = Object.freeze({
+  "IMG_0942.jpeg#4":"B",
+  "IMG_0942.jpeg#7":"B",
+  "IMG_0942.jpeg#8":"D",
+  "IMG_0942.jpeg#9":"B",
+  "IMG_0944.jpeg#1":"A",
+  "IMG_0944.jpeg#2":"B",
+  "IMG_0944.jpeg#3":"B",
+  "IMG_0944.jpeg#5":"B",
+  "IMG_0944.jpeg#8":"A",
+});
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const GT_OPTIONS = [
   { value: "", label: "未設定", expected: null },
@@ -1069,6 +1080,348 @@ function candidateQualityMetrics(raw, page, candidate) {
     canvas.width = 1;
     canvas.height = 1;
   }
+}
+function percentile(values, ratio) {
+  const sorted=(values||[]).filter(Number.isFinite).sort((a,b)=>a-b);
+  if(!sorted.length) return null;
+  const index=Math.max(0,Math.min(sorted.length-1,(sorted.length-1)*ratio));
+  const lo=Math.floor(index), hi=Math.ceil(index);
+  if(lo===hi) return sorted[lo];
+  const t=index-lo;
+  return sorted[lo]*(1-t)+sorted[hi]*t;
+}
+function focusMetricsFromImageData(image, insetRatio=.04) {
+  const width=image?.width||0, height=image?.height||0;
+  if(width<5||height<5) return null;
+  const gray=new Float32Array(width*height);
+  let min=255,max=0,sum=0,count=0;
+  for(let i=0,p=0;i<gray.length;i+=1,p+=4){
+    const g=image.data[p]*.22+image.data[p+1]*.70+image.data[p+2]*.08;
+    gray[i]=g;
+  }
+  const marginX=Math.max(1,Math.floor(width*insetRatio));
+  const marginY=Math.max(1,Math.floor(height*insetRatio));
+  for(let y=marginY;y<height-marginY;y+=1){
+    for(let x=marginX;x<width-marginX;x+=1){
+      const g=gray[y*width+x];
+      sum+=g; count+=1; if(g<min)min=g; if(g>max)max=g;
+    }
+  }
+  const mean=count?sum/count:0;
+  let variance=0,edgeSum=0,gradientEnergy=0,edgeCount=0,lapSum=0,lapSq=0,lapCount=0;
+  for(let y=Math.max(1,marginY);y<Math.min(height-1,height-marginY);y+=1){
+    for(let x=Math.max(1,marginX);x<Math.min(width-1,width-marginX);x+=1){
+      const i=y*width+x;
+      const g=gray[i];
+      variance+=(g-mean)*(g-mean);
+      const gx=(gray[i+1]-gray[i-1])*.5;
+      const gy=(gray[i+width]-gray[i-width])*.5;
+      const mag=Math.hypot(gx,gy);
+      edgeSum+=mag;
+      gradientEnergy+=gx*gx+gy*gy;
+      edgeCount+=1;
+      const lap=gray[i-1]+gray[i+1]+gray[i-width]+gray[i+width]-4*g;
+      lapSum+=lap; lapSq+=lap*lap; lapCount+=1;
+    }
+  }
+  const lapMean=lapCount?lapSum/lapCount:0;
+  const lapVariance=lapCount?Math.max(0,lapSq/lapCount-lapMean*lapMean):0;
+  return {
+    pixelWidth:width,
+    pixelHeight:height,
+    localContrastRange:Number((max-min).toFixed(3)),
+    localLumaStdDev:Number(Math.sqrt(variance/Math.max(1,edgeCount)).toFixed(3)),
+    edgeStrength:Number((edgeSum/Math.max(1,edgeCount)).toFixed(3)),
+    gradientEnergy:Number((gradientEnergy/Math.max(1,edgeCount)).toFixed(3)),
+    blurIndicatorLaplacianVariance:Number(lapVariance.toFixed(3)),
+  };
+}
+function focusMetricsFromCanvas(canvas, insetRatio=.04) {
+  if(!canvas?.width||!canvas?.height) return null;
+  const ctx=canvas.getContext("2d",{willReadFrequently:true});
+  return focusMetricsFromImageData(ctx.getImageData(0,0,canvas.width,canvas.height),insetRatio);
+}
+function rawPatchFocusMetrics(raw, center, radiusPx) {
+  if(!raw||!center) return null;
+  const radius=Math.max(5,Math.round(radiusPx||8));
+  const x0=Math.max(0,Math.floor(Number(center.x)-radius));
+  const y0=Math.max(0,Math.floor(Number(center.y)-radius));
+  const x1=Math.min(raw.width,Math.ceil(Number(center.x)+radius));
+  const y1=Math.min(raw.height,Math.ceil(Number(center.y)+radius));
+  const w=Math.max(1,x1-x0),h=Math.max(1,y1-y0);
+  if(w<5||h<5) return null;
+  const image=raw.getContext("2d",{willReadFrequently:true}).getImageData(x0,y0,w,h);
+  return focusMetricsFromImageData(image,.08);
+}
+function geometryAxisCrop(raw, geometry) {
+  const quad=geometry?.quietQuad;
+  if(!geometry?.geometryValid||!Array.isArray(quad)||quad.length!==4) return null;
+  const b=quadBounds(quad);
+  const x0=Math.max(0,Math.floor(b.x0));
+  const y0=Math.max(0,Math.floor(b.y0));
+  const x1=Math.min(raw.width,Math.ceil(b.x1));
+  const y1=Math.min(raw.height,Math.ceil(b.y1));
+  const w=Math.max(1,x1-x0),h=Math.max(1,y1-y0);
+  const canvas=document.createElement("canvas");
+  canvas.width=w; canvas.height=h;
+  canvas.getContext("2d",{willReadFrequently:true}).drawImage(raw,x0,y0,w,h,0,0,w,h);
+  return canvas;
+}
+function sampleLumaBilinear(image,x,y) {
+  const width=image.width,height=image.height;
+  const fx=Math.max(0,Math.min(width-1,x)), fy=Math.max(0,Math.min(height-1,y));
+  const x0=Math.floor(fx),y0=Math.floor(fy),x1=Math.min(width-1,x0+1),y1=Math.min(height-1,y0+1);
+  const tx=fx-x0,ty=fy-y0;
+  const luma=(ix,iy)=>{
+    const p=(iy*width+ix)*4;
+    return image.data[p]*.22+image.data[p+1]*.70+image.data[p+2]*.08;
+  };
+  const a=luma(x0,y0)*(1-tx)+luma(x1,y0)*tx;
+  const b=luma(x0,y1)*(1-tx)+luma(x1,y1)*tx;
+  return a*(1-ty)+b*ty;
+}
+function geometryModuleQualityMetrics(raw, geometry, rectifiedCanvas) {
+  const dimension=Number(geometry?.qrDimension||0);
+  const modulePx=Number(geometry?.modulePx||0);
+  const quad=geometry?.quietQuad;
+  if(!geometry?.geometryValid||!dimension||!modulePx||!Array.isArray(quad)||quad.length!==4) return null;
+  const totalModules=dimension+8;
+  const b=quadBounds(quad);
+  const x0=Math.max(0,Math.floor(b.x0)-1);
+  const y0=Math.max(0,Math.floor(b.y0)-1);
+  const x1=Math.min(raw.width,Math.ceil(b.x1)+1);
+  const y1=Math.min(raw.height,Math.ceil(b.y1)+1);
+  const w=Math.max(1,x1-x0),hgt=Math.max(1,y1-y0);
+  const image=raw.getContext("2d",{willReadFrequently:true}).getImageData(x0,y0,w,hgt);
+  const h=homographyDestToSource(1001,quad);
+  if(!h) return null;
+  const map=(nx,ny)=>{
+    const u=nx*1000,v=ny*1000;
+    const denom=h[6]*u+h[7]*v+1;
+    if(Math.abs(denom)<1e-9) return null;
+    return {
+      x:(h[0]*u+h[1]*v+h[2])/denom-x0,
+      y:(h[3]*u+h[4]*v+h[5])/denom-y0,
+    };
+  };
+  const qrRows=[];
+  const qrLumas=[];
+  const quietLumas=[];
+  const borderLumas=[];
+  for(let my=0;my<totalModules;my+=1){
+    const row=[];
+    for(let mx=0;mx<totalModules;mx+=1){
+      const p=map((mx+.5)/totalModules,(my+.5)/totalModules);
+      if(!p) continue;
+      const l=sampleLumaBilinear(image,p.x,p.y);
+      const quiet=mx<4||my<4||mx>=totalModules-4||my>=totalModules-4;
+      if(quiet){
+        quietLumas.push(l);
+      } else {
+        const qx=mx-4,qy=my-4;
+        if(!qrRows[qy]) qrRows[qy]=[];
+        qrRows[qy][qx]=l;
+        qrLumas.push(l);
+        if(qx<2||qy<2||qx>=dimension-2||qy>=dimension-2) borderLumas.push(l);
+      }
+    }
+  }
+  const diffs=[];
+  for(let y=0;y<dimension;y+=1){
+    for(let x=0;x<dimension;x+=1){
+      const v=qrRows[y]?.[x];
+      if(!Number.isFinite(v)) continue;
+      const right=qrRows[y]?.[x+1];
+      const down=qrRows[y+1]?.[x];
+      if(Number.isFinite(right)) diffs.push(Math.abs(v-right));
+      if(Number.isFinite(down)) diffs.push(Math.abs(v-down));
+    }
+  }
+  const p25=percentile(qrLumas,.25),p75=percentile(qrLumas,.75),qMedian=percentile(qrLumas,.5);
+  const low=qrLumas.filter(v=>qMedian!=null&&v<=qMedian);
+  const high=qrLumas.filter(v=>qMedian!=null&&v>qMedian);
+  const mean=(values)=>values.length?values.reduce((s,v)=>s+v,0)/values.length:null;
+  const meanQuiet=mean(quietLumas), meanBorder=mean(borderLumas);
+  const p25Diff=percentile(diffs,.75);
+  const topDiffs=p25Diff==null?[]:diffs.filter(v=>v>=p25Diff);
+  const finderPatchMetrics=(geometry.findersRaw||[]).map((finder)=>
+    rawPatchFocusMetrics(raw,finder,Math.max(7,modulePx*4.2))
+  ).filter(Boolean);
+  const finderMean=(key)=>finderPatchMetrics.length
+    ?finderPatchMetrics.reduce((s,m)=>s+Number(m?.[key]||0),0)/finderPatchMetrics.length
+    :null;
+  const quietMean=meanQuiet;
+  const quietStd=quietLumas.length&&quietMean!=null
+    ?Math.sqrt(quietLumas.reduce((s,v)=>s+(v-quietMean)*(v-quietMean),0)/quietLumas.length)
+    :null;
+  return {
+    qrDimension:dimension,
+    totalModulesWithQuietZone:totalModules,
+    estimatedModuleWidthRawPx:Number(modulePx.toFixed(3)),
+    estimatedModuleWidthRectifiedPx:rectifiedCanvas?.width
+      ?Number((rectifiedCanvas.width/totalModules).toFixed(3))
+      :null,
+    blackWhiteSeparationP75P25:p25!=null&&p75!=null?Number((p75-p25).toFixed(3)):null,
+    bimodalMeanSeparation:low.length&&high.length?Number((mean(high)-mean(low)).toFixed(3)):null,
+    moduleBoundaryContrastP75:p25Diff!=null?Number(p25Diff.toFixed(3)):null,
+    activeBoundaryContrastTopQuartileMean:topDiffs.length?Number(mean(topDiffs).toFixed(3)):null,
+    finderEdgeStrengthMean:finderMean("edgeStrength")!=null?Number(finderMean("edgeStrength").toFixed(3)):null,
+    finderGradientEnergyMean:finderMean("gradientEnergy")!=null?Number(finderMean("gradientEnergy").toFixed(3)):null,
+    finderLaplacianVarianceMean:finderMean("blurIndicatorLaplacianVariance")!=null?Number(finderMean("blurIndicatorLaplacianVariance").toFixed(3)):null,
+    quietZoneLumaMean:quietMean!=null?Number(quietMean.toFixed(3)):null,
+    quietZoneLumaStdDev:quietStd!=null?Number(quietStd.toFixed(3)):null,
+    qrBorderLumaMean:meanBorder!=null?Number(meanBorder.toFixed(3)):null,
+    quietVsQrBorderMeanContrast:quietMean!=null&&meanBorder!=null?Number(Math.abs(quietMean-meanBorder).toFixed(3)):null,
+    quietVsDarkQuartileContrast:quietMean!=null&&p25!=null?Number((quietMean-p25).toFixed(3)):null,
+  };
+}
+function buildCandidateQualityDiagnostic(raw, page, row, geometry, sourceLabel) {
+  const coarse=candidateQualityMetrics(raw,page,row);
+  let originalAxisCrop=null,rectified=null,moduleQuality=null,retention=null;
+  if(geometry?.geometryValid){
+    const original=geometryAxisCrop(raw,geometry);
+    const rectifiedCanvas=rectifyQrGeometry(raw,geometry,GEOMETRY_RECTIFY_CONFIGS[0]);
+    try{
+      originalAxisCrop=original?focusMetricsFromCanvas(original,.06):null;
+      rectified=rectifiedCanvas?focusMetricsFromCanvas(rectifiedCanvas,.06):null;
+      moduleQuality=geometryModuleQualityMetrics(raw,geometry,rectifiedCanvas);
+      if(originalAxisCrop&&rectified){
+        const ratio=(a,b)=>Number.isFinite(Number(a))&&Number(a)>0&&Number.isFinite(Number(b))
+          ?Number((Number(b)/Number(a)).toFixed(4)):null;
+        retention={
+          gradientEnergyRatio:ratio(originalAxisCrop.gradientEnergy,rectified.gradientEnergy),
+          laplacianVarianceRatio:ratio(originalAxisCrop.blurIndicatorLaplacianVariance,rectified.blurIndicatorLaplacianVariance),
+          edgeStrengthRatio:ratio(originalAxisCrop.edgeStrength,rectified.edgeStrength),
+        };
+      }
+    } finally {
+      if(original){original.width=1;original.height=1;}
+      if(rectifiedCanvas){rectifiedCanvas.width=1;rectifiedCanvas.height=1;}
+    }
+  }
+  return {
+    candidateIndex:row.candidateIndex,
+    sourceLabel,
+    decodeSucceeded:Boolean(row.currentSuccess||row.geometrySuccess),
+    geometryValid:Boolean(geometry?.geometryValid),
+    overlapRejected:Boolean(geometry?.overlapRejected),
+    geometryFailReason:geometry?.geometryFailReason||"none",
+    qrDimension:Number(geometry?.qrDimension||0)||null,
+    modulePx:Number(geometry?.modulePx||0)||null,
+    perspectiveScaleSpread:Number(geometry?.perspectiveScaleSpread||0)||null,
+    candidateCenterDistancePx:Number(geometry?.candidateCenterDistancePx||0)||null,
+    coarseCandidateCrop:coarse,
+    originalGeometryAxisCrop:originalAxisCrop,
+    rectifiedCrop:rectified,
+    rectifySharpnessRetention:retention,
+    moduleQuality,
+  };
+}
+function buildQualityDiagnosticAudit(file, raw, normalized, current, geometry) {
+  const started=performance.now();
+  const fileName=normalizeFixedFileName(file)||safeName(file);
+  const diagnosticsByIndex=new Map((geometry?.diagnostics||[]).map((item)=>[item.candidateIndex,item]));
+  const priorityIndexes=OVERLAY_PRIORITY_CANDIDATES[fileName]||[];
+  const priorityCandidates=[];
+  for(const index of priorityIndexes){
+    const row=current.rows.find((item)=>item.candidateIndex===index);
+    const g=diagnosticsByIndex.get(index);
+    if(!row||!g) continue;
+    priorityCandidates.push({
+      fileName,
+      priorOverlayClassification:PRIOR_OVERLAY_CLASSIFICATIONS[`${fileName}#${index}`]||null,
+      ...buildCandidateQualityDiagnostic(raw,normalized.paper,row,g,"priority-failed-candidate"),
+    });
+  }
+  const successfulReferences=[];
+  const seen=new Set();
+  for(const row of current.rows||[]){
+    if(!row.currentSuccess||seen.has(row.candidateIndex)) continue;
+    seen.add(row.candidateIndex);
+    const diagnosticGeometry=detectLocalQrGeometry(raw,normalized.paper,row);
+    successfulReferences.push({
+      fileName,
+      ...buildCandidateQualityDiagnostic(raw,normalized.paper,row,diagnosticGeometry,"A-current-decode-success"),
+    });
+  }
+  for(const eRow of geometry?.rows||[]){
+    if(!eRow.geometrySuccess||seen.has(eRow.candidateIndex)) continue;
+    seen.add(eRow.candidateIndex);
+    successfulReferences.push({
+      fileName,
+      ...buildCandidateQualityDiagnostic(raw,normalized.paper,eRow,eRow.geometry,"E-rectify-decode-success"),
+    });
+  }
+  return {
+    diagnosticOnly:true,
+    formalDecodeLogicChanged:false,
+    priorityCandidates,
+    successfulReferences,
+    qualityDiagnosticElapsedMs:Math.round(performance.now()-started),
+  };
+}
+function metricAt(obj,path) {
+  return path.split(".").reduce((value,key)=>value?.[key],obj);
+}
+function summarizeSuccessfulQualityReferences(entries=[]) {
+  const metricPaths=[
+    "originalGeometryAxisCrop.gradientEnergy",
+    "originalGeometryAxisCrop.blurIndicatorLaplacianVariance",
+    "originalGeometryAxisCrop.edgeStrength",
+    "rectifiedCrop.gradientEnergy",
+    "rectifiedCrop.blurIndicatorLaplacianVariance",
+    "rectifiedCrop.edgeStrength",
+    "rectifySharpnessRetention.gradientEnergyRatio",
+    "rectifySharpnessRetention.laplacianVarianceRatio",
+    "rectifySharpnessRetention.edgeStrengthRatio",
+    "moduleQuality.estimatedModuleWidthRawPx",
+    "moduleQuality.finderEdgeStrengthMean",
+    "moduleQuality.finderGradientEnergyMean",
+    "moduleQuality.finderLaplacianVarianceMean",
+    "moduleQuality.blackWhiteSeparationP75P25",
+    "moduleQuality.bimodalMeanSeparation",
+    "moduleQuality.moduleBoundaryContrastP75",
+    "moduleQuality.activeBoundaryContrastTopQuartileMean",
+    "moduleQuality.quietVsQrBorderMeanContrast",
+    "moduleQuality.quietVsDarkQuartileContrast",
+  ];
+  const metrics={};
+  for(const path of metricPaths){
+    const values=entries.map((item)=>Number(metricAt(item,path))).filter(Number.isFinite);
+    metrics[path]={
+      count:values.length,
+      p25:values.length?Number(percentile(values,.25).toFixed(4)):null,
+      median:values.length?Number(percentile(values,.5).toFixed(4)):null,
+      p75:values.length?Number(percentile(values,.75).toFixed(4)):null,
+    };
+  }
+  return {
+    referenceCandidateCount:entries.length,
+    geometryValidReferenceCount:entries.filter((item)=>item.geometryValid).length,
+    imageCount:new Set(entries.map((item)=>item.fileName)).size,
+    metrics,
+  };
+}
+function priorityRelativeToReference(entry, referenceSummary) {
+  const paths=[
+    "originalGeometryAxisCrop.gradientEnergy",
+    "originalGeometryAxisCrop.blurIndicatorLaplacianVariance",
+    "originalGeometryAxisCrop.edgeStrength",
+    "moduleQuality.estimatedModuleWidthRawPx",
+    "moduleQuality.finderEdgeStrengthMean",
+    "moduleQuality.finderLaplacianVarianceMean",
+    "moduleQuality.blackWhiteSeparationP75P25",
+    "moduleQuality.moduleBoundaryContrastP75",
+    "moduleQuality.quietVsDarkQuartileContrast",
+  ];
+  const out={};
+  for(const path of paths){
+    const value=Number(metricAt(entry,path));
+    const median=Number(referenceSummary?.metrics?.[path]?.median);
+    out[path]=Number.isFinite(value)&&Number.isFinite(median)&&median>0
+      ?Number((value/median).toFixed(4)):null;
+  }
+  return out;
 }
 function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
   return new Promise((resolve, reject) => {
@@ -2572,6 +2925,7 @@ async function runMatrix(file) {
 
     const failOnlyExpectedElapsedMs =
       candidateDetectionElapsedMs + aElapsedMs + geometry.geometryElapsedMs + geometry.rectifyDecodeElapsedMs;
+    const qualityDiagnosticAudit=buildQualityDiagnosticAudit(file,raw,normalized,current,geometry);
 
     return {
       candidateDetection:{
@@ -2654,12 +3008,14 @@ async function runMatrix(file) {
         conflicts:allConflicts,
         adoptedConflictRule:"same-position ambiguous conflicts remain rejected; compact physical consensus and multi-QR position resolution are tracked separately from parser recognition",
       },
+      qualityDiagnosticAudit,
       timing:{
         candidateDetectionElapsedMs,
         aElapsedMs,
         geometryElapsedMs:geometry.geometryElapsedMs,
         rectifyDecodeElapsedMs:geometry.rectifyDecodeElapsedMs,
         failOnlyExpectedElapsedMs,
+        qualityDiagnosticElapsedMs:Number(qualityDiagnosticAudit.qualityDiagnosticElapsedMs||0),
         totalExperimentalElapsedMs:Math.round(performance.now()-totalStarted),
       },
       decodedRuntimeVehicleKind:decodedRuntime?.kind||null,
@@ -2704,6 +3060,7 @@ function aggregateExperiment(results) {
     const conflict=result.matrix?.conflictPositionAudit||{};
     const structural=result.matrix?.structuralValidation||{};
     const timing=result.matrix?.timing||{};
+    const quality=result.matrix?.qualityDiagnosticAudit||{};
 
     acc.expected+=expected;
     acc.baselinePhysicalUnique+=Number(result.baseline.qrCount||0);
@@ -2752,6 +3109,9 @@ function aggregateExperiment(results) {
     for(const item of structural.singleEngineStructuralFails||[]) acc.singleEngineStructuralFails.push({fileName:result.fileName,...item});
     for(const item of conflict.diagnostics||[]) acc.conflictPositionDiagnostics.push({fileName:result.fileName,...item});
     for(const item of compact.diagnostics||[]) acc.compactDiagnostics.push({fileName:result.fileName,...item});
+    for(const item of quality.priorityCandidates||[]) acc.qualityPriorityDiagnostics.push({fileName:result.fileName,...item});
+    for(const item of quality.successfulReferences||[]) acc.qualityReferenceDiagnostics.push({fileName:result.fileName,...item});
+    acc.qualityDiagnosticElapsedMs+=Number(quality.qualityDiagnosticElapsedMs||0);
 
     acc.baselineElapsedMs+=Number(result.baseline?.elapsedMs||0);
     acc.aElapsedMs+=Number(timing.aElapsedMs||0);
@@ -2806,6 +3166,9 @@ function aggregateExperiment(results) {
     singleEngineStructuralFails:[],
     conflictPositionDiagnostics:[],
     compactDiagnostics:[],
+    qualityPriorityDiagnostics:[],
+    qualityReferenceDiagnostics:[],
+    qualityDiagnosticElapsedMs:0,
     baselineElapsedMs:0,
     aElapsedMs:0,
     geometryElapsedMs:0,
@@ -2847,7 +3210,7 @@ export default function CertificateQrDecodeExperimentPage() {
   const [expandedName, setExpandedName] = useState("");
   const [results, setResults] = useState([]);
   const [visualDiagnostics, setVisualDiagnostics] = useState({});
-  const [overlayClassifications, setOverlayClassifications] = useState({});
+  const [overlayClassifications, setOverlayClassifications] = useState({...PRIOR_OVERLAY_CLASSIFICATIONS});
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("固定8枚を選択してください。");
   const [experimentalHead, setExperimentalHead] = useState(null);
@@ -2894,7 +3257,7 @@ export default function CertificateQrDecodeExperimentPage() {
 
   useEffect(() => {
     clearVisualDiagnostics();
-    setOverlayClassifications({});
+    setOverlayClassifications({...PRIOR_OVERLAY_CLASSIFICATIONS});
     return () => {
       for (const entry of Object.values(visualDiagnosticsRef.current)) revokeVisualDiagnosticEntry(entry);
       visualDiagnosticsRef.current = {};
@@ -2986,6 +3349,11 @@ export default function CertificateQrDecodeExperimentPage() {
     .filter((r)=>Number(r.matrix?.geometryStage?.finalUnionCanonicalCount||0)<Number(r.matrix?.currentEnsemble?.physicalSafeQrCount||0))
     .map((r)=>r.fileName):[];
   const compactFingerprintStability=totals?summarizeCompactFingerprintStability(totals.compactDiagnostics):null;
+  const successfulQualityReferenceSummary=totals?summarizeSuccessfulQualityReferences(totals.qualityReferenceDiagnostics):null;
+  const priorityQualityWithRelative=totals?(totals.qualityPriorityDiagnostics||[]).map((item)=>({
+    ...item,
+    relativeToSuccessfulReferenceMedian:priorityRelativeToReference(item,successfulQualityReferenceSummary),
+  })):[];
   const requiredOverlayClassifications=Object.entries(OVERLAY_PRIORITY_CANDIDATES).flatMap(([fileName,indexes])=>
     indexes.map((candidateIndex)=>({fileName,candidateIndex,key:`${fileName}#${candidateIndex}`}))
   );
@@ -3001,7 +3369,7 @@ export default function CertificateQrDecodeExperimentPage() {
     experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
-    diagnosticRevision:"v7-postformal-quad-audit-1",
+    diagnosticRevision:"v7-postformal-quality-audit-2",
     experimentRoute:EXPERIMENT_ROUTE,
     pathname:PATHNAME,
     pathnameRole:"baseline-target-route",
@@ -3105,6 +3473,18 @@ export default function CertificateQrDecodeExperimentPage() {
       validatorPolicy:"same-position ambiguous conflicts remain rejected; compact consensus is separate from parser recognition",
       payloadIncluded:false,
     }:null,
+    qualityDiagnosticTotals:totals?{
+      diagnosticOnly:true,
+      formalV7ReferenceHead:"339cbf5d832fd2bc9ab5eadfa260cb16adda02f9",
+      formalDecodeLogicChanged:false,
+      qualityDiagnosticElapsedMs:totals.qualityDiagnosticElapsedMs,
+      successfulDecodeReferenceSummary:successfulQualityReferenceSummary,
+      priorityCandidates:priorityQualityWithRelative,
+      focusInterpretation:"higher sharpness/edge/gradient values generally indicate stronger local high-frequency detail; ratios are diagnostic only and not decode acceptance thresholds",
+      moduleInterpretation:"module and luma metrics are aggregate non-PII measurements derived from geometry; no module matrix or payload is included",
+      imageIncluded:false,
+      payloadIncluded:false,
+    }:null,
     visualOverlayAudit:{
       requiredPriorityCandidates:requiredOverlayClassifications.map(({fileName,candidateIndex})=>({fileName,candidateIndex})),
       classifications:overlayClassificationRows,
@@ -3124,6 +3504,7 @@ export default function CertificateQrDecodeExperimentPage() {
       geometryElapsedMs:totals.geometryElapsedMs,
       rectifyDecodeElapsedMs:totals.rectifyDecodeElapsedMs,
       failOnlyExpectedElapsedMs:totals.failOnlyExpectedElapsedMs,
+      qualityDiagnosticElapsedMs:totals.qualityDiagnosticElapsedMs,
       totalExperimentalElapsedMs:totals.totalExperimentalElapsedMs,
     }:null,
     runtimeVehicleKindTotals:gtReady?{
@@ -3352,7 +3733,7 @@ export default function CertificateQrDecodeExperimentPage() {
 
       <section style={{ marginTop: 18 }}>
         <div style={{fontSize:12,marginBottom:8,fontWeight:700}}>
-          overlay分類: {overlayClassificationComplete ? "優先9候補すべて分類済み" : "未完了（0942: 4/7/8/9、0944: 1/2/3/5/8 をA/B/C/D分類）"}
+          overlay分類: {overlayClassificationComplete ? "前回分類を引き継ぎ済み（再分類不要）" : "分類情報不足"} / 画質diagnosticはsummaryへ自動出力
         </div>
         <button disabled={!results.length} onClick={copySummary} style={{ marginRight: 8, padding: "9px 14px" }}>非PII summaryをコピー</button>
         <button disabled={!results.length} onClick={downloadSummary} style={{ padding: "9px 14px" }}>summaryを端末保存</button>
