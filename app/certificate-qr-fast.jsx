@@ -4,6 +4,15 @@ import { useEffect } from "react";
 import { expectedCertificateQrCount, normalizeCertificateCanvas } from "./lib/certificate-photo-normalize";
 import { detectCertificateQrDensityCenters } from "./lib/certificate-qr-density.mjs";
 
+function auditEnabled() {
+  try { return new URLSearchParams(location.search).get("certificateQrAudit") === "1"; } catch { return false; }
+}
+function auditPush(type, detail = {}) {
+  if (!auditEnabled()) return;
+  const root = window.__certificateQrFastAuditTrace || { events: [], startedAt: performance.now() };
+  root.events.push({ type, atMs: Math.round(performance.now() - root.startedAt), ...detail });
+  window.__certificateQrFastAuditTrace = root;
+}
 function hex(bytes = []) {
   return Array.from(bytes).map((v) => Number(v).toString(16).padStart(2, "0")).join(" ").toUpperCase();
 }
@@ -87,9 +96,7 @@ function cropRegion(source, x0, y0, w0, h0, mode, target) {
   return canvas;
 }
 function cropPaperRegion(source, paperBounds, x0, y0, w0, h0, mode, target) {
-  const b = paperBounds && Number(paperBounds.w) > 0 && Number(paperBounds.h) > 0
-    ? paperBounds
-    : { x: 0, y: 0, w: source.width, h: source.height };
+  const b = paperBounds && Number(paperBounds.w) > 0 && Number(paperBounds.h) > 0 ? paperBounds : { x: 0, y: 0, w: source.width, h: source.height };
   const sx = Math.max(0, Math.round(b.x + b.w * x0));
   const sy = Math.max(0, Math.round(b.y + b.h * y0));
   const sw = Math.max(1, Math.min(source.width - sx, Math.round(b.w * w0)));
@@ -100,8 +107,7 @@ function cropPaperRegion(source, paperBounds, x0, y0, w0, h0, mode, target) {
   canvas.width = Math.round(sw * scale) + pad * 2;
   canvas.height = Math.round(sh * scale) + pad * 2;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(source, sx, sy, sw, sh, pad, pad, canvas.width - pad * 2, canvas.height - pad * 2);
   if (mode !== "color") {
@@ -109,18 +115,14 @@ function cropPaperRegion(source, paperBounds, x0, y0, w0, h0, mode, target) {
     let sum = 0;
     for (let p = 0; p < image.data.length; p += 4) {
       const g = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
-      sum += g;
-      image.data[p] = image.data[p + 1] = image.data[p + 2] = g;
+      sum += g; image.data[p] = image.data[p + 1] = image.data[p + 2] = g;
     }
     const avg = sum / Math.max(1, image.data.length / 4);
     const threshold = Math.max(90, Math.min(225, avg - 8));
     for (let p = 0; p < image.data.length; p += 4) {
       const g = image.data[p];
-      const v = mode === "binary"
-        ? (g < threshold ? 0 : 255)
-        : Math.max(0, Math.min(255, Math.round((g - 128) * 2.05 + 150)));
-      image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
-      image.data[p + 3] = 255;
+      const v = mode === "binary" ? (g < threshold ? 0 : 255) : Math.max(0, Math.min(255, Math.round((g - 128) * 2.05 + 150)));
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = v; image.data[p + 3] = 255;
     }
     ctx.putImageData(image, 0, 0);
   }
@@ -133,31 +135,26 @@ function qrBounds(code, width, height) {
   if (!pts.length) return null;
   const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
   const pad = Math.max(14, Math.round(Math.min(width, height) * .018));
-  return {
-    left: Math.max(0, Math.floor(Math.min(...xs) - pad)),
-    top: Math.max(0, Math.floor(Math.min(...ys) - pad)),
-    right: Math.min(width, Math.ceil(Math.max(...xs) + pad)),
-    bottom: Math.min(height, Math.ceil(Math.max(...ys) + pad)),
-    centerX: (Math.min(...xs) + Math.max(...xs)) / 2,
-  };
+  return { left: Math.max(0, Math.floor(Math.min(...xs) - pad)), top: Math.max(0, Math.floor(Math.min(...ys) - pad)), right: Math.min(width, Math.ceil(Math.max(...xs) + pad)), bottom: Math.min(height, Math.ceil(Math.max(...ys) + pad)), centerX: (Math.min(...xs) + Math.max(...xs)) / 2 };
 }
 function decodeBand(jsQR, canvas, tag) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   const found = [];
   for (let attempt = 0; attempt < 7; attempt += 1) {
+    auditPush("jsqr-attempt", { stage: tag, attempt });
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const result = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
+    auditPush("jsqr-result", { stage: tag, attempt, success: Boolean(result) });
     if (!result) break;
     const binary = Array.from(result.binaryData || []);
     const data = decodeRawText(binary) || result.data || "";
     const b = qrBounds(result, canvas.width, canvas.height);
-    if (data || binary.length) {
-      found.push({ slot: null, scanTag: "帯域/" + tag + "/jsQR", data, binary, hex: binary.length ? hex(binary) : "", xCenter: b ? b.centerX / canvas.width : .5 });
-    }
+    if (data || binary.length) found.push({ slot: null, scanTag: "帯域/" + tag + "/jsQR", data, binary, hex: binary.length ? hex(binary) : "", xCenter: b ? b.centerX / canvas.width : .5 });
     if (!b) break;
     ctx.fillStyle = "#fff";
     ctx.fillRect(b.left, b.top, Math.max(1, b.right - b.left), Math.max(1, b.bottom - b.top));
   }
+  auditPush("decode-band-complete", { stage: tag, hitCount: found.length });
   return found;
 }
 async function makeReader() {
@@ -169,14 +166,18 @@ async function makeReader() {
   return new browser.BrowserQRCodeReader(hints);
 }
 async function decodeZxing(reader, canvas, xCenter, tag) {
+  auditPush("zxing-attempt", { stage: tag, center: Number(Number(xCenter).toFixed(4)) });
   try {
     const result = await reader.decodeFromCanvas(canvas);
     const raw = result?.getRawBytes?.() || result?.rawBytes || [];
     const binary = Array.from(raw || []);
     const data = decodeRawText(binary) || result?.getText?.() || result?.text || "";
-    if (!data && !binary.length) return null;
+    const success = Boolean(data || binary.length);
+    auditPush("zxing-result", { stage: tag, center: Number(Number(xCenter).toFixed(4)), success });
+    if (!success) return null;
     return { slot: null, scanTag: "個別/" + tag + "/ZXing", data, binary, hex: hex(binary), xCenter };
   } catch {
+    auditPush("zxing-result", { stage: tag, center: Number(Number(xCenter).toFixed(4)), success: false });
     return null;
   }
 }
@@ -188,9 +189,7 @@ function orderedUnique(items) {
     if (!key || map.has(key)) continue;
     map.set(key, item);
   }
-  return [...map.values()]
-    .sort((a, b) => Number(a.xCenter ?? 9) - Number(b.xCenter ?? 9))
-    .map((item, slot) => ({ ...item, slot, label: "高速QR/QR" + (slot + 1) + "/" + String(item.scanTag || "") }));
+  return [...map.values()].sort((a, b) => Number(a.xCenter ?? 9) - Number(b.xCenter ?? 9)).map((item, slot) => ({ ...item, slot, label: "高速QR/QR" + (slot + 1) + "/" + String(item.scanTag || "") }));
 }
 function keiVersions(items) {
   return [...new Set((items || []).map((item) => {
@@ -202,9 +201,7 @@ function qrDensityCenters(canvas) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return [];
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  return detectCertificateQrDensityCenters(image.data, image.width, image.height)
-    .map((item) => Number(item.x))
-    .filter((x) => Number.isFinite(x) && x >= .4 && x <= .98);
+  return detectCertificateQrDensityCenters(image.data, image.width, image.height).map((item) => Number(item.x)).filter((x) => Number.isFinite(x) && x >= .4 && x <= .98);
 }
 function mergeCenters(primary, fallback) {
   const out = [];
@@ -216,7 +213,6 @@ function mergeCenters(primary, fallback) {
   }
   return out;
 }
-
 function showStatus(text) {
   const host = document.getElementById("certificate-qr-debug") || document.querySelector("img.preview")?.closest("section.card");
   if (!host) return;
@@ -224,8 +220,7 @@ function showStatus(text) {
   if (!box) {
     box = document.createElement("div");
     box.id = "certificate-qr-fast-status";
-    box.style.marginTop = "10px"; box.style.padding = "10px"; box.style.borderRadius = "10px";
-    box.style.background = "#eefaf2"; box.style.border = "1px solid #bfe6ce"; box.style.fontWeight = "800";
+    box.style.marginTop = "10px"; box.style.padding = "10px"; box.style.borderRadius = "10px"; box.style.background = "#eefaf2"; box.style.border = "1px solid #bfe6ce"; box.style.fontWeight = "800";
     host.appendChild(box);
   }
   box.textContent = text;
@@ -237,47 +232,47 @@ async function scanFast(file) {
   const [reader, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
   const jsQR = jsMod.default || jsMod;
   const started = performance.now();
-  // QRが全部拾えれば後段OCRを減らせるため、弱い写真だけ最大4.6秒までQR救済を許可する。
   const budgetMs = 4600;
-  // 実写真では登録車5QRの横位置が撮影・用紙補正で数%ずれる。
-  // 先にQRらしい高周波領域を画像だけで探し、固定座標より優先して個別ZXingへ渡す。
   const densityCenters = qrDensityCenters(source);
+  if (auditEnabled()) window.__certificateQrFastAuditTrace = { events: [], startedAt: started, budgetMs, densityCenters: densityCenters.map((x) => Number(Number(x).toFixed(4))) };
+  auditPush("fast-start", { densityCenters: densityCenters.map((x) => Number(Number(x).toFixed(4))), budgetMs });
   let found = [];
 
-  const add = (items) => {
+  const add = (items, stage = "unknown") => {
+    const before = found.length;
+    const incoming = (items || []).length;
+    const combined = before + incoming;
     found.push(...(items || []));
     found = orderedUnique(found);
+    auditPush("dedupe", { stage, beforeCount: before, incomingCount: incoming, orderedUniqueBeforeCount: combined, orderedUniqueAfterCount: found.length, droppedCount: combined - found.length });
   };
   const runBand = async (y, mode) => {
+    const stage = "norm/y" + y + "/" + mode;
+    auditPush("stage-start", { stage });
     const band = cropRegion(source, .34, y, .65, .21, mode, 3200);
-    try {
-      add(decodeBand(jsQR, band, "norm/y" + y + "/" + mode).map((hit) => ({
-        ...hit,
-        xCenter: .34 + hit.xCenter * .65,
-      })));
-    } finally { band.width = 1; band.height = 1; }
+    try { add(decodeBand(jsQR, band, stage).map((hit) => ({ ...hit, xCenter: .34 + hit.xCenter * .65 })), stage); }
+    finally { band.width = 1; band.height = 1; }
   };
   const runRawBand = async (y, mode) => {
+    const stage = "raw/y" + y + "/" + mode;
+    auditPush("stage-start", { stage });
     const band = cropPaperRegion(raw, normalized.paper?.bounds, .33, y, .66, .22, mode, 3400);
-    try {
-      add(decodeBand(jsQR, band, "raw/y" + y + "/" + mode).map((hit) => ({
-        ...hit,
-        xCenter: .33 + hit.xCenter * .66,
-      })));
-    } finally { band.width = 1; band.height = 1; }
+    try { add(decodeBand(jsQR, band, stage).map((hit) => ({ ...hit, xCenter: .33 + hit.xCenter * .66 })), stage); }
+    finally { band.width = 1; band.height = 1; }
   };
   const scanSlots = async (useRaw, y, mode) => {
     const fixedCenters = [.46, .545, .63, .715, .82, .91];
     const centers = mergeCenters(densityCenters, fixedCenters);
+    const stage = (useRaw ? "raw/" : "norm/") + "slots/y" + y + "/" + mode;
+    auditPush("stage-start", { stage, candidateCenters: centers.map((x) => Number(Number(x).toFixed(4))) });
     for (const center of centers) {
-      if (performance.now() - started >= budgetMs) break;
-      if (found.some((x) => Math.abs(Number(x.xCenter) - center) < .038)) continue;
-      const c = useRaw
-        ? cropPaperRegion(raw, normalized.paper?.bounds, Math.max(0, center - .06), y, .12, .15, mode, mode === "color" ? 1250 : 1500)
-        : cropRegion(source, Math.max(0, center - .06), y, .12, .15, mode, mode === "color" ? 1250 : 1500);
+      if (performance.now() - started >= budgetMs) { auditPush("budget-stop", { stage, center: Number(Number(center).toFixed(4)) }); break; }
+      if (found.some((x) => Math.abs(Number(x.xCenter) - center) < .038)) { auditPush("center-skip-already-found", { stage, center: Number(Number(center).toFixed(4)) }); continue; }
+      auditPush("center-scan", { stage, center: Number(Number(center).toFixed(4)) });
+      const c = useRaw ? cropPaperRegion(raw, normalized.paper?.bounds, Math.max(0, center - .06), y, .12, .15, mode, mode === "color" ? 1250 : 1500) : cropRegion(source, Math.max(0, center - .06), y, .12, .15, mode, mode === "color" ? 1250 : 1500);
       try {
         const hit = await decodeZxing(reader, c, center, (useRaw ? "raw/" : "norm/") + "x" + center + "/y" + y + "/" + mode);
-        if (hit) add([hit]);
+        if (hit) add([hit], stage);
       } finally { c.width = 1; c.height = 1; }
       const expected = expectedCertificateQrCount(found);
       if (found.length >= expected.count) break;
@@ -290,35 +285,26 @@ async function scanFast(file) {
     let expected = expectedCertificateQrCount(found);
     if (found.length < expected.count && performance.now() - started < budgetMs) await runBand(.785, "contrast");
     expected = expectedCertificateQrCount(found);
-
     if (found.length < expected.count && performance.now() - started < budgetMs) await scanSlots(false, .785, "color");
     expected = expectedCertificateQrCount(found);
     if (found.length < expected.count && performance.now() - started < budgetMs) await scanSlots(false, .805, "contrast");
     expected = expectedCertificateQrCount(found);
-
     if (found.length < expected.count && performance.now() - started < budgetMs) await runRawBand(.74, "color");
     expected = expectedCertificateQrCount(found);
     if (found.length < expected.count && performance.now() - started < budgetMs) await scanSlots(true, .765, "contrast");
     expected = expectedCertificateQrCount(found);
-
     if (found.length < expected.count && performance.now() - started < budgetMs) await runRawBand(.755, "binary");
   } finally {
-    raw.width = 1;
-    raw.height = 1;
-    source.width = 1;
-    source.height = 1;
+    raw.width = 1; raw.height = 1; source.width = 1; source.height = 1;
   }
 
+  const finalBefore = found.length;
   found = orderedUnique(found);
+  auditPush("final-dedupe", { orderedUniqueBeforeCount: finalBefore, orderedUniqueAfterCount: found.length, droppedCount: finalBefore - found.length });
   const expected = expectedCertificateQrCount(found);
-  return {
-    result: found,
-    elapsed: Math.round(performance.now() - started),
-    expected,
-    normalizeMode: normalized.mode,
-    normalizeConfidence: normalized.confidence,
-    densityCenters,
-  };
+  const elapsed = Math.round(performance.now() - started);
+  auditPush("fast-complete", { elapsed, finalUniqueQrCount: found.length, expectedQrCount: expected.count, budgetReached: elapsed >= budgetMs });
+  return { result: found, elapsed, expected, normalizeMode: normalized.mode, normalizeConfidence: normalized.confidence, densityCenters };
 }
 export default function CertificateQrFast() {
   useEffect(() => {
