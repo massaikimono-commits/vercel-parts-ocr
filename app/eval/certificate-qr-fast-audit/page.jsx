@@ -396,7 +396,6 @@ function summaryResult(r, score = null) {
     phase: r.phase,
     pathname: r.pathname,
     fastFired: r.fastFired,
-    expectedQrCount: r.expectedQrCount,
     runtimeExpectedQrCount: r.runtimeExpectedQrCount,
     runtimeVehicleKind: r.runtimeVehicleKind,
     groundTruthVehicleKind: r.groundTruthVehicleKind ?? null,
@@ -409,8 +408,9 @@ function summaryResult(r, score = null) {
     densityCentersX: r.densityCentersX,
     stages: r.stages,
     finalUniqueQrCount: r.finalUniqueQrCount,
-    missingQrCount: r.missingQrCount,
-    missingQrPositions: r.missingQrPositions,
+    runtimeMissingQrCount: r.missingQrCount,
+    runtimeMissingQrPositions: r.missingQrPositions,
+    failureClassificationBasis: "runtimeExpectedDiagnosticOnly",
     budget4600Reached: r.budget4600Reached,
     fastElapsedMsDiagnostic: r.fastElapsedMsDiagnostic,
     totalElapsedMsDiagnostic: r.totalElapsedMsDiagnostic,
@@ -669,7 +669,7 @@ export default function CertificateQrFastAuditPage() {
 
       <section style={{ marginTop: 18 }}>
         <h2 style={{ fontSize: 18 }}>進捗</h2>
-        {results.map((r) => <div key={r.fileName} style={{ padding: 10, borderBottom: "1px solid #ddd" }}>{r.imageIndex}/8 {r.fileName} — QR {r.finalUniqueQrCount}/{r.expectedQrCount ?? "?"} — Fast {r.fastElapsedMsDiagnostic}ms — {r.privacyFail ? "PRIVACY FAIL" : r.timeout ? "timeout" : "完了"}</div>)}
+        {results.map((r) => <div key={r.fileName} style={{ padding: 10, borderBottom: "1px solid #ddd" }}>{r.imageIndex}/8 {r.fileName} — QR {r.finalUniqueQrCount}/runtime {r.runtimeExpectedQrCount ?? "?"} — Fast {r.fastElapsedMsDiagnostic}ms — {r.privacyFail ? "PRIVACY FAIL" : r.timeout ? "timeout" : "完了"}</div>)}
       </section>
 
       <section style={{ marginTop: 18 }}>
