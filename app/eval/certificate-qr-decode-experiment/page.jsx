@@ -1042,19 +1042,31 @@ function canonicalDecode(text, bytes = []) {
 }
 function structuralValidation(canonical) {
   const text = canonicalText(canonical);
-  const length = text.length;
+  const chars = [...text];
+  const length = chars.length;
   const slashCount = (text.match(/\//g) || []).length;
   const newlineCount = (text.match(/\n/g) || []).length;
   const pipeCount = (text.match(/\|/g) || []).length;
   const commaCount = (text.match(/,/g) || []).length;
   const replacementCount = (text.match(/�/g) || []).length;
-  const controlCount = [...text].filter((ch) => {
+  const controlCount = chars.filter((ch) => {
     const code = ch.charCodeAt(0);
     return code < 32 && ch !== "\n" && ch !== "\t";
   }).length;
   const printableRatio = length ? (length - replacementCount - controlCount) / length : 0;
+  const asciiVisibleCount = chars.filter((ch) => {
+    const code = ch.charCodeAt(0);
+    return code >= 32 && code <= 126;
+  }).length;
+  const asciiVisibleRatio = length ? asciiVisibleCount / length : 0;
+  const alnumCount = chars.filter((ch) => /[0-9A-Za-z]/.test(ch)).length;
+  const knownSymbolCount = chars.filter((ch) => /[ ._+*\-\[\]()]/.test(ch)).length;
+  const alnumKnownSymbolRatio = length ? (alnumCount + knownSymbolCount) / length : 0;
+  const digitCount = chars.filter((ch) => /[0-9]/.test(ch)).length;
+  const upperCount = chars.filter((ch) => /[A-Z]/.test(ch)).length;
   const slashFields = text.split("/").filter((part) => part.length > 0).length;
   const newlineFields = text.split("\n").filter((part) => part.length > 0).length;
+
   let recognizedSchemaClass = "unknown";
   if (slashCount >= 1 && slashFields >= 2) recognizedSchemaClass = "slash-delimited";
   else if (newlineCount >= 1 && newlineFields >= 2) recognizedSchemaClass = "newline-delimited";
@@ -1092,6 +1104,10 @@ function structuralValidation(canonical) {
     score,
     payloadLength: length,
     printableRatio: Number(printableRatio.toFixed(4)),
+    asciiVisibleRatio: Number(asciiVisibleRatio.toFixed(4)),
+    alnumKnownSymbolRatio: Number(alnumKnownSymbolRatio.toFixed(4)),
+    digitRatio: length ? Number((digitCount / length).toFixed(4)) : 0,
+    uppercaseRatio: length ? Number((upperCount / length).toFixed(4)) : 0,
     separatorPattern,
     recognizedSchemaClass,
     structuralFailReason: pass ? "none" : failReasons.join("+"),
@@ -1101,16 +1117,83 @@ function structuralValidation(canonical) {
     printableRatioBucket: printableRatio >= .98 ? "high" : printableRatio >= .96 ? "borderline" : "low",
   };
 }
+function pointCenter(points = []) {
+  const valid = points.filter((p) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)));
+  if (!valid.length) return null;
+  return {
+    x: valid.reduce((sum,p)=>sum+Number(p.x),0)/valid.length,
+    y: valid.reduce((sum,p)=>sum+Number(p.y),0)/valid.length,
+  };
+}
+function normalizeDecodePosition(center, canvas) {
+  if (!center || !canvas?.width || !canvas?.height) return null;
+  return {
+    x: Number(center.x.toFixed(2)),
+    y: Number(center.y.toFixed(2)),
+    nx: Number((center.x / canvas.width).toFixed(4)),
+    ny: Number((center.y / canvas.height).toFixed(4)),
+  };
+}
+function canvasPositionToRaw(position, canvas) {
+  const meta = canvas?.__qrCropMeta;
+  if (!position || !meta) return null;
+  const ux = (Number(position.x) - meta.pad) / Math.max(1, meta.drawWidth);
+  const uy = (Number(position.y) - meta.pad) / Math.max(1, meta.drawHeight);
+  return {
+    x: Number((meta.sx + ux * meta.sw).toFixed(2)),
+    y: Number((meta.sy + uy * meta.sh).toFixed(2)),
+  };
+}
+function compactConsensusValidation(js, zx, conflictPositionClass) {
+  const same = Boolean(js?.success && zx?.success && sameCanonical(js.canonical, zx.canonical));
+  const a = js?.structural || {};
+  const b = zx?.structural || {};
+  const stableFeatureMatch =
+    a.payloadLength === b.payloadLength &&
+    a.separatorPattern === b.separatorPattern &&
+    a.recognizedSchemaClass === b.recognizedSchemaClass;
+  const strictCompact =
+    same &&
+    conflictPositionClass !== "multi-qr-crop" &&
+    stableFeatureMatch &&
+    a.payloadLength === 60 &&
+    a.printableRatio === 1 &&
+    b.printableRatio === 1 &&
+    a.asciiVisibleRatio === 1 &&
+    b.asciiVisibleRatio === 1 &&
+    a.alnumKnownSymbolRatio >= .98 &&
+    b.alnumKnownSymbolRatio >= .98 &&
+    a.separatorPattern === "none" &&
+    b.separatorPattern === "none" &&
+    a.recognizedSchemaClass === "compact-printable" &&
+    b.recognizedSchemaClass === "compact-printable" &&
+    a.structuralFailReason === "slash-schema-mismatch" &&
+    b.structuralFailReason === "slash-schema-mismatch";
+  return {
+    compactCandidate: same && a.recognizedSchemaClass === "compact-printable" && b.recognizedSchemaClass === "compact-printable",
+    physicalQrConsensusAccepted: strictCompact,
+    parserSchemaRecognized: false,
+    compactSchemaClass: strictCompact ? "compact-consensus-60" : "compact-unconfirmed",
+  };
+}
 async function decodeJs(jsQR, canvas) {
   try {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const result = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
-    if (!result) return { success: false, canonical: "", structural: structuralValidation("") };
+    if (!result) return { success: false, canonical: "", structural: structuralValidation(""), position: null };
     const canonical = canonicalDecode(result.data || "", Array.from(result.binaryData || []));
-    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical) };
+    const location = result.location || {};
+    const points = [
+      location.topLeftCorner,
+      location.topRightCorner,
+      location.bottomRightCorner,
+      location.bottomLeftCorner,
+    ].filter(Boolean);
+    const position = normalizeDecodePosition(pointCenter(points), canvas);
+    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical), position };
   } catch {
-    return { success: false, canonical: "", structural: structuralValidation("") };
+    return { success: false, canonical: "", structural: structuralValidation(""), position: null };
   }
 }
 async function makeReader(options = {}) {
@@ -1137,9 +1220,15 @@ async function decodeZxing(reader, canvas) {
     const raw = Array.from(result?.getRawBytes?.() || result?.rawBytes || []);
     const text = result?.getText?.() || result?.text || "";
     const canonical = canonicalDecode(text, raw);
-    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical) };
+    const resultPoints = result?.getResultPoints?.() || result?.resultPoints || [];
+    const points = Array.from(resultPoints || []).map((p) => ({
+      x: Number(p?.getX?.() ?? p?.x),
+      y: Number(p?.getY?.() ?? p?.y),
+    })).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    const position = normalizeDecodePosition(pointCenter(points), canvas);
+    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical), position };
   } catch {
-    return { success: false, canonical: "", structural: structuralValidation("") };
+    return { success: false, canonical: "", structural: structuralValidation(""), position: null };
   }
 }
 function sameCanonical(a, b) {
