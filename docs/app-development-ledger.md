@@ -1,6 +1,6 @@
 # App Development Ledger
 
-Last updated: 2026-09-02
+Last updated: 2026-09-07
 Shared baseline: see `docs/shared-project-state.md`
 
 ## Purpose
@@ -39,11 +39,12 @@ Business rules include:
 - no registration 12:00-13:00,
 - business hours 08:30-17:30,
 - one-hour visit slots,
-- overlap warning with explicit override,
+- ICB-SPEC v1.2 overlap warning: only when both entries are 点検 + customer visit + 作業待ち + exact-time and `starts_at` is identical; all other combinations do not use this duplicate warning,
 - combined AM cap 15 / PM cap 10 for pickup/visit/mobile,
 - vehicle-inspection AM cap 4, warn on 5th; PM uncapped,
 - annual business-calendar input,
 - delivery date/time can be registered together with intake and changed later.
+- 点検 + customer visit may use the dedicated `is_waiting_service` flag when the customer waits for the inspection work to finish; this mode has no delivery plan, is excluded from staying vehicles, and prints as `来社待ち`. 車検の作業待ちは通常仕様ではない。
 - morning pickup has its own limit of 10 entries; exact pickup deadlines and A中 both count toward the same 10 (for example, one 9時まで pickup plus one A中 pickup counts as 2).
 - pickup choices include 9時まで / 10時まで / 11時まで / A中 in the morning and an afternoon period option.
 - exact pickup and delivery times are operational deadlines, so user-facing labels use 「〜時まで」 / 「〜時〜分まで」 rather than plain clock-time wording.
@@ -122,6 +123,7 @@ Staff confirmation precedes print.
 - Save source photos/history.
 - Print onto designated blank areas of forms.
 - Do not print total amount.
+- The formal OCR review screen supports editing/deleting recognized rows and adding a blank manual row with 部品名称 / 個数 / 定価 / 仕入れ before explicit formal save.
 
 ## Recent integrated source work
 
@@ -409,3 +411,14 @@ Before an app-development chat finishes a batch:
 - Other normal screens were reviewed: week/month schedule, workload, loaner assignment, inspection/select/detail flows already use date/ID/active-vehicle scoped customer/vehicle reads. The daily-report print route still has broad print-only reads and was intentionally left out of performance pass ③.
 - Added app-core performance guards against the former 1000-row schedule preload, all-customer/all-vehicle customer-management preload, global 500-part preload, missing search limits, and loss of paging/debounce.
 - Shared Supabase schema/RPC/data were not changed. OCR logic, main, Netlify and photo-storage features were not changed.
+
+
+### 2026-09-07 — ICB-SPEC v1.2 app-core gap batch
+- Branch: `preview/schedule-ux-20260903`; started from `6885320e1995fe3c18d7b80ddc1009e2c233e4f5`.
+- One-day schedule reason color now follows the already-established shared rule: 車検=red, 点検=blue, normal 一般整備=yellow, 板金=white, and 一般整備 with `outsource_vendor_name`=white. Ordering, work-state display, visit counts, and waiting-service classification were not changed.
+- Parts OCR formal review now has `＋ 部品行を追加`. A manual row starts blank with 部品名称 / 個数 / 定価 / 仕入れ, uses the same edit/delete UI, and is included in the existing explicit `parts_ocr_documents -> parts_ocr_items -> parts` formal-save flow. OCR execution still does not formal-save anything by itself.
+- ICB-SPEC v1.2 waiting-service state is already database-live through migration `add_waiting_service_visit_rules_v12`: `work_orders.is_waiting_service boolean NOT NULL DEFAULT false`, no inferred backfill, valid for 点検 + 来社 only, no delivery plan, excluded from staying vehicles, daily report label `来社待ち`.
+- The v1.2 duplicate warning is already database-live: both sides must be 点検 + 来社 + `is_waiting_service=true` + `print_time_mode=exact` and have identical `starts_at`. 車検来社, normal 点検来社, 引取, 納車, 出張, and broad-time choices do not use this warning.
+- The schedule mutation SECURITY DEFINER RPC active-app-user hardening remains live via `harden_schedule_rpcs_active_app_user`; this batch does not change DB/RLS/RPC.
+- Pending ledger #002 and #003 are reclassified as implemented history; #001 `legal_3m` remains pending and untouched.
+- OCR recognition/preprocessing/engine code, shared Supabase schema/RLS/RPC, main, Netlify, and Vercel Preview are not changed by this batch.

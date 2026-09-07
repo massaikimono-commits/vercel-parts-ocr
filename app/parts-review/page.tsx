@@ -237,6 +237,20 @@ export default function PartsReviewPage() {
     setParts((old) => old.filter((_, i) => i !== index));
   }
 
+  function addEmptyPart() {
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? `manual-${crypto.randomUUID()}`
+        : `manual-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setParts((old) => [
+      ...old,
+      { id, name: "", qty: "", retail: "", cost: "" },
+    ]);
+    setMessage(
+      "空の部品行を追加しました。4項目を入力して正式保存してください。"
+    );
+  }
+
   async function saveFormal() {
     if (!meta || !vehicle || !canSave || busy) return;
 
@@ -639,6 +653,14 @@ export default function PartsReviewPage() {
           ))}
         </div>
 
+        <button
+          type="button"
+          className="addRow"
+          onClick={addEmptyPart}
+        >
+          ＋ 部品行を追加
+        </button>
+
         {!parts.length && (
           <div className="empty">
             確認するOCR結果がありません。
@@ -684,7 +706,7 @@ export default function PartsReviewPage() {
       )}
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.reviewPage{max-width:920px;margin:0 auto;padding:14px 12px 50px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}button,input,select{font:inherit}.top button,.actions button,.remove{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:10px;padding:9px 11px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.sectionHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.sectionHead h1,.sectionHead h2{margin:0}.sectionHead h1{font-size:27px}.sectionHead span{font-size:11px;background:#eef4ff;color:#245ca8;border-radius:999px;padding:5px 8px;font-weight:900}.notice{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef5ff;color:#315f98}.vehicleName{font-size:20px;margin:12px 0}.targetGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.targetGrid>div{display:grid;gap:3px;padding:10px;border:1px solid #e2e8f0;border-radius:10px}.targetGrid small{color:#718096}.mono{font-size:10px;word-break:break-all}.workSelect{display:grid;gap:5px;margin-top:12px;font-size:12px;font-weight:800;color:#5d6878}.workSelect select,.partRow input{border:1px solid #ccd7e5;border-radius:9px;padding:9px;background:#fff;color:#172033}.workHint{display:block;margin-top:5px;color:#718096}.missingVehicle{margin-top:12px;padding:13px;border-radius:12px;background:#fff8dd;border:1px solid #ecd986}.missingVehicle p{color:#6c7480}.actions{display:flex;gap:7px;flex-wrap:wrap}.headRow,.partRow{display:grid;grid-template-columns:minmax(170px,2fr) 80px 110px 110px 60px;gap:6px;align-items:center}.headRow{margin:12px 0 5px;color:#687487;font-size:11px}.parts{display:grid;gap:7px}.remove{padding:8px 5px;color:#b84040}.save{width:100%;margin-top:14px;border:0;border-radius:12px;padding:14px;background:#2f6fe4;color:#fff;font-weight:900;font-size:17px}.save:disabled{opacity:.45}.empty{padding:18px;text-align:center;background:#f8fafc;color:#8491a3;border-radius:10px}.success{border-color:#9fd0ae;background:#f4fbf6}.success p{color:#52705c}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.reviewPage{max-width:920px;margin:0 auto;padding:14px 12px 50px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}button,input,select{font:inherit}.top button,.actions button,.remove{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:10px;padding:9px 11px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.sectionHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.sectionHead h1,.sectionHead h2{margin:0}.sectionHead h1{font-size:27px}.sectionHead span{font-size:11px;background:#eef4ff;color:#245ca8;border-radius:999px;padding:5px 8px;font-weight:900}.notice{margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef5ff;color:#315f98}.vehicleName{font-size:20px;margin:12px 0}.targetGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.targetGrid>div{display:grid;gap:3px;padding:10px;border:1px solid #e2e8f0;border-radius:10px}.targetGrid small{color:#718096}.mono{font-size:10px;word-break:break-all}.workSelect{display:grid;gap:5px;margin-top:12px;font-size:12px;font-weight:800;color:#5d6878}.workSelect select,.partRow input{border:1px solid #ccd7e5;border-radius:9px;padding:9px;background:#fff;color:#172033}.workHint{display:block;margin-top:5px;color:#718096}.missingVehicle{margin-top:12px;padding:13px;border-radius:12px;background:#fff8dd;border:1px solid #ecd986}.missingVehicle p{color:#6c7480}.actions{display:flex;gap:7px;flex-wrap:wrap}.headRow,.partRow{display:grid;grid-template-columns:minmax(170px,2fr) 80px 110px 110px 60px;gap:6px;align-items:center}.headRow{margin:12px 0 5px;color:#687487;font-size:11px}.parts{display:grid;gap:7px}.remove{padding:8px 5px;color:#b84040}.addRow{width:100%;margin-top:10px;border:1px dashed #9fb3cf;border-radius:10px;padding:10px;background:#f8fbff;color:#2766bd;font-weight:900}.save{width:100%;margin-top:14px;border:0;border-radius:12px;padding:14px;background:#2f6fe4;color:#fff;font-weight:900;font-size:17px}.save:disabled{opacity:.45}.empty{padding:18px;text-align:center;background:#f8fafc;color:#8491a3;border-radius:10px}.success{border-color:#9fd0ae;background:#f4fbf6}.success p{color:#52705c}
         @media(max-width:650px){.reviewPage{padding:7px 6px 30px}.card{padding:11px;margin-bottom:7px;border-radius:13px}.sectionHead h1{font-size:20px}.vehicleName{font-size:16px;margin:8px 0}.targetGrid{grid-template-columns:1fr 1fr;gap:4px}.targetGrid>div{padding:7px}.headRow{display:none}.partRow{grid-template-columns:minmax(0,1fr) 62px 82px 82px;gap:4px;padding:6px;border:1px solid #e4e9f0;border-radius:9px}.partRow .remove{grid-column:1/-1;justify-self:end;padding:4px 8px;font-size:10px}.partRow input{min-width:0;padding:7px 5px;font-size:12px}.save{padding:11px;font-size:14px}.actions button{padding:8px 9px;font-size:12px}}
       `}</style>
     </main>

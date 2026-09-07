@@ -244,4 +244,12 @@ assert(scheduleEdit.includes('supabase.rpc("cancel_schedule_entry_v1"'), "reserv
 assert(scheduleEdit.includes("取消理由（任意）"), "reservation cancellation reason must remain optional");
 assert(scheduleEdit.includes("p_reason:cancelReason.trim() || null"), "blank cancellation reasons must be sent as null");
 assert(scheduleEdit.includes("この入庫予定一式を取消"), "reservation cancellation must require an explicit work-order-set confirmation step");
+assert(partsReview.includes("function addEmptyPart()"), "parts formal review must allow a manual empty row to be added");
+assert(partsReview.includes('{ id, name: "", qty: "", retail: "", cost: "" }'), "manual parts row must expose the same four editable formal fields");
+assert(partsReview.includes('onClick={addEmptyPart}') && partsReview.includes("＋ 部品行を追加"), "parts formal review must expose the add-row action");
+assert(partsReview.includes('updatePart(index, "name"') && partsReview.includes('updatePart(index, "qty"') && partsReview.includes('updatePart(index, "retail"') && partsReview.includes('updatePart(index, "cost"'), "manual and OCR rows must share the existing four-field edit path");
+assert(partsReview.includes('onClick={() => removePart(index)}'), "parts formal review must keep row deletion");
+assert(partsReview.includes('.from("parts_ocr_documents")') && partsReview.includes('.from("parts_ocr_items")') && partsReview.includes('.from("parts")'), "parts formal review must keep the documents -> items -> parts formal save path");
+assert(partsReview.includes("const itemPayload = parts.map((part, index) => ({"), "all reviewed rows, including manual rows, must be written through parts_ocr_items");
+assert((partsReview.match(/saveFormal\\(\\)/g) || []).length === 2, "OCR/review load must not auto-trigger formal save; saveFormal may only exist as the function and explicit save-button call");
 console.log("app-core safety regression passed");
