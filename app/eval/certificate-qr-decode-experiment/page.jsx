@@ -875,6 +875,7 @@ async function decodeWithConfig({ jsQR, reader, raw, normalized, candidate, conf
     const js = await decodeJs(jsQR, canvas);
     const zx = await decodeZxing(reader, canvas);
     const adopted = adoptCanonical(js, zx);
+    const rawCanonicalSet = new Set([js?.success ? js.canonical : "", zx?.success ? zx.canonical : ""].filter(Boolean));
     return {
       jsqrSuccess: js.success,
       zxingSuccess: zx.success,
@@ -885,6 +886,7 @@ async function decodeWithConfig({ jsQR, reader, raw, normalized, candidate, conf
       crossEngineConflict: adopted.conflict,
       adoptedEngine: adopted.adoptedEngine,
       adoptionReason: adopted.adoptionReason,
+      rawCanonicalSet,
       canonicalSet: new Set(adopted.canonical ? [adopted.canonical] : []),
     };
   } finally {
@@ -961,6 +963,61 @@ function conflictDetailsFromRows(stage, rows, attemptKey) {
   }
   return details;
 }
+function canonicalSetFromRows(rows, successKey) {
+  const set = new Set();
+  for (const row of rows || []) {
+    if (!row?.[successKey]) continue;
+    for (const canonical of row.canonicalSet || []) if (canonical) set.add(canonical);
+  }
+  return set;
+}
+function canonicalNetNew(stageSet, priorSet) {
+  let count = 0;
+  for (const canonical of stageSet || []) if (!priorSet.has(canonical)) count += 1;
+  return count;
+}
+function unionCanonicalSets(...sets) {
+  const out = new Set();
+  for (const set of sets) for (const canonical of set || []) if (canonical) out.add(canonical);
+  return out;
+}
+function legacyCompatibleStageReplay(rows, attemptKey) {
+  const accepted = [];
+  for (const row of rows || []) {
+    const firstRawSuccess = (row?.[attemptKey] || []).find((attempt) => attempt.jsqrSuccess || attempt.zxingSuccess);
+    if (!firstRawSuccess) continue;
+    const legacyRow = {
+      x: row.x,
+      y: row.y,
+      canonicalSet: new Set(firstRawSuccess.rawCanonicalSet || []),
+    };
+    if (accepted.some((known) => samePhysicalPayloadNear(known, legacyRow))) continue;
+    accepted.push(legacyRow);
+  }
+  return accepted.length;
+}
+function stageExclusionDiagnostics(rows, successKey, attemptKey) {
+  let rawDecodeCandidateCount = 0;
+  let ambiguousConflictRejectedCandidateCount = 0;
+  let nonConflictStructuralRejectedCandidateCount = 0;
+  for (const row of rows || []) {
+    const attempts = row?.[attemptKey] || [];
+    const rawSuccess = attempts.some((attempt) => attempt.jsqrSuccess || attempt.zxingSuccess);
+    if (rawSuccess) rawDecodeCandidateCount += 1;
+    if (row?.[successKey] || !rawSuccess) continue;
+    const ambiguousConflict = attempts.some((attempt) =>
+      attempt.crossEngineConflict &&
+      (attempt.adoptionReason === "conflict-ambiguous" || attempt.adoptionReason === "conflict-structural-fail")
+    );
+    if (ambiguousConflict) ambiguousConflictRejectedCandidateCount += 1;
+    else nonConflictStructuralRejectedCandidateCount += 1;
+  }
+  return {
+    rawDecodeCandidateCount,
+    ambiguousConflictRejectedCandidateCount,
+    nonConflictStructuralRejectedCandidateCount,
+  };
+}
 async function runAdaptiveRows({ candidates, configs, jsQR, reader, raw, normalized, successKey, attemptKey }) {
   const rows = candidates.map((candidate, index) => ({
     ...candidate,
@@ -989,6 +1046,8 @@ async function runAdaptiveRows({ candidates, configs, jsQR, reader, raw, normali
     }
   }
   const unique = uniqueAcceptedRows(rows, successKey);
+  const legacyCompatiblePhysicalUniqueQrCount = legacyCompatibleStageReplay(rows, attemptKey);
+  const exclusionDiagnostics = stageExclusionDiagnostics(rows, successKey, attemptKey);
   const seen = new Set();
   for (const row of unique.accepted) for (const canonical of row.canonicalSet) seen.add(canonical);
   for (const stat of Object.values(stats)) stat.netNewCanonicalQrCount = 0;
@@ -1008,6 +1067,8 @@ async function runAdaptiveRows({ candidates, configs, jsQR, reader, raw, normali
     totalAttempts,
     skippedAttemptsByEarlySuccess,
     physicalUniqueQrCount: unique.accepted.length,
+    legacyCompatiblePhysicalUniqueQrCount,
+    exclusionDiagnostics,
     duplicatePayloadCandidateCount: unique.duplicatePayloadCandidateCount,
     conflictDetails: conflictDetailsFromRows(successKey, rows, attemptKey),
   };
@@ -1205,6 +1266,23 @@ async function runMatrix(file) {
     });
     const rotateRescueElapsedMs = Math.round(performance.now() - dStarted);
 
+    const aCanonical = canonicalSetFromRows(current.rows, "currentSuccess");
+    const bCanonical = canonicalSetFromRows(core.rows, "coreSuccess");
+    const cCanonical = canonicalSetFromRows(threshold.rows, "thresholdSuccess");
+    const dCanonical = canonicalSetFromRows(rescue.rows, "rotateRescueSuccess");
+    const abCanonical = unionCanonicalSets(aCanonical, bCanonical);
+    const abcCanonical = unionCanonicalSets(abCanonical, cCanonical);
+    const abcdCanonical = unionCanonicalSets(abcCanonical, dCanonical);
+    const canonicalFlow = {
+      aCanonicalCount: aCanonical.size,
+      bNetNewCanonicalVsA: canonicalNetNew(bCanonical, aCanonical),
+      abCanonicalCount: abCanonical.size,
+      cNetNewCanonicalVsAB: canonicalNetNew(cCanonical, abCanonical),
+      abcCanonicalCount: abcCanonical.size,
+      dNetNewCanonicalVsABC: canonicalNetNew(dCanonical, abcCanonical),
+      finalUnionCanonicalCount: abcdCanonical.size,
+    };
+
     const finalAccepted = [];
     for (const row of rescue.rows) {
       if (!(row.coreSuccess || row.thresholdSuccess || row.rotateRescueSuccess)) continue;
@@ -1269,6 +1347,11 @@ async function runMatrix(file) {
       },
       currentEnsemble: {
         physicalUniqueQrCount: current.physicalUniqueQrCount,
+        legacyCompatiblePhysicalUniqueQrCount: current.legacyCompatiblePhysicalUniqueQrCount,
+        v4ReferencePhysicalUniqueQrCount: 29,
+        decodeResultDeltaVsV4Reference: current.legacyCompatiblePhysicalUniqueQrCount - 29,
+        structuralAndConflictDeltaVsLegacyCompatible: current.physicalUniqueQrCount - current.legacyCompatiblePhysicalUniqueQrCount,
+        ...current.exclusionDiagnostics,
         totalAttempts: current.totalAttempts,
         skippedAttemptsByEarlySuccess: current.skippedAttemptsByEarlySuccess,
         stats: current.stats,
@@ -1293,6 +1376,7 @@ async function runMatrix(file) {
         skippedAttemptsByEarlySuccess: rescue.skippedAttemptsByEarlySuccess,
         stats: rescue.stats,
       },
+      canonicalFlow,
       zxingAudit: {
         base: readerBundle.audit,
         invertedProbe: zxingInvertedProbe,
@@ -1311,6 +1395,7 @@ async function runMatrix(file) {
         thresholdElapsedMs,
         rotateRescueElapsedMs,
         zxingInvertedProbeElapsedMs: zxingInvertedProbe.elapsedMs,
+        productionCandidateElapsedMs: Math.max(0, Math.round(performance.now() - totalStarted) - zxingInvertedProbe.elapsedMs),
         totalExperimentalElapsedMs: Math.round(performance.now() - totalStarted),
       },
       decodedRuntimeVehicleKind: decodedRuntime?.kind || null,
