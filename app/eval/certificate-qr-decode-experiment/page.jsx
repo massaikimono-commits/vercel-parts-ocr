@@ -1819,6 +1819,7 @@ function aggregateExperiment(results) {
     acc.baselinePhysicalUnique+=Number(result.baseline.qrCount||0);
     acc.aLegacyCompatible+=Number(a.legacyCompatiblePhysicalUniqueQrCount||0);
     acc.aSafe+=Number(a.physicalUniqueQrCount||0);
+    acc.aCanonicalCount+=Number(e.aCanonicalCount||0);
     acc.eNetNew+=Number(e.eNetNewCanonicalVsA||0);
     acc.finalUnion+=Number(e.finalUnionCanonicalCount||0);
     if(result.baseline.qrCount===expected) acc.baselineCompleteImages+=1;
@@ -1853,7 +1854,7 @@ function aggregateExperiment(results) {
     aggregateStageStats(acc.eStats,e.stats);
     return acc;
   },{
-    expected:0,baselinePhysicalUnique:0,aLegacyCompatible:0,aSafe:0,eNetNew:0,finalUnion:0,
+    expected:0,baselinePhysicalUnique:0,aLegacyCompatible:0,aSafe:0,aCanonicalCount:0,eNetNew:0,finalUnion:0,
     baselineCompleteImages:0,aCompleteImages:0,finalCompleteImages:0,
     aCountingIntegrityFail:false,finalCountingIntegrityFail:false,
     coarseCandidateCount:0,aFailedCandidateCount:0,finderOrQuadEstablishedCandidateCount:0,
@@ -1992,7 +1993,7 @@ export default function CertificateQrDecodeExperimentPage() {
         });
         setResults([...out]);
       }
-      setStatus("固定8枚のdecode A/B診断が完了しました。Ground Truth未設定画像がある場合、正式QR取得率は未確定のままです。");
+      setStatus("固定8枚のdecode A/E geometry診断が完了しました。Ground Truthはdecode終了後の採点だけに使用しています。");
     } catch (e) {
       setStatus(`停止: ${e?.message || e}`);
     } finally {
@@ -2000,172 +2001,112 @@ export default function CertificateQrDecodeExperimentPage() {
     }
   };
 
-  const gtReady = results.length === 8 && results.every((r) => Number.isFinite(r.groundTruthExpectedQrCount));
-  const totals = gtReady ? aggregateExperiment(results) : null;
-  const rate = (count, fail) => totals && !fail && totals.expected
-    ? Number((Number(count || 0) / totals.expected).toFixed(4))
-    : null;
-  const currentRate = rate(totals?.currentPhysicalUnique, totals?.currentCountingIntegrityFail);
-  const coreRate = rate(totals?.corePhysicalUnique, totals?.coreCountingIntegrityFail);
-  const thresholdRate = rate(totals?.thresholdPhysicalUnique, totals?.thresholdCountingIntegrityFail);
-  const rescueRate = rate(totals?.rescuePhysicalUnique, totals?.rescueCountingIntegrityFail);
-  const runtimeVehicleKindCorrectCount = gtReady
-    ? results.filter((r) => r.matrix?.decodedRuntimeVehicleKind === r.groundTruthVehicleKind).length
-    : null;
-  const runtimeVehicleKindAccuracy = gtReady
-    ? Number((runtimeVehicleKindCorrectCount / 8).toFixed(4))
-    : null;
-  const sumStats = (map, key) => Object.values(map || {}).reduce((sum, item) => sum + Number(item?.[key] || 0), 0);
+  const gtReady=results.length===8&&results.every((r)=>Number.isFinite(r.groundTruthExpectedQrCount));
+  const totals=gtReady?aggregateExperiment(results):null;
+  const rate=(count,fail)=>totals&&!fail&&totals.expected
+    ?Number((Number(count||0)/totals.expected).toFixed(4)):null;
+  const aSafeRate=rate(totals?.aSafe,totals?.aCountingIntegrityFail);
+  const finalRate=rate(totals?.finalUnion,totals?.finalCountingIntegrityFail);
+  const aLegacyRate=totals?.expected?Number((Number(totals.aLegacyCompatible||0)/totals.expected).toFixed(4)):null;
+  const runtimeVehicleKindCorrectCount=gtReady
+    ?results.filter((r)=>r.matrix?.decodedRuntimeVehicleKind===r.groundTruthVehicleKind).length:null;
+  const runtimeVehicleKindAccuracy=gtReady?Number((runtimeVehicleKindCorrectCount/8).toFixed(4)):null;
+  const sumStats=(map,key)=>Object.values(map||{}).reduce((sum,item)=>sum+Number(item?.[key]||0),0);
+  const regressionImages=gtReady?results
+    .filter((r)=>Number(r.matrix?.geometryStage?.finalUnionCanonicalCount||0)<Number(r.matrix?.geometryStage?.aCanonicalCount||0))
+    .map((r)=>r.fileName):[];
 
-  const summary = JSON.stringify({
-    schema: "icb-certificate-qr-decode-experiment-summary-v5",
-    generatedAt: new Date().toISOString(),
-    branchRole: "experimental-only",
-    pathname: PATHNAME,
-    groundTruthUsedDuringDecode: false,
-    recognitionIsolation: RECOGNITION_ISOLATION,
-    privacy: {
-      imageUpload: false,
-      qrPayloadIncluded: false,
-      canonicalPayloadIncluded: false,
-      thumbnailIncluded: false,
-      candidateCropImageIncluded: false,
-      browserMemoryOnly: true,
+  const summary=JSON.stringify({
+    schema:"icb-certificate-qr-decode-experiment-summary-v6",
+    generatedAt:new Date().toISOString(),
+    branchRole:"experimental-only",
+    pathname:PATHNAME,
+    groundTruthUsedDuringDecode:false,
+    recognitionIsolation:RECOGNITION_ISOLATION,
+    privacy:{
+      imageUpload:false,
+      qrPayloadIncluded:false,
+      canonicalPayloadIncluded:false,
+      thumbnailIncluded:false,
+      candidateCropImageIncluded:false,
+      browserMemoryOnly:true,
     },
-    groundTruth: {
-      ready: gtReady,
-      totalExpectedQrCount: gtReady ? 47 : null,
-      runtimeExpectedUsedAsGroundTruth: false,
-      usedForScoringOnlyAfterDecode: true,
+    groundTruth:{
+      ready:gtReady,
+      totalExpectedQrCount:gtReady?47:null,
+      runtimeExpectedUsedAsGroundTruth:false,
+      usedForScoringOnlyAfterDecode:true,
     },
-    baselineTotals: totals ? {
-      physicalUniqueQrCount: totals.baselinePhysicalUnique,
-      expectedQrCount: totals.expected,
-      qrAcquisitionRate: totals.expected ? Number((totals.baselinePhysicalUnique / totals.expected).toFixed(4)) : null,
-      completeImageCount: totals.baselineCompleteImages,
-      baselineElapsedMs: totals.baselineElapsedMs,
-    } : null,
-    aCurrentEnsembleTotals: totals ? {
-      physicalUniqueQrCount: totals.currentPhysicalUnique,
-      expectedQrCount: totals.expected,
-      qrAcquisitionRate: currentRate,
-      completeImageCount: totals.currentCompleteImages,
-      countingIntegrityFail: totals.currentCountingIntegrityFail,
-      jsqrSuccesses: sumStats(totals.currentStats, "jsqrSuccesses"),
-      zxingSuccesses: sumStats(totals.currentStats, "zxingSuccesses"),
-      crossEngineConflictCount: sumStats(totals.currentStats, "crossEngineConflictCount"),
-      currentEnsembleElapsedMs: totals.currentEnsembleElapsedMs,
-      stats: Object.values(totals.currentStats),
-    } : null,
-    aReproducibilityVsV4: totals ? {
-      v4ReferencePhysicalUniqueQrCount: 29,
-      v4ReferenceRate: 0.617,
-      v5LegacyCompatiblePhysicalUniqueQrCount: totals.aLegacyCompatiblePhysicalUnique,
-      v5StructuralAdoptedPhysicalUniqueQrCount: totals.currentPhysicalUnique,
-      decodeResultDeltaVsV4Reference: totals.aLegacyCompatiblePhysicalUnique - 29,
-      structuralAndConflictDeltaVsLegacyCompatible: totals.currentPhysicalUnique - totals.aLegacyCompatiblePhysicalUnique,
-      rawDecodeCandidateCount: totals.aRawDecodeCandidateCount,
-      ambiguousConflictRejectedCandidateCount: totals.aAmbiguousConflictRejectedCandidateCount,
-      nonConflictStructuralRejectedCandidateCount: totals.aNonConflictStructuralRejectedCandidateCount,
-      interpretation: "legacy-compatible replays first raw engine success per candidate; structural-adopted A uses v5 validation/arbitration",
-    } : null,
-    bRefinedCoreTotals: totals ? {
-      physicalUniqueQrCount: totals.corePhysicalUnique,
-      expectedQrCount: totals.expected,
-      qrAcquisitionRate: coreRate,
-      completeImageCount: totals.coreCompleteImages,
-      countingIntegrityFail: totals.coreCountingIntegrityFail,
-      jsqrSuccesses: sumStats(totals.coreStats, "jsqrSuccesses"),
-      zxingSuccesses: sumStats(totals.coreStats, "zxingSuccesses"),
-      crossEngineConflictCount: sumStats(totals.coreStats, "crossEngineConflictCount"),
-      refinedCoreElapsedMs: totals.refinedCoreElapsedMs,
-      stats: Object.values(totals.coreStats),
-    } : null,
-    candidateRefinementTotals: totals ? {
-      coarseCandidateCount: totals.coarseCandidateCount,
-      refinedCandidateCount: totals.refinedCandidateCount,
-      weakRejectedCount: totals.weakRejectedCount,
-      overlapDuplicateMergedCount: totals.overlapDuplicateMergedCount,
-      falseOrDuplicateCandidateReductionCount: totals.falseOrDuplicateCandidateReductionCount,
-      candidateRefineElapsedMs: totals.candidateRefineElapsedMs,
-    } : null,
-    cThresholdTotals: totals ? {
-      physicalUniqueQrCountAfterThreshold: totals.thresholdPhysicalUnique,
-      expectedQrCount: totals.expected,
-      qrAcquisitionRateAfterThreshold: thresholdRate,
-      completeImageCountAfterThreshold: totals.thresholdCompleteImages,
-      countingIntegrityFail: totals.thresholdCountingIntegrityFail,
-      netNewCanonicalQrCount: Math.max(0, totals.thresholdPhysicalUnique - totals.corePhysicalUnique),
-      jsqrSuccesses: sumStats(totals.thresholdStats, "jsqrSuccesses"),
-      zxingSuccesses: sumStats(totals.thresholdStats, "zxingSuccesses"),
-      crossEngineConflictCount: sumStats(totals.thresholdStats, "crossEngineConflictCount"),
-      thresholdElapsedMs: totals.thresholdElapsedMs,
-      stats: Object.values(totals.thresholdStats),
-    } : null,
-    dRotateRescueTotals: totals ? {
-      physicalUniqueQrCountAfterRescue: totals.rescuePhysicalUnique,
-      expectedQrCount: totals.expected,
-      qrAcquisitionRateAfterRescue: rescueRate,
-      completeImageCountAfterRescue: totals.rescueCompleteImages,
-      countingIntegrityFail: totals.rescueCountingIntegrityFail,
-      netNewCanonicalQrCount: Math.max(0, totals.rescuePhysicalUnique - totals.thresholdPhysicalUnique),
-      jsqrSuccesses: sumStats(totals.rescueStats, "jsqrSuccesses"),
-      zxingSuccesses: sumStats(totals.rescueStats, "zxingSuccesses"),
-      crossEngineConflictCount: sumStats(totals.rescueStats, "crossEngineConflictCount"),
-      rotateRescueElapsedMs: totals.rotateRescueElapsedMs,
-      stats: Object.values(totals.rescueStats),
-    } : null,
-    canonicalFlowTotals: totals ? {
-      aCanonicalCount: totals.aCanonicalCount,
-      bNetNewCanonicalVsA: totals.bNetNewCanonicalVsA,
-      abCanonicalCount: totals.abCanonicalCount,
-      cNetNewCanonicalVsAB: totals.cNetNewCanonicalVsAB,
-      abcCanonicalCount: totals.abcCanonicalCount,
-      dNetNewCanonicalVsABC: totals.dNetNewCanonicalVsABC,
-      finalUnionCanonicalCount: totals.finalUnionCanonicalCount,
-      payloadIncluded: false,
-      intendedFailOnlyOrder: ["A currentEnsemble", "B refined+tight on A-fail", "C threshold on AB-fail", "D ±1° on ABC-fail"],
-    } : null,
-    structuralValidationTotals: totals ? {
-      crossEngineConflictCount: totals.crossEngineConflictCount,
-      conflicts: totals.conflicts,
-      adoptionRule: "single structural pass wins; both pass requires structural score lead >=2; ambiguous conflict is not adopted",
-      payloadIncluded: false,
-    } : null,
-    zxingAuditTotals: totals ? {
-      tryHarderAlreadyEnabled: true,
-      hybridBinarizerAlreadyInBrowserDecodePath: true,
-      alsoInvertedHintAvailable: totals.zxingInvertedHintAvailable,
-      invertedProbeTestedCandidateCount: totals.zxingInvertedTestedCandidateCount,
-      invertedProbeStructuralPassCount: totals.zxingInvertedStructuralPassCount,
-      invertedProbeAdditionalStructuralPassVsBase: totals.zxingInvertedAdditionalStructuralPassVsBase,
-      invertedProbeElapsedMs: totals.zxingInvertedProbeElapsedMs,
-      includedInFinalQrCount: false,
-    } : null,
-    timingTotals: totals ? {
-      baselineElapsedMs: totals.baselineElapsedMs,
-      currentEnsembleElapsedMs: totals.currentEnsembleElapsedMs,
-      candidateRefineElapsedMs: totals.candidateRefineElapsedMs,
-      refinedCoreElapsedMs: totals.refinedCoreElapsedMs,
-      thresholdElapsedMs: totals.thresholdElapsedMs,
-      rotateRescueElapsedMs: totals.rotateRescueElapsedMs,
-      zxingInvertedProbeElapsedMs: totals.zxingInvertedProbeElapsedMs,
-      productionCandidateElapsedMs: totals.productionCandidateElapsedMs,
-      productionCandidateExcludesInvertedProbe: true,
-      productionCandidateTimingIsDiagnosticUpperBoundForFailOnly: true,
-      totalExperimentalElapsedMs: totals.totalExperimentalElapsedMs,
-    } : null,
-    runtimeVehicleKindTotals: gtReady ? {
-      correctCount: runtimeVehicleKindCorrectCount,
-      imageCount: 8,
-      accuracy: runtimeVehicleKindAccuracy,
-    } : null,
-    results: results.map(publicResult),
-  }, null, 2);
+    baselineTotals:totals?{
+      physicalUniqueQrCount:totals.baselinePhysicalUnique,
+      expectedQrCount:totals.expected,
+      qrAcquisitionRate:totals.expected?Number((totals.baselinePhysicalUnique/totals.expected).toFixed(4)):null,
+      completeImageCount:totals.baselineCompleteImages,
+      baselineElapsedMs:totals.baselineElapsedMs,
+    }:null,
+    aCurrentEnsembleTotals:totals?{
+      v5ReferenceLegacyCompatiblePhysicalUniqueQrCount:29,
+      legacyCompatiblePhysicalUniqueQrCount:totals.aLegacyCompatible,
+      legacyCompatibleRate:aLegacyRate,
+      structuralAdoptedPhysicalUniqueQrCount:totals.aSafe,
+      structuralAdoptedRate:aSafeRate,
+      aCanonicalCount:totals.aCanonicalCount,
+      expectedQrCount:totals.expected,
+      completeImageCount:totals.aCompleteImages,
+      countingIntegrityFail:totals.aCountingIntegrityFail,
+      jsqrSuccesses:sumStats(totals.aStats,"jsqrSuccesses"),
+      zxingSuccesses:sumStats(totals.aStats,"zxingSuccesses"),
+      stats:Object.values(totals.aStats),
+      aElapsedMs:totals.aElapsedMs,
+    }:null,
+    eGeometryRectifyTotals:totals?{
+      aFailedCandidateCount:totals.aFailedCandidateCount,
+      finderOrQuadEstablishedCandidateCount:totals.finderOrQuadEstablishedCandidateCount,
+      geometryKeptCandidateCount:totals.geometryKeptCandidateCount,
+      geometryOverlapMergedCount:totals.geometryOverlapMergedCount,
+      falseCandidateReductionCount:totals.falseCandidateReductionCount,
+      eNetNewCanonicalVsA:totals.eNetNew,
+      finalUnionCanonicalCount:totals.finalUnion,
+      expectedQrCount:totals.expected,
+      finalUnionRate:finalRate,
+      finalCompleteImageCount:totals.finalCompleteImages,
+      countingIntegrityFail:totals.finalCountingIntegrityFail,
+      jsqrSuccesses:sumStats(totals.eStats,"jsqrSuccesses"),
+      zxingSuccesses:sumStats(totals.eStats,"zxingSuccesses"),
+      stats:Object.values(totals.eStats),
+      regressionImageCount:regressionImages.length,
+      regressionImages,
+    }:null,
+    structuralValidationTotals:totals?{
+      samePayloadStructuralFailCount:totals.samePayloadStructuralFailCount,
+      singleEngineStructuralFailCount:totals.singleEngineStructuralFailCount,
+      ambiguousConflictCount:totals.ambiguousConflictCount,
+      crossEngineConflictCount:totals.crossEngineConflictCount,
+      samePayloadStructuralFails:totals.samePayloadStructuralFails,
+      singleEngineStructuralFails:totals.singleEngineStructuralFails,
+      conflicts:totals.conflicts,
+      validatorPolicy:"audit schema coverage first; ambiguous conflicts remain rejected; validator is not loosened in this batch",
+      payloadIncluded:false,
+    }:null,
+    timingTotals:totals?{
+      baselineElapsedMs:totals.baselineElapsedMs,
+      aElapsedMs:totals.aElapsedMs,
+      geometryElapsedMs:totals.geometryElapsedMs,
+      rectifyDecodeElapsedMs:totals.rectifyDecodeElapsedMs,
+      failOnlyExpectedElapsedMs:totals.failOnlyExpectedElapsedMs,
+      totalExperimentalElapsedMs:totals.totalExperimentalElapsedMs,
+    }:null,
+    runtimeVehicleKindTotals:gtReady?{
+      correctCount:runtimeVehicleKindCorrectCount,
+      imageCount:8,
+      accuracy:runtimeVehicleKindAccuracy,
+    }:null,
+    results:results.map(publicResult),
+  },null,2);
 
   const copySummary = async () => {
     await navigator.clipboard.writeText(summary);
-    setStatus("非PII decode A/B summaryをコピーしました。");
+    setStatus("非PII decode A/E summaryをコピーしました。");
   };
   const downloadSummary = () => {
     const blob = new Blob([summary], { type: "application/json" });
