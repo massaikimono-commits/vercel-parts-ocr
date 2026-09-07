@@ -139,4 +139,5 @@ jobs:
             /tmp/parts-qg-next-${{ matrix.label }}.log
             /tmp/parts-qg-assets-${{ matrix.label }}/
             /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz
+            /tmp/parts-qg-playwright-${{ matrix.label }}.tar.gz
           if-no-files-found: ignore
