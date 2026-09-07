@@ -2013,18 +2013,19 @@ async function augmentRows({ rows, configs, jsQR, reader, raw, normalized, prior
     conflictDetails: conflictDetailsFromRows(successKey, rows, attemptKey),
   };
 }
-async function runGeometryFailOnly({ current, raw, normalized, jsQR, reader }) {
+async function runGeometryFailOnly({ current, raw, normalized, jsQR, reader, physicalConsensusSkipCandidateIndexes = new Set() }) {
   const geometryStarted = performance.now();
   const diagnostics = [];
   for (const row of current.rows) {
-    if (row.currentSuccess) {
+    if (row.currentSuccess || physicalConsensusSkipCandidateIndexes.has(row.candidateIndex)) {
       diagnostics.push({
         candidateIndex: row.candidateIndex,
         x: row.x,
         y: row.y,
-        skippedBecauseASuccess: true,
+        skippedBecauseASuccess: Boolean(row.currentSuccess),
+        skippedBecausePhysicalConsensus: physicalConsensusSkipCandidateIndexes.has(row.candidateIndex),
         geometryValid: false,
-        geometryFailReason: "a-success-skip",
+        geometryFailReason: row.currentSuccess ? "a-success-skip" : "a-compact-consensus-skip",
       });
       continue;
     }
@@ -2112,7 +2113,7 @@ async function runGeometryFailOnly({ current, raw, normalized, jsQR, reader }) {
   return {
     geometryElapsedMs,
     rectifyDecodeElapsedMs,
-    aFailedCandidateCount: current.rows.filter((row)=>!row.currentSuccess).length,
+    aFailedCandidateCount: current.rows.filter((row)=>!row.currentSuccess&&!physicalConsensusSkipCandidateIndexes.has(row.candidateIndex)).length,
     finderOrQuadEstablishedCandidateCount: valid.length,
     geometryKeptCandidateCount: kept.length,
     geometryOverlapMergedCount: overlapMergedCount,
@@ -2130,6 +2131,7 @@ async function runGeometryFailOnly({ current, raw, normalized, jsQR, reader }) {
       x:item.x,
       y:item.y,
       skippedBecauseASuccess:Boolean(item.skippedBecauseASuccess),
+      skippedBecausePhysicalConsensus:Boolean(item.skippedBecausePhysicalConsensus),
       geometryValid:Boolean(item.geometryValid),
       geometryFailReason:item.geometryFailReason||"unknown",
       overlapRejected:Boolean(item.overlapRejected),
@@ -2165,6 +2167,7 @@ async function runMatrix(file) {
   const normImage = normCtx.getImageData(0, 0, norm.width, norm.height);
 
   try {
+    const paperW=paperWidthPx(normalized.paper,raw);
     const detectionStarted = performance.now();
     const rawCandidates = detectCertificateQrDensityCandidates2D(
       normImage.data,
@@ -2195,15 +2198,67 @@ async function runMatrix(file) {
     });
     const aElapsedMs = Math.round(performance.now() - aStarted);
 
+    const compactA=compactConsensusAuditFromRows(current.rows,"currentAttempts",paperW);
+    const compactSkipIndexes=new Set(
+      compactA.diagnostics.filter((item)=>item.physicalQrConsensusAccepted).map((item)=>item.candidateIndex)
+    );
+
     const geometry = await runGeometryFailOnly({
       current,
       raw,
       normalized,
       jsQR,
       reader: readerBundle.reader,
+      physicalConsensusSkipCandidateIndexes:compactSkipIndexes,
     });
 
-    const decodedItems=[...geometry.unionCanonical].map((data)=>({data}));
+    const compactE=compactConsensusAuditFromRows(geometry.rows,"geometryAttempts",paperW);
+    const aConflictPosition=resolvePositionConflicts(current.rows,"currentAttempts",paperW,geometry.diagnostics);
+    const eConflictPosition=resolvePositionConflicts(geometry.rows,"geometryAttempts",paperW,geometry.diagnostics);
+
+    const aStructuralCanonical=canonicalSetFromRows(current.rows,"currentSuccess");
+    const eStructuralCanonical=canonicalSetFromRows(geometry.rows,"geometrySuccess");
+    const aPhysicalSafeCanonical=unionCanonicalSets(
+      aStructuralCanonical,
+      compactA.acceptedCanonicalSet,
+      aConflictPosition.resolvedCanonicalSet
+    );
+    const ePhysicalSafeCanonical=unionCanonicalSets(
+      eStructuralCanonical,
+      compactE.acceptedCanonicalSet,
+      eConflictPosition.resolvedCanonicalSet
+    );
+    const finalPhysicalSafeCanonical=unionCanonicalSets(aPhysicalSafeCanonical,ePhysicalSafeCanonical);
+    const parserEligibleCanonical=unionCanonicalSets(
+      aStructuralCanonical,
+      aConflictPosition.resolvedCanonicalSet,
+      eStructuralCanonical,
+      eConflictPosition.resolvedCanonicalSet
+    );
+
+    const compactMergedDiagnostics=[];
+    const compactRadius=Math.max(8,paperW*.018);
+    for(const item of [...compactA.diagnostics,...compactE.diagnostics]){
+      const duplicate=compactMergedDiagnostics.find((known)=>{
+        if(item.rawCenter&&known.rawCenter){
+          return Math.hypot(item.rawCenter.x-known.rawCenter.x,item.rawCenter.y-known.rawCenter.y)<=compactRadius;
+        }
+        return item.candidateIndex===known.candidateIndex;
+      });
+      if(duplicate){
+        duplicate.physicalQrConsensusAccepted=duplicate.physicalQrConsensusAccepted||item.physicalQrConsensusAccepted;
+        continue;
+      }
+      compactMergedDiagnostics.push({...item});
+    }
+    const compactPhysicalConsensusAcceptedCount=compactMergedDiagnostics.filter((item)=>item.physicalQrConsensusAccepted).length;
+
+    const resolvedConflictCanonical=unionCanonicalSets(
+      aConflictPosition.resolvedCanonicalSet,
+      eConflictPosition.resolvedCanonicalSet
+    );
+
+    const decodedItems=[...parserEligibleCanonical].map((data)=>({data}));
     const decodedRuntime=expectedCertificateQrCount(decodedItems,"");
     const aStructuralAudit=structuralFailAuditFromRows(current.rows,"currentAttempts");
     const allConflicts=current.conflictDetails.map((item)=>({...item,stage:"A-current-ensemble"}));
@@ -2224,10 +2279,9 @@ async function runMatrix(file) {
         })),
       },
       currentEnsemble:{
-        physicalUniqueQrCount:current.physicalUniqueQrCount,
+        structuralAdoptedPhysicalUniqueQrCount:current.physicalUniqueQrCount,
+        physicalSafeQrCount:aPhysicalSafeCanonical.size,
         legacyCompatiblePhysicalUniqueQrCount:current.legacyCompatiblePhysicalUniqueQrCount,
-        v5ReferenceLegacyCompatiblePhysicalUniqueQrCount:29,
-        decodeResultDeltaVsReference:current.legacyCompatiblePhysicalUniqueQrCount-29,
         structuralAndConflictDeltaVsLegacyCompatible:current.physicalUniqueQrCount-current.legacyCompatiblePhysicalUniqueQrCount,
         ...current.exclusionDiagnostics,
         totalAttempts:current.totalAttempts,
@@ -2241,12 +2295,40 @@ async function runMatrix(file) {
         geometryKeptCandidateCount:geometry.geometryKeptCandidateCount,
         geometryOverlapMergedCount:geometry.geometryOverlapMergedCount,
         falseCandidateReductionCount:geometry.falseCandidateReductionCount,
-        aCanonicalCount:geometry.aCanonicalCount,
-        eNetNewCanonicalVsA:geometry.eNetNewCanonicalVsA,
-        finalUnionCanonicalCount:geometry.finalUnionCanonicalCount,
+        finderAtLeast3ButNoValidQuadCount:geometry.finderAtLeast3ButNoValidQuadCount,
+        tripletCandidateCount:geometry.tripletCandidateCount,
+        alternateTripletTriedCount:geometry.alternateTripletTriedCount,
+        alternateTripletRecoveredCount:geometry.alternateTripletRecoveredCount,
+        aPhysicalSafeCanonicalCount:aPhysicalSafeCanonical.size,
+        eNetNewCanonicalVsA:canonicalNetNew(ePhysicalSafeCanonical,aPhysicalSafeCanonical),
+        nativeRectifyNetNewCanonicalCount:canonicalNetNew(ePhysicalSafeCanonical,aPhysicalSafeCanonical),
+        finalUnionCanonicalCount:finalPhysicalSafeCanonical.size,
+        parserEligibleUnionCanonicalCount:parserEligibleCanonical.size,
         stats:geometry.stats,
         diagnostics:geometry.diagnostics,
         structuralAudit:geometry.structuralAudit,
+      },
+      compactSchemaAudit:{
+        uniqueCompactCandidateCount:compactMergedDiagnostics.length,
+        compactPhysicalConsensusAcceptedCount,
+        compactParserRecognizedCount:0,
+        physicalQrConsensusAccepted:compactPhysicalConsensusAcceptedCount,
+        parserSchemaRecognized:0,
+        diagnostics:compactMergedDiagnostics,
+        policy:"strict same-payload same-position 60-char compact consensus may count as physical QR; parser remains unrecognized and is excluded from runtime parser input",
+      },
+      conflictPositionAudit:{
+        multiQrCropConflictCount:aConflictPosition.multiQrCropConflictCount+eConflictPosition.multiQrCropConflictCount,
+        samePhysicalQrConflictCount:aConflictPosition.samePhysicalQrConflictCount+eConflictPosition.samePhysicalQrConflictCount,
+        positionUncertainConflictCount:aConflictPosition.positionUncertainConflictCount+eConflictPosition.positionUncertainConflictCount,
+        resolvedConflictEventCount:aConflictPosition.resolvedConflictEventCount+eConflictPosition.resolvedConflictEventCount,
+        resolvedAsSeparatePhysicalQrCount:resolvedConflictCanonical.size,
+        remainingAmbiguousConflictCount:aConflictPosition.remainingAmbiguousConflictCount+eConflictPosition.remainingAmbiguousConflictCount,
+        diagnostics:[
+          ...aConflictPosition.diagnostics.map((item)=>({...item,stage:"A-current-ensemble"})),
+          ...eConflictPosition.diagnostics.map((item)=>({...item,stage:"E-geometry-rectify"})),
+        ],
+        policy:"same-position conflict remains rejected; multi-QR-crop requires position clustering plus repeated evidence or geometry alignment before separate-physical resolution",
       },
       structuralValidation:{
         crossEngineConflictCount:allConflicts.length,
@@ -2262,7 +2344,7 @@ async function runMatrix(file) {
           ...geometry.structuralAudit.singleEngineStructuralFails.map((item)=>({...item,stage:"E-geometry-rectify"})),
         ],
         conflicts:allConflicts,
-        adoptedConflictRule:"ambiguous conflict remains rejected; structural schema is audited, not loosened",
+        adoptedConflictRule:"same-position ambiguous conflicts remain rejected; compact physical consensus and multi-QR position resolution are tracked separately from parser recognition",
       },
       timing:{
         candidateDetectionElapsedMs,
@@ -2274,6 +2356,7 @@ async function runMatrix(file) {
       },
       decodedRuntimeVehicleKind:decodedRuntime?.kind||null,
       decodedRuntimeExpectedQrCount:Number(decodedRuntime?.count||0)||null,
+      runtimeParserInputExcludesCompactConsensus:true,
       normalizeMode:normalized.mode,
       normalizeConfidence:Number(Number(normalized.confidence||0).toFixed(3)),
     };
