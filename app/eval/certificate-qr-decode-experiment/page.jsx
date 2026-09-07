@@ -1792,6 +1792,191 @@ function drawSourceQuadOverlay(ctx,quad,scale,color) {
   ctx.stroke();
   ctx.restore();
 }
+const IMG_0942_A_CANDIDATES = Object.freeze([3,5,6]);
+function canonicalSetIntersects(a,b) {
+  if(!(a instanceof Set)||!(b instanceof Set)) return false;
+  for(const value of a) if(value&&b.has(value)) return true;
+  return false;
+}
+function attemptFormalPhysicalSafeSuccess(attempt,stageSafeSet) {
+  if(!attempt) return false;
+  return canonicalSetIntersects(attempt.canonicalSet,stageSafeSet) ||
+    canonicalSetIntersects(attempt.compactCanonicalSet,stageSafeSet) ||
+    canonicalSetIntersects(attempt.rawCanonicalSet,stageSafeSet);
+}
+function minimalFormalDecoderResult(attempt,stageSafeSet) {
+  if(!attempt) return null;
+  return {
+    jsqrSuccess:Boolean(attempt.jsqrSuccess),
+    zxingSuccess:Boolean(attempt.zxingSuccess),
+    jsStructuralPass:Boolean(attempt.jsStructuralPass),
+    zxingStructuralPass:Boolean(attempt.zxingStructuralPass),
+    physicalSafeSuccess:attemptFormalPhysicalSafeSuccess(attempt,stageSafeSet),
+  };
+}
+function buildFormalStageEntry({id,attempt,row,skipReason,stageSafeSet}) {
+  if(attempt){
+    return {
+      stageId:id,
+      attempted:true,
+      skipReason:null,
+      decoderResult:minimalFormalDecoderResult(attempt,stageSafeSet),
+    };
+  }
+  return {
+    stageId:id,
+    attempted:false,
+    skipReason:skipReason||(
+      row?.currentSuccess ? "early-success-before-this-config" : "formal-attempt-not-recorded"
+    ),
+    decoderResult:null,
+  };
+}
+function buildImg0942ACandidateDecodePathAudit({
+  raw,normalized,current,geometry,aPhysicalSafeCanonical,ePhysicalSafeCanonical,
+}) {
+  const diagnosticsByIndex=new Map((geometry?.diagnostics||[]).map((item)=>[item.candidateIndex,item]));
+  const geometryRowsByIndex=new Map((geometry?.rows||[]).map((item)=>[item.candidateIndex,item]));
+  return IMG_0942_A_CANDIDATES.map((candidateIndex)=>{
+    const row=(current?.rows||[]).find((item)=>item.candidateIndex===candidateIndex)||null;
+    const g=diagnosticsByIndex.get(candidateIndex)||null;
+    const eRow=geometryRowsByIndex.get(candidateIndex)||null;
+    const center=row?paperPoint(normalized.paper,raw,row):null;
+    const currentAttempts=new Map((row?.currentAttempts||[]).map((attempt)=>[attempt.configId,attempt]));
+    const geometryAttempts=new Map((eRow?.geometryAttempts||[]).map((attempt)=>[attempt.configId,attempt]));
+    const aConfigs=[
+      ["current-small","raw-color-small-2x-nearest"],
+      ["current-medium-nearest","raw-color-medium-3x-nearest"],
+      ["current-medium-smooth","raw-color-medium-2x-smooth"],
+    ];
+    const formalStages=aConfigs.map(([stageId,configId])=>{
+      const attempt=currentAttempts.get(configId)||null;
+      let skipReason=null;
+      if(!attempt){
+        const attemptedIds=(row?.currentAttempts||[]).map((item)=>item.configId);
+        const thisIndex=ENSEMBLE_CONFIGS.findIndex((config)=>config.id===configId);
+        const maxAttemptedIndex=Math.max(-1,...attemptedIds.map((id)=>ENSEMBLE_CONFIGS.findIndex((config)=>config.id===id)));
+        skipReason=row?.currentSuccess&&thisIndex>maxAttemptedIndex
+          ?"early-success-before-this-config"
+          :"formal-attempt-not-recorded";
+      }
+      return buildFormalStageEntry({
+        id:stageId,attempt,row,skipReason,stageSafeSet:aPhysicalSafeCanonical,
+      });
+    });
+    const geometryAttempt=geometryAttempts.get("geometry-rectify-native")||null;
+    let geometrySkipReason=null;
+    if(!geometryAttempt){
+      if(!g) geometrySkipReason="geometry-diagnostic-missing";
+      else if(g.skippedBecauseASuccess) geometrySkipReason="a-success-skip";
+      else if(g.skippedBecausePhysicalConsensus) geometrySkipReason="a-compact-consensus-skip";
+      else if(!g.geometryValid) geometrySkipReason=`geometry-invalid:${g.geometryFailReason||"unknown"}`;
+      else if(g.overlapRejected) geometrySkipReason="geometry-overlap-duplicate";
+      else if(!eRow) geometrySkipReason="geometry-not-kept-for-rectify";
+      else geometrySkipReason="rectify-canvas-unavailable-or-attempt-not-recorded";
+    }
+    formalStages.push(buildFormalStageEntry({
+      id:"geometry-rectify-native",
+      attempt:geometryAttempt,
+      row,
+      skipReason:geometrySkipReason,
+      stageSafeSet:ePhysicalSafeCanonical,
+    }));
+    const quality=row&&g
+      ?buildCandidateQualityDiagnostic(raw,normalized.paper,row,g,"img0942-A-candidate-decode-path")
+      :null;
+    return {
+      candidateIndex,
+      classification:"A",
+      candidateExists:Boolean(row),
+      normalizedCenter:row?{
+        x:Number(Number(row.x).toFixed(4)),
+        y:Number(Number(row.y).toFixed(4)),
+      }:null,
+      sourceCenter:center?{
+        x:Number(center.x.toFixed(2)),
+        y:Number(center.y.toFixed(2)),
+      }:null,
+      finderCount:Number(g?.finderCount||0),
+      tripletCandidateCount:Number(g?.tripletCandidateCount||0),
+      selectedTripletRank:Number(g?.selectedTripletRank||0)||null,
+      geometryValid:Boolean(g?.geometryValid),
+      geometryFailReason:g?.geometryFailReason||"missing",
+      finalGeometry:Boolean(g?.geometryValid&&!g?.overlapRejected),
+      overlapRejected:Boolean(g?.overlapRejected),
+      qrDimension:Number(g?.qrDimension||0)||null,
+      modulePx:Number(g?.modulePx||0)||null,
+      perspectiveScaleSpread:Number(g?.perspectiveScaleSpread||0)||null,
+      candidateCenterDistancePx:Number(g?.candidateCenterDistancePx||0)||null,
+      formalStages,
+      quality,
+      payloadIncluded:false,
+      imageIncluded:false,
+    };
+  });
+}
+function flattenImg0942AQuality(item,referenceSummary) {
+  const q=item?.quality||{};
+  const read=(path)=>{
+    const value=metricAt(q,path);
+    return Number.isFinite(Number(value))?Number(value):null;
+  };
+  const map=[
+    ["rawGradientEnergy","originalGeometryAxisCrop.gradientEnergy"],
+    ["rawLaplacianVariance","originalGeometryAxisCrop.blurIndicatorLaplacianVariance"],
+    ["rawEdgeStrength","originalGeometryAxisCrop.edgeStrength"],
+    ["rawLocalContrast","originalGeometryAxisCrop.localContrastRange"],
+    ["rawLocalLumaStdDev","originalGeometryAxisCrop.localLumaStdDev"],
+    ["rectifiedGradientEnergy","rectifiedCrop.gradientEnergy"],
+    ["rectifiedLaplacianVariance","rectifiedCrop.blurIndicatorLaplacianVariance"],
+    ["rectifiedEdgeStrength","rectifiedCrop.edgeStrength"],
+    ["estimatedModuleWidthRawPx","moduleQuality.estimatedModuleWidthRawPx"],
+    ["estimatedModuleWidthRectifiedPx","moduleQuality.estimatedModuleWidthRectifiedPx"],
+    ["finderGradientEnergyMean","moduleQuality.finderGradientEnergyMean"],
+    ["finderLaplacianVarianceMean","moduleQuality.finderLaplacianVarianceMean"],
+    ["blackWhiteSeparationP75P25","moduleQuality.blackWhiteSeparationP75P25"],
+    ["bimodalMeanSeparation","moduleQuality.bimodalMeanSeparation"],
+    ["moduleBoundaryContrastP75","moduleQuality.moduleBoundaryContrastP75"],
+    ["activeBoundaryContrastTopQuartileMean","moduleQuality.activeBoundaryContrastTopQuartileMean"],
+    ["quietZoneLumaMean","moduleQuality.quietZoneLumaMean"],
+    ["quietZoneLumaStdDev","moduleQuality.quietZoneLumaStdDev"],
+    ["quietVsQrBorderMeanContrast","moduleQuality.quietVsQrBorderMeanContrast"],
+    ["quietVsDarkQuartileContrast","moduleQuality.quietVsDarkQuartileContrast"],
+  ];
+  const qualityMetrics=Object.fromEntries(map.map(([key,path])=>[key,read(path)]));
+  const relative={};
+  for(const [key] of map){
+    const value=qualityMetrics[key];
+    const median=Number(referenceSummary?.metrics?.[key]?.median);
+    relative[key]=value!=null&&Number.isFinite(median)&&median!==0
+      ?Number((value/median).toFixed(4))
+      :null;
+  }
+  return {
+    candidateIndex:item.candidateIndex,
+    classification:"A",
+    normalizedCenter:item.normalizedCenter,
+    sourceCenter:item.sourceCenter,
+    candidateExists:item.candidateExists,
+    finderCount:item.finderCount,
+    tripletCandidateCount:item.tripletCandidateCount,
+    selectedTripletRank:item.selectedTripletRank,
+    geometryValid:item.geometryValid,
+    geometryFailReason:item.geometryFailReason,
+    finalGeometry:item.finalGeometry,
+    overlapRejected:item.overlapRejected,
+    qrDimension:item.qrDimension,
+    modulePx:item.modulePx,
+    perspectiveScaleSpread:item.perspectiveScaleSpread,
+    candidateCenterDistancePx:item.candidateCenterDistancePx,
+    formalStages:item.formalStages,
+    decoderResults:item.formalStages
+      .filter((stage)=>stage.attempted)
+      .map((stage)=>({stageId:stage.stageId,...stage.decoderResult})),
+    qualityMetrics,
+    relativeToSuccessfulReferenceMedian:relative,
+  };
+}
 function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -3432,6 +3617,16 @@ async function runMatrix(file) {
     const failOnlyExpectedElapsedMs =
       candidateDetectionElapsedMs + aElapsedMs + geometry.geometryElapsedMs + geometry.rectifyDecodeElapsedMs;
     const qualityDiagnosticAudit=buildQualityDiagnosticAudit(file,raw,normalized,current,geometry);
+    const img0942ACandidateDecodePathAudit=(normalizeFixedFileName(file)||safeName(file))==="IMG_0942.jpeg"
+      ?buildImg0942ACandidateDecodePathAudit({
+        raw,
+        normalized,
+        current,
+        geometry,
+        aPhysicalSafeCanonical,
+        ePhysicalSafeCanonical,
+      })
+      :[];
     const limitedQualityRescueExperiment=await runLimitedQualityRescueExperiment({
       file,
       raw,
@@ -3524,6 +3719,7 @@ async function runMatrix(file) {
         adoptedConflictRule:"same-position ambiguous conflicts remain rejected; compact physical consensus and multi-QR position resolution are tracked separately from parser recognition",
       },
       qualityDiagnosticAudit,
+      img0942ACandidateDecodePathAudit,
       limitedQualityRescueExperiment,
       timing:{
         candidateDetectionElapsedMs,
@@ -3904,6 +4100,9 @@ export default function CertificateQrDecodeExperimentPage() {
   const managementQualityReference=totals
     ?buildManagementQualityReferenceSummary(totals.qualityReferenceDiagnostics)
     :null;
+  const img0942Result=results.find((result)=>result.fileName==="IMG_0942.jpeg")||null;
+  const img0942ACandidateDecodePathAudit=(img0942Result?.matrix?.img0942ACandidateDecodePathAudit||[])
+    .map((item)=>flattenImg0942AQuality(item,managementQualityReference));
   const managementPriorityQuality=totals
     ?priorityQualityWithRelative.map((item)=>{
       const overlay=overlayClassificationRows.find(
@@ -3916,7 +4115,7 @@ export default function CertificateQrDecodeExperimentPage() {
     schema:"icb-certificate-qr-decode-experiment-summary-v7",
     summaryVariant:"management-audit-short-v1",
     experimentalHead,
-    diagnosticRevision:"v7-postformal-0942-ownership-audit-5",
+    diagnosticRevision:"v7-postformal-0942-A-decode-path-audit-6",
     experimentRoute:EXPERIMENT_ROUTE,
     baselineTargetRoute:PATHNAME,
     groundTruthUsedDuringDecode:false,
@@ -3955,6 +4154,7 @@ export default function CertificateQrDecodeExperimentPage() {
     overlayClassifications:overlayClassificationRows,
     img0942OwnershipClassifications,
     img0942OwnershipComplete,
+    img0942ACandidateDecodePathAudit,
     qualityDiagnostic:totals?{
       successfulDecodeReference:managementQualityReference,
       priorityCandidates:managementPriorityQuality,
@@ -3991,7 +4191,7 @@ export default function CertificateQrDecodeExperimentPage() {
     experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
-    diagnosticRevision:"v7-postformal-0942-ownership-audit-5",
+    diagnosticRevision:"v7-postformal-0942-A-decode-path-audit-6",
     experimentRoute:EXPERIMENT_ROUTE,
     pathname:PATHNAME,
     pathnameRole:"baseline-target-route",
@@ -4125,6 +4325,7 @@ export default function CertificateQrDecodeExperimentPage() {
       payloadIncluded:false,
       canonicalPayloadIncluded:false,
     }:null,
+    img0942ACandidateDecodePathAudit,
     img0942OwnershipAudit:{
       classifications:img0942OwnershipClassifications,
       complete:img0942OwnershipComplete,
@@ -4401,7 +4602,7 @@ export default function CertificateQrDecodeExperimentPage() {
 
       <section style={{ marginTop: 18 }}>
         <div style={{fontSize:12,marginBottom:8,fontWeight:700}}>
-          IMG_0942 ownership分類: {img0942OwnershipClassifiedCount}/10
+          IMG_0942 ownership分類: {img0942OwnershipClassifiedCount}/10 / A candidate decode-path audit: 3/5/6
           {img0942OwnershipComplete ? "（全candidate分類完了）" : "（未分類candidateをA/B/C/D選択）"}
           {" / "}既存0944分類は引き継ぎ済み
         </div>
