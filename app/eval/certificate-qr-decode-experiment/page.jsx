@@ -409,6 +409,8 @@ async function runMatrix(file) {
           const physicalSuccess = js.success || zx.success;
           stat.candidateRows.push({
             candidateIndex: ci + 1,
+            x: candidate.x,
+            y: candidate.y,
             physicalSuccess,
             canonicalSet,
           });
@@ -434,6 +436,10 @@ async function runMatrix(file) {
       for (const row of stat.candidateRows) {
         if (!row.physicalSuccess) continue;
         const payloadDuplicate = accepted.some((known) => {
+          const nearSamePosition =
+            Math.abs(Number(known.x) - Number(row.x)) <= .055 &&
+            Math.abs(Number(known.y) - Number(row.y)) <= .065;
+          if (!nearSamePosition) return false;
           for (const canonical of row.canonicalSet) {
             if (known.canonicalSet.has(canonical)) return true;
           }
