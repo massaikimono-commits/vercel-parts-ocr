@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { normalizeCertificateCanvas } from "../../lib/certificate-photo-normalize";
 import { detectCertificateQrDensityCandidates2D, clusterCertificateQrCandidates2D } from "../../lib/certificate-qr-density-2d.mjs";
 
@@ -346,7 +346,14 @@ async function runMatrix(file) {
   const norm = normalized.canvas;
   const normCtx = norm.getContext("2d", { willReadFrequently: true });
   const normImage = normCtx.getImageData(0, 0, norm.width, norm.height);
-  const candidates = detectCertificateQrDensityCandidates2D(normImage.data, normImage.width, normImage.height, { maxCandidates: 8 });
+  const rawCandidates = detectCertificateQrDensityCandidates2D(
+    normImage.data,
+    normImage.width,
+    normImage.height,
+    { maxCandidates: 16 }
+  );
+  const clustered = clusterCertificateQrCandidates2D(rawCandidates, { maxCandidates: 8 });
+  const candidates = clustered.candidates;
   const [reader, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
   const jsQR = jsMod.default || jsMod;
 
@@ -356,15 +363,25 @@ async function runMatrix(file) {
     jsqrSuccesses: 0,
     zxingAttempts: 0,
     zxingSuccesses: 0,
-    uniqueKeys: new Set(),
+    crossEngineDuplicateRemovedCount: 0,
+    crossEngineConflictCount: 0,
+    crossCandidatePayloadDuplicateRemovedCount: 0,
+    candidateRows: [],
   }]));
-  const union = new Set();
   const candidateDiagnostics = [];
 
   try {
     for (let ci = 0; ci < candidates.length; ci += 1) {
       const candidate = candidates[ci];
-      const row = { index: ci + 1, ...candidate, attempts: [], successCount: 0 };
+      const row = {
+        index: ci + 1,
+        x: candidate.x,
+        y: candidate.y,
+        score: candidate.score,
+        mergedPeakCount: candidate.mergedPeakCount || 1,
+        attempts: [],
+      };
+
       for (const config of CONFIGS) {
         const source = config.source === "raw" ? raw : norm;
         const pageGeometry = config.source === "raw"
@@ -374,25 +391,34 @@ async function runMatrix(file) {
         try {
           const stat = configs[config.id];
           stat.jsqrAttempts += 1;
-          const jk = await decodeJs(jsQR, canvas);
-          if (jk) {
-            stat.jsqrSuccesses += 1;
-            stat.uniqueKeys.add(jk);
-            union.add(jk);
-          }
+          const js = await decodeJs(jsQR, canvas);
+          if (js.success) stat.jsqrSuccesses += 1;
+
           stat.zxingAttempts += 1;
-          const zk = await decodeZxing(reader, canvas);
-          if (zk) {
-            stat.zxingSuccesses += 1;
-            stat.uniqueKeys.add(zk);
-            union.add(zk);
-          }
-          const success = Boolean(jk || zk);
-          if (success) row.successCount += 1;
+          const zx = await decodeZxing(reader, canvas);
+          if (zx.success) stat.zxingSuccesses += 1;
+
+          const crossEngineDuplicate = js.success && zx.success && sameCanonical(js.canonical, zx.canonical);
+          const crossEngineConflict = js.success && zx.success && !sameCanonical(js.canonical, zx.canonical);
+          if (crossEngineDuplicate) stat.crossEngineDuplicateRemovedCount += 1;
+          if (crossEngineConflict) stat.crossEngineConflictCount += 1;
+
+          const canonicalSet = new Set(
+            [js.success ? js.canonical : "", zx.success ? zx.canonical : ""].filter(Boolean)
+          );
+          const physicalSuccess = js.success || zx.success;
+          stat.candidateRows.push({
+            candidateIndex: ci + 1,
+            physicalSuccess,
+            canonicalSet,
+          });
           row.attempts.push({
             configId: config.id,
-            jsqrSuccess: Boolean(jk),
-            zxingSuccess: Boolean(zk),
+            jsqrSuccess: js.success,
+            zxingSuccess: zx.success,
+            crossEngineDuplicate,
+            crossEngineConflict,
+            physicalSuccess,
           });
         } finally {
           canvas.width = 1;
@@ -403,24 +429,59 @@ async function runMatrix(file) {
       candidateDiagnostics.push(row);
     }
 
+    const publicConfigs = Object.values(configs).map((stat) => {
+      const accepted = [];
+      for (const row of stat.candidateRows) {
+        if (!row.physicalSuccess) continue;
+        const payloadDuplicate = accepted.some((known) => {
+          for (const canonical of row.canonicalSet) {
+            if (known.canonicalSet.has(canonical)) return true;
+          }
+          return false;
+        });
+        if (payloadDuplicate) {
+          stat.crossCandidatePayloadDuplicateRemovedCount += 1;
+          continue;
+        }
+        accepted.push(row);
+      }
+      return {
+        id: stat.id,
+        source: stat.source,
+        mode: stat.mode,
+        crop: stat.crop,
+        widthRel: stat.widthRel,
+        scale: stat.scale,
+        interpolation: stat.interpolation,
+        jsqrAttempts: stat.jsqrAttempts,
+        jsqrSuccesses: stat.jsqrSuccesses,
+        zxingAttempts: stat.zxingAttempts,
+        zxingSuccesses: stat.zxingSuccesses,
+        crossEngineDuplicateRemovedCount: stat.crossEngineDuplicateRemovedCount,
+        crossEngineConflictCount: stat.crossEngineConflictCount,
+        crossCandidatePayloadDuplicateRemovedCount: stat.crossCandidatePayloadDuplicateRemovedCount,
+        physicalUniqueQrCount: accepted.length,
+      };
+    });
+
     return {
-      candidates,
+      candidateDetection: {
+        dominantRowY: clustered.dominantRowY,
+        rawCandidateCount: clustered.inputCandidateCount,
+        physicalCandidateCount: candidates.length,
+        rowClusterCount: clustered.rowClusterCount,
+        candidatePositionDuplicateRemovedCount: clustered.candidatePositionDuplicateRemovedCount,
+        discardedOffRowCount: clustered.discardedOffRowCount,
+        physicalCandidates: candidates.map((candidate, index) => ({
+          index: index + 1,
+          x: candidate.x,
+          y: candidate.y,
+          score: candidate.score,
+          mergedPeakCount: candidate.mergedPeakCount || 1,
+        })),
+      },
       candidateDiagnostics,
-      configs: Object.values(configs).map((s) => ({
-        id: s.id,
-        source: s.source,
-        mode: s.mode,
-        crop: s.crop,
-        widthRel: s.widthRel,
-        scale: s.scale,
-        interpolation: s.interpolation,
-        jsqrAttempts: s.jsqrAttempts,
-        jsqrSuccesses: s.jsqrSuccesses,
-        zxingAttempts: s.zxingAttempts,
-        zxingSuccesses: s.zxingSuccesses,
-        uniqueQrCount: s.uniqueKeys.size,
-      })),
-      matrixUnionQrCount: union.size,
+      configs: publicConfigs,
       elapsedMs: Math.round(performance.now() - started),
       normalizeMode: normalized.mode,
       normalizeConfidence: Number(Number(normalized.confidence || 0).toFixed(3)),
@@ -432,24 +493,62 @@ async function runMatrix(file) {
     norm.height = 1;
   }
 }
+function applyCountingIntegrity(matrix, expectedQrCount) {
+  const expected = Number(expectedQrCount);
+  const configs = (matrix?.configs || []).map((config) => ({
+    ...config,
+    countingIntegrityFail: Number.isFinite(expected)
+      ? Number(config.physicalUniqueQrCount || 0) > expected
+      : false,
+  }));
+  return { ...matrix, configs };
+}
 function aggregateConfigs(results) {
   const map = new Map();
   for (const result of results) {
     for (const config of result?.matrix?.configs || []) {
       const prev = map.get(config.id) || {
-        id: config.id, source: config.source, mode: config.mode, crop: config.crop,
-        widthRel: config.widthRel, scale: config.scale, interpolation: config.interpolation,
-        qrCountSum: 0, jsqrAttempts: 0, jsqrSuccesses: 0, zxingAttempts: 0, zxingSuccesses: 0,
+        id: config.id,
+        source: config.source,
+        mode: config.mode,
+        crop: config.crop,
+        widthRel: config.widthRel,
+        scale: config.scale,
+        interpolation: config.interpolation,
+        physicalQrCountSum: 0,
+        completeImageCount: 0,
+        countingIntegrityFailImageCount: 0,
+        jsqrAttempts: 0,
+        jsqrSuccesses: 0,
+        zxingAttempts: 0,
+        zxingSuccesses: 0,
+        crossEngineDuplicateRemovedCount: 0,
+        crossEngineConflictCount: 0,
+        crossCandidatePayloadDuplicateRemovedCount: 0,
       };
-      prev.qrCountSum += Number(config.uniqueQrCount || 0);
+      const count = Number(config.physicalUniqueQrCount || 0);
+      prev.physicalQrCountSum += count;
+      if (Number.isFinite(result.groundTruthExpectedQrCount) && count === result.groundTruthExpectedQrCount) {
+        prev.completeImageCount += 1;
+      }
+      if (config.countingIntegrityFail) prev.countingIntegrityFailImageCount += 1;
       prev.jsqrAttempts += Number(config.jsqrAttempts || 0);
       prev.jsqrSuccesses += Number(config.jsqrSuccesses || 0);
       prev.zxingAttempts += Number(config.zxingAttempts || 0);
       prev.zxingSuccesses += Number(config.zxingSuccesses || 0);
+      prev.crossEngineDuplicateRemovedCount += Number(config.crossEngineDuplicateRemovedCount || 0);
+      prev.crossEngineConflictCount += Number(config.crossEngineConflictCount || 0);
+      prev.crossCandidatePayloadDuplicateRemovedCount += Number(config.crossCandidatePayloadDuplicateRemovedCount || 0);
       map.set(config.id, prev);
     }
   }
-  return [...map.values()].sort((a, b) => b.qrCountSum - a.qrCountSum || b.zxingSuccesses - a.zxingSuccesses || b.jsqrSuccesses - a.jsqrSuccesses);
+  return [...map.values()].sort((a, b) =>
+    a.countingIntegrityFailImageCount - b.countingIntegrityFailImageCount ||
+    b.physicalQrCountSum - a.physicalQrCountSum ||
+    b.completeImageCount - a.completeImageCount ||
+    b.zxingSuccesses - a.zxingSuccesses ||
+    b.jsqrSuccesses - a.jsqrSuccesses
+  );
 }
 function publicResult(result) {
   return {
@@ -458,8 +557,14 @@ function publicResult(result) {
     groundTruthExpectedQrCount: result.groundTruthExpectedQrCount,
     baseline: {
       ...result.baseline,
+      physicalUniqueQrCount: result.baseline.qrCount,
+      countingIntegrityFail: Number.isFinite(result.groundTruthExpectedQrCount)
+        ? result.baseline.qrCount > result.groundTruthExpectedQrCount
+        : false,
       networkAudit: result.baseline.networkAudit,
-      kindMismatch: result.groundTruthVehicleKind ? result.baseline.runtimeVehicleKind !== result.groundTruthVehicleKind : null,
+      kindMismatch: result.groundTruthVehicleKind
+        ? result.baseline.runtimeVehicleKind !== result.groundTruthVehicleKind
+        : null,
     },
     matrix: result.matrix,
   };
@@ -467,7 +572,9 @@ function publicResult(result) {
 
 export default function CertificateQrDecodeExperimentPage() {
   const [files, setFiles] = useState([]);
-  const [groundTruth, setGroundTruth] = useState({});
+  const [groundTruth, setGroundTruth] = useState(DEFAULT_GROUND_TRUTH);
+  const [thumbnailUrls, setThumbnailUrls] = useState({});
+  const [expandedName, setExpandedName] = useState("");
   const [results, setResults] = useState([]);
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("固定8枚を選択してください。");
@@ -476,6 +583,26 @@ export default function CertificateQrDecodeExperimentPage() {
   const normalizedNames = useMemo(() => files.map(normalizeFixedFileName), [files]);
   const nameSet = useMemo(() => new Set(normalizedNames.filter(Boolean)), [normalizedNames]);
   const valid = files.length === 8 && normalizedNames.every(Boolean) && nameSet.size === 8 && REQUIRED_NAMES.every((n) => nameSet.has(n));
+
+  const filesByName = useMemo(() => {
+    const map = {};
+    for (const file of files) {
+      const name = normalizeFixedFileName(file);
+      if (name) map[name] = file;
+    }
+    return map;
+  }, [files]);
+
+  useEffect(() => {
+    const next = {};
+    for (const [name, file] of Object.entries(filesByName)) {
+      next[name] = URL.createObjectURL(file);
+    }
+    setThumbnailUrls(next);
+    return () => {
+      for (const url of Object.values(next)) URL.revokeObjectURL(url);
+    };
+  }, [filesByName]);
 
   const setGt = (name, kind) => {
     const opt = GT_OPTIONS.find((x) => x.value === kind) || GT_OPTIONS[0];
@@ -507,8 +634,9 @@ export default function CertificateQrDecodeExperimentPage() {
           frameRef.current.src = "about:blank";
           await wait(80);
         }
-        const matrix = await runMatrix(file);
+        const rawMatrix = await runMatrix(file);
         const gt = groundTruth[name] || {};
+        const matrix = applyCountingIntegrity(rawMatrix, gt.expectedQrCount);
         out.push({
           fileName: name,
           groundTruthVehicleKind: gt.vehicleKind || null,
@@ -527,35 +655,83 @@ export default function CertificateQrDecodeExperimentPage() {
   };
 
   const aggregate = aggregateConfigs(results);
-  const best = aggregate[0] || null;
+  const best = aggregate.find((config) => config.countingIntegrityFailImageCount === 0) || aggregate[0] || null;
   const gtReady = results.length === 8 && results.every((r) => Number.isFinite(r.groundTruthExpectedQrCount));
-  const totals = gtReady ? results.reduce((acc, r) => {
-    acc.expected += r.groundTruthExpectedQrCount;
-    acc.baseline += r.baseline.qrCount;
-    if (r.baseline.qrCount >= r.groundTruthExpectedQrCount) acc.baselineComplete += 1;
-    const bestRow = r.matrix.configs.find((c) => c.id === best?.id);
-    const q = Number(bestRow?.uniqueQrCount || 0);
-    acc.candidate += q;
-    if (q >= r.groundTruthExpectedQrCount) acc.candidateComplete += 1;
-    return acc;
-  }, { expected: 0, baseline: 0, candidate: 0, baselineComplete: 0, candidateComplete: 0 }) : null;
+  const bestHasIntegrityFail = Boolean(best?.countingIntegrityFailImageCount);
+  const candidateTotals = gtReady && best && !bestHasIntegrityFail
+    ? results.reduce((acc, r) => {
+        const config = r.matrix.configs.find((c) => c.id === best.id);
+        const count = Number(config?.physicalUniqueQrCount || 0);
+        acc.expected += r.groundTruthExpectedQrCount;
+        acc.physicalUnique += count;
+        if (count === r.groundTruthExpectedQrCount) acc.completeImages += 1;
+        acc.jsqrSuccesses += Number(config?.jsqrSuccesses || 0);
+        acc.zxingSuccesses += Number(config?.zxingSuccesses || 0);
+        acc.crossEngineDuplicateRemovedCount += Number(config?.crossEngineDuplicateRemovedCount || 0);
+        acc.crossCandidatePayloadDuplicateRemovedCount += Number(config?.crossCandidatePayloadDuplicateRemovedCount || 0);
+        acc.candidatePositionDuplicateRemovedCount += Number(r.matrix?.candidateDetection?.candidatePositionDuplicateRemovedCount || 0);
+        acc.elapsedMs += Number(r.matrix?.elapsedMs || 0);
+        return acc;
+      }, {
+        expected: 0,
+        physicalUnique: 0,
+        completeImages: 0,
+        jsqrSuccesses: 0,
+        zxingSuccesses: 0,
+        crossEngineDuplicateRemovedCount: 0,
+        crossCandidatePayloadDuplicateRemovedCount: 0,
+        candidatePositionDuplicateRemovedCount: 0,
+        elapsedMs: 0,
+      })
+    : null;
+  const baselineTotals = gtReady
+    ? results.reduce((acc, r) => {
+        acc.expected += r.groundTruthExpectedQrCount;
+        acc.physicalUnique += r.baseline.qrCount;
+        if (r.baseline.qrCount === r.groundTruthExpectedQrCount) acc.completeImages += 1;
+        if (r.baseline.qrCount > r.groundTruthExpectedQrCount) acc.countingIntegrityFail = true;
+        acc.elapsedMs += Number(r.baseline.elapsedMs || 0);
+        return acc;
+      }, { expected: 0, physicalUnique: 0, completeImages: 0, countingIntegrityFail: false, elapsedMs: 0 })
+    : null;
 
   const summary = JSON.stringify({
-    schema: "icb-certificate-qr-decode-experiment-summary-v1",
+    schema: "icb-certificate-qr-decode-experiment-summary-v2",
     generatedAt: new Date().toISOString(),
     branchRole: "experimental-only",
     pathname: PATHNAME,
-    privacy: { imageUpload: false, qrPayloadIncluded: false, browserMemoryOnly: true },
+    privacy: {
+      imageUpload: false,
+      qrPayloadIncluded: false,
+      canonicalPayloadIncluded: false,
+      thumbnailIncluded: false,
+      browserMemoryOnly: true,
+    },
     groundTruth: {
       ready: gtReady,
+      totalExpectedQrCount: gtReady ? results.reduce((sum, r) => sum + r.groundTruthExpectedQrCount, 0) : null,
       runtimeExpectedUsedAsGroundTruth: false,
     },
-    bestGlobalConfig: best,
-    totals: totals ? {
-      ...totals,
-      baselineQrRate: totals.expected ? Number((totals.baseline / totals.expected).toFixed(4)) : null,
-      candidateQrRate: totals.expected ? Number((totals.candidate / totals.expected).toFixed(4)) : null,
+    baselineTotals: baselineTotals ? {
+      ...baselineTotals,
+      qrAcquisitionRate: !baselineTotals.countingIntegrityFail && baselineTotals.expected
+        ? Number((baselineTotals.physicalUnique / baselineTotals.expected).toFixed(4))
+        : null,
     } : null,
+    selectedCandidateConfig: best ? {
+      ...best,
+      usableForRate: !bestHasIntegrityFail,
+    } : null,
+    candidateTotals: candidateTotals ? {
+      ...candidateTotals,
+      qrAcquisitionRate: candidateTotals.expected
+        ? Number((candidateTotals.physicalUnique / candidateTotals.expected).toFixed(4))
+        : null,
+      countingIntegrityFail: false,
+    } : {
+      countingIntegrityFail: bestHasIntegrityFail,
+      qrAcquisitionRate: null,
+    },
     configAggregate: aggregate,
     results: results.map(publicResult),
   }, null, 2);
@@ -577,7 +753,7 @@ export default function CertificateQrDecodeExperimentPage() {
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
       <h1>車検証QR decode A/B 実験</h1>
-      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。改善候補は同じ画像をブラウザ内だけで dynamic XY / raw vs normalized / crop / scale / interpolation matrix に通します。</p>
+      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。改善候補は同じ画像をブラウザ内だけで dynamic XY候補を物理クラスタリングし、3つのraw color有力構成だけで比較します。</p>
       <p><b>禁止:</b> QR payloadの表示・保存・送信。本ページのsummaryは座標・設定・成功/失敗・件数のみです。</p>
 
       <section style={{ border: "1px solid #ccc", borderRadius: 12, padding: 14 }}>
@@ -585,17 +761,51 @@ export default function CertificateQrDecodeExperimentPage() {
         <div style={{ marginTop: 8 }}>{files.length}/8 選択</div>
         <div style={{ marginTop: 6, fontSize: 12 }}>正規化後: {normalizedNames.map((n) => n || "判定不可").join(" / ")}</div>
         {valid && (
-          <div style={{ marginTop: 12 }}>
-            <b>QR Ground Truth（ユーザー確認後に設定）</b>
-            {REQUIRED_NAMES.map((name) => (
-              <label key={name} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-                <span style={{ minWidth: 120, fontFamily: "monospace" }}>{name}</span>
-                <select value={groundTruth[name]?.vehicleKind || ""} disabled={running} onChange={(e) => setGt(name, e.target.value)}>
-                  {GT_OPTIONS.map((o) => <option key={o.value || "unset"} value={o.value}>{o.label}</option>)}
-                </select>
-                <span style={{ fontSize: 12 }}>expected {groundTruth[name]?.expectedQrCount ?? "未設定"}</span>
-              </label>
-            ))}
+          <div style={{ marginTop: 14 }}>
+            <b>QR Ground Truth（写真を見て確認 / ブラウザローカルのみ）</b>
+            <div style={{ marginTop: 8, display: "grid", gap: 12 }}>
+              {REQUIRED_NAMES.map((name) => (
+                <div key={name} style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12 }}>
+                  <div style={{ fontFamily: "monospace", fontWeight: 800 }}>{name}</div>
+                  {thumbnailUrls[name] && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedName(name)}
+                      disabled={running}
+                      style={{ display: "block", width: "100%", padding: 0, marginTop: 8, border: 0, background: "transparent" }}
+                    >
+                      <img
+                        src={thumbnailUrls[name]}
+                        alt={`${name} 車検証サムネイル`}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          maxHeight: 260,
+                          objectFit: "contain",
+                          borderRadius: 10,
+                          border: "1px solid #ccc",
+                          background: "#f5f5f5",
+                        }}
+                      />
+                    </button>
+                  )}
+                  <label style={{ display: "block", marginTop: 10 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 5 }}>車種</div>
+                    <select
+                      value={groundTruth[name]?.vehicleKind || ""}
+                      disabled={running}
+                      onChange={(e) => setGt(name, e.target.value)}
+                      style={{ width: "100%", padding: "10px 8px", fontSize: 16 }}
+                    >
+                      {GT_OPTIONS.map((o) => <option key={o.value || "unset"} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </label>
+                  <div style={{ marginTop: 7, fontSize: 13 }}>
+                    expected QR数: <b>{groundTruth[name]?.expectedQrCount ?? "未設定"}</b>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         <button disabled={!valid || running} onClick={start} style={{ marginTop: 14, padding: "10px 18px", fontWeight: 700 }}>
@@ -612,7 +822,7 @@ export default function CertificateQrDecodeExperimentPage() {
             <div key={r.fileName} style={{ borderBottom: "1px solid #ddd", padding: "10px 0" }}>
               <b>{r.fileName}</b> — GT {r.groundTruthExpectedQrCount ?? "未設定"} —
               Baseline {r.baseline.qrCount} QR / jsQR {r.baseline.jsqrSuccesses}/{r.baseline.jsqrAttempts} / ZXing {r.baseline.zxingSuccesses}/{r.baseline.zxingAttempts} / {r.baseline.elapsedMs}ms —
-              Dynamic candidates {r.matrix.candidates.length} — best-global {bestRow?.uniqueQrCount ?? "-"} QR — matrix union {r.matrix.matrixUnionQrCount} — matrix {r.matrix.elapsedMs}ms
+              Physical candidates {r.matrix.candidateDetection.physicalCandidateCount} — duplicate positions removed {r.matrix.candidateDetection.candidatePositionDuplicateRemovedCount} — best-global physical {bestRow?.physicalUniqueQrCount ?? "-"} QR {bestRow?.countingIntegrityFail ? " / COUNTING FAIL" : ""} — matrix {r.matrix.elapsedMs}ms
             </div>
           );
         })}
@@ -622,7 +832,7 @@ export default function CertificateQrDecodeExperimentPage() {
         <h2>共通設定ランキング</h2>
         {aggregate.slice(0, 11).map((c, i) => (
           <div key={c.id} style={{ padding: 6, borderBottom: "1px solid #eee" }}>
-            {i + 1}. {c.id} — QR count sum {c.qrCountSum} — jsQR {c.jsqrSuccesses}/{c.jsqrAttempts} — ZXing {c.zxingSuccesses}/{c.zxingAttempts}
+            {i + 1}. {c.id} — physical QR sum {c.physicalQrCountSum} — complete {c.completeImageCount}/8 — integrity FAIL {c.countingIntegrityFailImageCount} — jsQR {c.jsqrSuccesses}/{c.jsqrAttempts} — ZXing {c.zxingSuccesses}/{c.zxingAttempts} — cross-engine dedupe {c.crossEngineDuplicateRemovedCount}
           </div>
         ))}
       </section>
@@ -632,7 +842,31 @@ export default function CertificateQrDecodeExperimentPage() {
         <button disabled={!results.length} onClick={downloadSummary} style={{ padding: "9px 14px" }}>summaryを端末保存</button>
       </section>
 
-      <iframe ref={frameRef} title="baseline certificate QR Fast" style={{ width: "100%", height: 520, border: "1px solid #bbb", marginTop: 20 }} />
+      {expandedName && thumbnailUrls[expandedName] && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setExpandedName("")}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(0,0,0,.82)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 14,
+          }}
+        >
+          <img
+            src={thumbnailUrls[expandedName]}
+            alt={`${expandedName} 拡大確認`}
+            style={{ maxWidth: "100%", maxHeight: "92vh", objectFit: "contain", background: "#fff" }}
+          />
+        </div>
+      )}
+
+            <iframe ref={frameRef} title="baseline certificate QR Fast" style={{ width: "100%", height: 520, border: "1px solid #bbb", marginTop: 20 }} />
       <details style={{ marginTop: 16 }}><summary>非PII summary確認</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 11 }}>{summary}</pre></details>
     </main>
   );
