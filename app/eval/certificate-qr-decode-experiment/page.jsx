@@ -2390,11 +2390,17 @@ async function runMatrix(file) {
       });
       if(duplicate){
         duplicate.physicalQrConsensusAccepted=duplicate.physicalQrConsensusAccepted||item.physicalQrConsensusAccepted;
+        duplicate.parserSchemaRecognized=duplicate.parserSchemaRecognized||item.parserSchemaRecognized;
+        duplicate.candidateAligned=duplicate.candidateAligned||item.candidateAligned;
+        if(duplicate.candidateCenterDistanceNormalized==null || (item.candidateCenterDistanceNormalized!=null && item.candidateCenterDistanceNormalized<duplicate.candidateCenterDistanceNormalized)){
+          duplicate.candidateCenterDistanceNormalized=item.candidateCenterDistanceNormalized;
+        }
         continue;
       }
       compactMergedDiagnostics.push({...item});
     }
     const compactPhysicalConsensusAcceptedCount=compactMergedDiagnostics.filter((item)=>item.physicalQrConsensusAccepted).length;
+    const compactParserRecognizedCount=compactMergedDiagnostics.filter((item)=>item.parserSchemaRecognized).length;
 
     const resolvedConflictCanonical=unionCanonicalSets(
       aConflictPosition.resolvedCanonicalSet,
@@ -2454,11 +2460,11 @@ async function runMatrix(file) {
       compactSchemaAudit:{
         uniqueCompactCandidateCount:compactMergedDiagnostics.length,
         compactPhysicalConsensusAcceptedCount,
-        compactParserRecognizedCount:0,
+        compactParserRecognizedCount,
         physicalQrConsensusAccepted:compactPhysicalConsensusAcceptedCount,
-        parserSchemaRecognized:0,
+        parserSchemaRecognized:compactParserRecognizedCount,
         diagnostics:compactMergedDiagnostics,
-        policy:"strict same-payload same-position 60-char compact consensus may count as physical QR; parser remains unrecognized and is excluded from runtime parser input",
+        policy:"strict same-payload + same-position + candidate-alignment 60-char compact consensus may count as physical QR; existing ApplyFixed K/ or 2/ parser recognition remains a separate field and unrecognized compact payload is excluded from runtime parser input",
       },
       conflictPositionAudit:{
         multiQrCropConflictCount:aConflictPosition.multiQrCropConflictCount+eConflictPosition.multiQrCropConflictCount,
