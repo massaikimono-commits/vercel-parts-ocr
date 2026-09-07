@@ -306,6 +306,7 @@ function documentPerspectiveMetrics(page) {
 }
 function candidateQualityMetrics(raw, page, candidate) {
   const config = { ...ENSEMBLE_CONFIGS[0], scale: 1, quietZoneRatio: .04 };
+  const sourceCropPx = Math.max(1, paperWidthPx(page, raw) * config.widthRel);
   const canvas = cropCandidate(raw, page, candidate, config);
   try {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -348,8 +349,10 @@ function candidateQualityMetrics(raw, page, candidate) {
     const lapVariance = lapCount ? Math.max(0, lapSqSum / lapCount - lapMean * lapMean) : 0;
     const perspective = documentPerspectiveMetrics(page);
     return {
-      cropPixelWidth: canvas.width,
-      cropPixelHeight: canvas.height,
+      cropPixelWidth: Math.round(sourceCropPx),
+      cropPixelHeight: Math.round(sourceCropPx),
+      analysisCanvasWidth: canvas.width,
+      analysisCanvasHeight: canvas.height,
       localContrastRange: Number((max - min).toFixed(2)),
       localLumaStdDev: Number(Math.sqrt(variance / Math.max(1, edgeCount)).toFixed(2)),
       edgeStrength: Number((edgeSum / Math.max(1, edgeCount)).toFixed(2)),
@@ -388,25 +391,36 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
   try {
     for (const candidate of candidates) {
       const center = paperPoint(normalized.paper, raw, candidate);
-      const cropW = paperWidthPx(normalized.paper, raw) * ENSEMBLE_CONFIGS[0].widthRel;
-      const sx = (center.x - cropW / 2) * scale;
-      const sy = (center.y - cropW / 2) * scale;
-      const sw = cropW * scale;
-      ctx.strokeStyle = "#ff2d55";
-      ctx.fillStyle = "rgba(255,45,85,.92)";
-      ctx.strokeRect(sx, sy, sw, sw);
-      ctx.fillRect(sx, Math.max(0, sy - 20), 34, 20);
-      ctx.fillStyle = "#fff";
-      ctx.fillText(String(candidate.index), sx + 4, Math.max(0, sy - 18));
+      const smallW = paperWidthPx(normalized.paper, raw) * ENSEMBLE_CONFIGS[0].widthRel;
+      const mediumW = paperWidthPx(normalized.paper, raw) * ENSEMBLE_CONFIGS[1].widthRel;
+      const drawBox = (cropW, stroke, labelOffset) => {
+        const sx = (center.x - cropW / 2) * scale;
+        const sy = (center.y - cropW / 2) * scale;
+        const sw = cropW * scale;
+        ctx.strokeStyle = stroke;
+        ctx.strokeRect(sx, sy, sw, sw);
+        if (labelOffset === 0) {
+          ctx.fillStyle = "rgba(255,45,85,.92)";
+          ctx.fillRect(sx, Math.max(0, sy - 20), 38, 20);
+          ctx.fillStyle = "#fff";
+          ctx.fillText(String(candidate.index), sx + 4, Math.max(0, sy - 18));
+        }
+      };
+      drawBox(mediumW, "#0a84ff", 1);
+      drawBox(smallW, "#ff2d55", 0);
 
-      const decoderCrop = cropCandidate(raw, normalized.paper, candidate, ENSEMBLE_CONFIGS[0]);
-      const url = await canvasToObjectUrl(decoderCrop);
-      decoderCrop.width = 1;
-      decoderCrop.height = 1;
-      cropUrls.push({ candidateIndex: candidate.index, url });
+      const smallCrop = cropCandidate(raw, normalized.paper, candidate, ENSEMBLE_CONFIGS[0]);
+      const mediumCrop = cropCandidate(raw, normalized.paper, candidate, ENSEMBLE_CONFIGS[1]);
+      const [smallUrl, mediumUrl] = await Promise.all([
+        canvasToObjectUrl(smallCrop),
+        canvasToObjectUrl(mediumCrop),
+      ]);
+      smallCrop.width = 1; smallCrop.height = 1;
+      mediumCrop.width = 1; mediumCrop.height = 1;
+      cropUrls.push({ candidateIndex: candidate.index, smallUrl, mediumUrl });
     }
     const overlayUrl = await canvasToObjectUrl(overlay);
-    return { overlayUrl, cropUrls };
+    return { overlayUrl, cropUrls, legend: { small: "red", medium: "blue" } };
   } finally {
     overlay.width = 1;
     overlay.height = 1;
@@ -419,7 +433,10 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
 function revokeVisualDiagnosticEntry(entry) {
   if (!entry) return;
   if (entry.overlayUrl) URL.revokeObjectURL(entry.overlayUrl);
-  for (const item of entry.cropUrls || []) if (item?.url) URL.revokeObjectURL(item.url);
+  for (const item of entry.cropUrls || []) {
+    if (item?.smallUrl) URL.revokeObjectURL(item.smallUrl);
+    if (item?.mediumUrl) URL.revokeObjectURL(item.mediumUrl);
+  }
 }
 function canonicalText(value) {
   return String(value ?? "")
@@ -675,6 +692,14 @@ async function runMatrix(file) {
     const offsetStarted = performance.now();
     let offsetActualDecodeAttempts = 0;
     let offsetSkippedAttemptsBySuccess = 0;
+    const offsetStats = Object.fromEntries(OFFSET_SWEEP.map((offset) => [offset.id, {
+      id: offset.id,
+      dx: offset.dx,
+      dy: offset.dy,
+      attempts: 0,
+      reusedAttempts: 0,
+      physicalSuccesses: 0,
+    }]));
     for (const row of rows) {
       if (row.ensembleSuccess) continue;
       const candidate = candidates[row.candidateIndex - 1];
@@ -688,6 +713,9 @@ async function runMatrix(file) {
         jsqrSuccess: Boolean(centerAttempt?.jsqrSuccess),
         zxingSuccess: Boolean(centerAttempt?.zxingSuccess),
       });
+      offsetStats.center.attempts += 1;
+      offsetStats.center.reusedAttempts += 1;
+      if (centerAttempt?.physicalSuccess) offsetStats.center.physicalSuccesses += 1;
       for (let oi = 1; oi < OFFSET_SWEEP.length; oi += 1) {
         const offset = OFFSET_SWEEP[oi];
         const shifted = shiftedCandidate(candidate, offset.dx, offset.dy);
@@ -700,6 +728,8 @@ async function runMatrix(file) {
           config: ENSEMBLE_CONFIGS[0],
         });
         offsetActualDecodeAttempts += 1;
+        offsetStats[offset.id].attempts += 1;
+        if (result.physicalSuccess) offsetStats[offset.id].physicalSuccesses += 1;
         row.offsetAttempts.push({
           offsetId: offset.id,
           reused: false,
@@ -747,6 +777,7 @@ async function runMatrix(file) {
 
     const baselineCanonicalsForRescue = new Set();
     for (const row of afterOffsetUnique.accepted) for (const canonical of row.canonicalSet) baselineCanonicalsForRescue.add(canonical);
+    const rescueCanonicalSeen = new Set(baselineCanonicalsForRescue);
 
     const rescueStarted = performance.now();
     let totalRescueAttempts = 0;
@@ -770,16 +801,17 @@ async function runMatrix(file) {
       }
 
       const localSeen = new Set();
-      for (const { row, result } of configCanonicalCandidates) {
+      for (const { result } of configCanonicalCandidates) {
         let netNew = false;
         for (const canonical of result.canonicalSet) {
-          if (!baselineCanonicalsForRescue.has(canonical) && !localSeen.has(canonical)) {
+          if (!rescueCanonicalSeen.has(canonical) && !localSeen.has(canonical)) {
             localSeen.add(canonical);
             netNew = true;
           }
         }
         if (netNew) rescueStats[config.id].netNewCanonicalQrCount += 1;
       }
+      for (const canonical of localSeen) rescueCanonicalSeen.add(canonical);
     }
     const rescueOnlyElapsedMs = Math.round(performance.now() - rescueStarted);
 
@@ -835,6 +867,7 @@ async function runMatrix(file) {
         addedPhysicalQrCount: Math.max(0, afterOffsetUnique.accepted.length - ensembleOnlyUnique.accepted.length),
         actualDecodeAttempts: offsetActualDecodeAttempts,
         skippedAttemptsBySuccess: offsetSkippedAttemptsBySuccess,
+        stats: Object.values(offsetStats),
       },
       rescueStudy: {
         physicalUniqueQrCountAfterRescue: rescueUnique.accepted.length,
@@ -923,6 +956,21 @@ function aggregateExperiment(results) {
     acc.skippedEnsembleAttempts += Number(ensemble.skippedAttemptsByEarlySuccess || 0);
     acc.offsetAttempts += Number(offset.actualDecodeAttempts || 0);
     acc.skippedOffsetAttempts += Number(offset.skippedAttemptsBySuccess || 0);
+    for (const stat of offset.stats || []) {
+      if (!acc.offsetById[stat.id]) {
+        acc.offsetById[stat.id] = {
+          id: stat.id,
+          dx: stat.dx,
+          dy: stat.dy,
+          attempts: 0,
+          reusedAttempts: 0,
+          physicalSuccesses: 0,
+        };
+      }
+      acc.offsetById[stat.id].attempts += Number(stat.attempts || 0);
+      acc.offsetById[stat.id].reusedAttempts += Number(stat.reusedAttempts || 0);
+      acc.offsetById[stat.id].physicalSuccesses += Number(stat.physicalSuccesses || 0);
+    }
     acc.rescueAttempts += Number(rescue.totalAttempts || 0);
     acc.candidatePositionDuplicateRemovedCount += Number(result.matrix?.candidateDetection?.candidatePositionDuplicateRemovedCount || 0);
     acc.baselineElapsedMs += Number(result.baseline?.elapsedMs || 0);
@@ -970,6 +1018,7 @@ function aggregateExperiment(results) {
     skippedEnsembleAttempts: 0,
     offsetAttempts: 0,
     skippedOffsetAttempts: 0,
+    offsetById: {},
     rescueAttempts: 0,
     candidatePositionDuplicateRemovedCount: 0,
     baselineElapsedMs: 0,
