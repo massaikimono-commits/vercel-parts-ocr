@@ -132,6 +132,10 @@ jobs:
             --manifest /tmp/parts-qg-formal-manifest.json \
             --out /tmp/parts-qg-${{ matrix.label }}-formal.json \
             --dynamic ${{ matrix.label == 'latest' && 'true' || 'false' }}
+          node ../harness/scripts/score-parts-ocr-quality-gate.cjs \
+            --manifest /tmp/parts-qg-formal-manifest.json \
+            --results /tmp/parts-qg-${{ matrix.label }}-formal.json \
+            --out /tmp/parts-qg-${{ matrix.label }}-formal-score.json
 
       - name: Show app log on failure
         if: failure()
@@ -146,6 +150,7 @@ jobs:
           path: |
             /tmp/parts-qg-${{ matrix.label }}-proxy.json
             /tmp/parts-qg-${{ matrix.label }}-formal.json
+            /tmp/parts-qg-${{ matrix.label }}-formal-score.json
             /tmp/parts-qg-next-${{ matrix.label }}.log
             /tmp/parts-qg-assets-${{ matrix.label }}/
             /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz
