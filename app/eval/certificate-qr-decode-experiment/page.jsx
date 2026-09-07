@@ -1489,6 +1489,212 @@ function buildManagementPriorityQuality(item, overlayClassification, referenceSu
     relativeToSuccessfulReferenceMedian:relative,
   };
 }
+const LIMITED_QUALITY_RESCUE_TARGET = Object.freeze({
+  fileName:"IMG_0944.jpeg",
+  candidateIndex:8,
+});
+const LIMITED_QUALITY_RESCUE_VARIANTS = Object.freeze([
+  { id:"current-rectified-unchanged", kind:"identity", params:{} },
+  { id:"light-sharpness", kind:"unsharp", params:{ amount:.35, radiusPx:1 } },
+  { id:"light-local-contrast", kind:"local-contrast", params:{ gain:1.18, radiusPx:6 } },
+]);
+function clampByte(value) {
+  return Math.max(0,Math.min(255,Math.round(value)));
+}
+function cloneCanvasPixels(source) {
+  if(!source?.width||!source?.height) return null;
+  const canvas=document.createElement("canvas");
+  canvas.width=source.width;
+  canvas.height=source.height;
+  canvas.getContext("2d",{willReadFrequently:true}).drawImage(source,0,0);
+  return canvas;
+}
+function canvasLuma(image) {
+  const gray=new Float32Array(image.width*image.height);
+  for(let i=0,p=0;i<gray.length;i+=1,p+=4){
+    gray[i]=image.data[p]*.22+image.data[p+1]*.70+image.data[p+2]*.08;
+  }
+  return gray;
+}
+function lightUnsharpCanvas(source, amount=.35) {
+  const canvas=cloneCanvasPixels(source);
+  if(!canvas) return null;
+  const ctx=canvas.getContext("2d",{willReadFrequently:true});
+  const image=ctx.getImageData(0,0,canvas.width,canvas.height);
+  const gray=canvasLuma(image);
+  const out=new Uint8ClampedArray(image.data);
+  const w=canvas.width,h=canvas.height;
+  for(let y=1;y<h-1;y+=1){
+    for(let x=1;x<w-1;x+=1){
+      const i=y*w+x;
+      let sum=0;
+      for(let yy=-1;yy<=1;yy+=1){
+        for(let xx=-1;xx<=1;xx+=1) sum+=gray[(y+yy)*w+(x+xx)];
+      }
+      const localMean=sum/9;
+      const delta=(gray[i]-localMean)*amount;
+      const p=i*4;
+      out[p]=clampByte(image.data[p]+delta);
+      out[p+1]=clampByte(image.data[p+1]+delta);
+      out[p+2]=clampByte(image.data[p+2]+delta);
+      out[p+3]=255;
+    }
+  }
+  image.data.set(out);
+  ctx.putImageData(image,0,0);
+  return canvas;
+}
+function integralImage(values,width,height) {
+  const stride=width+1;
+  const integral=new Float64Array((width+1)*(height+1));
+  for(let y=0;y<height;y+=1){
+    let rowSum=0;
+    for(let x=0;x<width;x+=1){
+      rowSum+=values[y*width+x];
+      integral[(y+1)*stride+x+1]=integral[y*stride+x+1]+rowSum;
+    }
+  }
+  return {integral,stride};
+}
+function boxMeanFromIntegral(bundle,width,height,x,y,radius) {
+  const x0=Math.max(0,x-radius),y0=Math.max(0,y-radius);
+  const x1=Math.min(width-1,x+radius),y1=Math.min(height-1,y+radius);
+  const {integral,stride}=bundle;
+  const sum=
+    integral[(y1+1)*stride+(x1+1)]-
+    integral[y0*stride+(x1+1)]-
+    integral[(y1+1)*stride+x0]+
+    integral[y0*stride+x0];
+  return sum/Math.max(1,(x1-x0+1)*(y1-y0+1));
+}
+function lightLocalContrastCanvas(source, gain=1.18, radiusPx=6) {
+  const canvas=cloneCanvasPixels(source);
+  if(!canvas) return null;
+  const ctx=canvas.getContext("2d",{willReadFrequently:true});
+  const image=ctx.getImageData(0,0,canvas.width,canvas.height);
+  const gray=canvasLuma(image);
+  const bundle=integralImage(gray,canvas.width,canvas.height);
+  const out=new Uint8ClampedArray(image.data);
+  for(let y=0;y<canvas.height;y+=1){
+    for(let x=0;x<canvas.width;x+=1){
+      const i=y*canvas.width+x;
+      const mean=boxMeanFromIntegral(bundle,canvas.width,canvas.height,x,y,radiusPx);
+      const target=mean+(gray[i]-mean)*gain;
+      const delta=target-gray[i];
+      const p=i*4;
+      out[p]=clampByte(image.data[p]+delta);
+      out[p+1]=clampByte(image.data[p+1]+delta);
+      out[p+2]=clampByte(image.data[p+2]+delta);
+      out[p+3]=255;
+    }
+  }
+  image.data.set(out);
+  ctx.putImageData(image,0,0);
+  return canvas;
+}
+function rescueCanvasForVariant(base,variant) {
+  if(variant.kind==="identity") return cloneCanvasPixels(base);
+  if(variant.kind==="unsharp") return lightUnsharpCanvas(base,Number(variant.params?.amount||.35));
+  if(variant.kind==="local-contrast") return lightLocalContrastCanvas(
+    base,
+    Number(variant.params?.gain||1.18),
+    Number(variant.params?.radiusPx||6)
+  );
+  return null;
+}
+async function runLimitedQualityRescueExperiment({
+  file,raw,current,geometry,jsQR,reader,formalFinalPhysicalSafeCanonical,
+}) {
+  const fileName=normalizeFixedFileName(file)||safeName(file);
+  const started=performance.now();
+  const baseReport={
+    diagnosticOnly:true,
+    formalDecodeLogicChanged:false,
+    targetFileName:LIMITED_QUALITY_RESCUE_TARGET.fileName,
+    targetCandidateIndex:LIMITED_QUALITY_RESCUE_TARGET.candidateIndex,
+    targetSelectionPolicy:"user-authorized fixed diagnostic target; excluded from formal A/E scoring and decode control",
+    maxVariantCount:3,
+  };
+  if(fileName!==LIMITED_QUALITY_RESCUE_TARGET.fileName){
+    return {...baseReport,eligible:false,skipReason:"non-target-image",attempts:[],rescueNetNewPhysicalQrCount:0,crossVariantCanonicalConflict:false,rescueElapsedMs:Math.round(performance.now()-started)};
+  }
+  const geometryItem=(geometry?.diagnostics||[]).find(
+    (item)=>item.candidateIndex===LIMITED_QUALITY_RESCUE_TARGET.candidateIndex
+  );
+  const row=(current?.rows||[]).find(
+    (item)=>item.candidateIndex===LIMITED_QUALITY_RESCUE_TARGET.candidateIndex
+  );
+  if(!row||!geometryItem?.geometryValid||geometryItem?.overlapRejected){
+    return {
+      ...baseReport,
+      eligible:false,
+      skipReason:!row?"target-candidate-missing":geometryItem?.overlapRejected?"target-geometry-overlap-rejected":"target-geometry-invalid",
+      attempts:[],
+      rescueNetNewPhysicalQrCount:0,
+      crossVariantCanonicalConflict:false,
+      rescueElapsedMs:Math.round(performance.now()-started),
+    };
+  }
+  const base=rectifyQrGeometry(raw,geometryItem,GEOMETRY_RECTIFY_CONFIGS[0]);
+  if(!base){
+    return {...baseReport,eligible:false,skipReason:"target-rectify-failed",attempts:[],rescueNetNewPhysicalQrCount:0,crossVariantCanonicalConflict:false,rescueElapsedMs:Math.round(performance.now()-started)};
+  }
+  const attempts=[];
+  const recoveredCanonicals=new Set();
+  try{
+    for(const variant of LIMITED_QUALITY_RESCUE_VARIANTS){
+      const canvas=rescueCanvasForVariant(base,variant);
+      if(!canvas) continue;
+      const attemptStarted=performance.now();
+      try{
+        const result=await decodeCanvasPair({jsQR,reader,canvas});
+        const safeCanonical=unionCanonicalSets(result.canonicalSet,result.compactCanonicalSet);
+        const netNew=canonicalNetNew(safeCanonical,formalFinalPhysicalSafeCanonical);
+        for(const canonical of safeCanonical){
+          if(canonical&&!formalFinalPhysicalSafeCanonical.has(canonical)) recoveredCanonicals.add(canonical);
+        }
+        attempts.push({
+          variantId:variant.id,
+          correctionKind:variant.kind,
+          params:variant.params,
+          jsqrSuccess:Boolean(result.jsqrSuccess),
+          zxingSuccess:Boolean(result.zxingSuccess),
+          jsStructuralPass:Boolean(result.jsStructuralPass),
+          zxingStructuralPass:Boolean(result.zxingStructuralPass),
+          physicalSafeSuccess:safeCanonical.size>0,
+          compactPhysicalConsensusAccepted:Boolean(result.physicalQrConsensusAccepted),
+          netNewCanonicalCount:Number(netNew||0),
+          elapsedMs:Math.round(performance.now()-attemptStarted),
+          payloadIncluded:false,
+        });
+      } finally {
+        canvas.width=1;
+        canvas.height=1;
+      }
+      await wait(0);
+    }
+  } finally {
+    base.width=1;
+    base.height=1;
+  }
+  const crossVariantCanonicalConflict=recoveredCanonicals.size>1;
+  const rescueNetNewPhysicalQrCount=recoveredCanonicals.size===1&&!crossVariantCanonicalConflict?1:0;
+  return {
+    ...baseReport,
+    eligible:true,
+    skipReason:"none",
+    attempts,
+    recoveredVariantCount:attempts.filter((item)=>item.netNewCanonicalCount>0).length,
+    uniqueRecoveredCanonicalCount:recoveredCanonicals.size,
+    crossVariantCanonicalConflict,
+    rescueNetNewPhysicalQrCount,
+    formalFinalSafeUnionCanonicalCount:Number(formalFinalPhysicalSafeCanonical?.size||0),
+    diagnosticFormalPlusRescueCount:Number(formalFinalPhysicalSafeCanonical?.size||0)+rescueNetNewPhysicalQrCount,
+    rescueElapsedMs:Math.round(performance.now()-started),
+    payloadIncluded:false,
+    canonicalPayloadIncluded:false,
+  };
+}
 function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -2992,6 +3198,15 @@ async function runMatrix(file) {
     const failOnlyExpectedElapsedMs =
       candidateDetectionElapsedMs + aElapsedMs + geometry.geometryElapsedMs + geometry.rectifyDecodeElapsedMs;
     const qualityDiagnosticAudit=buildQualityDiagnosticAudit(file,raw,normalized,current,geometry);
+    const limitedQualityRescueExperiment=await runLimitedQualityRescueExperiment({
+      file,
+      raw,
+      current,
+      geometry,
+      jsQR,
+      reader:readerBundle.reader,
+      formalFinalPhysicalSafeCanonical:finalPhysicalSafeCanonical,
+    });
 
     return {
       candidateDetection:{
@@ -3075,6 +3290,7 @@ async function runMatrix(file) {
         adoptedConflictRule:"same-position ambiguous conflicts remain rejected; compact physical consensus and multi-QR position resolution are tracked separately from parser recognition",
       },
       qualityDiagnosticAudit,
+      limitedQualityRescueExperiment,
       timing:{
         candidateDetectionElapsedMs,
         aElapsedMs,
@@ -3082,6 +3298,7 @@ async function runMatrix(file) {
         rectifyDecodeElapsedMs:geometry.rectifyDecodeElapsedMs,
         failOnlyExpectedElapsedMs,
         qualityDiagnosticElapsedMs:Number(qualityDiagnosticAudit.qualityDiagnosticElapsedMs||0),
+        limitedQualityRescueElapsedMs:Number(limitedQualityRescueExperiment.rescueElapsedMs||0),
         totalExperimentalElapsedMs:Math.round(performance.now()-totalStarted),
       },
       decodedRuntimeVehicleKind:decodedRuntime?.kind||null,
@@ -3127,6 +3344,7 @@ function aggregateExperiment(results) {
     const structural=result.matrix?.structuralValidation||{};
     const timing=result.matrix?.timing||{};
     const quality=result.matrix?.qualityDiagnosticAudit||{};
+    const rescue=result.matrix?.limitedQualityRescueExperiment||{};
 
     acc.expected+=expected;
     acc.baselinePhysicalUnique+=Number(result.baseline.qrCount||0);
@@ -3178,6 +3396,13 @@ function aggregateExperiment(results) {
     for(const item of quality.priorityCandidates||[]) acc.qualityPriorityDiagnostics.push({fileName:result.fileName,...item});
     for(const item of quality.successfulReferences||[]) acc.qualityReferenceDiagnostics.push({fileName:result.fileName,...item});
     acc.qualityDiagnosticElapsedMs+=Number(quality.qualityDiagnosticElapsedMs||0);
+    if(rescue.eligible) acc.rescueEligibleImageCount+=1;
+    acc.rescueRecoveredVariantCount+=Number(rescue.recoveredVariantCount||0);
+    acc.rescueUniqueRecoveredCanonicalCount+=Number(rescue.uniqueRecoveredCanonicalCount||0);
+    acc.rescueNetNewPhysicalQrCount+=Number(rescue.rescueNetNewPhysicalQrCount||0);
+    if(rescue.crossVariantCanonicalConflict) acc.rescueCrossVariantCanonicalConflictCount+=1;
+    acc.rescueElapsedMs+=Number(rescue.rescueElapsedMs||0);
+    for(const attempt of rescue.attempts||[]) acc.rescueAttempts.push({fileName:result.fileName,...attempt});
 
     acc.baselineElapsedMs+=Number(result.baseline?.elapsedMs||0);
     acc.aElapsedMs+=Number(timing.aElapsedMs||0);
@@ -3235,6 +3460,13 @@ function aggregateExperiment(results) {
     qualityPriorityDiagnostics:[],
     qualityReferenceDiagnostics:[],
     qualityDiagnosticElapsedMs:0,
+    rescueEligibleImageCount:0,
+    rescueRecoveredVariantCount:0,
+    rescueUniqueRecoveredCanonicalCount:0,
+    rescueNetNewPhysicalQrCount:0,
+    rescueCrossVariantCanonicalConflictCount:0,
+    rescueElapsedMs:0,
+    rescueAttempts:[],
     baselineElapsedMs:0,
     aElapsedMs:0,
     geometryElapsedMs:0,
@@ -3444,7 +3676,7 @@ export default function CertificateQrDecodeExperimentPage() {
     schema:"icb-certificate-qr-decode-experiment-summary-v7",
     summaryVariant:"management-audit-short-v1",
     experimentalHead,
-    diagnosticRevision:"v7-postformal-quality-audit-2",
+    diagnosticRevision:"v7-postformal-limited-quality-rescue-3",
     experimentRoute:EXPERIMENT_ROUTE,
     baselineTargetRoute:PATHNAME,
     groundTruthUsedDuringDecode:false,
@@ -3485,9 +3717,24 @@ export default function CertificateQrDecodeExperimentPage() {
       successfulDecodeReference:managementQualityReference,
       priorityCandidates:managementPriorityQuality,
     }:null,
+    limitedQualityRescue:totals?{
+      diagnosticOnly:true,
+      target:{fileName:LIMITED_QUALITY_RESCUE_TARGET.fileName,candidateIndex:LIMITED_QUALITY_RESCUE_TARGET.candidateIndex},
+      variants:LIMITED_QUALITY_RESCUE_VARIANTS,
+      eligibleImageCount:totals.rescueEligibleImageCount,
+      recoveredVariantCount:totals.rescueRecoveredVariantCount,
+      uniqueRecoveredCanonicalCount:totals.rescueUniqueRecoveredCanonicalCount,
+      crossVariantCanonicalConflictCount:totals.rescueCrossVariantCanonicalConflictCount,
+      rescueNetNewPhysicalQrCount:totals.rescueNetNewPhysicalQrCount,
+      formalFinalSafeUnionCanonicalCount:totals.finalUnion,
+      diagnosticFormalPlusRescueCount:totals.finalUnion+totals.rescueNetNewPhysicalQrCount,
+      attempts:totals.rescueAttempts,
+      payloadIncluded:false,
+    }:null,
     timing:totals?{
       failOnlyExpectedElapsedMs:totals.failOnlyExpectedElapsedMs,
       qualityDiagnosticElapsedMs:totals.qualityDiagnosticElapsedMs,
+      limitedQualityRescueElapsedMs:totals.rescueElapsedMs,
     }:null,
     runtime:gtReady?{
       accuracy:runtimeVehicleKindAccuracy,
@@ -3501,7 +3748,7 @@ export default function CertificateQrDecodeExperimentPage() {
     experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
-    diagnosticRevision:"v7-postformal-quality-audit-2",
+    diagnosticRevision:"v7-postformal-limited-quality-rescue-3",
     experimentRoute:EXPERIMENT_ROUTE,
     pathname:PATHNAME,
     pathnameRole:"baseline-target-route",
@@ -3617,6 +3864,23 @@ export default function CertificateQrDecodeExperimentPage() {
       imageIncluded:false,
       payloadIncluded:false,
     }:null,
+    limitedQualityRescueTotals:totals?{
+      diagnosticOnly:true,
+      formalV7ReferenceHead:"339cbf5d832fd2bc9ab5eadfa260cb16adda02f9",
+      formalDecodeLogicChanged:false,
+      target:{fileName:LIMITED_QUALITY_RESCUE_TARGET.fileName,candidateIndex:LIMITED_QUALITY_RESCUE_TARGET.candidateIndex},
+      variants:LIMITED_QUALITY_RESCUE_VARIANTS,
+      eligibleImageCount:totals.rescueEligibleImageCount,
+      recoveredVariantCount:totals.rescueRecoveredVariantCount,
+      uniqueRecoveredCanonicalCount:totals.rescueUniqueRecoveredCanonicalCount,
+      crossVariantCanonicalConflictCount:totals.rescueCrossVariantCanonicalConflictCount,
+      rescueNetNewPhysicalQrCount:totals.rescueNetNewPhysicalQrCount,
+      formalFinalSafeUnionCanonicalCount:totals.finalUnion,
+      diagnosticFormalPlusRescueCount:totals.finalUnion+totals.rescueNetNewPhysicalQrCount,
+      attempts:totals.rescueAttempts,
+      payloadIncluded:false,
+      canonicalPayloadIncluded:false,
+    }:null,
     visualOverlayAudit:{
       requiredPriorityCandidates:requiredOverlayClassifications.map(({fileName,candidateIndex})=>({fileName,candidateIndex})),
       classifications:overlayClassificationRows,
@@ -3637,6 +3901,7 @@ export default function CertificateQrDecodeExperimentPage() {
       rectifyDecodeElapsedMs:totals.rectifyDecodeElapsedMs,
       failOnlyExpectedElapsedMs:totals.failOnlyExpectedElapsedMs,
       qualityDiagnosticElapsedMs:totals.qualityDiagnosticElapsedMs,
+      limitedQualityRescueElapsedMs:totals.rescueElapsedMs,
       totalExperimentalElapsedMs:totals.totalExperimentalElapsedMs,
     }:null,
     runtimeVehicleKindTotals:gtReady?{
@@ -3782,6 +4047,7 @@ export default function CertificateQrDecodeExperimentPage() {
         <div>runtime車種判定: {runtimeVehicleKindCorrectCount??"-"}/8 ({runtimeVehicleKindAccuracy??"-"}) ※compact parser-unrecognizedは入力除外</div>
         <div>時間: baseline {totals?.baselineElapsedMs??"-"}ms / A {totals?.aElapsedMs??"-"}ms / geometry {totals?.geometryElapsedMs??"-"}ms / native rectify {totals?.rectifyDecodeElapsedMs??"-"}ms / fail-only想定 {totals?.failOnlyExpectedElapsedMs??"-"}ms / experimental total {totals?.totalExperimentalElapsedMs??"-"}ms</div>
         <div>regression images: {regressionImages.length ? regressionImages.join(", ") : "なし"}</div>
+        <div>限定quality rescue（formal外）: target IMG_0944 candidate 8 / recovered variants {totals?.rescueRecoveredVariantCount??"-"} / net-new physical QR +{totals?.rescueNetNewPhysicalQrCount??"-"} / formal+diagnostic {totals ? (totals.finalUnion+totals.rescueNetNewPhysicalQrCount)+"/47" : "-"}</div>
         {totals&&(
           <div style={{marginTop:10}}>
             <b>E rectify config</b>
