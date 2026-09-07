@@ -2366,7 +2366,7 @@ async function runMatrix(file) {
 }
 function applyCountingIntegrity(matrix, expectedQrCount) {
   const expected=Number(expectedQrCount);
-  const aCount=Number(matrix?.currentEnsemble?.physicalUniqueQrCount||0);
+  const aCount=Number(matrix?.currentEnsemble?.physicalSafeQrCount||0);
   const finalCount=Number(matrix?.geometryStage?.finalUnionCanonicalCount||0);
   const fail=(count)=>Number.isFinite(expected)?count>expected:false;
   return {
@@ -2392,17 +2392,23 @@ function aggregateExperiment(results) {
     const expected=Number(result.groundTruthExpectedQrCount||0);
     const a=result.matrix?.currentEnsemble||{};
     const e=result.matrix?.geometryStage||{};
+    const compact=result.matrix?.compactSchemaAudit||{};
+    const conflict=result.matrix?.conflictPositionAudit||{};
     const structural=result.matrix?.structuralValidation||{};
     const timing=result.matrix?.timing||{};
+
     acc.expected+=expected;
     acc.baselinePhysicalUnique+=Number(result.baseline.qrCount||0);
     acc.aLegacyCompatible+=Number(a.legacyCompatiblePhysicalUniqueQrCount||0);
-    acc.aSafe+=Number(a.physicalUniqueQrCount||0);
-    acc.aCanonicalCount+=Number(e.aCanonicalCount||0);
+    acc.aStructuralAdopted+=Number(a.structuralAdoptedPhysicalUniqueQrCount||0);
+    acc.aPhysicalSafe+=Number(a.physicalSafeQrCount||0);
     acc.eNetNew+=Number(e.eNetNewCanonicalVsA||0);
     acc.finalUnion+=Number(e.finalUnionCanonicalCount||0);
+    acc.parserEligibleUnion+=Number(e.parserEligibleUnionCanonicalCount||0);
+
     if(result.baseline.qrCount===expected) acc.baselineCompleteImages+=1;
-    if(a.physicalUniqueQrCount===expected) acc.aCompleteImages+=1;
+    if(a.structuralAdoptedPhysicalUniqueQrCount===expected) acc.aStructuralCompleteImages+=1;
+    if(a.physicalSafeQrCount===expected) acc.aPhysicalSafeCompleteImages+=1;
     if(e.finalUnionCanonicalCount===expected) acc.finalCompleteImages+=1;
     if(a.countingIntegrityFail) acc.aCountingIntegrityFail=true;
     if(e.countingIntegrityFail) acc.finalCountingIntegrityFail=true;
@@ -2413,14 +2419,29 @@ function aggregateExperiment(results) {
     acc.geometryKeptCandidateCount+=Number(e.geometryKeptCandidateCount||0);
     acc.geometryOverlapMergedCount+=Number(e.geometryOverlapMergedCount||0);
     acc.falseCandidateReductionCount+=Number(e.falseCandidateReductionCount||0);
+    acc.finderAtLeast3ButNoValidQuadCount+=Number(e.finderAtLeast3ButNoValidQuadCount||0);
+    acc.tripletCandidateCount+=Number(e.tripletCandidateCount||0);
+    acc.alternateTripletTriedCount+=Number(e.alternateTripletTriedCount||0);
+    acc.alternateTripletRecoveredCount+=Number(e.alternateTripletRecoveredCount||0);
+    acc.nativeRectifyNetNewCanonicalCount+=Number(e.nativeRectifyNetNewCanonicalCount||0);
+
+    acc.uniqueCompactCandidateCount+=Number(compact.uniqueCompactCandidateCount||0);
+    acc.compactPhysicalConsensusAcceptedCount+=Number(compact.compactPhysicalConsensusAcceptedCount||0);
+    acc.compactParserRecognizedCount+=Number(compact.compactParserRecognizedCount||0);
+
+    acc.multiQrCropConflictCount+=Number(conflict.multiQrCropConflictCount||0);
+    acc.samePhysicalQrConflictCount+=Number(conflict.samePhysicalQrConflictCount||0);
+    acc.positionUncertainConflictCount+=Number(conflict.positionUncertainConflictCount||0);
+    acc.resolvedAsSeparatePhysicalQrCount+=Number(conflict.resolvedAsSeparatePhysicalQrCount||0);
+    acc.remainingAmbiguousConflictCount+=Number(conflict.remainingAmbiguousConflictCount||0);
 
     acc.samePayloadStructuralFailCount+=Number(structural.samePayloadStructuralFailCount||0);
     acc.singleEngineStructuralFailCount+=Number(structural.singleEngineStructuralFailCount||0);
-    acc.ambiguousConflictCount+=Number(structural.ambiguousConflictCount||0);
     acc.crossEngineConflictCount+=Number(structural.crossEngineConflictCount||0);
     for(const item of structural.samePayloadStructuralFails||[]) acc.samePayloadStructuralFails.push({fileName:result.fileName,...item});
     for(const item of structural.singleEngineStructuralFails||[]) acc.singleEngineStructuralFails.push({fileName:result.fileName,...item});
-    for(const item of structural.conflicts||[]) acc.conflicts.push({fileName:result.fileName,...item});
+    for(const item of conflict.diagnostics||[]) acc.conflictPositionDiagnostics.push({fileName:result.fileName,...item});
+    for(const item of compact.diagnostics||[]) acc.compactDiagnostics.push({fileName:result.fileName,...item});
 
     acc.baselineElapsedMs+=Number(result.baseline?.elapsedMs||0);
     acc.aElapsedMs+=Number(timing.aElapsedMs||0);
@@ -2433,16 +2454,54 @@ function aggregateExperiment(results) {
     aggregateStageStats(acc.eStats,e.stats);
     return acc;
   },{
-    expected:0,baselinePhysicalUnique:0,aLegacyCompatible:0,aSafe:0,aCanonicalCount:0,eNetNew:0,finalUnion:0,
-    baselineCompleteImages:0,aCompleteImages:0,finalCompleteImages:0,
-    aCountingIntegrityFail:false,finalCountingIntegrityFail:false,
-    coarseCandidateCount:0,aFailedCandidateCount:0,finderOrQuadEstablishedCandidateCount:0,
-    geometryKeptCandidateCount:0,geometryOverlapMergedCount:0,falseCandidateReductionCount:0,
-    samePayloadStructuralFailCount:0,singleEngineStructuralFailCount:0,ambiguousConflictCount:0,crossEngineConflictCount:0,
-    samePayloadStructuralFails:[],singleEngineStructuralFails:[],conflicts:[],
-    baselineElapsedMs:0,aElapsedMs:0,geometryElapsedMs:0,rectifyDecodeElapsedMs:0,
-    failOnlyExpectedElapsedMs:0,totalExperimentalElapsedMs:0,
-    aStats:{},eStats:{},
+    expected:0,
+    baselinePhysicalUnique:0,
+    aLegacyCompatible:0,
+    aStructuralAdopted:0,
+    aPhysicalSafe:0,
+    eNetNew:0,
+    finalUnion:0,
+    parserEligibleUnion:0,
+    baselineCompleteImages:0,
+    aStructuralCompleteImages:0,
+    aPhysicalSafeCompleteImages:0,
+    finalCompleteImages:0,
+    aCountingIntegrityFail:false,
+    finalCountingIntegrityFail:false,
+    coarseCandidateCount:0,
+    aFailedCandidateCount:0,
+    finderOrQuadEstablishedCandidateCount:0,
+    geometryKeptCandidateCount:0,
+    geometryOverlapMergedCount:0,
+    falseCandidateReductionCount:0,
+    finderAtLeast3ButNoValidQuadCount:0,
+    tripletCandidateCount:0,
+    alternateTripletTriedCount:0,
+    alternateTripletRecoveredCount:0,
+    nativeRectifyNetNewCanonicalCount:0,
+    uniqueCompactCandidateCount:0,
+    compactPhysicalConsensusAcceptedCount:0,
+    compactParserRecognizedCount:0,
+    multiQrCropConflictCount:0,
+    samePhysicalQrConflictCount:0,
+    positionUncertainConflictCount:0,
+    resolvedAsSeparatePhysicalQrCount:0,
+    remainingAmbiguousConflictCount:0,
+    samePayloadStructuralFailCount:0,
+    singleEngineStructuralFailCount:0,
+    crossEngineConflictCount:0,
+    samePayloadStructuralFails:[],
+    singleEngineStructuralFails:[],
+    conflictPositionDiagnostics:[],
+    compactDiagnostics:[],
+    baselineElapsedMs:0,
+    aElapsedMs:0,
+    geometryElapsedMs:0,
+    rectifyDecodeElapsedMs:0,
+    failOnlyExpectedElapsedMs:0,
+    totalExperimentalElapsedMs:0,
+    aStats:{},
+    eStats:{},
   });
 }
 function publicResult(result) {
