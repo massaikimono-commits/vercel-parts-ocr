@@ -10,6 +10,13 @@ const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 function safeName(file) {
   return String(file?.name || "").replace(/[^A-Za-z0-9._-]/g, "_");
 }
+function normalizeFixedFileName(file) {
+  const original = String(file?.name || "").normalize("NFKC").trim();
+  const leaf = original.split(/[\\/]/).pop() || "";
+  const match = leaf.match(/^IMG_(094[0-7])(?:[\\s_-]*(?:\\(\\d+\\)|\\d+|copy(?:[\\s_-]*\\d+)?))?\\.(jpe?g)$/i);
+  if (!match) return null;
+  return `IMG_${match[1]}.jpeg`;
+}
 function safeRequest(url, method, type, base) {
   try {
     const u = new URL(String(url || ""), base);
@@ -345,8 +352,13 @@ export default function CertificateQrFastAuditPage() {
   const [results, setResults] = useState([]);
   const frameRef = useRef(null);
 
-  const selectedNames = useMemo(() => files.map((f) => safeName(f)), [files]);
-  const exactSet = REQUIRED_NAMES.every((name) => selectedNames.includes(name));
+  const normalizedSelectedNames = useMemo(() => files.map((f) => normalizeFixedFileName(f)), [files]);
+  const normalizedNameSet = useMemo(() => new Set(normalizedSelectedNames.filter(Boolean)), [normalizedSelectedNames]);
+  const exactSet =
+    normalizedSelectedNames.length === 8 &&
+    normalizedSelectedNames.every(Boolean) &&
+    normalizedNameSet.size === 8 &&
+    REQUIRED_NAMES.every((name) => normalizedNameSet.has(name));
   const validCount = files.length === 8 && exactSet;
 
   const reloadFrame = () => new Promise((resolve, reject) => {
@@ -361,7 +373,7 @@ export default function CertificateQrFastAuditPage() {
     if (!validCount || running) return;
     setRunning(true);
     setResults([]);
-    const ordered = [...files].sort((a, b) => safeName(a).localeCompare(safeName(b)));
+    const ordered = [...files].sort((a, b) => String(normalizeFixedFileName(a) || safeName(a)).localeCompare(String(normalizeFixedFileName(b) || safeName(b))));
     const out = [];
     try {
       for (let i = 0; i < ordered.length; i += 1) {
@@ -421,6 +433,11 @@ export default function CertificateQrFastAuditPage() {
       <section style={{ padding: 16, border: "1px solid #ccc", borderRadius: 12, marginTop: 16 }}>
         <input type="file" accept="image/*" multiple disabled={running} onChange={(e) => setFiles([...e.target.files].slice(0, 8))} />
         <div style={{ marginTop: 10, fontSize: 13 }}>{files.length}/8 選択</div>
+        {files.length > 0 && (
+          <div style={{ marginTop: 8, fontSize: 12, overflowWrap: "anywhere" }}>
+            正規化後: {normalizedSelectedNames.map((name) => name || "判定不可").join(" / ")}
+          </div>
+        )}
         {!exactSet && files.length > 0 && <div style={{ marginTop: 8 }}>固定セット IMG_0940.jpeg〜IMG_0947.jpeg の8枚を選択してください。</div>}
         <button onClick={start} disabled={!validCount || running} style={{ marginTop: 14, padding: "10px 18px", fontWeight: 700 }}>{running ? "評価中…" : "評価開始"}</button>
         <div style={{ marginTop: 12, fontWeight: 700 }}>{status}</div>
