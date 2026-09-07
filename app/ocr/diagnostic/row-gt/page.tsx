@@ -16,6 +16,7 @@ type PhotoState = {
   url: string;
   width: number;
   height: number;
+  rotationDeg: number;
   bands: Band[];
 };
 
@@ -93,6 +94,49 @@ function clamp01(v: number) {
   return Math.max(0, Math.min(1, v));
 }
 
+function loadFileImage(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(`${file.name} を開けませんでした`));
+    };
+    img.src = url;
+  });
+}
+
+async function rotatedPreview(file: File, rotationDeg: number) {
+  if (rotationDeg % 360 === 0) {
+    const img = await loadFileImage(file);
+    return {
+      url: URL.createObjectURL(file),
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    };
+  }
+
+  const img = await loadFileImage(file);
+  const normalized = ((rotationDeg % 360) + 360) % 360;
+  const swap = normalized === 90 || normalized === 270;
+  const canvas = document.createElement("canvas");
+  canvas.width = swap ? img.naturalHeight : img.naturalWidth;
+  canvas.height = swap ? img.naturalWidth : img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("画像回転に失敗しました。");
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((normalized * Math.PI) / 180);
+  ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+  const blob = await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((value) => value ? resolve(value) : reject(new Error("画像回転に失敗しました。")), "image/jpeg", 0.96),
+  );
+  return { url: URL.createObjectURL(blob), width: canvas.width, height: canvas.height };
+}
+
 function bandFromNorm(y1: number, y2: number, h: number, rowIndex: number): Band {
   const a = clamp01(Math.min(y1, y2));
   const b = clamp01(Math.max(y1, y2));
@@ -167,6 +211,7 @@ export default function PartsOcrRowGtPage() {
         url,
         width: dims.width,
         height: dims.height,
+        rotationDeg: 0,
         bands: [],
       });
     }
@@ -184,6 +229,31 @@ export default function PartsOcrRowGtPage() {
       duplicates.length ? `重複: ${duplicates.join(", ")}` : "",
     ].filter(Boolean);
     setSelectionNote(notes.join(" "));
+  }
+
+  async function rotateCurrent(delta: number) {
+    if (!photo) return;
+    const nextRotation = ((photo.rotationDeg + delta) % 360 + 360) % 360;
+    const rendered = await rotatedPreview(photo.sourceFile, nextRotation);
+    const oldUrl = photo.url;
+    setPhotos((old) =>
+      old.map((p, i) =>
+        i === current
+          ? {
+              ...p,
+              url: rendered.url,
+              width: rendered.width,
+              height: rendered.height,
+              rotationDeg: nextRotation,
+              bands: [],
+            }
+          : p,
+      ),
+    );
+    URL.revokeObjectURL(oldUrl);
+    setStartY(null);
+    setDraftY(null);
+    setCopyState("");
   }
 
   function pointerNormY(ev: PointerEvent<HTMLDivElement>) {
@@ -265,6 +335,7 @@ export default function PartsOcrRowGtPage() {
         fileName: p.canonicalName,
         imageWidth: p.width,
         imageHeight: p.height,
+        rotationDeg: p.rotationDeg,
         rowCount: p.bands.length,
         rows: p.bands.map((b, index) => ({
           rowIndex: index + 1,
@@ -439,7 +510,20 @@ export default function PartsOcrRowGtPage() {
 
             <p style={{ ...styles.sub, marginTop: 10 }}>
               指を行の上端から下端まで縦にドラッグしてください。bandは画像全幅に表示されますが、Stage A採点ではY位置だけを使用します。
+              伝票が横向きなら、先に回転ボタンで明細行が横方向になる向きへ直してください。回転するとその写真のbandはリセットされます。
             </p>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button style={styles.secondary} onClick={() => rotateCurrent(-90)}>
+                ↶ 左90°
+              </button>
+              <button style={styles.secondary} onClick={() => rotateCurrent(90)}>
+                右90° ↷
+              </button>
+            </div>
+            <div style={{ color: "#687386", fontSize: 12, marginTop: 6, textAlign: "center" }}>
+              表示回転: {photo.rotationDeg}°
+            </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button style={styles.secondary} onClick={undo} disabled={!photo.bands.length}>
