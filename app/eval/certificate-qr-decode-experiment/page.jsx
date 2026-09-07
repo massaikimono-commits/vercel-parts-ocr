@@ -27,18 +27,9 @@ const ENSEMBLE_CONFIGS = [
   { id: "raw-color-medium-3x-nearest", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
   { id: "raw-color-medium-2x-smooth", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 2, interpolation: "smooth", quietZoneRatio: .08 },
 ];
-const REFINED_CORE_CONFIGS = [
-  { id: "tight-small-quiet", mode: "color", useRefinedBbox: true, bboxMargin: .12, scale: 2, interpolation: "nearest" },
-  { id: "tight-medium-quiet", mode: "color", useRefinedBbox: true, bboxMargin: .24, scale: 3, interpolation: "nearest" },
-  { id: "current-small-fallback", mode: "color", widthRel: .10, scale: 2, interpolation: "nearest", quietZoneRatio: .08 },
-];
-const THRESHOLD_CONFIGS = [
-  { id: "tight-otsu", mode: "otsu", useRefinedBbox: true, bboxMargin: .20, scale: 3, interpolation: "nearest" },
-  { id: "tight-adaptive", mode: "adaptive", useRefinedBbox: true, bboxMargin: .20, scale: 3, interpolation: "nearest" },
-];
-const ROTATE_RESCUE_CONFIGS = [
-  { id: "tight-rotate-plus1", mode: "color", useRefinedBbox: true, bboxMargin: .20, scale: 3, interpolation: "nearest", rotateDeg: 1 },
-  { id: "tight-rotate-minus1", mode: "color", useRefinedBbox: true, bboxMargin: .20, scale: 3, interpolation: "nearest", rotateDeg: -1 },
+const GEOMETRY_RECTIFY_CONFIGS = [
+  { id: "geometry-rectify-native", outputScale: 1, sampling: "bilinear" },
+  { id: "geometry-rectify-2x-nearest", outputScale: 2, sampling: "nearest" },
 ];
 const DEFAULT_GROUND_TRUTH = {
   "IMG_0940.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
@@ -530,6 +521,339 @@ function refineQrCandidates(raw, page, coarseCandidates) {
     })),
   };
 }
+function finderRatioMatch(runs) {
+  if (!Array.isArray(runs) || runs.length !== 5) return null;
+  const total = runs.reduce((sum, value) => sum + value, 0);
+  if (total < 7) return null;
+  const module = total / 7;
+  const expected = [1, 1, 3, 1, 1];
+  let error = 0;
+  for (let i = 0; i < 5; i += 1) error += Math.abs(runs[i] - expected[i] * module);
+  const normalizedError = error / total;
+  if (normalizedError > .34) return null;
+  return { module, normalizedError };
+}
+function scanFinderRuns(binary, width, height, horizontal = true) {
+  const detections = [];
+  const outer = horizontal ? height : width;
+  const inner = horizontal ? width : height;
+  for (let o = 0; o < outer; o += 2) {
+    const runs = [];
+    let last = null;
+    let length = 0;
+    let start = 0;
+    for (let i = 0; i <= inner; i += 1) {
+      const value = i < inner
+        ? binary[horizontal ? o * width + i : i * width + o]
+        : -1;
+      if (i === 0) {
+        last = value;
+        length = 1;
+        start = 0;
+        continue;
+      }
+      if (value === last && i < inner) {
+        length += 1;
+        continue;
+      }
+      runs.push({ color: last, length, start, end: i - 1 });
+      last = value;
+      length = 1;
+      start = i;
+    }
+    for (let r = 0; r <= runs.length - 5; r += 1) {
+      const seq = runs.slice(r, r + 5);
+      if (seq[0].color !== 1 || seq[1].color !== 0 || seq[2].color !== 1 || seq[3].color !== 0 || seq[4].color !== 1) continue;
+      const match = finderRatioMatch(seq.map((part) => part.length));
+      if (!match) continue;
+      const center = (seq[2].start + seq[2].end) / 2;
+      detections.push(horizontal
+        ? { x: center, y: o, module: match.module, error: match.normalizedError }
+        : { x: o, y: center, module: match.module, error: match.normalizedError });
+    }
+  }
+  return detections;
+}
+function clusterFinderIntersections(horizontal, vertical) {
+  const intersections = [];
+  for (const h of horizontal) {
+    for (const v of vertical) {
+      const module = (h.module + v.module) / 2;
+      if (module < 1.1) continue;
+      if (Math.abs(h.x - v.x) > module * 2.8 || Math.abs(h.y - v.y) > module * 2.8) continue;
+      const moduleRatio = Math.max(h.module, v.module) / Math.max(.1, Math.min(h.module, v.module));
+      if (moduleRatio > 2.2) continue;
+      intersections.push({
+        x: (h.x + v.x) / 2,
+        y: (h.y + v.y) / 2,
+        module,
+        score: 1 / (1 + h.error + v.error),
+      });
+    }
+  }
+  const clusters = [];
+  for (const point of intersections.sort((a, b) => b.score - a.score)) {
+    const radius = Math.max(5, point.module * 3.2);
+    let cluster = clusters.find((item) => Math.hypot(item.x - point.x, item.y - point.y) <= radius);
+    if (!cluster) {
+      cluster = { x: point.x, y: point.y, module: point.module, score: point.score, count: 1 };
+      clusters.push(cluster);
+    } else {
+      const w = cluster.count;
+      cluster.x = (cluster.x * w + point.x) / (w + 1);
+      cluster.y = (cluster.y * w + point.y) / (w + 1);
+      cluster.module = (cluster.module * w + point.module) / (w + 1);
+      cluster.score += point.score;
+      cluster.count += 1;
+    }
+  }
+  return clusters
+    .filter((item) => item.count >= 2)
+    .map((item) => ({ ...item, score: item.score / item.count }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12);
+}
+function nearestQrDimension(estimate) {
+  const clamped = Math.max(21, Math.min(177, Number(estimate) || 21));
+  const version = Math.max(1, Math.min(40, Math.round((clamped - 17) / 4)));
+  return 17 + 4 * version;
+}
+function chooseFinderTriplet(finders) {
+  let best = null;
+  const points = (finders || []).slice(0, 10);
+  for (let i = 0; i < points.length; i += 1) {
+    for (let j = 0; j < points.length; j += 1) {
+      if (j === i) continue;
+      for (let k = j + 1; k < points.length; k += 1) {
+        if (k === i) continue;
+        const tl = points[i], a = points[j], b = points[k];
+        const ux = a.x - tl.x, uy = a.y - tl.y;
+        const vx = b.x - tl.x, vy = b.y - tl.y;
+        const du = Math.hypot(ux, uy), dv = Math.hypot(vx, vy);
+        if (du < 16 || dv < 16) continue;
+        const cos = Math.abs((ux * vx + uy * vy) / (du * dv));
+        if (cos > .38) continue;
+        const legRatio = Math.max(du, dv) / Math.max(1, Math.min(du, dv));
+        if (legRatio > 2.0) continue;
+        const modules = [tl.module, a.module, b.module];
+        const moduleRatio = Math.max(...modules) / Math.max(.1, Math.min(...modules));
+        if (moduleRatio > 2.0) continue;
+        const cross = ux * vy - uy * vx;
+        const tr = cross >= 0 ? a : b;
+        const bl = cross >= 0 ? b : a;
+        const geometryScore = (tl.score + a.score + b.score) / 3
+          * (1 - cos)
+          * (1 / legRatio)
+          * (1 / moduleRatio);
+        if (!best || geometryScore > best.geometryScore) best = { tl, tr, bl, geometryScore, cos, legRatio, moduleRatio };
+      }
+    }
+  }
+  return best;
+}
+function pointAdd(a, b, scale = 1) { return { x: a.x + b.x * scale, y: a.y + b.y * scale }; }
+function pointSub(a, b) { return { x: a.x - b.x, y: a.y - b.y }; }
+function pointScale(a, scale) { return { x: a.x * scale, y: a.y * scale }; }
+function quadBounds(quad) {
+  const xs = quad.map((p) => p.x), ys = quad.map((p) => p.y);
+  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+}
+function quadArea(quad) {
+  let area = 0;
+  for (let i = 0; i < quad.length; i += 1) {
+    const a = quad[i], b = quad[(i + 1) % quad.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(area) / 2;
+}
+function detectLocalQrGeometry(raw, page, candidate) {
+  const center = paperPoint(page, raw, candidate);
+  const paperW = paperWidthPx(page, raw);
+  const searchRawW = Math.max(120, Math.min(raw.width, paperW * .135));
+  const searchRawH = searchRawW;
+  const sx = Math.max(0, Math.min(raw.width - searchRawW, center.x - searchRawW / 2));
+  const sy = Math.max(0, Math.min(raw.height - searchRawH, center.y - searchRawH / 2));
+  const sw = Math.max(1, Math.min(raw.width - sx, searchRawW));
+  const sh = Math.max(1, Math.min(raw.height - sy, searchRawH));
+  const analysisSize = 300;
+  const canvas = document.createElement("canvas");
+  canvas.width = analysisSize;
+  canvas.height = analysisSize;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(raw, sx, sy, sw, sh, 0, 0, analysisSize, analysisSize);
+  try {
+    const image = ctx.getImageData(0, 0, analysisSize, analysisSize);
+    const gray = new Uint8Array(analysisSize * analysisSize);
+    for (let i = 0, p = 0; i < gray.length; i += 1, p += 4) {
+      gray[i] = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+    }
+    const threshold = otsuThreshold(gray);
+    const binary = new Uint8Array(gray.length);
+    for (let i = 0; i < gray.length; i += 1) binary[i] = gray[i] <= threshold ? 1 : 0;
+    const horizontal = scanFinderRuns(binary, analysisSize, analysisSize, true);
+    const vertical = scanFinderRuns(binary, analysisSize, analysisSize, false);
+    const finders = clusterFinderIntersections(horizontal, vertical);
+    const triplet = chooseFinderTriplet(finders);
+    if (!triplet) {
+      return {
+        geometryValid: false,
+        geometryFailReason: finders.length < 3 ? "finder-count-under-3" : "finder-triplet-inconsistent",
+        finderCount: finders.length,
+        finders: finders.map((f) => ({ x: f.x, y: f.y, module: f.module, score: Number(f.score.toFixed(4)) })),
+      };
+    }
+
+    const scaleX = sw / analysisSize;
+    const scaleY = sh / analysisSize;
+    const toRaw = (p) => ({ x: sx + p.x * scaleX, y: sy + p.y * scaleY });
+    const tl = toRaw(triplet.tl), tr = toRaw(triplet.tr), bl = toRaw(triplet.bl);
+    const moduleRaw = ((triplet.tl.module + triplet.tr.module + triplet.bl.module) / 3) * Math.sqrt(scaleX * scaleY);
+    const du = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+    const dv = Math.hypot(bl.x - tl.x, bl.y - tl.y);
+    const dimension = nearestQrDimension(((du + dv) / 2) / Math.max(1, moduleRaw) + 7);
+    const uModule = pointScale(pointSub(tr, tl), 1 / Math.max(1, dimension - 7));
+    const vModule = pointScale(pointSub(bl, tl), 1 / Math.max(1, dimension - 7));
+    const p0 = pointAdd(pointAdd(tl, uModule, -3.5), vModule, -3.5);
+    const p1 = pointAdd(pointAdd(tl, uModule, dimension - 3.5), vModule, -3.5);
+    const p3 = pointAdd(pointAdd(tl, uModule, -3.5), vModule, dimension - 3.5);
+    const p2 = pointAdd(pointAdd(tl, uModule, dimension - 3.5), vModule, dimension - 3.5);
+    const q0 = pointAdd(pointAdd(tl, uModule, -7.5), vModule, -7.5);
+    const q1 = pointAdd(pointAdd(tl, uModule, dimension + .5), vModule, -7.5);
+    const q3 = pointAdd(pointAdd(tl, uModule, -7.5), vModule, dimension + .5);
+    const q2 = pointAdd(pointAdd(tl, uModule, dimension + .5), vModule, dimension + .5);
+    const quietQuad = [q0, q1, q2, q3];
+    const qrQuad = [p0, p1, p2, p3];
+    const bounds = quadBounds(quietQuad);
+    const inBounds = bounds.x0 >= -2 && bounds.y0 >= -2 && bounds.x1 <= raw.width + 2 && bounds.y1 <= raw.height + 2;
+    const area = quadArea(qrQuad);
+    const minArea = Math.pow(Math.max(18, moduleRaw * 12), 2);
+    if (!inBounds || area < minArea) {
+      return {
+        geometryValid: false,
+        geometryFailReason: !inBounds ? "quad-out-of-bounds" : "quad-too-small",
+        finderCount: finders.length,
+        geometryScore: Number(triplet.geometryScore.toFixed(4)),
+      };
+    }
+    const widthTop = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+    const widthBottom = Math.hypot(p2.x - p3.x, p2.y - p3.y);
+    const heightLeft = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+    const heightRight = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const spread = Math.max(widthTop, widthBottom, heightLeft, heightRight) / Math.max(1, Math.min(widthTop, widthBottom, heightLeft, heightRight));
+    return {
+      geometryValid: true,
+      geometryFailReason: "none",
+      finderCount: finders.length,
+      geometryScore: Number(triplet.geometryScore.toFixed(4)),
+      qrDimension: dimension,
+      modulePx: Number(moduleRaw.toFixed(2)),
+      perspectiveScaleSpread: Number(spread.toFixed(3)),
+      qrCenter: {
+        x: Number(((p0.x + p1.x + p2.x + p3.x) / 4).toFixed(2)),
+        y: Number(((p0.y + p1.y + p2.y + p3.y) / 4).toFixed(2)),
+      },
+      findersRaw: [tl, tr, bl].map((p) => ({ x: Number(p.x.toFixed(2)), y: Number(p.y.toFixed(2)) })),
+      qrQuad: qrQuad.map((p) => ({ x: Number(p.x.toFixed(2)), y: Number(p.y.toFixed(2)) })),
+      quietQuad: quietQuad.map((p) => ({ x: Number(p.x.toFixed(2)), y: Number(p.y.toFixed(2)) })),
+    };
+  } finally {
+    canvas.width = 1;
+    canvas.height = 1;
+  }
+}
+function solveLinear8(matrix, vector) {
+  const a = matrix.map((row, i) => [...row, vector[i]]);
+  for (let col = 0; col < 8; col += 1) {
+    let pivot = col;
+    for (let row = col + 1; row < 8; row += 1) if (Math.abs(a[row][col]) > Math.abs(a[pivot][col])) pivot = row;
+    if (Math.abs(a[pivot][col]) < 1e-9) return null;
+    [a[col], a[pivot]] = [a[pivot], a[col]];
+    const div = a[col][col];
+    for (let j = col; j <= 8; j += 1) a[col][j] /= div;
+    for (let row = 0; row < 8; row += 1) {
+      if (row === col) continue;
+      const factor = a[row][col];
+      for (let j = col; j <= 8; j += 1) a[row][j] -= factor * a[col][j];
+    }
+  }
+  return a.map((row) => row[8]);
+}
+function homographyDestToSource(size, quad) {
+  const dst = [[0,0],[size-1,0],[size-1,size-1],[0,size-1]];
+  const m = [], b = [];
+  for (let i = 0; i < 4; i += 1) {
+    const [u,v] = dst[i];
+    const { x, y } = quad[i];
+    m.push([u,v,1,0,0,0,-u*x,-v*x]); b.push(x);
+    m.push([0,0,0,u,v,1,-u*y,-v*y]); b.push(y);
+  }
+  return solveLinear8(m,b);
+}
+function sampleImage(data, width, height, x, y, nearest) {
+  if (nearest) {
+    const ix = Math.max(0, Math.min(width - 1, Math.round(x)));
+    const iy = Math.max(0, Math.min(height - 1, Math.round(y)));
+    const p = (iy * width + ix) * 4;
+    return [data[p], data[p+1], data[p+2], data[p+3]];
+  }
+  const x0 = Math.max(0, Math.min(width - 1, Math.floor(x)));
+  const y0 = Math.max(0, Math.min(height - 1, Math.floor(y)));
+  const x1 = Math.min(width - 1, x0 + 1), y1 = Math.min(height - 1, y0 + 1);
+  const fx = x - x0, fy = y - y0;
+  const out = [0,0,0,255];
+  for (let c = 0; c < 3; c += 1) {
+    const p00 = data[(y0*width+x0)*4+c], p10 = data[(y0*width+x1)*4+c];
+    const p01 = data[(y1*width+x0)*4+c], p11 = data[(y1*width+x1)*4+c];
+    out[c] = Math.round((p00*(1-fx)+p10*fx)*(1-fy) + (p01*(1-fx)+p11*fx)*fy);
+  }
+  return out;
+}
+function rectifyQrGeometry(raw, geometry, config) {
+  const quad = geometry?.quietQuad;
+  if (!geometry?.geometryValid || !Array.isArray(quad) || quad.length !== 4) return null;
+  const sideA = Math.hypot(quad[1].x-quad[0].x, quad[1].y-quad[0].y);
+  const sideB = Math.hypot(quad[2].x-quad[3].x, quad[2].y-quad[3].y);
+  const native = Math.max(160, Math.min(520, Math.round((sideA + sideB) / 2)));
+  const size = Math.max(160, Math.min(900, Math.round(native * (Number(config.outputScale) || 1))));
+  const h = homographyDestToSource(size, quad);
+  if (!h) return null;
+  const bounds = quadBounds(quad);
+  const x0 = Math.max(0, Math.floor(bounds.x0) - 2);
+  const y0 = Math.max(0, Math.floor(bounds.y0) - 2);
+  const x1 = Math.min(raw.width, Math.ceil(bounds.x1) + 2);
+  const y1 = Math.min(raw.height, Math.ceil(bounds.y1) + 2);
+  const sw = Math.max(1, x1 - x0), sh = Math.max(1, y1 - y0);
+  const src = raw.getContext("2d", { willReadFrequently: true }).getImageData(x0, y0, sw, sh);
+  const canvas = document.createElement("canvas");
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const out = ctx.createImageData(size, size);
+  const nearest = config.sampling === "nearest";
+  for (let v = 0; v < size; v += 1) {
+    for (let u = 0; u < size; u += 1) {
+      const denom = h[6]*u + h[7]*v + 1;
+      const sx = (h[0]*u + h[1]*v + h[2]) / denom - x0;
+      const sy = (h[3]*u + h[4]*v + h[5]) / denom - y0;
+      const rgba = sampleImage(src.data, sw, sh, sx, sy, nearest);
+      const p = (v*size+u)*4;
+      out.data[p]=rgba[0]; out.data[p+1]=rgba[1]; out.data[p+2]=rgba[2]; out.data[p+3]=255;
+    }
+  }
+  ctx.putImageData(out,0,0);
+  return canvas;
+}
+function geometryOverlap(a,b) {
+  if (!a?.geometryValid || !b?.geometryValid) return false;
+  const aa=quadBounds(a.quietQuad), bb=quadBounds(b.quietQuad);
+  const iw=Math.max(0,Math.min(aa.x1,bb.x1)-Math.max(aa.x0,bb.x0));
+  const ih=Math.max(0,Math.min(aa.y1,bb.y1)-Math.max(aa.y0,bb.y0));
+  const inter=iw*ih;
+  const areaA=(aa.x1-aa.x0)*(aa.y1-aa.y0), areaB=(bb.x1-bb.x0)*(bb.y1-bb.y0);
+  const iou=inter/Math.max(1,areaA+areaB-inter);
+  const ca=a.qrCenter, cb=b.qrCenter;
+  const dist=Math.hypot(ca.x-cb.x,ca.y-cb.y);
+  return iou>=.28 || dist<=Math.min(Math.sqrt(areaA),Math.sqrt(areaB))*.35;
+}
 function documentPerspectiveMetrics(page) {
   const q = Array.isArray(page?.quad) && page.quad.length === 4 ? page.quad : null;
   if (!q) return { documentSkewDeg: 0, perspectiveSpreadDeg: 0, quadAvailable: false };
@@ -704,31 +1028,60 @@ function structuralValidation(canonical) {
   const text = canonicalText(canonical);
   const length = text.length;
   const slashCount = (text.match(/\//g) || []).length;
+  const newlineCount = (text.match(/\n/g) || []).length;
+  const pipeCount = (text.match(/\|/g) || []).length;
+  const commaCount = (text.match(/,/g) || []).length;
   const replacementCount = (text.match(/�/g) || []).length;
   const controlCount = [...text].filter((ch) => {
     const code = ch.charCodeAt(0);
     return code < 32 && ch !== "\n" && ch !== "\t";
   }).length;
   const printableRatio = length ? (length - replacementCount - controlCount) / length : 0;
-  const fields = text.split("/").filter((part) => part.length > 0).length;
+  const slashFields = text.split("/").filter((part) => part.length > 0).length;
+  const newlineFields = text.split("\n").filter((part) => part.length > 0).length;
+  let recognizedSchemaClass = "unknown";
+  if (slashCount >= 1 && slashFields >= 2) recognizedSchemaClass = "slash-delimited";
+  else if (newlineCount >= 1 && newlineFields >= 2) recognizedSchemaClass = "newline-delimited";
+  else if (pipeCount >= 1) recognizedSchemaClass = "pipe-delimited";
+  else if (commaCount >= 2) recognizedSchemaClass = "comma-delimited";
+  else if (length >= 3 && printableRatio >= .98) recognizedSchemaClass = "compact-printable";
+
+  const separatorPattern =
+    slashCount ? "slash" :
+    newlineCount ? "newline" :
+    pipeCount ? "pipe" :
+    commaCount ? "comma" :
+    "none";
+
+  const failReasons = [];
+  if (length < 3) failReasons.push("too-short");
+  if (length > 1200) failReasons.push("too-long");
+  if (printableRatio < .96) failReasons.push("low-printable-ratio");
+  if (replacementCount > 0) failReasons.push("replacement-char");
+  if (controlCount > 0) failReasons.push("control-char");
+  if (!(slashCount >= 1 && slashCount <= 40 && slashFields >= 2 && slashFields <= 50)) {
+    failReasons.push("slash-schema-mismatch");
+  }
+
   let score = 0;
   if (length >= 3 && length <= 1200) score += 2;
   if (slashCount >= 1 && slashCount <= 40) score += 3;
-  if (fields >= 2 && fields <= 50) score += 2;
+  if (slashFields >= 2 && slashFields <= 50) score += 2;
   if (printableRatio >= .98) score += 2;
   if (replacementCount === 0 && controlCount === 0) score += 1;
-  const pass = length >= 3 && length <= 1200
-    && slashCount >= 1 && slashCount <= 40
-    && fields >= 2 && fields <= 50
-    && printableRatio >= .96
-    && replacementCount === 0
-    && controlCount === 0;
+  const pass = failReasons.length === 0;
+
   return {
     pass,
     score,
+    payloadLength: length,
+    printableRatio: Number(printableRatio.toFixed(4)),
+    separatorPattern,
+    recognizedSchemaClass,
+    structuralFailReason: pass ? "none" : failReasons.join("+"),
     lengthBucket: length < 3 ? "too-short" : length > 1200 ? "too-long" : "normal",
     slashCountBucket: slashCount === 0 ? "none" : slashCount <= 8 ? "1-8" : slashCount <= 20 ? "9-20" : "21+",
-    fieldCountBucket: fields <= 1 ? "0-1" : fields <= 8 ? "2-8" : fields <= 20 ? "9-20" : "21+",
+    fieldCountBucket: slashFields <= 1 ? "0-1" : slashFields <= 8 ? "2-8" : slashFields <= 20 ? "9-20" : "21+",
     printableRatioBucket: printableRatio >= .98 ? "high" : printableRatio >= .96 ? "borderline" : "low",
   };
 }
