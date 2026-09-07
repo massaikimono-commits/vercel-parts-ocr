@@ -341,6 +341,9 @@ function cropCandidate(source, pageGeometry, candidate, config) {
     drawHeight: canvas.height - pad * 2,
     sourceWidth: source.width,
     sourceHeight: source.height,
+    candidateCenterX: center.x,
+    candidateCenterY: center.y,
+    referenceSpanPx: Math.max(sw, sh),
   };
   return canvas;
 }
@@ -960,7 +963,13 @@ function rectifyQrGeometry(raw, geometry, config) {
     }
   }
   ctx.putImageData(out,0,0);
-  canvas.__qrRectifyMeta={h,size};
+  canvas.__qrRectifyMeta={
+    h,
+    size,
+    candidateCenterX:Number(geometry?.qrCenter?.x),
+    candidateCenterY:Number(geometry?.qrCenter?.y),
+    referenceSpanPx:Math.max(sideA,sideB),
+  };
   return canvas;
 }
 function geometryOverlap(a,b) {
@@ -1117,7 +1126,8 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
         drawQuad(best.qrQuad,"#ff453a",true);
       }
       if(selected){
-        drawFinderSet(selected.findersRaw,"#0a84ff",5.5);
+        const selectedFinderColor=Number(selected.rank)>1?"#64d2ff":"#0a84ff";
+        drawFinderSet(selected.findersRaw,selectedFinderColor,5.5);
         drawQuad(selected.qrQuad,"#34c759",false);
         drawQuad(selected.quietQuad,"#bf5af2",false);
       } else if(item.geometryValid){
@@ -1382,7 +1392,30 @@ function canvasPositionToRaw(position, canvas) {
     y: Number((meta.sy + uy * meta.sh).toFixed(2)),
   };
 }
-function compactConsensusValidation(js, zx, conflictPositionClass) {
+function candidateDecodeAlignment(positionAudit, canvas) {
+  const jsRaw=positionAudit?.jsRawPosition;
+  const zxRaw=positionAudit?.zxingRawPosition;
+  const center=averageRawPositions(jsRaw,zxRaw);
+  const meta=canvas?.__qrCropMeta||canvas?.__qrRectifyMeta;
+  const cx=Number(meta?.candidateCenterX);
+  const cy=Number(meta?.candidateCenterY);
+  const span=Math.max(1,Number(meta?.referenceSpanPx||0));
+  if(!center||!Number.isFinite(cx)||!Number.isFinite(cy)||!Number.isFinite(span)){
+    return {
+      candidateAlignmentAvailable:false,
+      candidateAligned:false,
+      candidateCenterDistanceNormalized:null,
+    };
+  }
+  const distance=Math.hypot(center.x-cx,center.y-cy);
+  const normalized=distance/span;
+  return {
+    candidateAlignmentAvailable:true,
+    candidateAligned:normalized<=.30,
+    candidateCenterDistanceNormalized:Number(normalized.toFixed(4)),
+  };
+}
+function compactConsensusValidation(js, zx, conflictPositionClass, candidateAlignment) {
   const same = Boolean(js?.success && zx?.success && sameCanonical(js.canonical, zx.canonical));
   const a = js?.structural || {};
   const b = zx?.structural || {};
@@ -1393,6 +1426,7 @@ function compactConsensusValidation(js, zx, conflictPositionClass) {
   const strictCompact =
     same &&
     conflictPositionClass === "same-physical-qr" &&
+    Boolean(candidateAlignment?.candidateAligned) &&
     stableFeatureMatch &&
     a.payloadLength === 60 &&
     a.printableRatio === 1 &&
@@ -1412,6 +1446,9 @@ function compactConsensusValidation(js, zx, conflictPositionClass) {
     physicalQrConsensusAccepted: strictCompact,
     parserSchemaRecognized: Boolean(strictCompact && a.parserSchemaRecognized && b.parserSchemaRecognized),
     compactSchemaClass: strictCompact ? "compact-consensus-60" : "compact-unconfirmed",
+    candidateAlignmentAvailable:Boolean(candidateAlignment?.candidateAlignmentAvailable),
+    candidateAligned:Boolean(candidateAlignment?.candidateAligned),
+    candidateCenterDistanceNormalized:candidateAlignment?.candidateCenterDistanceNormalized??null,
   };
 }
 async function decodeJs(jsQR, canvas) {
@@ -1571,9 +1608,10 @@ async function decodeCanvasPair({ jsQR, reader, canvas }) {
   const js = await decodeJs(jsQR, canvas);
   const zx = await decodeZxing(reader, canvas);
   const positionAudit = classifyDecodePositions(js, zx, canvas);
+  const candidateAlignment = candidateDecodeAlignment(positionAudit, canvas);
   const adopted = adoptCanonical(js, zx);
   const samePayloadBothEngines = Boolean(js.success && zx.success && sameCanonical(js.canonical, zx.canonical));
-  const compact = compactConsensusValidation(js, zx, positionAudit.className);
+  const compact = compactConsensusValidation(js, zx, positionAudit.className, candidateAlignment);
   return {
     jsqrSuccess: js.success,
     zxingSuccess: zx.success,
@@ -1601,6 +1639,9 @@ async function decodeCanvasPair({ jsQR, reader, canvas }) {
     physicalQrConsensusAccepted: compact.physicalQrConsensusAccepted,
     parserSchemaRecognized: compact.parserSchemaRecognized,
     compactSchemaClass: compact.compactSchemaClass,
+    compactCandidateAlignmentAvailable: compact.candidateAlignmentAvailable,
+    compactCandidateAligned: compact.candidateAligned,
+    compactCandidateCenterDistanceNormalized: compact.candidateCenterDistanceNormalized,
     compactCanonicalSet: new Set(compact.physicalQrConsensusAccepted && js.canonical ? [js.canonical] : []),
     rawCanonicalSet: new Set([js?.success ? js.canonical : "", zx?.success ? zx.canonical : ""].filter(Boolean)),
     canonicalSet: new Set(adopted.canonical ? [adopted.canonical] : []),
@@ -1655,6 +1696,9 @@ function publicAttempt(attempt) {
     physicalQrConsensusAccepted: Boolean(attempt.physicalQrConsensusAccepted),
     parserSchemaRecognized: Boolean(attempt.parserSchemaRecognized),
     compactSchemaClass: attempt.compactSchemaClass || "none",
+    compactCandidateAlignmentAvailable: Boolean(attempt.compactCandidateAlignmentAvailable),
+    compactCandidateAligned: Boolean(attempt.compactCandidateAligned),
+    compactCandidateCenterDistanceNormalized: attempt.compactCandidateCenterDistanceNormalized ?? null,
     crossEngineDuplicate: Boolean(attempt.crossEngineDuplicate),
     crossEngineConflict: Boolean(attempt.crossEngineConflict),
     adoptedEngine: attempt.adoptedEngine || "none",
