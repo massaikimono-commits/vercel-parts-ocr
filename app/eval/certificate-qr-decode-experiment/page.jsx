@@ -1907,7 +1907,12 @@ function buildImg0942ACandidateDecodePathAudit({
       qrDimension:Number(g?.qrDimension||0)||null,
       modulePx:Number(g?.modulePx||0)||null,
       perspectiveScaleSpread:Number(g?.perspectiveScaleSpread||0)||null,
-      candidateCenterDistancePx:Number(g?.candidateCenterDistancePx||0)||null,
+      candidateCenterDistancePx:center&&g?.qrCenter
+        ?Number(Math.hypot(
+          Number(g.qrCenter.x)-Number(center.x),
+          Number(g.qrCenter.y)-Number(center.y)
+        ).toFixed(2))
+        :null,
       formalStages,
       quality,
       payloadIncluded:false,
