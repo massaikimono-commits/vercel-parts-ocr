@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { normalizeCertificateCanvas } from "../../lib/certificate-photo-normalize";
-import { detectCertificateQrDensityCandidates2D } from "../../lib/certificate-qr-density-2d.mjs";
+import { detectCertificateQrDensityCandidates2D, clusterCertificateQrCandidates2D } from "../../lib/certificate-qr-density-2d.mjs";
 
 const REQUIRED_NAMES = Array.from({ length: 8 }, (_, i) => `IMG_${String(940 + i).padStart(4, "0")}.jpeg`);
 const PATHNAME = "/vehicle-workflow-v2";
@@ -14,18 +14,20 @@ const GT_OPTIONS = [
   { value: "kei-legacy", label: "軽旧2QR", expected: 2 },
 ];
 const CONFIGS = [
-  { id: "norm-color-small-2x-nearest", source: "normalized", mode: "color", crop: "small", widthRel: .10, scale: 2, interpolation: "nearest" },
-  { id: "norm-color-medium-2x-nearest", source: "normalized", mode: "color", crop: "medium", widthRel: .13, scale: 2, interpolation: "nearest" },
-  { id: "norm-color-large-2x-nearest", source: "normalized", mode: "color", crop: "large", widthRel: .16, scale: 2, interpolation: "nearest" },
-  { id: "raw-color-small-2x-nearest", source: "raw", mode: "color", crop: "small", widthRel: .10, scale: 2, interpolation: "nearest" },
-  { id: "raw-color-medium-2x-nearest", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 2, interpolation: "nearest" },
-  { id: "raw-color-large-2x-nearest", source: "raw", mode: "color", crop: "large", widthRel: .16, scale: 2, interpolation: "nearest" },
-  { id: "raw-color-medium-1x-nearest", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 1, interpolation: "nearest" },
   { id: "raw-color-medium-3x-nearest", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest" },
-  { id: "raw-contrast-medium-2x-nearest", source: "raw", mode: "contrast", crop: "medium", widthRel: .13, scale: 2, interpolation: "nearest" },
-  { id: "raw-binary-medium-2x-nearest", source: "raw", mode: "binary", crop: "medium", widthRel: .13, scale: 2, interpolation: "nearest" },
   { id: "raw-color-medium-2x-smooth", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 2, interpolation: "smooth" },
+  { id: "raw-color-small-2x-nearest", source: "raw", mode: "color", crop: "small", widthRel: .10, scale: 2, interpolation: "nearest" },
 ];
+const DEFAULT_GROUND_TRUTH = {
+  "IMG_0940.jpeg": { vehicleKind: "registered", expectedQrCount: 5 },
+  "IMG_0941.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
+  "IMG_0942.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
+  "IMG_0943.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
+  "IMG_0944.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
+  "IMG_0945.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
+  "IMG_0946.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
+  "IMG_0947.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
+};
 
 function safeName(file) {
   return String(file?.name || "").replace(/[^A-Za-z0-9._-]/g, "_");
@@ -223,21 +225,37 @@ function cropCandidate(source, pageGeometry, candidate, config) {
   }
   return canvas;
 }
-function decodeKeyFromJs(result) {
-  if (!result) return "";
-  const bytes = Array.from(result.binaryData || []);
-  if (bytes.length) return "b:" + bytes.join(",");
-  return result.data ? "t:" + result.data : "";
+function canonicalText(value) {
+  return String(value ?? "")
+    .replace(/\0+$/g, "")
+    .replace(/\r\n?/g, "\n");
+}
+function decodeBytesText(bytes = []) {
+  const raw = Uint8Array.from(bytes || []);
+  if (!raw.length) return "";
+  for (const encoding of ["utf-8", "shift_jis"]) {
+    try {
+      const text = new TextDecoder(encoding, { fatal: true }).decode(raw);
+      if (text) return canonicalText(text);
+    } catch {}
+  }
+  return "";
+}
+function canonicalDecode(text, bytes = []) {
+  const direct = canonicalText(text);
+  if (direct) return direct;
+  return decodeBytesText(bytes);
 }
 async function decodeJs(jsQR, canvas) {
   try {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const result = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
-    const key = decodeKeyFromJs(result);
-    return key || null;
+    if (!result) return { success: false, canonical: "" };
+    const canonical = canonicalDecode(result.data || "", Array.from(result.binaryData || []));
+    return { success: Boolean(canonical), canonical };
   } catch {
-    return null;
+    return { success: false, canonical: "" };
   }
 }
 async function makeReader() {
@@ -252,12 +270,15 @@ async function decodeZxing(reader, canvas) {
   try {
     const result = await reader.decodeFromCanvas(canvas);
     const raw = Array.from(result?.getRawBytes?.() || result?.rawBytes || []);
-    if (raw.length) return "b:" + raw.join(",");
     const text = result?.getText?.() || result?.text || "";
-    return text ? "t:" + text : null;
+    const canonical = canonicalDecode(text, raw);
+    return { success: Boolean(canonical), canonical };
   } catch {
-    return null;
+    return { success: false, canonical: "" };
   }
+}
+function sameCanonical(a, b) {
+  return Boolean(a && b && a === b);
 }
 function traceCounts(trace) {
   const events = Array.isArray(trace?.events) ? trace.events : [];
