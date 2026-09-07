@@ -109,6 +109,43 @@ jobs:
           ls -lh /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz /tmp/parts-qg-playwright-${{ matrix.label }}.tar.gz
           find /tmp/parts-qg-assets-${{ matrix.label }} -maxdepth 1 -type f -printf '%f %s bytes\n' || true
 
+      - name: Split exact target runtime for private local-photo download
+        run: |
+          split -b 64M /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz /tmp/parts-qg-runtime-${{ matrix.label }}.part-
+          ls -lh /tmp/parts-qg-runtime-${{ matrix.label }}.part-*
+
+      - name: Upload runtime part aa
+        uses: actions/upload-artifact@v4
+        with:
+          name: parts-ocr-runtime-${{ matrix.label }}-aa
+          compression-level: 0
+          path: /tmp/parts-qg-runtime-${{ matrix.label }}.part-aa
+          if-no-files-found: error
+
+      - name: Upload runtime part ab
+        uses: actions/upload-artifact@v4
+        with:
+          name: parts-ocr-runtime-${{ matrix.label }}-ab
+          compression-level: 0
+          path: /tmp/parts-qg-runtime-${{ matrix.label }}.part-ab
+          if-no-files-found: error
+
+      - name: Upload runtime part ac
+        uses: actions/upload-artifact@v4
+        with:
+          name: parts-ocr-runtime-${{ matrix.label }}-ac
+          compression-level: 0
+          path: /tmp/parts-qg-runtime-${{ matrix.label }}.part-ac
+          if-no-files-found: ignore
+
+      - name: Upload captured OCR assets separately
+        uses: actions/upload-artifact@v4
+        with:
+          name: parts-ocr-assets-${{ matrix.label }}
+          compression-level: 6
+          path: /tmp/parts-qg-assets-${{ matrix.label }}/
+          if-no-files-found: error
+
       - name: Upload exact Playwright headless shell for private local-photo execution
         if: ${{ matrix.label == 'latest' }}
         uses: actions/upload-artifact@v4
