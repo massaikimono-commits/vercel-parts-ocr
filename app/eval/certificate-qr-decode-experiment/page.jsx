@@ -2026,10 +2026,10 @@ function buildImg0942AQuadTooSmallAudit(result,currentReferenceMedian) {
   if(!result||result.fileName!=="IMG_0942.jpeg") return null;
   const matrix=result.matrix||{};
   const diagnosticsByIndex=new Map((matrix.geometryStage?.diagnostics||[]).map((item)=>[item.candidateIndex,item]));
-  const rowsByIndex=new Map((matrix.currentEnsemble?.rows||[]).map((item)=>[item.candidateIndex,item]));
+  const priorAPathByIndex=new Map((matrix.img0942ACandidateDecodePathAudit||[]).map((item)=>[item.candidateIndex,item]));
   const candidateAudits=IMG_0942_A_CANDIDATES.map((candidateIndex)=>{
     const g=diagnosticsByIndex.get(candidateIndex)||null;
-    const row=rowsByIndex.get(candidateIndex)||null;
+    const priorAPath=priorAPathByIndex.get(candidateIndex)||null;
     const triplets=(g?.tripletDiagnostics||[]).slice(0,3).map((triplet)=>{
       const side=quadSideMetricsFromDiagnostic(triplet.qrQuad);
       const modulePx=Number(triplet.modulePx||0)||null;
@@ -2051,7 +2051,7 @@ function buildImg0942AQuadTooSmallAudit(result,currentReferenceMedian) {
         perspectiveScaleSpread:side?.perspectiveScaleSpread??null,
       };
     });
-    const currentCrop=row?.coarseCandidateCrop||null;
+    const currentCrop=priorAPath?.quality?.coarseCandidateCrop||null;
     const quality=currentCrop?{
       sourceCropWidthPx:Number(currentCrop.cropPixelWidth||0)||null,
       sourceCropHeightPx:Number(currentCrop.cropPixelHeight||0)||null,
