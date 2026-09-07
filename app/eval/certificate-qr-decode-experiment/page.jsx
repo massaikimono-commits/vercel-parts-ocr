@@ -1987,6 +1987,110 @@ function flattenImg0942AQuality(item,referenceSummary) {
     relativeToSuccessfulReferenceMedian:relative,
   };
 }
+function quadSideMetricsFromDiagnostic(quad=[]) {
+  if(!Array.isArray(quad)||quad.length!==4) return null;
+  const sides=quad.map((point,index)=>{
+    const next=quad[(index+1)%4];
+    return Math.hypot(Number(next.x)-Number(point.x),Number(next.y)-Number(point.y));
+  });
+  const minSidePx=Math.min(...sides);
+  const maxSidePx=Math.max(...sides);
+  const areaPx2=quadArea(quad);
+  return {
+    minSidePx:Number(minSidePx.toFixed(2)),
+    maxSidePx:Number(maxSidePx.toFixed(2)),
+    areaPx2:Number(areaPx2.toFixed(2)),
+    perspectiveScaleSpread:Number((maxSidePx/Math.max(1,minSidePx)).toFixed(4)),
+  };
+}
+function currentCropReferenceMedian(entries=[]) {
+  const current=(entries||[]).filter((item)=>item.sourceLabel==="A-current-decode-success");
+  const keys=[
+    ["localContrastRange","coarseCandidateCrop.localContrastRange"],
+    ["localLumaStdDev","coarseCandidateCrop.localLumaStdDev"],
+    ["edgeStrength","coarseCandidateCrop.edgeStrength"],
+    ["laplacianVariance","coarseCandidateCrop.blurIndicatorLaplacianVariance"],
+  ];
+  const metrics={};
+  for(const [key,path] of keys){
+    const values=current.map((item)=>Number(metricAt(item,path))).filter(Number.isFinite);
+    metrics[key]=values.length?Number(percentile(values,.5).toFixed(4)):null;
+  }
+  return {
+    candidateCount:current.length,
+    imageCount:new Set(current.map((item)=>item.fileName)).size,
+    metrics,
+  };
+}
+function buildImg0942AQuadTooSmallAudit(result,currentReferenceMedian) {
+  if(!result||result.fileName!=="IMG_0942.jpeg") return null;
+  const matrix=result.matrix||{};
+  const diagnosticsByIndex=new Map((matrix.geometryStage?.diagnostics||[]).map((item)=>[item.candidateIndex,item]));
+  const rowsByIndex=new Map((matrix.currentEnsemble?.rows||[]).map((item)=>[item.candidateIndex,item]));
+  const candidateAudits=IMG_0942_A_CANDIDATES.map((candidateIndex)=>{
+    const g=diagnosticsByIndex.get(candidateIndex)||null;
+    const row=rowsByIndex.get(candidateIndex)||null;
+    const triplets=(g?.tripletDiagnostics||[]).slice(0,3).map((triplet)=>{
+      const side=quadSideMetricsFromDiagnostic(triplet.qrQuad);
+      const modulePx=Number(triplet.modulePx||0)||null;
+      const minPhysicalSidePx=modulePx!=null?Math.max(28,modulePx*18):null;
+      return {
+        rank:Number(triplet.rank||0)||null,
+        rejectReason:triplet.rejectedReason||"unknown",
+        qrDimension:Number(triplet.qrDimension||0)||null,
+        modulePx,
+        quadMinSidePx:side?.minSidePx??null,
+        quadMaxSidePx:side?.maxSidePx??null,
+        quadAreaPx2:side?.areaPx2??null,
+        minPhysicalSidePx:minPhysicalSidePx!=null?Number(minPhysicalSidePx.toFixed(2)):null,
+        minSideToMinPhysicalSideRatio:side&&minPhysicalSidePx
+          ?Number((side.minSidePx/minPhysicalSidePx).toFixed(4)):null,
+        areaToMinimumAreaRatio:side&&minPhysicalSidePx
+          ?Number((side.areaPx2/(minPhysicalSidePx*minPhysicalSidePx)).toFixed(4)):null,
+        candidateCenterDistancePx:Number(triplet.candidateCenterDistancePx||0)||null,
+        perspectiveScaleSpread:side?.perspectiveScaleSpread??null,
+      };
+    });
+    const currentCrop=row?.coarseCandidateCrop||null;
+    const quality=currentCrop?{
+      sourceCropWidthPx:Number(currentCrop.cropPixelWidth||0)||null,
+      sourceCropHeightPx:Number(currentCrop.cropPixelHeight||0)||null,
+      localContrastRange:Number(currentCrop.localContrastRange||0),
+      localLumaStdDev:Number(currentCrop.localLumaStdDev||0),
+      edgeStrength:Number(currentCrop.edgeStrength||0),
+      laplacianVariance:Number(currentCrop.blurIndicatorLaplacianVariance||0),
+    }:null;
+    const rel={};
+    if(quality){
+      for(const key of ["localContrastRange","localLumaStdDev","edgeStrength","laplacianVariance"]){
+        const median=Number(currentReferenceMedian?.metrics?.[key]);
+        const value=Number(quality[key]);
+        rel[key]=Number.isFinite(value)&&Number.isFinite(median)&&median!==0
+          ?Number((value/median).toFixed(4))
+          :null;
+      }
+    }
+    return {
+      candidateIndex,
+      classification:"A",
+      geometryValid:Boolean(g?.geometryValid),
+      geometryFailReason:g?.geometryFailReason||"missing",
+      formalTopTriplets:triplets,
+      currentCropQuality:quality,
+      relativeToSuccessfulCurrentCropMedian:rel,
+    };
+  });
+  return {
+    diagnosticOnly:true,
+    formalDecodeLogicChanged:false,
+    targetFileName:"IMG_0942.jpeg",
+    targetCandidates:[3,5,6],
+    successfulCurrentCropReferenceMedian:currentReferenceMedian,
+    candidates:candidateAudits,
+    payloadIncluded:false,
+    imageIncluded:false,
+  };
+}
 function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -4110,7 +4214,14 @@ export default function CertificateQrDecodeExperimentPage() {
   const managementQualityReference=totals
     ?buildManagementQualityReferenceSummary(totals.qualityReferenceDiagnostics)
     :null;
+  const successfulCurrentCropReferenceMedian=totals
+    ?currentCropReferenceMedian(totals.qualityReferenceDiagnostics)
+    :null;
   const img0942Result=results.find((result)=>result.fileName==="IMG_0942.jpeg")||null;
+  const img0942AQuadTooSmallAudit=buildImg0942AQuadTooSmallAudit(
+    img0942Result,
+    successfulCurrentCropReferenceMedian
+  );
   const img0942ACandidateDecodePathAudit=(img0942Result?.matrix?.img0942ACandidateDecodePathAudit||[])
     .map((item)=>flattenImg0942AQuality(item,managementQualityReference));
   const managementPriorityQuality=totals
@@ -4125,7 +4236,7 @@ export default function CertificateQrDecodeExperimentPage() {
     schema:"icb-certificate-qr-decode-experiment-summary-v7",
     summaryVariant:"management-audit-short-v1",
     experimentalHead,
-    diagnosticRevision:"v7-postformal-0942-A-decode-path-audit-6",
+    diagnosticRevision:"v7-postformal-0942-A-quad-too-small-audit-7",
     experimentRoute:EXPERIMENT_ROUTE,
     baselineTargetRoute:PATHNAME,
     groundTruthUsedDuringDecode:false,
@@ -4164,6 +4275,7 @@ export default function CertificateQrDecodeExperimentPage() {
     overlayClassifications:overlayClassificationRows,
     img0942OwnershipClassifications,
     img0942OwnershipComplete,
+    img0942AQuadTooSmallAudit,
     img0942ACandidateDecodePathAudit,
     qualityDiagnostic:totals?{
       successfulDecodeReference:managementQualityReference,
@@ -4201,7 +4313,7 @@ export default function CertificateQrDecodeExperimentPage() {
     experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
-    diagnosticRevision:"v7-postformal-0942-A-decode-path-audit-6",
+    diagnosticRevision:"v7-postformal-0942-A-quad-too-small-audit-7",
     experimentRoute:EXPERIMENT_ROUTE,
     pathname:PATHNAME,
     pathnameRole:"baseline-target-route",
@@ -4335,6 +4447,7 @@ export default function CertificateQrDecodeExperimentPage() {
       payloadIncluded:false,
       canonicalPayloadIncluded:false,
     }:null,
+    img0942AQuadTooSmallAudit,
     img0942ACandidateDecodePathAudit,
     img0942OwnershipAudit:{
       classifications:img0942OwnershipClassifications,
@@ -4612,7 +4725,7 @@ export default function CertificateQrDecodeExperimentPage() {
 
       <section style={{ marginTop: 18 }}>
         <div style={{fontSize:12,marginBottom:8,fontWeight:700}}>
-          IMG_0942 ownership分類: {img0942OwnershipClassifiedCount}/10 / A candidate decode-path audit: 3/5/6
+          IMG_0942 ownership分類: {img0942OwnershipClassifiedCount}/10 / A quad-too-small audit: 3/5/6
           {img0942OwnershipComplete ? "（全candidate分類完了）" : "（未分類candidateをA/B/C/D選択）"}
           {" / "}既存0944分類は引き継ぎ済み
         </div>
