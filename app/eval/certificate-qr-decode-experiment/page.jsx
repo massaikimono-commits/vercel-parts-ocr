@@ -938,69 +938,75 @@ function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
   });
 }
 async function buildCandidateVisualDiagnostics(file, matrix) {
-  const raw = await sourceCanvas(file);
-  const normalized = normalizeCertificateCanvas(raw, 1800);
-  const candidates = matrix?.candidateRefinement?.refinedCandidates || [];
-  const scale = Math.min(1, 1400 / Math.max(raw.width, raw.height));
-  const overlay = document.createElement("canvas");
-  overlay.width = Math.max(1, Math.round(raw.width * scale));
-  overlay.height = Math.max(1, Math.round(raw.height * scale));
-  const ctx = overlay.getContext("2d");
-  ctx.drawImage(raw, 0, 0, overlay.width, overlay.height);
-  ctx.lineWidth = Math.max(2, Math.round(3 * scale));
-  ctx.font = `${Math.max(14, Math.round(18 * scale))}px system-ui`;
-  ctx.textBaseline = "top";
-
-  const cropUrls = [];
+  const raw=await sourceCanvas(file);
+  const normalized=normalizeCertificateCanvas(raw,1800);
+  const diagnostics=matrix?.geometryStage?.diagnostics||[];
+  const scale=Math.min(1,1400/Math.max(raw.width,raw.height));
+  const overlay=document.createElement("canvas");
+  overlay.width=Math.max(1,Math.round(raw.width*scale));
+  overlay.height=Math.max(1,Math.round(raw.height*scale));
+  const ctx=overlay.getContext("2d");
+  ctx.drawImage(raw,0,0,overlay.width,overlay.height);
+  ctx.lineWidth=Math.max(2,Math.round(3*scale));
+  ctx.font=`${Math.max(14,Math.round(18*scale))}px system-ui`;
+  ctx.textBaseline="top";
+  const cropUrls=[];
   try {
-    for (const candidate of candidates) {
-      const coarseCenter = paperPoint(normalized.paper, raw, candidate);
-      const currentSmallW = paperWidthPx(normalized.paper, raw) * ENSEMBLE_CONFIGS[0].widthRel;
-      const rx = Number(candidate.refinedRawCenterX || coarseCenter.x);
-      const ry = Number(candidate.refinedRawCenterY || coarseCenter.y);
-      const rw = Number(candidate.refinedRawBboxWidth || currentSmallW * .55);
-      const rh = Number(candidate.refinedRawBboxHeight || rw);
+    for (const item of diagnostics) {
+      if (item.skippedBecauseASuccess) continue;
+      const candidate={x:item.x,y:item.y};
+      const center=paperPoint(normalized.paper,raw,candidate);
+      const currentW=paperWidthPx(normalized.paper,raw)*ENSEMBLE_CONFIGS[0].widthRel;
+      ctx.strokeStyle="#ff9500";
+      ctx.strokeRect((center.x-currentW/2)*scale,(center.y-currentW/2)*scale,currentW*scale,currentW*scale);
+      ctx.fillStyle="rgba(255,149,0,.92)";
+      ctx.fillRect((center.x-currentW/2)*scale,Math.max(0,(center.y-currentW/2)*scale-20),44,20);
+      ctx.fillStyle="#fff";
+      ctx.fillText(String(item.candidateIndex),(center.x-currentW/2)*scale+4,Math.max(0,(center.y-currentW/2)*scale-18));
 
-      ctx.strokeStyle = "#ff2d55";
-      ctx.strokeRect((coarseCenter.x - currentSmallW / 2) * scale, (coarseCenter.y - currentSmallW / 2) * scale, currentSmallW * scale, currentSmallW * scale);
-      ctx.strokeStyle = "#34c759";
-      ctx.strokeRect((rx - rw / 2) * scale, (ry - rh / 2) * scale, rw * scale, rh * scale);
-      ctx.fillStyle = "rgba(52,199,89,.92)";
-      ctx.fillRect((rx - rw / 2) * scale, Math.max(0, (ry - rh / 2) * scale - 20), 42, 20);
-      ctx.fillStyle = "#fff";
-      ctx.fillText(String(candidate.index), (rx - rw / 2) * scale + 4, Math.max(0, (ry - rh / 2) * scale - 18));
+      if (item.geometryValid) {
+        ctx.fillStyle="#0a84ff";
+        for (const p of item.findersRaw||[]) {
+          ctx.beginPath(); ctx.arc(p.x*scale,p.y*scale,5,0,Math.PI*2); ctx.fill();
+        }
+        const drawQuad=(quad,color)=>{
+          if (!Array.isArray(quad)||quad.length!==4) return;
+          ctx.strokeStyle=color; ctx.beginPath();
+          ctx.moveTo(quad[0].x*scale,quad[0].y*scale);
+          for(let i=1;i<4;i+=1) ctx.lineTo(quad[i].x*scale,quad[i].y*scale);
+          ctx.closePath(); ctx.stroke();
+        };
+        drawQuad(item.qrQuad,"#34c759");
+        drawQuad(item.quietQuad,"#bf5af2");
+      }
 
-      const currentSmall = cropCandidate(raw, normalized.paper, candidate, ENSEMBLE_CONFIGS[0]);
-      const tightSmall = cropCandidate(raw, normalized.paper, candidate, REFINED_CORE_CONFIGS[0]);
-      const tightMedium = cropCandidate(raw, normalized.paper, candidate, REFINED_CORE_CONFIGS[1]);
-      const [currentSmallUrl, tightSmallUrl, tightMediumUrl] = await Promise.all([
-        canvasToObjectUrl(currentSmall),
-        canvasToObjectUrl(tightSmall),
-        canvasToObjectUrl(tightMedium),
-      ]);
-      currentSmall.width = 1; currentSmall.height = 1;
-      tightSmall.width = 1; tightSmall.height = 1;
-      tightMedium.width = 1; tightMedium.height = 1;
-      cropUrls.push({ candidateIndex: candidate.index, currentSmallUrl, tightSmallUrl, tightMediumUrl });
+      const currentSmall=cropCandidate(raw,normalized.paper,candidate,ENSEMBLE_CONFIGS[0]);
+      const currentSmallUrl=await canvasToObjectUrl(currentSmall);
+      currentSmall.width=1; currentSmall.height=1;
+      let rectifiedUrl=null;
+      if (item.geometryValid && !item.overlapRejected) {
+        const rectified=rectifyQrGeometry(raw,item,GEOMETRY_RECTIFY_CONFIGS[0]);
+        if (rectified) {
+          rectifiedUrl=await canvasToObjectUrl(rectified);
+          rectified.width=1; rectified.height=1;
+        }
+      }
+      cropUrls.push({candidateIndex:item.candidateIndex,currentSmallUrl,rectifiedUrl});
     }
-    const overlayUrl = await canvasToObjectUrl(overlay);
-    return { overlayUrl, cropUrls, legend: { currentSmall: "red", refinedBbox: "green" } };
+    const overlayUrl=await canvasToObjectUrl(overlay);
+    return {overlayUrl,cropUrls,legend:{coarseCrop:"orange",finders:"blue",qrQuad:"green",quietQuad:"purple"}};
   } finally {
-    overlay.width = 1;
-    overlay.height = 1;
-    raw.width = 1;
-    raw.height = 1;
-    normalized.canvas.width = 1;
-    normalized.canvas.height = 1;
+    overlay.width=1; overlay.height=1;
+    raw.width=1; raw.height=1;
+    normalized.canvas.width=1; normalized.canvas.height=1;
   }
 }
 function revokeVisualDiagnosticEntry(entry) {
   if (!entry) return;
   if (entry.overlayUrl) URL.revokeObjectURL(entry.overlayUrl);
-  for (const item of entry.cropUrls || []) {
+  for (const item of entry.cropUrls||[]) {
     if (item?.currentSmallUrl) URL.revokeObjectURL(item.currentSmallUrl);
-    if (item?.tightSmallUrl) URL.revokeObjectURL(item.tightSmallUrl);
-    if (item?.tightMediumUrl) URL.revokeObjectURL(item.tightMediumUrl);
+    if (item?.rectifiedUrl) URL.revokeObjectURL(item.rectifiedUrl);
   }
 }
 function canonicalText(value) {
@@ -1777,179 +1783,83 @@ async function runMatrix(file) {
   }
 }
 function applyCountingIntegrity(matrix, expectedQrCount) {
-  const expected = Number(expectedQrCount);
-  const counts = {
-    current: Number(matrix?.currentEnsemble?.physicalUniqueQrCount || 0),
-    core: Number(matrix?.refinedCore?.physicalUniqueQrCount || 0),
-    threshold: Number(matrix?.thresholdStage?.physicalUniqueQrCountAfterThreshold || 0),
-    rescue: Number(matrix?.rotateRescueStage?.physicalUniqueQrCountAfterRescue || 0),
-  };
-  const fail = (count) => Number.isFinite(expected) ? count > expected : false;
+  const expected=Number(expectedQrCount);
+  const aCount=Number(matrix?.currentEnsemble?.physicalUniqueQrCount||0);
+  const finalCount=Number(matrix?.geometryStage?.finalUnionCanonicalCount||0);
+  const fail=(count)=>Number.isFinite(expected)?count>expected:false;
   return {
     ...matrix,
-    currentEnsemble: { ...matrix.currentEnsemble, countingIntegrityFail: fail(counts.current) },
-    refinedCore: { ...matrix.refinedCore, countingIntegrityFail: fail(counts.core) },
-    thresholdStage: { ...matrix.thresholdStage, countingIntegrityFail: fail(counts.threshold) },
-    rotateRescueStage: { ...matrix.rotateRescueStage, countingIntegrityFail: fail(counts.rescue) },
+    currentEnsemble:{...matrix.currentEnsemble,countingIntegrityFail:fail(aCount)},
+    geometryStage:{...matrix.geometryStage,countingIntegrityFail:fail(finalCount)},
   };
 }
-function aggregateStageStats(target, stats = []) {
-  for (const stat of stats) {
-    if (!target[stat.id]) {
-      target[stat.id] = {
-        id: stat.id,
-        attempts: 0,
-        jsqrSuccesses: 0,
-        zxingSuccesses: 0,
-        jsStructuralPasses: 0,
-        zxingStructuralPasses: 0,
-        physicalSuccesses: 0,
-        crossEngineDuplicateCount: 0,
-        crossEngineConflictCount: 0,
-        netNewCanonicalQrCount: 0,
-      };
+function aggregateStageStats(target, stats=[]) {
+  for(const stat of stats){
+    if(!target[stat.id]) target[stat.id]={
+      id:stat.id,attempts:0,jsqrSuccesses:0,zxingSuccesses:0,
+      jsStructuralPasses:0,zxingStructuralPasses:0,physicalSuccesses:0,
+      crossEngineDuplicateCount:0,crossEngineConflictCount:0,netNewCanonicalQrCount:0,
+    };
+    for(const key of ["attempts","jsqrSuccesses","zxingSuccesses","jsStructuralPasses","zxingStructuralPasses","physicalSuccesses","crossEngineDuplicateCount","crossEngineConflictCount","netNewCanonicalQrCount"]){
+      target[stat.id][key]+=Number(stat[key]||0);
     }
-    const out = target[stat.id];
-    for (const key of [
-      "attempts",
-      "jsqrSuccesses",
-      "zxingSuccesses",
-      "jsStructuralPasses",
-      "zxingStructuralPasses",
-      "physicalSuccesses",
-      "crossEngineDuplicateCount",
-      "crossEngineConflictCount",
-      "netNewCanonicalQrCount",
-    ]) out[key] += Number(stat[key] || 0);
   }
 }
 function aggregateExperiment(results) {
-  return results.reduce((acc, result) => {
-    const expected = Number(result.groundTruthExpectedQrCount || 0);
-    const current = result.matrix?.currentEnsemble || {};
-    const core = result.matrix?.refinedCore || {};
-    const threshold = result.matrix?.thresholdStage || {};
-    const rescue = result.matrix?.rotateRescueStage || {};
-    const timing = result.matrix?.timing || {};
-    const refine = result.matrix?.candidateRefinement || {};
-    const structural = result.matrix?.structuralValidation || {};
+  return results.reduce((acc,result)=>{
+    const expected=Number(result.groundTruthExpectedQrCount||0);
+    const a=result.matrix?.currentEnsemble||{};
+    const e=result.matrix?.geometryStage||{};
+    const structural=result.matrix?.structuralValidation||{};
+    const timing=result.matrix?.timing||{};
+    acc.expected+=expected;
+    acc.baselinePhysicalUnique+=Number(result.baseline.qrCount||0);
+    acc.aLegacyCompatible+=Number(a.legacyCompatiblePhysicalUniqueQrCount||0);
+    acc.aSafe+=Number(a.physicalUniqueQrCount||0);
+    acc.eNetNew+=Number(e.eNetNewCanonicalVsA||0);
+    acc.finalUnion+=Number(e.finalUnionCanonicalCount||0);
+    if(result.baseline.qrCount===expected) acc.baselineCompleteImages+=1;
+    if(a.physicalUniqueQrCount===expected) acc.aCompleteImages+=1;
+    if(e.finalUnionCanonicalCount===expected) acc.finalCompleteImages+=1;
+    if(a.countingIntegrityFail) acc.aCountingIntegrityFail=true;
+    if(e.countingIntegrityFail) acc.finalCountingIntegrityFail=true;
 
-    acc.expected += expected;
-    acc.baselinePhysicalUnique += Number(result.baseline.qrCount || 0);
-    acc.currentPhysicalUnique += Number(current.physicalUniqueQrCount || 0);
-    acc.corePhysicalUnique += Number(core.physicalUniqueQrCount || 0);
-    acc.thresholdPhysicalUnique += Number(threshold.physicalUniqueQrCountAfterThreshold || 0);
-    acc.rescuePhysicalUnique += Number(rescue.physicalUniqueQrCountAfterRescue || 0);
+    acc.coarseCandidateCount+=Number(result.matrix?.candidateDetection?.coarsePhysicalCandidateCount||0);
+    acc.aFailedCandidateCount+=Number(e.aFailedCandidateCount||0);
+    acc.finderOrQuadEstablishedCandidateCount+=Number(e.finderOrQuadEstablishedCandidateCount||0);
+    acc.geometryKeptCandidateCount+=Number(e.geometryKeptCandidateCount||0);
+    acc.geometryOverlapMergedCount+=Number(e.geometryOverlapMergedCount||0);
+    acc.falseCandidateReductionCount+=Number(e.falseCandidateReductionCount||0);
 
-    if (result.baseline.qrCount === expected) acc.baselineCompleteImages += 1;
-    if (current.physicalUniqueQrCount === expected) acc.currentCompleteImages += 1;
-    if (core.physicalUniqueQrCount === expected) acc.coreCompleteImages += 1;
-    if (threshold.physicalUniqueQrCountAfterThreshold === expected) acc.thresholdCompleteImages += 1;
-    if (rescue.physicalUniqueQrCountAfterRescue === expected) acc.rescueCompleteImages += 1;
+    acc.samePayloadStructuralFailCount+=Number(structural.samePayloadStructuralFailCount||0);
+    acc.singleEngineStructuralFailCount+=Number(structural.singleEngineStructuralFailCount||0);
+    acc.ambiguousConflictCount+=Number(structural.ambiguousConflictCount||0);
+    acc.crossEngineConflictCount+=Number(structural.crossEngineConflictCount||0);
+    for(const item of structural.samePayloadStructuralFails||[]) acc.samePayloadStructuralFails.push({fileName:result.fileName,...item});
+    for(const item of structural.singleEngineStructuralFails||[]) acc.singleEngineStructuralFails.push({fileName:result.fileName,...item});
+    for(const item of structural.conflicts||[]) acc.conflicts.push({fileName:result.fileName,...item});
 
-    if (current.countingIntegrityFail) acc.currentCountingIntegrityFail = true;
-    if (core.countingIntegrityFail) acc.coreCountingIntegrityFail = true;
-    if (threshold.countingIntegrityFail) acc.thresholdCountingIntegrityFail = true;
-    if (rescue.countingIntegrityFail) acc.rescueCountingIntegrityFail = true;
+    acc.baselineElapsedMs+=Number(result.baseline?.elapsedMs||0);
+    acc.aElapsedMs+=Number(timing.aElapsedMs||0);
+    acc.geometryElapsedMs+=Number(timing.geometryElapsedMs||0);
+    acc.rectifyDecodeElapsedMs+=Number(timing.rectifyDecodeElapsedMs||0);
+    acc.failOnlyExpectedElapsedMs+=Number(timing.failOnlyExpectedElapsedMs||0);
+    acc.totalExperimentalElapsedMs+=Number(timing.totalExperimentalElapsedMs||0);
 
-    acc.coarseCandidateCount += Number(result.matrix?.candidateDetection?.coarsePhysicalCandidateCount || 0);
-    acc.refinedCandidateCount += Number(refine.refinedCandidateCount || 0);
-    acc.weakRejectedCount += Number(refine.weakRejectedCount || 0);
-    acc.overlapDuplicateMergedCount += Number(refine.overlapDuplicateMergedCount || 0);
-    acc.falseOrDuplicateCandidateReductionCount += Number(refine.falseOrDuplicateCandidateReductionCount || 0);
-
-    acc.baselineElapsedMs += Number(result.baseline?.elapsedMs || 0);
-    acc.currentEnsembleElapsedMs += Number(timing.currentEnsembleElapsedMs || 0);
-    acc.candidateRefineElapsedMs += Number(timing.candidateRefineElapsedMs || 0);
-    acc.refinedCoreElapsedMs += Number(timing.refinedCoreElapsedMs || 0);
-    acc.thresholdElapsedMs += Number(timing.thresholdElapsedMs || 0);
-    acc.rotateRescueElapsedMs += Number(timing.rotateRescueElapsedMs || 0);
-    acc.zxingInvertedProbeElapsedMs += Number(timing.zxingInvertedProbeElapsedMs || 0);
-    acc.productionCandidateElapsedMs += Number(timing.productionCandidateElapsedMs || 0);
-    acc.totalExperimentalElapsedMs += Number(timing.totalExperimentalElapsedMs || 0);
-
-    const flow = result.matrix?.canonicalFlow || {};
-    acc.aCanonicalCount += Number(flow.aCanonicalCount || 0);
-    acc.bNetNewCanonicalVsA += Number(flow.bNetNewCanonicalVsA || 0);
-    acc.abCanonicalCount += Number(flow.abCanonicalCount || 0);
-    acc.cNetNewCanonicalVsAB += Number(flow.cNetNewCanonicalVsAB || 0);
-    acc.abcCanonicalCount += Number(flow.abcCanonicalCount || 0);
-    acc.dNetNewCanonicalVsABC += Number(flow.dNetNewCanonicalVsABC || 0);
-    acc.finalUnionCanonicalCount += Number(flow.finalUnionCanonicalCount || 0);
-
-    acc.aLegacyCompatiblePhysicalUnique += Number(current.legacyCompatiblePhysicalUniqueQrCount || 0);
-    acc.aRawDecodeCandidateCount += Number(current.rawDecodeCandidateCount || 0);
-    acc.aAmbiguousConflictRejectedCandidateCount += Number(current.ambiguousConflictRejectedCandidateCount || 0);
-    acc.aNonConflictStructuralRejectedCandidateCount += Number(current.nonConflictStructuralRejectedCandidateCount || 0);
-
-    aggregateStageStats(acc.currentStats, current.stats);
-    aggregateStageStats(acc.coreStats, core.stats);
-    aggregateStageStats(acc.thresholdStats, threshold.stats);
-    aggregateStageStats(acc.rescueStats, rescue.stats);
-
-    acc.crossEngineConflictCount += Number(structural.crossEngineConflictCount || 0);
-    for (const conflict of structural.conflicts || []) {
-      acc.conflicts.push({ fileName: result.fileName, ...conflict });
-    }
-
-    const probe = result.matrix?.zxingAudit?.invertedProbe || {};
-    acc.zxingInvertedTestedCandidateCount += Number(probe.testedCandidateCount || 0);
-    acc.zxingInvertedStructuralPassCount += Number(probe.structuralPassCount || 0);
-    acc.zxingInvertedAdditionalStructuralPassVsBase += Number(probe.additionalStructuralPassVsBase || 0);
-    acc.zxingInvertedHintAvailable = acc.zxingInvertedHintAvailable || Boolean(probe.alsoInvertedHintAvailable);
-
+    aggregateStageStats(acc.aStats,a.stats);
+    aggregateStageStats(acc.eStats,e.stats);
     return acc;
-  }, {
-    expected: 0,
-    baselinePhysicalUnique: 0,
-    currentPhysicalUnique: 0,
-    corePhysicalUnique: 0,
-    thresholdPhysicalUnique: 0,
-    rescuePhysicalUnique: 0,
-    baselineCompleteImages: 0,
-    currentCompleteImages: 0,
-    coreCompleteImages: 0,
-    thresholdCompleteImages: 0,
-    rescueCompleteImages: 0,
-    currentCountingIntegrityFail: false,
-    coreCountingIntegrityFail: false,
-    thresholdCountingIntegrityFail: false,
-    rescueCountingIntegrityFail: false,
-    coarseCandidateCount: 0,
-    refinedCandidateCount: 0,
-    weakRejectedCount: 0,
-    overlapDuplicateMergedCount: 0,
-    falseOrDuplicateCandidateReductionCount: 0,
-    baselineElapsedMs: 0,
-    currentEnsembleElapsedMs: 0,
-    candidateRefineElapsedMs: 0,
-    refinedCoreElapsedMs: 0,
-    thresholdElapsedMs: 0,
-    rotateRescueElapsedMs: 0,
-    zxingInvertedProbeElapsedMs: 0,
-    productionCandidateElapsedMs: 0,
-    totalExperimentalElapsedMs: 0,
-    aCanonicalCount: 0,
-    bNetNewCanonicalVsA: 0,
-    abCanonicalCount: 0,
-    cNetNewCanonicalVsAB: 0,
-    abcCanonicalCount: 0,
-    dNetNewCanonicalVsABC: 0,
-    finalUnionCanonicalCount: 0,
-    aLegacyCompatiblePhysicalUnique: 0,
-    aRawDecodeCandidateCount: 0,
-    aAmbiguousConflictRejectedCandidateCount: 0,
-    aNonConflictStructuralRejectedCandidateCount: 0,
-    currentStats: {},
-    coreStats: {},
-    thresholdStats: {},
-    rescueStats: {},
-    crossEngineConflictCount: 0,
-    conflicts: [],
-    zxingInvertedTestedCandidateCount: 0,
-    zxingInvertedStructuralPassCount: 0,
-    zxingInvertedAdditionalStructuralPassVsBase: 0,
-    zxingInvertedHintAvailable: false,
+  },{
+    expected:0,baselinePhysicalUnique:0,aLegacyCompatible:0,aSafe:0,eNetNew:0,finalUnion:0,
+    baselineCompleteImages:0,aCompleteImages:0,finalCompleteImages:0,
+    aCountingIntegrityFail:false,finalCountingIntegrityFail:false,
+    coarseCandidateCount:0,aFailedCandidateCount:0,finderOrQuadEstablishedCandidateCount:0,
+    geometryKeptCandidateCount:0,geometryOverlapMergedCount:0,falseCandidateReductionCount:0,
+    samePayloadStructuralFailCount:0,singleEngineStructuralFailCount:0,ambiguousConflictCount:0,crossEngineConflictCount:0,
+    samePayloadStructuralFails:[],singleEngineStructuralFails:[],conflicts:[],
+    baselineElapsedMs:0,aElapsedMs:0,geometryElapsedMs:0,rectifyDecodeElapsedMs:0,
+    failOnlyExpectedElapsedMs:0,totalExperimentalElapsedMs:0,
+    aStats:{},eStats:{},
   });
 }
 function publicResult(result) {
