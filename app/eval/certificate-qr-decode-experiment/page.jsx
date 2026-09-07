@@ -1072,9 +1072,42 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
   ctx.font=`${Math.max(14,Math.round(18*scale))}px system-ui`;
   ctx.textBaseline="top";
   const cropUrls=[];
+
+  const drawTriplet=(triplet,color,dashed=false)=>{
+    const pts=triplet?.findersRaw||[];
+    if(pts.length!==3) return;
+    ctx.save();
+    ctx.strokeStyle=color;
+    ctx.fillStyle=color;
+    ctx.setLineDash(dashed?[8,6]:[]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x*scale,pts[0].y*scale);
+    ctx.lineTo(pts[1].x*scale,pts[1].y*scale);
+    ctx.lineTo(pts[2].x*scale,pts[2].y*scale);
+    ctx.closePath();
+    ctx.stroke();
+    for(const p of pts){
+      ctx.beginPath();
+      ctx.arc(p.x*scale,p.y*scale,5,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+  const drawQuad=(quad,color)=>{
+    if(!Array.isArray(quad)||quad.length!==4) return;
+    ctx.save();
+    ctx.strokeStyle=color;
+    ctx.beginPath();
+    ctx.moveTo(quad[0].x*scale,quad[0].y*scale);
+    for(let i=1;i<4;i+=1) ctx.lineTo(quad[i].x*scale,quad[i].y*scale);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  };
+
   try {
     for (const item of diagnostics) {
-      if (item.skippedBecauseASuccess) continue;
+      if (item.skippedBecauseASuccess||item.skippedBecausePhysicalConsensus) continue;
       const candidate={x:item.x,y:item.y};
       const center=paperPoint(normalized.paper,raw,candidate);
       const currentW=paperWidthPx(normalized.paper,raw)*ENSEMBLE_CONFIGS[0].widthRel;
@@ -1085,18 +1118,11 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
       ctx.fillStyle="#fff";
       ctx.fillText(String(item.candidateIndex),(center.x-currentW/2)*scale+4,Math.max(0,(center.y-currentW/2)*scale-18));
 
-      if (item.geometryValid) {
-        ctx.fillStyle="#0a84ff";
-        for (const p of item.findersRaw||[]) {
-          ctx.beginPath(); ctx.arc(p.x*scale,p.y*scale,5,0,Math.PI*2); ctx.fill();
-        }
-        const drawQuad=(quad,color)=>{
-          if (!Array.isArray(quad)||quad.length!==4) return;
-          ctx.strokeStyle=color; ctx.beginPath();
-          ctx.moveTo(quad[0].x*scale,quad[0].y*scale);
-          for(let i=1;i<4;i+=1) ctx.lineTo(quad[i].x*scale,quad[i].y*scale);
-          ctx.closePath(); ctx.stroke();
-        };
+      const best=item.tripletDiagnostics?.[0];
+      const selected=item.tripletDiagnostics?.find((t)=>t.selected);
+      if(best&&!best.selected) drawTriplet(best,"#ff453a",true);
+      if(selected) drawTriplet(selected,selected.rank>1?"#64d2ff":"#0a84ff",false);
+      if(item.geometryValid){
         drawQuad(item.qrQuad,"#34c759");
         drawQuad(item.quietQuad,"#bf5af2");
       }
@@ -1115,7 +1141,18 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
       cropUrls.push({candidateIndex:item.candidateIndex,currentSmallUrl,rectifiedUrl});
     }
     const overlayUrl=await canvasToObjectUrl(overlay);
-    return {overlayUrl,cropUrls,legend:{coarseCrop:"orange",finders:"blue",qrQuad:"green",quietQuad:"purple"}};
+    return {
+      overlayUrl,
+      cropUrls,
+      legend:{
+        coarseCrop:"orange",
+        rejectedBestTriplet:"red-dashed",
+        selectedTriplet:"blue",
+        alternateSelectedTriplet:"cyan",
+        qrQuad:"green",
+        quietQuad:"purple",
+      },
+    };
   } finally {
     overlay.width=1; overlay.height=1;
     raw.width=1; raw.height=1;
@@ -2861,23 +2898,25 @@ export default function CertificateQrDecodeExperimentPage() {
       </section>
 
       <section style={{ marginTop: 18 }}>
-        <h2>画像別 A → E</h2>
+        <h2>画像別 A → E / v7</h2>
         {results.map((r)=>(
           <div key={r.fileName} style={{borderBottom:"1px solid #ddd",padding:"10px 0"}}>
             <b>{r.fileName}</b> — GT {r.groundTruthExpectedQrCount??"未設定"} —
             Baseline {r.baseline.qrCount} —
             A legacy {r.matrix.currentEnsemble.legacyCompatiblePhysicalUniqueQrCount} /
-            A safe {r.matrix.currentEnsemble.physicalUniqueQrCount} /
-            A canonical {r.matrix.geometryStage.aCanonicalCount} →
+            A structural {r.matrix.currentEnsemble.structuralAdoptedPhysicalUniqueQrCount} /
+            A physical-safe {r.matrix.currentEnsemble.physicalSafeQrCount} →
             E純増 +{r.matrix.geometryStage.eNetNewCanonicalVsA} →
             final {r.matrix.geometryStage.finalUnionCanonicalCount} —
-            candidates coarse {r.matrix.candidateDetection.coarsePhysicalCandidateCount} /
-            A-fail {r.matrix.geometryStage.aFailedCandidateCount} /
-            finder-quad {r.matrix.geometryStage.finderOrQuadEstablishedCandidateCount} /
-            kept {r.matrix.geometryStage.geometryKeptCandidateCount} /
-            false-reduction {r.matrix.geometryStage.falseCandidateReductionCount} —
-            samePayloadFail {r.matrix.structuralValidation.samePayloadStructuralFailCount} /
-            ambiguous {r.matrix.structuralValidation.ambiguousConflictCount} —
+            finder≥3/no-valid {r.matrix.geometryStage.finderAtLeast3ButNoValidQuadCount} /
+            alternate recovered {r.matrix.geometryStage.alternateTripletRecoveredCount} —
+            compact unique {r.matrix.compactSchemaAudit.uniqueCompactCandidateCount} /
+            compact physical {r.matrix.compactSchemaAudit.compactPhysicalConsensusAcceptedCount} /
+            parser {r.matrix.compactSchemaAudit.compactParserRecognizedCount} —
+            multi-crop conflict {r.matrix.conflictPositionAudit.multiQrCropConflictCount} /
+            same-position {r.matrix.conflictPositionAudit.samePhysicalQrConflictCount} /
+            resolved separate {r.matrix.conflictPositionAudit.resolvedAsSeparatePhysicalQrCount} /
+            remaining ambiguous {r.matrix.conflictPositionAudit.remainingAmbiguousConflictCount} —
             A {r.matrix.timing.aElapsedMs}ms /
             geometry {r.matrix.timing.geometryElapsedMs}ms /
             rectify {r.matrix.timing.rectifyDecodeElapsedMs}ms /
@@ -2888,18 +2927,23 @@ export default function CertificateQrDecodeExperimentPage() {
       </section>
 
       <section style={{marginTop:18}}>
-        <h2>A / E 集計</h2>
+        <h2>A / E v7 集計</h2>
         <div>Ground Truth合計: 47 QR</div>
         <div>Baseline: {totals ? (totals.baselinePhysicalUnique + "/" + totals.expected) : "-"}</div>
-        <div>A legacy-compatible: {totals ? (totals.aLegacyCompatible + "/" + totals.expected) : "-"} / rate {aLegacyRate??"-"} / reference 29/47</div>
-        <div>A structural-adopted: {totals ? (totals.aSafe + "/" + totals.expected) : "-"} / rate {aSafeRate??"-"}</div>
-        <div>E net new canonical vs A: +{totals?.eNetNew??"-"}</div>
-        <div>Final safe canonical union: {totals ? (totals.finalUnion + "/" + totals.expected) : "-"} / rate {finalRate??"-"}</div>
-        <div>完全取得: A {totals?.aCompleteImages??"-"}/8 → final {totals?.finalCompleteImages??"-"}/8</div>
+        <div>A legacy-compatible: {totals ? (totals.aLegacyCompatible + "/" + totals.expected) : "-"} / rate {aLegacyRate??"-"} / aggregate reference 29/47</div>
+        <div>A structural-adopted: {totals ? (totals.aStructuralAdopted + "/" + totals.expected) : "-"} / rate {aStructuralRate??"-"}</div>
+        <div>A physical-safe: {totals ? (totals.aPhysicalSafe + "/" + totals.expected) : "-"} / rate {aPhysicalSafeRate??"-"}</div>
+        <div>E net new canonical vs A physical-safe: +{totals?.eNetNew??"-"}</div>
+        <div>Final safe union: {totals ? (totals.finalUnion + "/" + totals.expected) : "-"} / rate {finalRate??"-"}</div>
+        <div>完全取得: A structural {totals?.aStructuralCompleteImages??"-"}/8 / A physical-safe {totals?.aPhysicalSafeCompleteImages??"-"}/8 → final {totals?.finalCompleteImages??"-"}/8</div>
+        <div>Triplet: candidates {totals?.tripletCandidateCount??"-"} / finder≥3 but no valid quad {totals?.finderAtLeast3ButNoValidQuadCount??"-"} / alternate tried {totals?.alternateTripletTriedCount??"-"} / recovered {totals?.alternateTripletRecoveredCount??"-"}</div>
         <div>Geometry: A-fail {totals?.aFailedCandidateCount??"-"} / finder-or-quad成立 {totals?.finderOrQuadEstablishedCandidateCount??"-"} / kept {totals?.geometryKeptCandidateCount??"-"} / overlap統合 {totals?.geometryOverlapMergedCount??"-"} / false削減 {totals?.falseCandidateReductionCount??"-"}</div>
-        <div>Structural: same-payload fail {totals?.samePayloadStructuralFailCount??"-"} / single-engine fail {totals?.singleEngineStructuralFailCount??"-"} / ambiguous conflict {totals?.ambiguousConflictCount??"-"} / conflict total {totals?.crossEngineConflictCount??"-"}</div>
-        <div>runtime車種判定: {runtimeVehicleKindCorrectCount??"-"}/8 ({runtimeVehicleKindAccuracy??"-"})</div>
-        <div>時間: baseline {totals?.baselineElapsedMs??"-"}ms / A {totals?.aElapsedMs??"-"}ms / geometry {totals?.geometryElapsedMs??"-"}ms / rectify decode {totals?.rectifyDecodeElapsedMs??"-"}ms / fail-only想定 {totals?.failOnlyExpectedElapsedMs??"-"}ms / experimental total {totals?.totalExperimentalElapsedMs??"-"}ms</div>
+        <div>Compact: unique {totals?.uniqueCompactCandidateCount??"-"} / physical consensus accepted {totals?.compactPhysicalConsensusAcceptedCount??"-"} / parser-recognized {totals?.compactParserRecognizedCount??"-"}</div>
+        <div>Conflict位置: multi-QR-crop {totals?.multiQrCropConflictCount??"-"} / same-physical {totals?.samePhysicalQrConflictCount??"-"} / uncertain {totals?.positionUncertainConflictCount??"-"} / resolved separate physical {totals?.resolvedAsSeparatePhysicalQrCount??"-"} / remaining ambiguous {totals?.remainingAmbiguousConflictCount??"-"}</div>
+        <div>Structural: same-payload fail {totals?.samePayloadStructuralFailCount??"-"} / single-engine fail {totals?.singleEngineStructuralFailCount??"-"} / conflict total {totals?.crossEngineConflictCount??"-"}</div>
+        <div>Native rectify net new: +{totals?.nativeRectifyNetNewCanonicalCount??"-"}</div>
+        <div>runtime車種判定: {runtimeVehicleKindCorrectCount??"-"}/8 ({runtimeVehicleKindAccuracy??"-"}) ※compact parser-unrecognizedは入力除外</div>
+        <div>時間: baseline {totals?.baselineElapsedMs??"-"}ms / A {totals?.aElapsedMs??"-"}ms / geometry {totals?.geometryElapsedMs??"-"}ms / native rectify {totals?.rectifyDecodeElapsedMs??"-"}ms / fail-only想定 {totals?.failOnlyExpectedElapsedMs??"-"}ms / experimental total {totals?.totalExperimentalElapsedMs??"-"}ms</div>
         <div>regression images: {regressionImages.length ? regressionImages.join(", ") : "なし"}</div>
         {totals&&(
           <div style={{marginTop:10}}>
@@ -2914,8 +2958,8 @@ export default function CertificateQrDecodeExperimentPage() {
       </section>
 
       <section style={{marginTop:18}}>
-        <h2>0942 / 0944 browser-local geometry診断</h2>
-        <p style={{fontSize:12}}>橙=current-small crop、青=finder、緑=推定QR quad、紫=4-module quiet付きquad。画像/cropは端末ローカルobjectURLのみでsummaryには含めません。</p>
+        <h2>0942 / 0944 browser-local triplet geometry診断</h2>
+        <p style={{fontSize:12}}>橙=current-small、赤破線=rejectされたbest triplet、青=best採用triplet、シアン=alternate採用triplet、緑=QR quad、紫=4-module quiet quad。画像/cropは端末ローカルのみでsummaryに含めません。</p>
         {["IMG_0942.jpeg","IMG_0944.jpeg"].map((name)=>{
           const visual=visualDiagnostics[name];
           const result=results.find((r)=>r.fileName===name);
@@ -2923,7 +2967,7 @@ export default function CertificateQrDecodeExperimentPage() {
           return (
             <div key={name} style={{marginTop:16,border:"1px solid #ccc",borderRadius:12,padding:12}}>
               <h3 style={{marginTop:0}}>{name}</h3>
-              <img src={visual.overlayUrl} alt={name + " geometry overlay"} style={{width:"100%",maxHeight:520,objectFit:"contain",background:"#f4f4f4"}} />
+              <img src={visual.overlayUrl} alt={name + " triplet geometry overlay"} style={{width:"100%",maxHeight:520,objectFit:"contain",background:"#f4f4f4"}} />
               <div style={{marginTop:12,display:"grid",gap:12}}>
                 {visual.cropUrls.map((crop)=>{
                   const d=result.matrix.geometryStage.diagnostics.find((item)=>item.candidateIndex===crop.candidateIndex);
@@ -2931,8 +2975,14 @@ export default function CertificateQrDecodeExperimentPage() {
                     <div key={crop.candidateIndex} style={{borderTop:"1px solid #ddd",paddingTop:10}}>
                       <b>candidate {crop.candidateIndex}</b>
                       <div style={{fontSize:12,marginTop:4}}>
-                        geometry={String(Boolean(d?.geometryValid))} / reason={d?.geometryFailReason} /
-                        finder={d?.finderCount} / score={d?.geometryScore} /
+                        finder={d?.finderCount} / triplets={d?.tripletCandidateCount} /
+                        bestReject={d?.bestTripletRejectedReason} /
+                        alternateTried={d?.alternateTripletTriedCount} /
+                        alternateRecovered={d?.alternateTripletRecoveredCount} /
+                        selectedRank={d?.selectedTripletRank??"-"} /
+                        finalGeometry={String(Boolean(d?.geometryValid))}
+                      </div>
+                      <div style={{fontSize:12,marginTop:4}}>
                         dimension={d?.qrDimension??"-"} / modulePx={d?.modulePx??"-"} /
                         perspectiveSpread={d?.perspectiveScaleSpread??"-"} /
                         overlapRejected={String(Boolean(d?.overlapRejected))}
@@ -2944,7 +2994,7 @@ export default function CertificateQrDecodeExperimentPage() {
                         </div>
                         {crop.rectifiedUrl&&(
                           <div>
-                            <div style={{fontSize:11,fontWeight:700}}>quiet付きrectified crop</div>
+                            <div style={{fontSize:11,fontWeight:700}}>native quiet付きrectified crop</div>
                             <img src={crop.rectifiedUrl} alt={name + " candidate " + crop.candidateIndex + " rectified crop"} style={{width:"100%",maxHeight:240,objectFit:"contain",background:"#fff",border:"1px solid #ddd"}} />
                           </div>
                         )}
