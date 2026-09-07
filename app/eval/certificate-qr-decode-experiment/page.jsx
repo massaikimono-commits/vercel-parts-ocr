@@ -29,7 +29,6 @@ const ENSEMBLE_CONFIGS = [
 ];
 const GEOMETRY_RECTIFY_CONFIGS = [
   { id: "geometry-rectify-native", outputScale: 1, sampling: "bilinear" },
-  { id: "geometry-rectify-2x-nearest", outputScale: 2, sampling: "nearest" },
 ];
 const DEFAULT_GROUND_TRUTH = {
   "IMG_0940.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
@@ -332,6 +331,17 @@ function cropCandidate(source, pageGeometry, candidate, config) {
   if (rotate) ctx.restore();
 
   if (config.mode === "otsu" || config.mode === "adaptive") thresholdCanvas(ctx, canvas, config.mode);
+  canvas.__qrCropMeta = {
+    sx,
+    sy,
+    sw,
+    sh,
+    pad,
+    drawWidth: canvas.width - pad * 2,
+    drawHeight: canvas.height - pad * 2,
+    sourceWidth: source.width,
+    sourceHeight: source.height,
+  };
   return canvas;
 }
 function rectIntegral(binary, width, height) {
