@@ -67,8 +67,20 @@ async function waitForExpectedRedirect(page, mode) {
 
 async function waitForOcrCompletion(page, timeoutMs) {
   await page.waitForFunction(() => {
-    const body = document.body?.innerText || "";
-    return /\d+件を抽出しました|\d+件を候補抽出しました|まだ部品行を抽出できませんでした|候補を自動抽出できませんでした|OCR処理でエラー|汎用OCR処理でエラー/.test(body);
+    const text = document.querySelector("main")?.textContent || "";
+    const textareas = Array.from(document.querySelectorAll("textarea"))
+      .map((el) => "value" in el ? String(el.value || "") : "");
+
+    if (/\d+件を抽出しました|\d+件を候補抽出しました|まだ部品行を抽出できませんでした|候補を自動抽出できませんでした|OCR処理でエラー|汎用OCR処理でエラー/.test(text)) {
+      return true;
+    }
+    if (location.pathname === "/ocr") {
+      return textareas.some((value) => value.trim().length > 20);
+    }
+    if (location.pathname === "/ocr/general") {
+      return textareas.some((value) => value.includes("帳票プロファイル:"));
+    }
+    return false;
   }, undefined, { timeout: timeoutMs });
 }
 
