@@ -1514,7 +1514,22 @@ function aggregateExperiment(results) {
     acc.thresholdElapsedMs += Number(timing.thresholdElapsedMs || 0);
     acc.rotateRescueElapsedMs += Number(timing.rotateRescueElapsedMs || 0);
     acc.zxingInvertedProbeElapsedMs += Number(timing.zxingInvertedProbeElapsedMs || 0);
+    acc.productionCandidateElapsedMs += Number(timing.productionCandidateElapsedMs || 0);
     acc.totalExperimentalElapsedMs += Number(timing.totalExperimentalElapsedMs || 0);
+
+    const flow = result.matrix?.canonicalFlow || {};
+    acc.aCanonicalCount += Number(flow.aCanonicalCount || 0);
+    acc.bNetNewCanonicalVsA += Number(flow.bNetNewCanonicalVsA || 0);
+    acc.abCanonicalCount += Number(flow.abCanonicalCount || 0);
+    acc.cNetNewCanonicalVsAB += Number(flow.cNetNewCanonicalVsAB || 0);
+    acc.abcCanonicalCount += Number(flow.abcCanonicalCount || 0);
+    acc.dNetNewCanonicalVsABC += Number(flow.dNetNewCanonicalVsABC || 0);
+    acc.finalUnionCanonicalCount += Number(flow.finalUnionCanonicalCount || 0);
+
+    acc.aLegacyCompatiblePhysicalUnique += Number(current.legacyCompatiblePhysicalUniqueQrCount || 0);
+    acc.aRawDecodeCandidateCount += Number(current.rawDecodeCandidateCount || 0);
+    acc.aAmbiguousConflictRejectedCandidateCount += Number(current.ambiguousConflictRejectedCandidateCount || 0);
+    acc.aNonConflictStructuralRejectedCandidateCount += Number(current.nonConflictStructuralRejectedCandidateCount || 0);
 
     aggregateStageStats(acc.currentStats, current.stats);
     aggregateStageStats(acc.coreStats, core.stats);
@@ -1561,7 +1576,19 @@ function aggregateExperiment(results) {
     thresholdElapsedMs: 0,
     rotateRescueElapsedMs: 0,
     zxingInvertedProbeElapsedMs: 0,
+    productionCandidateElapsedMs: 0,
     totalExperimentalElapsedMs: 0,
+    aCanonicalCount: 0,
+    bNetNewCanonicalVsA: 0,
+    abCanonicalCount: 0,
+    cNetNewCanonicalVsAB: 0,
+    abcCanonicalCount: 0,
+    dNetNewCanonicalVsABC: 0,
+    finalUnionCanonicalCount: 0,
+    aLegacyCompatiblePhysicalUnique: 0,
+    aRawDecodeCandidateCount: 0,
+    aAmbiguousConflictRejectedCandidateCount: 0,
+    aNonConflictStructuralRejectedCandidateCount: 0,
     currentStats: {},
     coreStats: {},
     thresholdStats: {},
@@ -1766,6 +1793,18 @@ export default function CertificateQrDecodeExperimentPage() {
       currentEnsembleElapsedMs: totals.currentEnsembleElapsedMs,
       stats: Object.values(totals.currentStats),
     } : null,
+    aReproducibilityVsV4: totals ? {
+      v4ReferencePhysicalUniqueQrCount: 29,
+      v4ReferenceRate: 0.617,
+      v5LegacyCompatiblePhysicalUniqueQrCount: totals.aLegacyCompatiblePhysicalUnique,
+      v5StructuralAdoptedPhysicalUniqueQrCount: totals.currentPhysicalUnique,
+      decodeResultDeltaVsV4Reference: totals.aLegacyCompatiblePhysicalUnique - 29,
+      structuralAndConflictDeltaVsLegacyCompatible: totals.currentPhysicalUnique - totals.aLegacyCompatiblePhysicalUnique,
+      rawDecodeCandidateCount: totals.aRawDecodeCandidateCount,
+      ambiguousConflictRejectedCandidateCount: totals.aAmbiguousConflictRejectedCandidateCount,
+      nonConflictStructuralRejectedCandidateCount: totals.aNonConflictStructuralRejectedCandidateCount,
+      interpretation: "legacy-compatible replays first raw engine success per candidate; structural-adopted A uses v5 validation/arbitration",
+    } : null,
     bRefinedCoreTotals: totals ? {
       physicalUniqueQrCount: totals.corePhysicalUnique,
       expectedQrCount: totals.expected,
@@ -1812,6 +1851,17 @@ export default function CertificateQrDecodeExperimentPage() {
       rotateRescueElapsedMs: totals.rotateRescueElapsedMs,
       stats: Object.values(totals.rescueStats),
     } : null,
+    canonicalFlowTotals: totals ? {
+      aCanonicalCount: totals.aCanonicalCount,
+      bNetNewCanonicalVsA: totals.bNetNewCanonicalVsA,
+      abCanonicalCount: totals.abCanonicalCount,
+      cNetNewCanonicalVsAB: totals.cNetNewCanonicalVsAB,
+      abcCanonicalCount: totals.abcCanonicalCount,
+      dNetNewCanonicalVsABC: totals.dNetNewCanonicalVsABC,
+      finalUnionCanonicalCount: totals.finalUnionCanonicalCount,
+      payloadIncluded: false,
+      intendedFailOnlyOrder: ["A currentEnsemble", "B refined+tight on A-fail", "C threshold on AB-fail", "D ±1° on ABC-fail"],
+    } : null,
     structuralValidationTotals: totals ? {
       crossEngineConflictCount: totals.crossEngineConflictCount,
       conflicts: totals.conflicts,
@@ -1836,6 +1886,9 @@ export default function CertificateQrDecodeExperimentPage() {
       thresholdElapsedMs: totals.thresholdElapsedMs,
       rotateRescueElapsedMs: totals.rotateRescueElapsedMs,
       zxingInvertedProbeElapsedMs: totals.zxingInvertedProbeElapsedMs,
+      productionCandidateElapsedMs: totals.productionCandidateElapsedMs,
+      productionCandidateExcludesInvertedProbe: true,
+      productionCandidateTimingIsDiagnosticUpperBoundForFailOnly: true,
       totalExperimentalElapsedMs: totals.totalExperimentalElapsedMs,
     } : null,
     runtimeVehicleKindTotals: gtReady ? {
@@ -1961,9 +2014,12 @@ export default function CertificateQrDecodeExperimentPage() {
         <div>D +±1°: {totals ? `${totals.rescuePhysicalUnique}/${totals.expected}` : "-"} / rate {rescueRate ?? "-"}</div>
         <div>完全取得: A {totals?.currentCompleteImages ?? "-"}/8 / B {totals?.coreCompleteImages ?? "-"}/8 / C {totals?.thresholdCompleteImages ?? "-"}/8 / D {totals?.rescueCompleteImages ?? "-"}/8</div>
         <div>candidate: coarse {totals?.coarseCandidateCount ?? "-"} → refined {totals?.refinedCandidateCount ?? "-"} / weak除外 {totals?.weakRejectedCount ?? "-"} / overlap統合 {totals?.overlapDuplicateMergedCount ?? "-"}</div>
+        <div>canonical flow: A {totals?.aCanonicalCount ?? "-"} / B純増 {totals?.bNetNewCanonicalVsA ?? "-"} / A∪B {totals?.abCanonicalCount ?? "-"} / C純増 {totals?.cNetNewCanonicalVsAB ?? "-"} / A∪B∪C {totals?.abcCanonicalCount ?? "-"} / D純増 {totals?.dNetNewCanonicalVsABC ?? "-"} / final union {totals?.finalUnionCanonicalCount ?? "-"}</div>
+        <div>A再現性: v4=29 / legacy-compatible v5={totals?.aLegacyCompatiblePhysicalUnique ?? "-"} / structural採用後={totals?.currentPhysicalUnique ?? "-"}</div>
+        <div>A除外内訳: ambiguous conflict {totals?.aAmbiguousConflictRejectedCandidateCount ?? "-"} / non-conflict structural {totals?.aNonConflictStructuralRejectedCandidateCount ?? "-"}</div>
         <div>crossEngineConflict: {totals?.crossEngineConflictCount ?? "-"}</div>
         <div>runtime車種判定: {runtimeVehicleKindCorrectCount ?? "-"}/8 ({runtimeVehicleKindAccuracy ?? "-"})</div>
-        <div>時間: baseline {totals?.baselineElapsedMs ?? "-"}ms / A {totals?.currentEnsembleElapsedMs ?? "-"}ms / refine {totals?.candidateRefineElapsedMs ?? "-"}ms / B {totals?.refinedCoreElapsedMs ?? "-"}ms / threshold {totals?.thresholdElapsedMs ?? "-"}ms / ±1° {totals?.rotateRescueElapsedMs ?? "-"}ms / total {totals?.totalExperimentalElapsedMs ?? "-"}ms</div>
+        <div>時間: baseline {totals?.baselineElapsedMs ?? "-"}ms / A {totals?.currentEnsembleElapsedMs ?? "-"}ms / refine {totals?.candidateRefineElapsedMs ?? "-"}ms / B {totals?.refinedCoreElapsedMs ?? "-"}ms / threshold {totals?.thresholdElapsedMs ?? "-"}ms / ±1° {totals?.rotateRescueElapsedMs ?? "-"}ms / productionCandidate(no probe) {totals?.productionCandidateElapsedMs ?? "-"}ms / probe {totals?.zxingInvertedProbeElapsedMs ?? "-"}ms / total {totals?.totalExperimentalElapsedMs ?? "-"}ms</div>
         {totals && (
           <div style={{ marginTop: 10 }}>
             <b>Threshold / ±1° 純増</b>
