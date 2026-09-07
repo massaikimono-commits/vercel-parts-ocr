@@ -2537,6 +2537,7 @@ export default function CertificateQrDecodeExperimentPage() {
   const [visualDiagnostics, setVisualDiagnostics] = useState({});
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("固定8枚を選択してください。");
+  const [experimentalHead, setExperimentalHead] = useState(null);
   const frameRef = useRef(null);
   const visualDiagnosticsRef = useRef({});
 
@@ -2563,6 +2564,14 @@ export default function CertificateQrDecodeExperimentPage() {
       for (const url of Object.values(next)) URL.revokeObjectURL(url);
     };
   }, [filesByName]);
+
+  useEffect(() => {
+    try {
+      setExperimentalHead(new URLSearchParams(window.location.search).get("head"));
+    } catch {
+      setExperimentalHead(null);
+    }
+  }, []);
 
   const clearVisualDiagnostics = () => {
     for (const entry of Object.values(visualDiagnosticsRef.current)) revokeVisualDiagnosticEntry(entry);
@@ -2643,19 +2652,21 @@ export default function CertificateQrDecodeExperimentPage() {
   const totals=gtReady?aggregateExperiment(results):null;
   const rate=(count,fail)=>totals&&!fail&&totals.expected
     ?Number((Number(count||0)/totals.expected).toFixed(4)):null;
-  const aSafeRate=rate(totals?.aSafe,totals?.aCountingIntegrityFail);
-  const finalRate=rate(totals?.finalUnion,totals?.finalCountingIntegrityFail);
   const aLegacyRate=totals?.expected?Number((Number(totals.aLegacyCompatible||0)/totals.expected).toFixed(4)):null;
+  const aStructuralRate=rate(totals?.aStructuralAdopted,totals?.aCountingIntegrityFail);
+  const aPhysicalSafeRate=rate(totals?.aPhysicalSafe,totals?.aCountingIntegrityFail);
+  const finalRate=rate(totals?.finalUnion,totals?.finalCountingIntegrityFail);
   const runtimeVehicleKindCorrectCount=gtReady
     ?results.filter((r)=>r.matrix?.decodedRuntimeVehicleKind===r.groundTruthVehicleKind).length:null;
   const runtimeVehicleKindAccuracy=gtReady?Number((runtimeVehicleKindCorrectCount/8).toFixed(4)):null;
   const sumStats=(map,key)=>Object.values(map||{}).reduce((sum,item)=>sum+Number(item?.[key]||0),0);
   const regressionImages=gtReady?results
-    .filter((r)=>Number(r.matrix?.geometryStage?.finalUnionCanonicalCount||0)<Number(r.matrix?.geometryStage?.aCanonicalCount||0))
+    .filter((r)=>Number(r.matrix?.geometryStage?.finalUnionCanonicalCount||0)<Number(r.matrix?.currentEnsemble?.physicalSafeQrCount||0))
     .map((r)=>r.fileName):[];
 
   const summary=JSON.stringify({
-    schema:"icb-certificate-qr-decode-experiment-summary-v6",
+    schema:"icb-certificate-qr-decode-experiment-summary-v7",
+    experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
     pathname:PATHNAME,
@@ -2683,14 +2694,16 @@ export default function CertificateQrDecodeExperimentPage() {
       baselineElapsedMs:totals.baselineElapsedMs,
     }:null,
     aCurrentEnsembleTotals:totals?{
-      v5ReferenceLegacyCompatiblePhysicalUniqueQrCount:29,
+      aggregateReferenceLegacyCompatiblePhysicalUniqueQrCount:29,
+      aggregateReferenceExpectedQrCount:47,
       legacyCompatiblePhysicalUniqueQrCount:totals.aLegacyCompatible,
       legacyCompatibleRate:aLegacyRate,
-      structuralAdoptedPhysicalUniqueQrCount:totals.aSafe,
-      structuralAdoptedRate:aSafeRate,
-      aCanonicalCount:totals.aCanonicalCount,
-      expectedQrCount:totals.expected,
-      completeImageCount:totals.aCompleteImages,
+      structuralAdoptedPhysicalUniqueQrCount:totals.aStructuralAdopted,
+      structuralAdoptedRate:aStructuralRate,
+      physicalSafeQrCount:totals.aPhysicalSafe,
+      physicalSafeRate:aPhysicalSafeRate,
+      structuralCompleteImageCount:totals.aStructuralCompleteImages,
+      physicalSafeCompleteImageCount:totals.aPhysicalSafeCompleteImages,
       countingIntegrityFail:totals.aCountingIntegrityFail,
       jsqrSuccesses:sumStats(totals.aStats,"jsqrSuccesses"),
       zxingSuccesses:sumStats(totals.aStats,"zxingSuccesses"),
@@ -2700,11 +2713,17 @@ export default function CertificateQrDecodeExperimentPage() {
     eGeometryRectifyTotals:totals?{
       aFailedCandidateCount:totals.aFailedCandidateCount,
       finderOrQuadEstablishedCandidateCount:totals.finderOrQuadEstablishedCandidateCount,
+      finderAtLeast3ButNoValidQuadCount:totals.finderAtLeast3ButNoValidQuadCount,
+      tripletCandidateCount:totals.tripletCandidateCount,
+      alternateTripletTriedCount:totals.alternateTripletTriedCount,
+      alternateTripletRecoveredCount:totals.alternateTripletRecoveredCount,
       geometryKeptCandidateCount:totals.geometryKeptCandidateCount,
       geometryOverlapMergedCount:totals.geometryOverlapMergedCount,
       falseCandidateReductionCount:totals.falseCandidateReductionCount,
       eNetNewCanonicalVsA:totals.eNetNew,
+      nativeRectifyNetNewCanonicalCount:totals.nativeRectifyNetNewCanonicalCount,
       finalUnionCanonicalCount:totals.finalUnion,
+      parserEligibleUnionCanonicalCount:totals.parserEligibleUnion,
       expectedQrCount:totals.expected,
       finalUnionRate:finalRate,
       finalCompleteImageCount:totals.finalCompleteImages,
@@ -2715,15 +2734,32 @@ export default function CertificateQrDecodeExperimentPage() {
       regressionImageCount:regressionImages.length,
       regressionImages,
     }:null,
+    compactSchemaTotals:totals?{
+      uniqueCompactCandidateCount:totals.uniqueCompactCandidateCount,
+      physicalQrConsensusAcceptedCount:totals.compactPhysicalConsensusAcceptedCount,
+      parserSchemaRecognizedCount:totals.compactParserRecognizedCount,
+      physicalQrConsensusAccepted:totals.compactPhysicalConsensusAcceptedCount,
+      parserSchemaRecognized:totals.compactParserRecognizedCount,
+      diagnostics:totals.compactDiagnostics,
+      parserPolicy:"compact consensus may count as physical QR only; parser remains unrecognized and compact payload is excluded from runtime parser input",
+      payloadIncluded:false,
+    }:null,
+    conflictPositionTotals:totals?{
+      multiQrCropConflictCount:totals.multiQrCropConflictCount,
+      samePhysicalQrConflictCount:totals.samePhysicalQrConflictCount,
+      positionUncertainConflictCount:totals.positionUncertainConflictCount,
+      resolvedAsSeparatePhysicalQrCount:totals.resolvedAsSeparatePhysicalQrCount,
+      remainingAmbiguousConflictCount:totals.remainingAmbiguousConflictCount,
+      diagnostics:totals.conflictPositionDiagnostics,
+      payloadIncluded:false,
+    }:null,
     structuralValidationTotals:totals?{
       samePayloadStructuralFailCount:totals.samePayloadStructuralFailCount,
       singleEngineStructuralFailCount:totals.singleEngineStructuralFailCount,
-      ambiguousConflictCount:totals.ambiguousConflictCount,
       crossEngineConflictCount:totals.crossEngineConflictCount,
       samePayloadStructuralFails:totals.samePayloadStructuralFails,
       singleEngineStructuralFails:totals.singleEngineStructuralFails,
-      conflicts:totals.conflicts,
-      validatorPolicy:"audit schema coverage first; ambiguous conflicts remain rejected; validator is not loosened in this batch",
+      validatorPolicy:"same-position ambiguous conflicts remain rejected; compact consensus is separate from parser recognition",
       payloadIncluded:false,
     }:null,
     timingTotals:totals?{
@@ -2738,6 +2774,7 @@ export default function CertificateQrDecodeExperimentPage() {
       correctCount:runtimeVehicleKindCorrectCount,
       imageCount:8,
       accuracy:runtimeVehicleKindAccuracy,
+      compactConsensusExcludedFromParserInput:true,
     }:null,
     results:results.map(publicResult),
   },null,2);
