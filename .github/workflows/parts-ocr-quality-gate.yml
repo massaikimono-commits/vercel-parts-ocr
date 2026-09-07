@@ -105,7 +105,8 @@ jobs:
           rm -rf app-under-test/.next/cache
           tar -C app-under-test -czf /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz \
             .next public node_modules package.json next.config.mjs
-          ls -lh /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz
+          tar -C "$HOME/.cache" -czf /tmp/parts-qg-playwright-${{ matrix.label }}.tar.gz ms-playwright
+          ls -lh /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz /tmp/parts-qg-playwright-${{ matrix.label }}.tar.gz
           find /tmp/parts-qg-assets-${{ matrix.label }} -maxdepth 1 -type f -printf '%f %s bytes\n' || true
 
       - name: Run formal fixed-set gate when a private runner-local photo directory is provided
