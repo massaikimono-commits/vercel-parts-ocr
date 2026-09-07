@@ -6,6 +6,17 @@ import { detectCertificateQrDensityCandidates2D, clusterCertificateQrCandidates2
 
 const REQUIRED_NAMES = Array.from({ length: 8 }, (_, i) => `IMG_${String(940 + i).padStart(4, "0")}.jpeg`);
 const PATHNAME = "/vehicle-workflow-v2";
+const EXPERIMENT_ROUTE = "/eval/certificate-qr-decode-experiment";
+const OVERLAY_PRIORITY_CANDIDATES = Object.freeze({
+  "IMG_0942.jpeg": [4, 7, 8, 9],
+  "IMG_0944.jpeg": [1, 2, 3, 5, 8],
+});
+const OVERLAY_CLASS_OPTIONS = Object.freeze([
+  { value: "A", label: "A: 正しい1QRを正確に囲う" },
+  { value: "B", label: "B: 複数QRのfinder混在" },
+  { value: "C", label: "C: QR外/通常文字の誤検出" },
+  { value: "D", label: "D: QRだがquad/角度/quiet不適切" },
+]);
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const GT_OPTIONS = [
   { value: "", label: "未設定", expected: null },
@@ -1215,6 +1226,48 @@ function parserSchemaRecognition(canonical) {
   if (/^2\//.test(text)) return { recognized: true, parserSchemaClass: "registered-slash" };
   return { recognized: false, parserSchemaClass: "unrecognized" };
 }
+function compactNonPiiFingerprint(canonical) {
+  const text = canonicalText(canonical);
+  const chars = [...text];
+  if (!chars.length) return null;
+  const classify = (ch) => {
+    if (/[0-9]/.test(ch)) return "D";
+    if (/[A-Z]/.test(ch)) return "U";
+    if (/[a-z]/.test(ch)) return "L";
+    if (ch === " ") return "W";
+    if (/[._+*\-\[\]()]/.test(ch)) return "S";
+    return "O";
+  };
+  const classes = chars.map(classify);
+  const countClasses = (items) => {
+    const out = { D:0, U:0, L:0, W:0, S:0, O:0 };
+    for (const item of items) out[item] = (out[item] || 0) + 1;
+    return out;
+  };
+  const positionWindows = [];
+  for (let start=0; start<classes.length; start+=10) {
+    const slice=classes.slice(start,start+10);
+    positionWindows.push({
+      start,
+      end:start+slice.length-1,
+      counts:countClasses(slice),
+    });
+  }
+  let hash=2166136261;
+  for(const ch of classes.join("")){
+    hash^=ch.charCodeAt(0);
+    hash=Math.imul(hash,16777619)>>>0;
+  }
+  const parser=parserSchemaRecognition(text);
+  return {
+    classPatternHash:`cc-${hash.toString(16).padStart(8,"0")}`,
+    classCounts:countClasses(classes),
+    positionWindows,
+    compactLength60:chars.length===60,
+    legacyApplyFixedPrefixCompatible:Boolean(parser.recognized),
+    knownVehicleQrFormatAlignment:parser.recognized?parser.parserSchemaClass:"legacy-slash-unrecognized",
+  };
+}
 function structuralValidation(canonical) {
   const text = canonicalText(canonical);
   const chars = [...text];
@@ -1274,6 +1327,7 @@ function structuralValidation(canonical) {
   if (replacementCount === 0 && controlCount === 0) score += 1;
   const pass = failReasons.length === 0;
   const parserSchema = parserSchemaRecognition(text);
+  const nonPiiFingerprint = compactNonPiiFingerprint(text);
 
   return {
     pass,
@@ -1293,6 +1347,7 @@ function structuralValidation(canonical) {
     slashCountBucket: slashCount === 0 ? "none" : slashCount <= 8 ? "1-8" : slashCount <= 20 ? "9-20" : "21+",
     fieldCountBucket: slashFields <= 1 ? "0-1" : slashFields <= 8 ? "2-8" : slashFields <= 20 ? "9-20" : "21+",
     printableRatioBucket: printableRatio >= .98 ? "high" : printableRatio >= .96 ? "borderline" : "low",
+    nonPiiFingerprint,
   };
 }
 function qrCenterFromResultPoints(points = []) {
@@ -1752,6 +1807,9 @@ function compactConsensusAuditFromRows(rows, attemptKey, paperWidthPxValue) {
     const chosen=acceptedAttempt||diagnosticAttempt;
     if(!chosen) continue;
     const center=averageRawPositions(chosen.jsRawPosition,chosen.zxingRawPosition);
+    const jsFingerprint=chosen.jsStructural?.nonPiiFingerprint||null;
+    const zxingFingerprint=chosen.zxingStructural?.nonPiiFingerprint||null;
+    const nonPiiFingerprint=jsFingerprint||zxingFingerprint;
     rawCandidates.push({
       candidateIndex:row.candidateIndex,
       x:row.x,
@@ -1770,6 +1828,12 @@ function compactConsensusAuditFromRows(rows, attemptKey, paperWidthPxValue) {
       alnumKnownSymbolRatio:Number(chosen.jsStructural?.alnumKnownSymbolRatio||chosen.zxingStructural?.alnumKnownSymbolRatio||0),
       separatorPattern:chosen.jsStructural?.separatorPattern||chosen.zxingStructural?.separatorPattern||"none",
       positionClass:chosen.conflictPositionClass||"position-unavailable",
+      nonPiiFingerprint,
+      engineFingerprintMatch:Boolean(
+        jsFingerprint?.classPatternHash &&
+        zxingFingerprint?.classPatternHash &&
+        jsFingerprint.classPatternHash===zxingFingerprint.classPatternHash
+      ),
       canonicalSet:new Set(acceptedAttempt?.compactCanonicalSet||[]),
     });
   }
@@ -1822,6 +1886,8 @@ function compactConsensusAuditFromRows(rows, attemptKey, paperWidthPxValue) {
       alnumKnownSymbolRatio:item.alnumKnownSymbolRatio,
       separatorPattern:item.separatorPattern,
       positionClass:item.positionClass,
+      nonPiiFingerprint:item.nonPiiFingerprint||null,
+      engineFingerprintMatch:Boolean(item.engineFingerprintMatch),
     })),
     acceptedCanonicalSet,
   };
@@ -1954,6 +2020,72 @@ function countUniqueResolvedPhysicalQrPositions(audits, paperWidthPxValue) {
     }
   }
   return positions.length;
+}
+function countUniqueConflictPhysicalPositions(audits, paperWidthPxValue, geometryDiagnostics=[], className="same-physical-qr") {
+  const radius=Math.max(8,Number(paperWidthPxValue||0)*.018);
+  const geometryByCandidate=new Map(
+    (geometryDiagnostics||[])
+      .filter((item)=>item?.candidateIndex)
+      .map((item)=>[item.candidateIndex,item])
+  );
+  const positions=[];
+  for(const audit of audits||[]){
+    for(const item of audit?.diagnostics||[]){
+      if(item?.conflictPositionClass!==className) continue;
+      const decodedCenter=averageRawPositions(item.jsRawPosition,item.zxingRawPosition);
+      const geometry=geometryByCandidate.get(item.candidateIndex);
+      const geometryCenter=geometry?.qrCenter&&Number.isFinite(Number(geometry.qrCenter.x))&&Number.isFinite(Number(geometry.qrCenter.y))
+        ?{x:Number(geometry.qrCenter.x),y:Number(geometry.qrCenter.y)}
+        :null;
+      const center=decodedCenter||geometryCenter;
+      if(!center) continue;
+      let known=positions.find((p)=>Math.hypot(p.x-center.x,p.y-center.y)<=radius);
+      if(!known){
+        known={x:center.x,y:center.y,evidenceCount:0,candidateIndexes:new Set(),geometryAlignedEvidenceCount:0};
+        positions.push(known);
+      }
+      known.evidenceCount+=1;
+      known.candidateIndexes.add(item.candidateIndex);
+      if(geometryCenter&&Math.hypot(geometryCenter.x-center.x,geometryCenter.y-center.y)<=radius*1.7){
+        known.geometryAlignedEvidenceCount+=1;
+      }
+    }
+  }
+  return {
+    count:positions.length,
+    positions:positions.map((p)=>({
+      x:Number(p.x.toFixed(2)),
+      y:Number(p.y.toFixed(2)),
+      evidenceCount:p.evidenceCount,
+      candidateIndexes:[...p.candidateIndexes].sort((a,b)=>a-b),
+      geometryAlignedEvidenceCount:p.geometryAlignedEvidenceCount,
+    })),
+  };
+}
+function summarizeCompactFingerprintStability(diagnostics=[]) {
+  const groups=new Map();
+  for(const item of diagnostics||[]){
+    const fp=item?.nonPiiFingerprint;
+    const key=fp?.classPatternHash;
+    if(!key) continue;
+    if(!groups.has(key)) groups.set(key,{fingerprintId:key,candidateCount:0,fileNames:new Set(),fingerprint:fp});
+    const group=groups.get(key);
+    group.candidateCount+=1;
+    if(item.fileName) group.fileNames.add(item.fileName);
+  }
+  const rows=[...groups.values()].map((group)=>({
+    fingerprintId:group.fingerprintId,
+    candidateCount:group.candidateCount,
+    imageCount:group.fileNames.size,
+    fileNames:[...group.fileNames].sort(),
+    stableAcrossMultipleImages:group.fileNames.size>=2,
+    fingerprint:group.fingerprint,
+  }));
+  return {
+    fingerprintGroupCount:rows.length,
+    multiImageStableGroupCount:rows.filter((row)=>row.stableAcrossMultipleImages).length,
+    groups:rows,
+  };
 }
 function createStageStats(configs) {
   return Object.fromEntries(configs.map((config) => [config.id, {
@@ -2377,6 +2509,12 @@ async function runMatrix(file) {
       [aConflictPosition,eConflictPosition],
       paperW
     );
+    const uniqueSamePhysicalConflict=countUniqueConflictPhysicalPositions(
+      [aConflictPosition,eConflictPosition],
+      paperW,
+      geometry.diagnostics,
+      "same-physical-qr"
+    );
 
     const aStructuralCanonical=canonicalSetFromRows(current.rows,"currentSuccess");
     const eStructuralCanonical=canonicalSetFromRows(geometry.rows,"geometrySuccess");
@@ -2488,6 +2626,8 @@ async function runMatrix(file) {
       conflictPositionAudit:{
         multiQrCropConflictCount:aConflictPosition.multiQrCropConflictCount+eConflictPosition.multiQrCropConflictCount,
         samePhysicalQrConflictCount:aConflictPosition.samePhysicalQrConflictCount+eConflictPosition.samePhysicalQrConflictCount,
+        uniqueSamePhysicalConflictCount:uniqueSamePhysicalConflict.count,
+        uniqueSamePhysicalConflictPositions:uniqueSamePhysicalConflict.positions,
         positionUncertainConflictCount:aConflictPosition.positionUncertainConflictCount+eConflictPosition.positionUncertainConflictCount,
         resolvedConflictEventCount:aConflictPosition.resolvedConflictEventCount+eConflictPosition.resolvedConflictEventCount,
         resolvedAsSeparatePhysicalQrCount:resolvedSeparatePhysicalQrCount,
@@ -2599,6 +2739,8 @@ function aggregateExperiment(results) {
 
     acc.multiQrCropConflictCount+=Number(conflict.multiQrCropConflictCount||0);
     acc.samePhysicalQrConflictCount+=Number(conflict.samePhysicalQrConflictCount||0);
+    acc.uniqueSamePhysicalConflictCount+=Number(conflict.uniqueSamePhysicalConflictCount||0);
+    for(const item of conflict.uniqueSamePhysicalConflictPositions||[]) acc.uniqueSamePhysicalConflictPositions.push({fileName:result.fileName,...item});
     acc.positionUncertainConflictCount+=Number(conflict.positionUncertainConflictCount||0);
     acc.resolvedAsSeparatePhysicalQrCount+=Number(conflict.resolvedAsSeparatePhysicalQrCount||0);
     acc.remainingAmbiguousConflictCount+=Number(conflict.remainingAmbiguousConflictCount||0);
@@ -2652,6 +2794,8 @@ function aggregateExperiment(results) {
     compactParserRecognizedCount:0,
     multiQrCropConflictCount:0,
     samePhysicalQrConflictCount:0,
+    uniqueSamePhysicalConflictCount:0,
+    uniqueSamePhysicalConflictPositions:[],
     positionUncertainConflictCount:0,
     resolvedAsSeparatePhysicalQrCount:0,
     remainingAmbiguousConflictCount:0,
@@ -2703,6 +2847,7 @@ export default function CertificateQrDecodeExperimentPage() {
   const [expandedName, setExpandedName] = useState("");
   const [results, setResults] = useState([]);
   const [visualDiagnostics, setVisualDiagnostics] = useState({});
+  const [overlayClassifications, setOverlayClassifications] = useState({});
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("固定8枚を選択してください。");
   const [experimentalHead, setExperimentalHead] = useState(null);
@@ -2749,11 +2894,20 @@ export default function CertificateQrDecodeExperimentPage() {
 
   useEffect(() => {
     clearVisualDiagnostics();
+    setOverlayClassifications({});
     return () => {
       for (const entry of Object.values(visualDiagnosticsRef.current)) revokeVisualDiagnosticEntry(entry);
       visualDiagnosticsRef.current = {};
     };
   }, [files]);
+
+  const setOverlayClassification = (fileName, candidateIndex, value) => {
+    const key=`${fileName}#${candidateIndex}`;
+    setOverlayClassifications((prev)=>({
+      ...prev,
+      [key]:value||"",
+    }));
+  };
 
   const setGt = (name, kind) => {
     const opt = GT_OPTIONS.find((x) => x.value === kind) || GT_OPTIONS[0];
@@ -2831,13 +2985,27 @@ export default function CertificateQrDecodeExperimentPage() {
   const regressionImages=gtReady?results
     .filter((r)=>Number(r.matrix?.geometryStage?.finalUnionCanonicalCount||0)<Number(r.matrix?.currentEnsemble?.physicalSafeQrCount||0))
     .map((r)=>r.fileName):[];
+  const compactFingerprintStability=totals?summarizeCompactFingerprintStability(totals.compactDiagnostics):null;
+  const requiredOverlayClassifications=Object.entries(OVERLAY_PRIORITY_CANDIDATES).flatMap(([fileName,indexes])=>
+    indexes.map((candidateIndex)=>({fileName,candidateIndex,key:`${fileName}#${candidateIndex}`}))
+  );
+  const overlayClassificationRows=requiredOverlayClassifications.map((item)=>({
+    fileName:item.fileName,
+    candidateIndex:item.candidateIndex,
+    classification:overlayClassifications[item.key]||null,
+  }));
+  const overlayClassificationComplete=overlayClassificationRows.every((item)=>Boolean(item.classification));
 
   const summary=JSON.stringify({
     schema:"icb-certificate-qr-decode-experiment-summary-v7",
     experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
+    diagnosticRevision:"v7-postformal-quad-audit-1",
+    experimentRoute:EXPERIMENT_ROUTE,
     pathname:PATHNAME,
+    pathnameRole:"baseline-target-route",
+    baselineTargetRoute:PATHNAME,
     groundTruthUsedDuringDecode:false,
     recognitionIsolation:RECOGNITION_ISOLATION,
     runtimeParserInputExcludesCompactConsensus:true,
@@ -2913,12 +3081,15 @@ export default function CertificateQrDecodeExperimentPage() {
       physicalQrConsensusAccepted:totals.compactPhysicalConsensusAcceptedCount,
       parserSchemaRecognized:totals.compactParserRecognizedCount,
       diagnostics:totals.compactDiagnostics,
+      nonPiiFingerprintStability:compactFingerprintStability,
       parserPolicy:"compact consensus may count as physical QR only; parser remains unrecognized and compact payload is excluded from runtime parser input",
       payloadIncluded:false,
     }:null,
     conflictPositionTotals:totals?{
       multiQrCropConflictCount:totals.multiQrCropConflictCount,
       samePhysicalQrConflictCount:totals.samePhysicalQrConflictCount,
+      uniqueSamePhysicalConflictCount:totals.uniqueSamePhysicalConflictCount,
+      uniqueSamePhysicalConflictPositions:totals.uniqueSamePhysicalConflictPositions,
       positionUncertainConflictCount:totals.positionUncertainConflictCount,
       resolvedAsSeparatePhysicalQrCount:totals.resolvedAsSeparatePhysicalQrCount,
       remainingAmbiguousConflictCount:totals.remainingAmbiguousConflictCount,
@@ -2934,6 +3105,19 @@ export default function CertificateQrDecodeExperimentPage() {
       validatorPolicy:"same-position ambiguous conflicts remain rejected; compact consensus is separate from parser recognition",
       payloadIncluded:false,
     }:null,
+    visualOverlayAudit:{
+      requiredPriorityCandidates:requiredOverlayClassifications.map(({fileName,candidateIndex})=>({fileName,candidateIndex})),
+      classifications:overlayClassificationRows,
+      complete:overlayClassificationComplete,
+      classificationLegend:{
+        A:"correct-single-qr-accurate-quad",
+        B:"mixed-finders-from-multiple-qrs",
+        C:"non-qr-or-text-false-geometry",
+        D:"qr-aligned-but-quad-angle-or-quiet-zone-inappropriate",
+      },
+      imageIncluded:false,
+      browserLocalVisualOnly:true,
+    },
     timingTotals:totals?{
       baselineElapsedMs:totals.baselineElapsedMs,
       aElapsedMs:totals.aElapsedMs,
@@ -3075,7 +3259,7 @@ export default function CertificateQrDecodeExperimentPage() {
         <div>Triplet: candidates {totals?.tripletCandidateCount??"-"} / finder≥3 but no valid quad {totals?.finderAtLeast3ButNoValidQuadCount??"-"} / alternate tried {totals?.alternateTripletTriedCount??"-"} / recovered {totals?.alternateTripletRecoveredCount??"-"}</div>
         <div>Geometry: A-fail {totals?.aFailedCandidateCount??"-"} / finder-or-quad成立 {totals?.finderOrQuadEstablishedCandidateCount??"-"} / kept {totals?.geometryKeptCandidateCount??"-"} / overlap統合 {totals?.geometryOverlapMergedCount??"-"} / false削減 {totals?.falseCandidateReductionCount??"-"}</div>
         <div>Compact: unique {totals?.uniqueCompactCandidateCount??"-"} / physical consensus accepted {totals?.compactPhysicalConsensusAcceptedCount??"-"} / parser-recognized {totals?.compactParserRecognizedCount??"-"}</div>
-        <div>Conflict位置: multi-QR-crop {totals?.multiQrCropConflictCount??"-"} / same-physical {totals?.samePhysicalQrConflictCount??"-"} / uncertain {totals?.positionUncertainConflictCount??"-"} / resolved separate physical {totals?.resolvedAsSeparatePhysicalQrCount??"-"} / remaining ambiguous {totals?.remainingAmbiguousConflictCount??"-"}</div>
+        <div>Conflict位置: multi-QR-crop {totals?.multiQrCropConflictCount??"-"} / same-physical events {totals?.samePhysicalQrConflictCount??"-"} / unique physical {totals?.uniqueSamePhysicalConflictCount??"-"} / uncertain {totals?.positionUncertainConflictCount??"-"} / resolved separate physical {totals?.resolvedAsSeparatePhysicalQrCount??"-"} / remaining ambiguous {totals?.remainingAmbiguousConflictCount??"-"}</div>
         <div>Structural: same-payload fail {totals?.samePayloadStructuralFailCount??"-"} / single-engine fail {totals?.singleEngineStructuralFailCount??"-"} / conflict total {totals?.crossEngineConflictCount??"-"}</div>
         <div>Native rectify net new: +{totals?.nativeRectifyNetNewCanonicalCount??"-"}</div>
         <div>runtime車種判定: {runtimeVehicleKindCorrectCount??"-"}/8 ({runtimeVehicleKindAccuracy??"-"}) ※compact parser-unrecognizedは入力除外</div>
@@ -3123,6 +3307,28 @@ export default function CertificateQrDecodeExperimentPage() {
                         perspectiveSpread={d?.perspectiveScaleSpread??"-"} /
                         overlapRejected={String(Boolean(d?.overlapRejected))}
                       </div>
+                      {OVERLAY_PRIORITY_CANDIDATES[name]?.includes(crop.candidateIndex)&&(
+                        <div style={{marginTop:8,padding:8,border:"1px solid #f0ad4e",borderRadius:8}}>
+                          <div style={{fontSize:12,fontWeight:800}}>★ 総合管理指定の優先分類candidate</div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:6,marginTop:6}}>
+                            {OVERLAY_CLASS_OPTIONS.map((option)=>{
+                              const key=`${name}#${crop.candidateIndex}`;
+                              const selected=overlayClassifications[key]===option.value;
+                              return (
+                                <button
+                                  type="button"
+                                  key={option.value}
+                                  onClick={()=>setOverlayClassification(name,crop.candidateIndex,option.value)}
+                                  style={{padding:"8px 6px",fontWeight:selected?800:500,border:selected?"2px solid currentColor":"1px solid #bbb",borderRadius:8}}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div style={{fontSize:11,marginTop:5}}>選択結果は分類コードとcandidate番号だけを非PII summaryへ出します。画像は出しません。</div>
+                        </div>
+                      )}
                       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:8,marginTop:8}}>
                         <div>
                           <div style={{fontSize:11,fontWeight:700}}>current-small fallback crop</div>
@@ -3145,6 +3351,9 @@ export default function CertificateQrDecodeExperimentPage() {
       </section>
 
       <section style={{ marginTop: 18 }}>
+        <div style={{fontSize:12,marginBottom:8,fontWeight:700}}>
+          overlay分類: {overlayClassificationComplete ? "優先9候補すべて分類済み" : "未完了（0942: 4/7/8/9、0944: 1/2/3/5/8 をA/B/C/D分類）"}
+        </div>
         <button disabled={!results.length} onClick={copySummary} style={{ marginRight: 8, padding: "9px 14px" }}>非PII summaryをコピー</button>
         <button disabled={!results.length} onClick={downloadSummary} style={{ padding: "9px 14px" }}>summaryを端末保存</button>
       </section>
