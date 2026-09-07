@@ -1341,114 +1341,151 @@ async function runMatrix(file) {
 }
 function applyCountingIntegrity(matrix, expectedQrCount) {
   const expected = Number(expectedQrCount);
-  const ensembleCount = Number(matrix?.ensemble?.physicalUniqueQrCount || 0);
-  const offsetCount = Number(matrix?.offsetSweep?.physicalUniqueQrCountAfterOffset || 0);
-  const rescueCount = Number(matrix?.rescueStudy?.physicalUniqueQrCountAfterRescue || 0);
+  const counts = {
+    current: Number(matrix?.currentEnsemble?.physicalUniqueQrCount || 0),
+    core: Number(matrix?.refinedCore?.physicalUniqueQrCount || 0),
+    threshold: Number(matrix?.thresholdStage?.physicalUniqueQrCountAfterThreshold || 0),
+    rescue: Number(matrix?.rotateRescueStage?.physicalUniqueQrCountAfterRescue || 0),
+  };
   const fail = (count) => Number.isFinite(expected) ? count > expected : false;
   return {
     ...matrix,
-    ensemble: { ...matrix.ensemble, countingIntegrityFail: fail(ensembleCount) },
-    offsetSweep: { ...matrix.offsetSweep, countingIntegrityFail: fail(offsetCount) },
-    rescueStudy: { ...matrix.rescueStudy, countingIntegrityFail: fail(rescueCount) },
+    currentEnsemble: { ...matrix.currentEnsemble, countingIntegrityFail: fail(counts.current) },
+    refinedCore: { ...matrix.refinedCore, countingIntegrityFail: fail(counts.core) },
+    thresholdStage: { ...matrix.thresholdStage, countingIntegrityFail: fail(counts.threshold) },
+    rotateRescueStage: { ...matrix.rotateRescueStage, countingIntegrityFail: fail(counts.rescue) },
   };
+}
+function aggregateStageStats(target, stats = []) {
+  for (const stat of stats) {
+    if (!target[stat.id]) {
+      target[stat.id] = {
+        id: stat.id,
+        attempts: 0,
+        jsqrSuccesses: 0,
+        zxingSuccesses: 0,
+        jsStructuralPasses: 0,
+        zxingStructuralPasses: 0,
+        physicalSuccesses: 0,
+        crossEngineDuplicateCount: 0,
+        crossEngineConflictCount: 0,
+        netNewCanonicalQrCount: 0,
+      };
+    }
+    const out = target[stat.id];
+    for (const key of [
+      "attempts",
+      "jsqrSuccesses",
+      "zxingSuccesses",
+      "jsStructuralPasses",
+      "zxingStructuralPasses",
+      "physicalSuccesses",
+      "crossEngineDuplicateCount",
+      "crossEngineConflictCount",
+      "netNewCanonicalQrCount",
+    ]) out[key] += Number(stat[key] || 0);
+  }
 }
 function aggregateExperiment(results) {
   return results.reduce((acc, result) => {
     const expected = Number(result.groundTruthExpectedQrCount || 0);
-    const ensemble = result.matrix?.ensemble || {};
-    const offset = result.matrix?.offsetSweep || {};
-    const rescue = result.matrix?.rescueStudy || {};
+    const current = result.matrix?.currentEnsemble || {};
+    const core = result.matrix?.refinedCore || {};
+    const threshold = result.matrix?.thresholdStage || {};
+    const rescue = result.matrix?.rotateRescueStage || {};
     const timing = result.matrix?.timing || {};
+    const refine = result.matrix?.candidateRefinement || {};
+    const structural = result.matrix?.structuralValidation || {};
+
     acc.expected += expected;
     acc.baselinePhysicalUnique += Number(result.baseline.qrCount || 0);
-    acc.ensemblePhysicalUnique += Number(ensemble.physicalUniqueQrCount || 0);
-    acc.offsetPhysicalUnique += Number(offset.physicalUniqueQrCountAfterOffset || 0);
+    acc.currentPhysicalUnique += Number(current.physicalUniqueQrCount || 0);
+    acc.corePhysicalUnique += Number(core.physicalUniqueQrCount || 0);
+    acc.thresholdPhysicalUnique += Number(threshold.physicalUniqueQrCountAfterThreshold || 0);
     acc.rescuePhysicalUnique += Number(rescue.physicalUniqueQrCountAfterRescue || 0);
+
     if (result.baseline.qrCount === expected) acc.baselineCompleteImages += 1;
-    if (ensemble.physicalUniqueQrCount === expected) acc.ensembleCompleteImages += 1;
-    if (offset.physicalUniqueQrCountAfterOffset === expected) acc.offsetCompleteImages += 1;
+    if (current.physicalUniqueQrCount === expected) acc.currentCompleteImages += 1;
+    if (core.physicalUniqueQrCount === expected) acc.coreCompleteImages += 1;
+    if (threshold.physicalUniqueQrCountAfterThreshold === expected) acc.thresholdCompleteImages += 1;
     if (rescue.physicalUniqueQrCountAfterRescue === expected) acc.rescueCompleteImages += 1;
-    if (ensemble.countingIntegrityFail) acc.ensembleCountingIntegrityFail = true;
-    if (offset.countingIntegrityFail) acc.offsetCountingIntegrityFail = true;
+
+    if (current.countingIntegrityFail) acc.currentCountingIntegrityFail = true;
+    if (core.countingIntegrityFail) acc.coreCountingIntegrityFail = true;
+    if (threshold.countingIntegrityFail) acc.thresholdCountingIntegrityFail = true;
     if (rescue.countingIntegrityFail) acc.rescueCountingIntegrityFail = true;
-    acc.ensembleAttempts += Number(ensemble.totalAttempts || 0);
-    acc.skippedEnsembleAttempts += Number(ensemble.skippedAttemptsByEarlySuccess || 0);
-    acc.offsetAttempts += Number(offset.actualDecodeAttempts || 0);
-    acc.skippedOffsetAttempts += Number(offset.skippedAttemptsBySuccess || 0);
-    for (const stat of offset.stats || []) {
-      if (!acc.offsetById[stat.id]) {
-        acc.offsetById[stat.id] = {
-          id: stat.id,
-          dx: stat.dx,
-          dy: stat.dy,
-          attempts: 0,
-          reusedAttempts: 0,
-          physicalSuccesses: 0,
-        };
-      }
-      acc.offsetById[stat.id].attempts += Number(stat.attempts || 0);
-      acc.offsetById[stat.id].reusedAttempts += Number(stat.reusedAttempts || 0);
-      acc.offsetById[stat.id].physicalSuccesses += Number(stat.physicalSuccesses || 0);
-    }
-    acc.rescueAttempts += Number(rescue.totalAttempts || 0);
-    acc.candidatePositionDuplicateRemovedCount += Number(result.matrix?.candidateDetection?.candidatePositionDuplicateRemovedCount || 0);
+
+    acc.coarseCandidateCount += Number(result.matrix?.candidateDetection?.coarsePhysicalCandidateCount || 0);
+    acc.refinedCandidateCount += Number(refine.refinedCandidateCount || 0);
+    acc.weakRejectedCount += Number(refine.weakRejectedCount || 0);
+    acc.overlapDuplicateMergedCount += Number(refine.overlapDuplicateMergedCount || 0);
+    acc.falseOrDuplicateCandidateReductionCount += Number(refine.falseOrDuplicateCandidateReductionCount || 0);
+
     acc.baselineElapsedMs += Number(result.baseline?.elapsedMs || 0);
-    acc.ensembleOnlyElapsedMs += Number(timing.ensembleOnlyElapsedMs || 0);
-    acc.offsetSweepElapsedMs += Number(timing.offsetSweepElapsedMs || 0);
-    acc.rescueOnlyElapsedMs += Number(timing.rescueOnlyElapsedMs || 0);
+    acc.currentEnsembleElapsedMs += Number(timing.currentEnsembleElapsedMs || 0);
+    acc.candidateRefineElapsedMs += Number(timing.candidateRefineElapsedMs || 0);
+    acc.refinedCoreElapsedMs += Number(timing.refinedCoreElapsedMs || 0);
+    acc.thresholdElapsedMs += Number(timing.thresholdElapsedMs || 0);
+    acc.rotateRescueElapsedMs += Number(timing.rotateRescueElapsedMs || 0);
+    acc.zxingInvertedProbeElapsedMs += Number(timing.zxingInvertedProbeElapsedMs || 0);
     acc.totalExperimentalElapsedMs += Number(timing.totalExperimentalElapsedMs || 0);
-    for (const stat of ensemble.stats || []) {
-      acc.ensembleJsqrSuccesses += Number(stat.jsqrSuccesses || 0);
-      acc.ensembleZxingSuccesses += Number(stat.zxingSuccesses || 0);
-      acc.crossEngineDuplicateRemovedCount += Number(stat.crossEngineDuplicateRemovedCount || 0);
+
+    aggregateStageStats(acc.currentStats, current.stats);
+    aggregateStageStats(acc.coreStats, core.stats);
+    aggregateStageStats(acc.thresholdStats, threshold.stats);
+    aggregateStageStats(acc.rescueStats, rescue.stats);
+
+    acc.crossEngineConflictCount += Number(structural.crossEngineConflictCount || 0);
+    for (const conflict of structural.conflicts || []) {
+      acc.conflicts.push({ fileName: result.fileName, ...conflict });
     }
-    for (const stat of rescue.stats || []) {
-      const key = stat.id;
-      if (!acc.rescueNetNewByConfig[key]) {
-        acc.rescueNetNewByConfig[key] = {
-          id: key,
-          netNewCanonicalQrCount: 0,
-          physicalSuccesses: 0,
-          attempts: 0,
-          recommendedKeep: false,
-        };
-      }
-      acc.rescueNetNewByConfig[key].netNewCanonicalQrCount += Number(stat.netNewCanonicalQrCount || 0);
-      acc.rescueNetNewByConfig[key].physicalSuccesses += Number(stat.physicalSuccesses || 0);
-      acc.rescueNetNewByConfig[key].attempts += Number(stat.attempts || 0);
-      acc.rescueNetNewByConfig[key].recommendedKeep =
-        acc.rescueNetNewByConfig[key].netNewCanonicalQrCount > 0;
-    }
+
+    const probe = result.matrix?.zxingAudit?.invertedProbe || {};
+    acc.zxingInvertedTestedCandidateCount += Number(probe.testedCandidateCount || 0);
+    acc.zxingInvertedStructuralPassCount += Number(probe.structuralPassCount || 0);
+    acc.zxingInvertedAdditionalStructuralPassVsBase += Number(probe.additionalStructuralPassVsBase || 0);
+    acc.zxingInvertedHintAvailable = acc.zxingInvertedHintAvailable || Boolean(probe.alsoInvertedHintAvailable);
+
     return acc;
   }, {
     expected: 0,
     baselinePhysicalUnique: 0,
-    ensemblePhysicalUnique: 0,
-    offsetPhysicalUnique: 0,
+    currentPhysicalUnique: 0,
+    corePhysicalUnique: 0,
+    thresholdPhysicalUnique: 0,
     rescuePhysicalUnique: 0,
     baselineCompleteImages: 0,
-    ensembleCompleteImages: 0,
-    offsetCompleteImages: 0,
+    currentCompleteImages: 0,
+    coreCompleteImages: 0,
+    thresholdCompleteImages: 0,
     rescueCompleteImages: 0,
-    ensembleCountingIntegrityFail: false,
-    offsetCountingIntegrityFail: false,
+    currentCountingIntegrityFail: false,
+    coreCountingIntegrityFail: false,
+    thresholdCountingIntegrityFail: false,
     rescueCountingIntegrityFail: false,
-    ensembleAttempts: 0,
-    skippedEnsembleAttempts: 0,
-    offsetAttempts: 0,
-    skippedOffsetAttempts: 0,
-    offsetById: {},
-    rescueAttempts: 0,
-    candidatePositionDuplicateRemovedCount: 0,
+    coarseCandidateCount: 0,
+    refinedCandidateCount: 0,
+    weakRejectedCount: 0,
+    overlapDuplicateMergedCount: 0,
+    falseOrDuplicateCandidateReductionCount: 0,
     baselineElapsedMs: 0,
-    ensembleOnlyElapsedMs: 0,
-    offsetSweepElapsedMs: 0,
-    rescueOnlyElapsedMs: 0,
+    currentEnsembleElapsedMs: 0,
+    candidateRefineElapsedMs: 0,
+    refinedCoreElapsedMs: 0,
+    thresholdElapsedMs: 0,
+    rotateRescueElapsedMs: 0,
+    zxingInvertedProbeElapsedMs: 0,
     totalExperimentalElapsedMs: 0,
-    ensembleJsqrSuccesses: 0,
-    ensembleZxingSuccesses: 0,
-    crossEngineDuplicateRemovedCount: 0,
-    rescueNetNewByConfig: {},
+    currentStats: {},
+    coreStats: {},
+    thresholdStats: {},
+    rescueStats: {},
+    crossEngineConflictCount: 0,
+    conflicts: [],
+    zxingInvertedTestedCandidateCount: 0,
+    zxingInvertedStructuralPassCount: 0,
+    zxingInvertedAdditionalStructuralPassVsBase: 0,
+    zxingInvertedHintAvailable: false,
   });
 }
 function publicResult(result) {
