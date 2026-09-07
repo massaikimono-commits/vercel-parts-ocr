@@ -336,7 +336,15 @@ export default function CertificateQrFast() {
       });
     };
     document.addEventListener("change", onChange, true);
-    return () => { stopped = true; document.removeEventListener("change", onChange, true); };
+    if (auditEnabled()) {
+      window.__certificateQrFastAuditReady = true;
+      window.dispatchEvent(new CustomEvent("vehicle-certificate-qr-fast-audit-ready"));
+    }
+    return () => {
+      stopped = true;
+      if (auditEnabled()) window.__certificateQrFastAuditReady = false;
+      document.removeEventListener("change", onChange, true);
+    };
   }, []);
   return null;
 }
