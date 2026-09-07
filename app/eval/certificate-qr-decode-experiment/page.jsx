@@ -2120,8 +2120,8 @@ export default function CertificateQrDecodeExperimentPage() {
 
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
-      <h1>車検証QR decode A/B 実験</h1>
-      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。A=現Ensemble、B=QR-like candidate精製＋tight raw crop、C=Otsu/adaptive threshold、D=±1° rescueだけを比較します。</p>
+      <h1>車検証QR decode A/E geometry 実験</h1>
+      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。A=現current ensemble、E=A失敗candidateだけlocal finder/quad推定＋4-module quiet付きperspective rectifyです。</p>
       <p><b>禁止:</b> QR payloadの表示・保存・送信。本ページのsummaryは座標・設定・成功/失敗・件数のみです。</p>
 
       <section style={{ border: "1px solid #ccc", borderRadius: 12, padding: 14 }}>
@@ -2180,123 +2180,99 @@ export default function CertificateQrDecodeExperimentPage() {
           </div>
         )}
         <button disabled={!valid || running} onClick={start} style={{ marginTop: 14, padding: "10px 18px", fontWeight: 700 }}>
-          {running ? "実験中…" : "固定8枚 A/B開始"}
+          {running ? "実験中…" : "固定8枚 A/E開始"}
         </button>
         <div style={{ marginTop: 10, fontWeight: 700 }}>{status}</div>
       </section>
 
       <section style={{ marginTop: 18 }}>
-        <h2>画像別 A/B/C/D</h2>
-        {results.map((r) => (
-          <div key={r.fileName} style={{ borderBottom: "1px solid #ddd", padding: "10px 0" }}>
-            <b>{r.fileName}</b> — GT {r.groundTruthExpectedQrCount ?? "未設定"} —
-            Baseline {r.baseline.qrCount} →
-            A {r.matrix.currentEnsemble.physicalUniqueQrCount} →
-            B {r.matrix.refinedCore.physicalUniqueQrCount} →
-            C {r.matrix.thresholdStage.physicalUniqueQrCountAfterThreshold} →
-            D {r.matrix.rotateRescueStage.physicalUniqueQrCountAfterRescue} —
-            candidates {r.matrix.candidateDetection.coarsePhysicalCandidateCount}→{r.matrix.candidateRefinement.refinedCandidateCount}
-            (削減 {r.matrix.candidateRefinement.falseOrDuplicateCandidateReductionCount}) —
-            A {r.matrix.timing.currentEnsembleElapsedMs}ms /
-            refine {r.matrix.timing.candidateRefineElapsedMs}ms /
-            B {r.matrix.timing.refinedCoreElapsedMs}ms /
-            threshold {r.matrix.timing.thresholdElapsedMs}ms /
-            ±1° {r.matrix.timing.rotateRescueElapsedMs}ms /
-            total {r.matrix.timing.totalExperimentalElapsedMs}ms —
-            conflict {r.matrix.structuralValidation.crossEngineConflictCount} —
-            kind {r.matrix.decodedRuntimeVehicleKind || "?"}
+        <h2>画像別 A → E</h2>
+        {results.map((r)=>(
+          <div key={r.fileName} style={{borderBottom:"1px solid #ddd",padding:"10px 0"}}>
+            <b>{r.fileName}</b> — GT {r.groundTruthExpectedQrCount??"未設定"} —
+            Baseline {r.baseline.qrCount} —
+            A legacy {r.matrix.currentEnsemble.legacyCompatiblePhysicalUniqueQrCount} /
+            A safe {r.matrix.currentEnsemble.physicalUniqueQrCount} /
+            A canonical {r.matrix.geometryStage.aCanonicalCount} →
+            E純増 +{r.matrix.geometryStage.eNetNewCanonicalVsA} →
+            final {r.matrix.geometryStage.finalUnionCanonicalCount} —
+            candidates coarse {r.matrix.candidateDetection.coarsePhysicalCandidateCount} /
+            A-fail {r.matrix.geometryStage.aFailedCandidateCount} /
+            finder-quad {r.matrix.geometryStage.finderOrQuadEstablishedCandidateCount} /
+            kept {r.matrix.geometryStage.geometryKeptCandidateCount} /
+            false-reduction {r.matrix.geometryStage.falseCandidateReductionCount} —
+            samePayloadFail {r.matrix.structuralValidation.samePayloadStructuralFailCount} /
+            ambiguous {r.matrix.structuralValidation.ambiguousConflictCount} —
+            A {r.matrix.timing.aElapsedMs}ms /
+            geometry {r.matrix.timing.geometryElapsedMs}ms /
+            rectify {r.matrix.timing.rectifyDecodeElapsedMs}ms /
+            fail-only {r.matrix.timing.failOnlyExpectedElapsedMs}ms —
+            kind {r.matrix.decodedRuntimeVehicleKind||"?"}
           </div>
         ))}
       </section>
 
-      <section style={{ marginTop: 18 }}>
-        <h2>A/B/C/D 集計</h2>
+      <section style={{marginTop:18}}>
+        <h2>A / E 集計</h2>
         <div>Ground Truth合計: 47 QR</div>
-        <div>Baseline: {totals ? `${totals.baselinePhysicalUnique}/${totals.expected}` : "-"}</div>
-        <div>A 現Ensemble: {totals ? `${totals.currentPhysicalUnique}/${totals.expected}` : "-"} / rate {currentRate ?? "-"}</div>
-        <div>B candidate精製+tight: {totals ? `${totals.corePhysicalUnique}/${totals.expected}` : "-"} / rate {coreRate ?? "-"}</div>
-        <div>C +threshold: {totals ? `${totals.thresholdPhysicalUnique}/${totals.expected}` : "-"} / rate {thresholdRate ?? "-"}</div>
-        <div>D +±1°: {totals ? `${totals.rescuePhysicalUnique}/${totals.expected}` : "-"} / rate {rescueRate ?? "-"}</div>
-        <div>完全取得: A {totals?.currentCompleteImages ?? "-"}/8 / B {totals?.coreCompleteImages ?? "-"}/8 / C {totals?.thresholdCompleteImages ?? "-"}/8 / D {totals?.rescueCompleteImages ?? "-"}/8</div>
-        <div>candidate: coarse {totals?.coarseCandidateCount ?? "-"} → refined {totals?.refinedCandidateCount ?? "-"} / weak除外 {totals?.weakRejectedCount ?? "-"} / overlap統合 {totals?.overlapDuplicateMergedCount ?? "-"}</div>
-        <div>canonical flow: A {totals?.aCanonicalCount ?? "-"} / B純増 {totals?.bNetNewCanonicalVsA ?? "-"} / A∪B {totals?.abCanonicalCount ?? "-"} / C純増 {totals?.cNetNewCanonicalVsAB ?? "-"} / A∪B∪C {totals?.abcCanonicalCount ?? "-"} / D純増 {totals?.dNetNewCanonicalVsABC ?? "-"} / final union {totals?.finalUnionCanonicalCount ?? "-"}</div>
-        <div>A再現性: v4=29 / legacy-compatible v5={totals?.aLegacyCompatiblePhysicalUnique ?? "-"} / structural採用後={totals?.currentPhysicalUnique ?? "-"}</div>
-        <div>A除外内訳: ambiguous conflict {totals?.aAmbiguousConflictRejectedCandidateCount ?? "-"} / non-conflict structural {totals?.aNonConflictStructuralRejectedCandidateCount ?? "-"}</div>
-        <div>crossEngineConflict: {totals?.crossEngineConflictCount ?? "-"}</div>
-        <div>runtime車種判定: {runtimeVehicleKindCorrectCount ?? "-"}/8 ({runtimeVehicleKindAccuracy ?? "-"})</div>
-        <div>時間: baseline {totals?.baselineElapsedMs ?? "-"}ms / A {totals?.currentEnsembleElapsedMs ?? "-"}ms / refine {totals?.candidateRefineElapsedMs ?? "-"}ms / B {totals?.refinedCoreElapsedMs ?? "-"}ms / threshold {totals?.thresholdElapsedMs ?? "-"}ms / ±1° {totals?.rotateRescueElapsedMs ?? "-"}ms / productionCandidate(no probe) {totals?.productionCandidateElapsedMs ?? "-"}ms / probe {totals?.zxingInvertedProbeElapsedMs ?? "-"}ms / total {totals?.totalExperimentalElapsedMs ?? "-"}ms</div>
-        {totals && (
-          <div style={{ marginTop: 10 }}>
-            <b>Threshold / ±1° 純増</b>
-            {Object.values(totals.thresholdStats).map((item) => (
-              <div key={item.id} style={{ fontSize: 13 }}>{item.id}: netNew {item.netNewCanonicalQrCount} / attempts {item.attempts}</div>
+        <div>Baseline: {totals ? (totals.baselinePhysicalUnique + "/" + totals.expected) : "-"}</div>
+        <div>A legacy-compatible: {totals ? (totals.aLegacyCompatible + "/" + totals.expected) : "-"} / rate {aLegacyRate??"-"} / reference 29/47</div>
+        <div>A structural-adopted: {totals ? (totals.aSafe + "/" + totals.expected) : "-"} / rate {aSafeRate??"-"}</div>
+        <div>E net new canonical vs A: +{totals?.eNetNew??"-"}</div>
+        <div>Final safe canonical union: {totals ? (totals.finalUnion + "/" + totals.expected) : "-"} / rate {finalRate??"-"}</div>
+        <div>完全取得: A {totals?.aCompleteImages??"-"}/8 → final {totals?.finalCompleteImages??"-"}/8</div>
+        <div>Geometry: A-fail {totals?.aFailedCandidateCount??"-"} / finder-or-quad成立 {totals?.finderOrQuadEstablishedCandidateCount??"-"} / kept {totals?.geometryKeptCandidateCount??"-"} / overlap統合 {totals?.geometryOverlapMergedCount??"-"} / false削減 {totals?.falseCandidateReductionCount??"-"}</div>
+        <div>Structural: same-payload fail {totals?.samePayloadStructuralFailCount??"-"} / single-engine fail {totals?.singleEngineStructuralFailCount??"-"} / ambiguous conflict {totals?.ambiguousConflictCount??"-"} / conflict total {totals?.crossEngineConflictCount??"-"}</div>
+        <div>runtime車種判定: {runtimeVehicleKindCorrectCount??"-"}/8 ({runtimeVehicleKindAccuracy??"-"})</div>
+        <div>時間: baseline {totals?.baselineElapsedMs??"-"}ms / A {totals?.aElapsedMs??"-"}ms / geometry {totals?.geometryElapsedMs??"-"}ms / rectify decode {totals?.rectifyDecodeElapsedMs??"-"}ms / fail-only想定 {totals?.failOnlyExpectedElapsedMs??"-"}ms / experimental total {totals?.totalExperimentalElapsedMs??"-"}ms</div>
+        <div>regression images: {regressionImages.length ? regressionImages.join(", ") : "なし"}</div>
+        {totals&&(
+          <div style={{marginTop:10}}>
+            <b>E rectify config</b>
+            {Object.values(totals.eStats).map((item)=>(
+              <div key={item.id} style={{fontSize:13}}>
+                {item.id}: netNew {item.netNewCanonicalQrCount} / attempts {item.attempts} / jsQR {item.jsqrSuccesses} / ZXing {item.zxingSuccesses}
+              </div>
             ))}
-            {Object.values(totals.rescueStats).map((item) => (
-              <div key={item.id} style={{ fontSize: 13 }}>{item.id}: netNew {item.netNewCanonicalQrCount} / attempts {item.attempts}</div>
-            ))}
-          </div>
-        )}
-        {totals && (
-          <div style={{ marginTop: 10 }}>
-            <b>ZXing audit probe（最終件数には不算入）</b>
-            <div style={{ fontSize: 13 }}>
-              TRY_HARDER=on / HybridBinarizer=built-in / ALSO_INVERTED available={String(totals.zxingInvertedHintAvailable)} /
-              tested {totals.zxingInvertedTestedCandidateCount} / extra structural pass {totals.zxingInvertedAdditionalStructuralPassVsBase}
-            </div>
           </div>
         )}
       </section>
 
-      <section style={{ marginTop: 18 }}>
-        <h2>0942 / 0944 browser-local refine診断</h2>
-        <p style={{ fontSize: 12 }}>画像/cropは端末ローカルobjectURLのみ。赤枠=旧current-small、緑枠=QR-like refined bbox。summaryには画像を含めません。</p>
-        {["IMG_0942.jpeg", "IMG_0944.jpeg"].map((name) => {
-          const visual = visualDiagnostics[name];
-          const result = results.find((r) => r.fileName === name);
-          if (!visual || !result) return <div key={name} style={{ marginTop: 10 }}>{name}: 実験完了後に表示</div>;
+      <section style={{marginTop:18}}>
+        <h2>0942 / 0944 browser-local geometry診断</h2>
+        <p style={{fontSize:12}}>橙=current-small crop、青=finder、緑=推定QR quad、紫=4-module quiet付きquad。画像/cropは端末ローカルobjectURLのみでsummaryには含めません。</p>
+        {["IMG_0942.jpeg","IMG_0944.jpeg"].map((name)=>{
+          const visual=visualDiagnostics[name];
+          const result=results.find((r)=>r.fileName===name);
+          if(!visual||!result) return <div key={name} style={{marginTop:10}}>{name}: 実験完了後に表示</div>;
           return (
-            <div key={name} style={{ marginTop: 16, border: "1px solid #ccc", borderRadius: 12, padding: 12 }}>
-              <h3 style={{ marginTop: 0 }}>{name}</h3>
-              <img src={visual.overlayUrl} alt={`${name} refined candidate overlay`} style={{ width: "100%", maxHeight: 520, objectFit: "contain", background: "#f4f4f4" }} />
-              <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-                {visual.cropUrls.map((crop) => {
-                  const diagnostic = result.matrix.candidateDiagnostics.find((item) => item.candidateIndex === crop.candidateIndex);
-                  const refined = result.matrix.candidateRefinement.refinedCandidates.find((item) => item.index === crop.candidateIndex);
-                  const q = diagnostic?.quality || {};
+            <div key={name} style={{marginTop:16,border:"1px solid #ccc",borderRadius:12,padding:12}}>
+              <h3 style={{marginTop:0}}>{name}</h3>
+              <img src={visual.overlayUrl} alt={name + " geometry overlay"} style={{width:"100%",maxHeight:520,objectFit:"contain",background:"#f4f4f4"}} />
+              <div style={{marginTop:12,display:"grid",gap:12}}>
+                {visual.cropUrls.map((crop)=>{
+                  const d=result.matrix.geometryStage.diagnostics.find((item)=>item.candidateIndex===crop.candidateIndex);
                   return (
-                    <div key={crop.candidateIndex} style={{ borderTop: "1px solid #ddd", paddingTop: 10 }}>
+                    <div key={crop.candidateIndex} style={{borderTop:"1px solid #ddd",paddingTop:10}}>
                       <b>candidate {crop.candidateIndex}</b>
-                      <div style={{ fontSize: 12, marginTop: 4 }}>
-                        x={diagnostic?.x} y={diagnostic?.y} / qrLike={diagnostic?.qrLikeScore} /
-                        B={String(Boolean(diagnostic?.coreSuccess))} /
-                        C={String(Boolean(diagnostic?.thresholdSuccess))} /
-                        D={String(Boolean(diagnostic?.rotateRescueSuccess))}
+                      <div style={{fontSize:12,marginTop:4}}>
+                        geometry={String(Boolean(d?.geometryValid))} / reason={d?.geometryFailReason} /
+                        finder={d?.finderCount} / score={d?.geometryScore} /
+                        dimension={d?.qrDimension??"-"} / modulePx={d?.modulePx??"-"} /
+                        perspectiveSpread={d?.perspectiveScaleSpread??"-"} /
+                        overlapRejected={String(Boolean(d?.overlapRejected))}
                       </div>
-                      <div style={{ fontSize: 12, marginTop: 4 }}>
-                        bboxRel {refined?.bboxWidthRel}×{refined?.bboxHeightRel} /
-                        refineOffset x={refined?.refineOffsetXRel} y={refined?.refineOffsetYRel} /
-                        axisBalance {refined?.axisBalance} /
-                        darkRatio {refined?.darkRatio}
-                      </div>
-                      <div style={{ fontSize: 12, marginTop: 4 }}>
-                        crop {q.cropPixelWidth}×{q.cropPixelHeight}px /
-                        contrastRange {q.localContrastRange} /
-                        edge {q.edgeStrength} /
-                        blurVar {q.blurIndicatorLaplacianVariance}
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginTop: 8 }}>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:8,marginTop:8}}>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 700 }}>A current-small</div>
-                          <img src={crop.currentSmallUrl} alt={`${name} candidate ${crop.candidateIndex} current small`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
+                          <div style={{fontSize:11,fontWeight:700}}>current-small fallback crop</div>
+                          <img src={crop.currentSmallUrl} alt={name + " candidate " + crop.candidateIndex + " current crop"} style={{width:"100%",maxHeight:240,objectFit:"contain",background:"#fff",border:"1px solid #ddd"}} />
                         </div>
-                        <div>
-                          <div style={{ fontSize: 11, fontWeight: 700 }}>B tight-small</div>
-                          <img src={crop.tightSmallUrl} alt={`${name} candidate ${crop.candidateIndex} tight small`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 11, fontWeight: 700 }}>B tight-medium</div>
-                          <img src={crop.tightMediumUrl} alt={`${name} candidate ${crop.candidateIndex} tight medium`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
-                        </div>
+                        {crop.rectifiedUrl&&(
+                          <div>
+                            <div style={{fontSize:11,fontWeight:700}}>quiet付きrectified crop</div>
+                            <img src={crop.rectifiedUrl} alt={name + " candidate " + crop.candidateIndex + " rectified crop"} style={{width:"100%",maxHeight:240,objectFit:"contain",background:"#fff",border:"1px solid #ddd"}} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
