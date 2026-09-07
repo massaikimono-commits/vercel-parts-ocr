@@ -46,7 +46,7 @@ async function waitForAutoDecision(page, timeoutMs) {
     const firstDiv = section.querySelector("div");
     const result = (firstDiv?.textContent || "").trim();
     return result === "大一用品商会 専用OCR" || result === "汎用A4・他社伝票OCR" || result === "判定保留";
-  }, { timeout: timeoutMs });
+  }, undefined, { timeout: timeoutMs });
 }
 
 async function waitForExpectedRedirect(page, mode) {
@@ -59,7 +59,7 @@ async function waitForOcrCompletion(page, timeoutMs) {
   await page.waitForFunction(() => {
     const body = document.body?.innerText || "";
     return /\d+件を抽出しました|\d+件を候補抽出しました|まだ部品行を抽出できませんでした|候補を自動抽出できませんでした|OCR処理でエラー|汎用OCR処理でエラー/.test(body);
-  }, { timeout: timeoutMs });
+  }, undefined, { timeout: timeoutMs });
 }
 
 async function extractParts(page) {
@@ -100,7 +100,7 @@ async function supplementalDynamic(page, file, timeoutMs) {
     await page.waitForFunction(() => {
       const value = document.querySelector("textarea")?.value || "";
       return value.includes("診断結論材料:") || value.includes("ERROR:");
-    }, { timeout: timeoutMs });
+    }, undefined, { timeout: timeoutMs });
     const report = await page.locator("textarea").inputValue();
     const m = report.match(/診断結論材料:\s*dynamicRows=(\d+)\s*\/\s*rowOCR非空=(\d+)/);
     if (m) {
