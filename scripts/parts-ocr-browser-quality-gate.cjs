@@ -12,11 +12,21 @@ const manifestPath = arg("manifest");
 const outPath = arg("out", "parts-ocr-quality-gate.json");
 const runDynamic = arg("dynamic", "false") === "true";
 const assetDir = arg("asset-dir", "");
+const replayAssetDir = arg("replay-asset-dir", "");
 if (!manifestPath) throw new Error("--manifest is required");
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 if (!Array.isArray(manifest)) throw new Error("manifest must be an array");
 if (assetDir) fs.mkdirSync(assetDir, { recursive: true });
+
+let replayAssets = {};
+if (replayAssetDir) {
+  const replayManifestPath = path.join(replayAssetDir, "assets-manifest.json");
+  if (!fs.existsSync(replayManifestPath)) {
+    throw new Error("missing replay asset manifest: " + replayManifestPath);
+  }
+  replayAssets = JSON.parse(fs.readFileSync(replayManifestPath, "utf8"));
+}
 
 function now() { return Date.now(); }
 
@@ -153,6 +163,24 @@ function shouldCaptureAsset(url) {
       }
 
       const context = await browser.newContext({ viewport: { width: 1280, height: 1600 }, locale: "ja-JP" });
+      if (replayAssetDir) {
+        await context.route("**/*", async (route) => {
+          const url = route.request().url();
+          const hit = replayAssets[url];
+          if (hit && hit.file) {
+            const local = path.join(replayAssetDir, hit.file);
+            if (fs.existsSync(local)) {
+              await route.fulfill({
+                status: 200,
+                body: fs.readFileSync(local),
+                contentType: hit.contentType || "application/octet-stream",
+              });
+              return;
+            }
+          }
+          await route.continue();
+        });
+      }
       await context.addInitScript(() => {
         setInterval(() => {
           if (location.pathname !== "/ocr/auto") return;
