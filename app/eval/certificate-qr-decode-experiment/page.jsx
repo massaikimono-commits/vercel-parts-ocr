@@ -343,6 +343,193 @@ function cropCandidate(source, pageGeometry, candidate, config) {
   if (config.mode === "otsu" || config.mode === "adaptive") thresholdCanvas(ctx, canvas, config.mode);
   return canvas;
 }
+function rectIntegral(binary, width, height) {
+  const out = new Uint32Array((width + 1) * (height + 1));
+  for (let y = 0; y < height; y += 1) {
+    let row = 0;
+    for (let x = 0; x < width; x += 1) {
+      row += binary[y * width + x];
+      out[(y + 1) * (width + 1) + x + 1] = out[y * (width + 1) + x + 1] + row;
+    }
+  }
+  return out;
+}
+function integralRectSum(integral, width, x0, y0, x1, y1) {
+  return integral[y1 * (width + 1) + x1]
+    - integral[y0 * (width + 1) + x1]
+    - integral[y1 * (width + 1) + x0]
+    + integral[y0 * (width + 1) + x0];
+}
+function refineCandidateQrLike(raw, page, candidate) {
+  const center = paperPoint(page, raw, candidate);
+  const paperW = paperWidthPx(page, raw);
+  const paperH = paperHeightPx(page, raw);
+  const searchRawW = Math.max(80, paperW * .12);
+  const searchRawH = searchRawW;
+  let sx = Math.max(0, Math.min(raw.width - searchRawW, center.x - searchRawW / 2));
+  let sy = Math.max(0, Math.min(raw.height - searchRawH, center.y - searchRawH / 2));
+  const sw = Math.max(1, Math.min(raw.width - sx, searchRawW));
+  const sh = Math.max(1, Math.min(raw.height - sy, searchRawH));
+  const analysisSize = 180;
+  const canvas = document.createElement("canvas");
+  canvas.width = analysisSize;
+  canvas.height = analysisSize;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(raw, sx, sy, sw, sh, 0, 0, analysisSize, analysisSize);
+  try {
+    const image = ctx.getImageData(0, 0, analysisSize, analysisSize);
+    const gray = new Uint8Array(analysisSize * analysisSize);
+    for (let i = 0, p = 0; i < gray.length; i += 1, p += 4) {
+      gray[i] = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+    }
+    const threshold = otsuThreshold(gray);
+    const dark = new Uint8Array(gray.length);
+    const edgeH = new Uint8Array(gray.length);
+    const edgeV = new Uint8Array(gray.length);
+    const diffThreshold = 20;
+    for (let y = 0; y < analysisSize; y += 1) {
+      for (let x = 0; x < analysisSize; x += 1) {
+        const i = y * analysisSize + x;
+        dark[i] = gray[i] <= threshold ? 1 : 0;
+        if (x + 1 < analysisSize && Math.abs(gray[i] - gray[i + 1]) >= diffThreshold) edgeH[i] = 1;
+        if (y + 1 < analysisSize && Math.abs(gray[i] - gray[i + analysisSize]) >= diffThreshold) edgeV[i] = 1;
+      }
+    }
+    const darkI = rectIntegral(dark, analysisSize, analysisSize);
+    const hI = rectIntegral(edgeH, analysisSize, analysisSize);
+    const vI = rectIntegral(edgeV, analysisSize, analysisSize);
+    const sizes = [54, 64, 74, 84, 94];
+    let best = null;
+    for (const size of sizes) {
+      const half = size / 2;
+      for (let cy = 54; cy <= 126; cy += 8) {
+        for (let cx = 54; cx <= 126; cx += 8) {
+          const x0 = Math.max(0, Math.round(cx - half));
+          const y0 = Math.max(0, Math.round(cy - half));
+          const x1 = Math.min(analysisSize, Math.round(cx + half));
+          const y1 = Math.min(analysisSize, Math.round(cy + half));
+          const area = Math.max(1, (x1 - x0) * (y1 - y0));
+          const hRate = integralRectSum(hI, analysisSize, x0, y0, x1, y1) / area;
+          const vRate = integralRectSum(vI, analysisSize, x0, y0, x1, y1) / area;
+          const edgeDensity = (hRate + vRate) / 2;
+          const axisBalance = Math.min(hRate, vRate) / Math.max(.0001, Math.max(hRate, vRate));
+          const darkRatio = integralRectSum(darkI, analysisSize, x0, y0, x1, y1) / area;
+          const darkBalance = Math.max(0, 1 - Math.abs(darkRatio - .45) / .45);
+          const centerDistance = Math.hypot(cx - analysisSize / 2, cy - analysisSize / 2) / analysisSize;
+          const score = edgeDensity * (.55 + .45 * axisBalance) * (.65 + .35 * darkBalance) - centerDistance * .012;
+          if (!best || score > best.score) best = { cx, cy, size, score, edgeDensity, axisBalance, darkRatio };
+        }
+      }
+    }
+    const scaleX = sw / analysisSize;
+    const scaleY = sh / analysisSize;
+    const rawCenterX = sx + best.cx * scaleX;
+    const rawCenterY = sy + best.cy * scaleY;
+    const bboxW = best.size * scaleX;
+    const bboxH = best.size * scaleY;
+    const dxRel = (rawCenterX - center.x) / paperW;
+    const dyRel = (rawCenterY - center.y) / paperH;
+    const qrLikePass = best.score >= .028 && best.edgeDensity >= .035 && best.axisBalance >= .18 && best.darkRatio >= .07 && best.darkRatio <= .90;
+    return {
+      ...candidate,
+      coarseX: candidate.x,
+      coarseY: candidate.y,
+      x: Number(Math.max(0, Math.min(1, Number(candidate.x) + dxRel)).toFixed(4)),
+      y: Number(Math.max(0, Math.min(1, Number(candidate.y) + dyRel)).toFixed(4)),
+      refinedRawCenterX: rawCenterX,
+      refinedRawCenterY: rawCenterY,
+      refinedRawBboxWidth: bboxW,
+      refinedRawBboxHeight: bboxH,
+      bboxWidthRel: Number((bboxW / paperW).toFixed(4)),
+      bboxHeightRel: Number((bboxH / paperH).toFixed(4)),
+      squareRatio: Number((bboxW / Math.max(1, bboxH)).toFixed(3)),
+      refineOffsetXRel: Number(dxRel.toFixed(4)),
+      refineOffsetYRel: Number(dyRel.toFixed(4)),
+      qrLikeScore: Number(best.score.toFixed(4)),
+      localEdgeDensity: Number(best.edgeDensity.toFixed(4)),
+      axisBalance: Number(best.axisBalance.toFixed(4)),
+      darkRatio: Number(best.darkRatio.toFixed(4)),
+      qrLikePass,
+    };
+  } finally {
+    canvas.width = 1;
+    canvas.height = 1;
+  }
+}
+function rawBbox(candidate) {
+  const w = Number(candidate.refinedRawBboxWidth || 0);
+  const h = Number(candidate.refinedRawBboxHeight || w);
+  return {
+    x0: Number(candidate.refinedRawCenterX || 0) - w / 2,
+    y0: Number(candidate.refinedRawCenterY || 0) - h / 2,
+    x1: Number(candidate.refinedRawCenterX || 0) + w / 2,
+    y1: Number(candidate.refinedRawCenterY || 0) + h / 2,
+    w,
+    h,
+  };
+}
+function bboxIou(a, b) {
+  const aa = rawBbox(a);
+  const bb = rawBbox(b);
+  const iw = Math.max(0, Math.min(aa.x1, bb.x1) - Math.max(aa.x0, bb.x0));
+  const ih = Math.max(0, Math.min(aa.y1, bb.y1) - Math.max(aa.y0, bb.y0));
+  const intersection = iw * ih;
+  const union = aa.w * aa.h + bb.w * bb.h - intersection;
+  return union > 0 ? intersection / union : 0;
+}
+function refineQrCandidates(raw, page, coarseCandidates) {
+  const refinedAll = (coarseCandidates || []).map((candidate) => refineCandidateQrLike(raw, page, candidate));
+  let weakRejectedCount = refinedAll.filter((candidate) => !candidate.qrLikePass).length;
+  let pool = refinedAll.filter((candidate) => candidate.qrLikePass);
+  if (pool.length < Math.min(2, refinedAll.length)) {
+    pool = [...refinedAll].sort((a, b) => b.qrLikeScore - a.qrLikeScore).slice(0, Math.min(2, refinedAll.length));
+    weakRejectedCount = Math.max(0, refinedAll.length - pool.length);
+  }
+  const kept = [];
+  let overlapDuplicateMergedCount = 0;
+  for (const candidate of [...pool].sort((a, b) => b.qrLikeScore - a.qrLikeScore)) {
+    const duplicate = kept.find((known) => {
+      const iou = bboxIou(known, candidate);
+      const distance = Math.hypot(
+        known.refinedRawCenterX - candidate.refinedRawCenterX,
+        known.refinedRawCenterY - candidate.refinedRawCenterY
+      );
+      const minSize = Math.min(known.refinedRawBboxWidth, candidate.refinedRawBboxWidth);
+      return iou >= .30 || distance <= minSize * .48;
+    });
+    if (duplicate) {
+      overlapDuplicateMergedCount += 1;
+      continue;
+    }
+    kept.push(candidate);
+  }
+  kept.sort((a, b) => a.x - b.x);
+  return {
+    inputCandidateCount: refinedAll.length,
+    qrLikePassCount: refinedAll.filter((candidate) => candidate.qrLikePass).length,
+    weakRejectedCount,
+    overlapDuplicateMergedCount,
+    falseOrDuplicateCandidateReductionCount: Math.max(0, refinedAll.length - kept.length),
+    refinedCandidates: kept.map((candidate, index) => ({ ...candidate, index: index + 1 })),
+    allDiagnostics: refinedAll.map((candidate, index) => ({
+      coarseIndex: index + 1,
+      coarseX: candidate.coarseX,
+      coarseY: candidate.coarseY,
+      refinedX: candidate.x,
+      refinedY: candidate.y,
+      bboxWidthRel: candidate.bboxWidthRel,
+      bboxHeightRel: candidate.bboxHeightRel,
+      squareRatio: candidate.squareRatio,
+      refineOffsetXRel: candidate.refineOffsetXRel,
+      refineOffsetYRel: candidate.refineOffsetYRel,
+      qrLikeScore: candidate.qrLikeScore,
+      localEdgeDensity: candidate.localEdgeDensity,
+      axisBalance: candidate.axisBalance,
+      darkRatio: candidate.darkRatio,
+      qrLikePass: candidate.qrLikePass,
+    })),
+  };
+}
 function documentPerspectiveMetrics(page) {
   const q = Array.isArray(page?.quad) && page.quad.length === 4 ? page.quad : null;
   if (!q) return { documentSkewDeg: 0, perspectiveSpreadDeg: 0, quadAvailable: false };
@@ -512,25 +699,67 @@ function canonicalDecode(text, bytes = []) {
   if (direct) return direct;
   return decodeBytesText(bytes);
 }
+function structuralValidation(canonical) {
+  const text = canonicalText(canonical);
+  const length = text.length;
+  const slashCount = (text.match(/\//g) || []).length;
+  const replacementCount = (text.match(/�/g) || []).length;
+  const controlCount = [...text].filter((ch) => {
+    const code = ch.charCodeAt(0);
+    return code < 32 && ch !== "\n" && ch !== "\t";
+  }).length;
+  const printableRatio = length ? (length - replacementCount - controlCount) / length : 0;
+  const fields = text.split("/").filter((part) => part.length > 0).length;
+  let score = 0;
+  if (length >= 3 && length <= 1200) score += 2;
+  if (slashCount >= 1 && slashCount <= 40) score += 3;
+  if (fields >= 2 && fields <= 50) score += 2;
+  if (printableRatio >= .98) score += 2;
+  if (replacementCount === 0 && controlCount === 0) score += 1;
+  const pass = length >= 3 && length <= 1200
+    && slashCount >= 1 && slashCount <= 40
+    && fields >= 2 && fields <= 50
+    && printableRatio >= .96
+    && replacementCount === 0
+    && controlCount === 0;
+  return {
+    pass,
+    score,
+    lengthBucket: length < 3 ? "too-short" : length > 1200 ? "too-long" : "normal",
+    slashCountBucket: slashCount === 0 ? "none" : slashCount <= 8 ? "1-8" : slashCount <= 20 ? "9-20" : "21+",
+    fieldCountBucket: fields <= 1 ? "0-1" : fields <= 8 ? "2-8" : fields <= 20 ? "9-20" : "21+",
+    printableRatioBucket: printableRatio >= .98 ? "high" : printableRatio >= .96 ? "borderline" : "low",
+  };
+}
 async function decodeJs(jsQR, canvas) {
   try {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const result = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
-    if (!result) return { success: false, canonical: "" };
+    if (!result) return { success: false, canonical: "", structural: structuralValidation("") };
     const canonical = canonicalDecode(result.data || "", Array.from(result.binaryData || []));
-    return { success: Boolean(canonical), canonical };
+    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical) };
   } catch {
-    return { success: false, canonical: "" };
+    return { success: false, canonical: "", structural: structuralValidation("") };
   }
 }
-async function makeReader() {
+async function makeReader(options = {}) {
   const browser = await import("@zxing/browser");
   const lib = await import("@zxing/library");
   const hints = new Map();
   hints.set(lib.DecodeHintType.POSSIBLE_FORMATS, [lib.BarcodeFormat.QR_CODE]);
   hints.set(lib.DecodeHintType.TRY_HARDER, true);
-  return new browser.BrowserQRCodeReader(hints);
+  const invertedHintAvailable = lib.DecodeHintType.ALSO_INVERTED !== undefined;
+  if (options.alsoInverted && invertedHintAvailable) hints.set(lib.DecodeHintType.ALSO_INVERTED, true);
+  return {
+    reader: new browser.BrowserQRCodeReader(hints),
+    audit: {
+      tryHarderEnabled: true,
+      alsoInvertedHintAvailable: invertedHintAvailable,
+      alsoInvertedEnabled: Boolean(options.alsoInverted && invertedHintAvailable),
+      hybridBinarizerPath: "BrowserCodeReader.decodeFromCanvas built-in",
+    },
+  };
 }
 async function decodeZxing(reader, canvas) {
   try {
@@ -538,13 +767,37 @@ async function decodeZxing(reader, canvas) {
     const raw = Array.from(result?.getRawBytes?.() || result?.rawBytes || []);
     const text = result?.getText?.() || result?.text || "";
     const canonical = canonicalDecode(text, raw);
-    return { success: Boolean(canonical), canonical };
+    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical) };
   } catch {
-    return { success: false, canonical: "" };
+    return { success: false, canonical: "", structural: structuralValidation("") };
   }
 }
 function sameCanonical(a, b) {
   return Boolean(a && b && a === b);
+}
+function adoptCanonical(js, zx) {
+  const jsValid = Boolean(js?.success && js?.structural?.pass);
+  const zxValid = Boolean(zx?.success && zx?.structural?.pass);
+  const conflict = Boolean(js?.success && zx?.success && !sameCanonical(js.canonical, zx.canonical));
+  if (js?.success && zx?.success && sameCanonical(js.canonical, zx.canonical)) {
+    if (!jsValid && !zxValid) return { canonical: "", adoptedEngine: "none", adoptionReason: "same-payload-structural-fail", conflict: false };
+    return { canonical: js.canonical, adoptedEngine: "both", adoptionReason: "same-payload", conflict: false };
+  }
+  if (conflict) {
+    if (jsValid && !zxValid) return { canonical: js.canonical, adoptedEngine: "jsqr", adoptionReason: "conflict-js-only-structural-pass", conflict: true };
+    if (zxValid && !jsValid) return { canonical: zx.canonical, adoptedEngine: "zxing", adoptionReason: "conflict-zxing-only-structural-pass", conflict: true };
+    if (jsValid && zxValid) {
+      const jsScore = Number(js.structural.score || 0);
+      const zxScore = Number(zx.structural.score || 0);
+      if (jsScore >= zxScore + 2) return { canonical: js.canonical, adoptedEngine: "jsqr", adoptionReason: "conflict-higher-structural-score", conflict: true };
+      if (zxScore >= jsScore + 2) return { canonical: zx.canonical, adoptedEngine: "zxing", adoptionReason: "conflict-higher-structural-score", conflict: true };
+      return { canonical: "", adoptedEngine: "none", adoptionReason: "conflict-ambiguous", conflict: true };
+    }
+    return { canonical: "", adoptedEngine: "none", adoptionReason: "conflict-structural-fail", conflict: true };
+  }
+  if (jsValid) return { canonical: js.canonical, adoptedEngine: "jsqr", adoptionReason: "single-engine-structural-pass", conflict: false };
+  if (zxValid) return { canonical: zx.canonical, adoptedEngine: "zxing", adoptionReason: "single-engine-structural-pass", conflict: false };
+  return { canonical: "", adoptedEngine: "none", adoptionReason: js?.success || zx?.success ? "single-engine-structural-fail" : "no-decode", conflict: false };
 }
 function traceCounts(trace) {
   const events = Array.isArray(trace?.events) ? trace.events : [];
