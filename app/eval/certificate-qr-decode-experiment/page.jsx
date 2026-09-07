@@ -1695,6 +1695,98 @@ async function runLimitedQualityRescueExperiment({
     canonicalPayloadIncluded:false,
   };
 }
+async function browserDecodedImageDimensions(file) {
+  const url=URL.createObjectURL(file);
+  try{
+    const image=await new Promise((resolve,reject)=>{
+      const node=new Image();
+      node.onload=()=>resolve(node);
+      node.onerror=()=>reject(new Error("座標diagnostic用画像寸法を取得できませんでした"));
+      node.src=url;
+    });
+    return {
+      naturalWidth:Number(image.naturalWidth||image.width||0),
+      naturalHeight:Number(image.naturalHeight||image.height||0),
+      manualExifTransformApplied:false,
+      browserDecodedOrientationUsed:true,
+    };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+function rectFromCenter(center,width,height,sourceWidth,sourceHeight) {
+  const w=Math.max(1,Math.min(Number(sourceWidth)||1,Number(width)||1));
+  const h=Math.max(1,Math.min(Number(sourceHeight)||1,Number(height)||1));
+  let x=Number(center?.x||0)-w/2;
+  let y=Number(center?.y||0)-h/2;
+  x=Math.max(0,Math.min((Number(sourceWidth)||1)-w,x));
+  y=Math.max(0,Math.min((Number(sourceHeight)||1)-h,y));
+  return {x,y,w,h};
+}
+function roundRect(rect,digits=2) {
+  if(!rect) return null;
+  const f=(v)=>Number(Number(v||0).toFixed(digits));
+  return {x:f(rect.x),y:f(rect.y),w:f(rect.w),h:f(rect.h)};
+}
+function rectFromCropMeta(meta) {
+  if(!meta) return null;
+  return {x:Number(meta.sx),y:Number(meta.sy),w:Number(meta.sw),h:Number(meta.sh)};
+}
+function rectToDisplay(rect,scale) {
+  if(!rect) return null;
+  return roundRect({x:rect.x*scale,y:rect.y*scale,w:rect.w*scale,h:rect.h*scale},2);
+}
+function maxRectDelta(a,b) {
+  if(!a||!b) return null;
+  return Number(Math.max(
+    Math.abs(a.x-b.x),Math.abs(a.y-b.y),Math.abs(a.w-b.w),Math.abs(a.h-b.h)
+  ).toFixed(3));
+}
+function sourceWindowGeometry(pageGeometry,source,candidate) {
+  const x=Number(candidate?.x||0),y=Number(candidate?.y||0);
+  const w=Math.max(0,Number(candidate?.windowWidth||0));
+  const h=Math.max(0,Number(candidate?.windowHeight||0));
+  const x0=Math.max(0,Math.min(1,x-w/2)),x1=Math.max(0,Math.min(1,x+w/2));
+  const y0=Math.max(0,Math.min(1,y-h/2)),y1=Math.max(0,Math.min(1,y+h/2));
+  const quad=[
+    paperPoint(pageGeometry,source,{x:x0,y:y0}),
+    paperPoint(pageGeometry,source,{x:x1,y:y0}),
+    paperPoint(pageGeometry,source,{x:x1,y:y1}),
+    paperPoint(pageGeometry,source,{x:x0,y:y1}),
+  ];
+  const xs=quad.map((p)=>p.x),ys=quad.map((p)=>p.y);
+  return {
+    normalized:{x:Number(x.toFixed(4)),y:Number(y.toFixed(4)),w:Number(w.toFixed(4)),h:Number(h.toFixed(4))},
+    sourceQuad:quad.map((p)=>({x:Number(p.x.toFixed(2)),y:Number(p.y.toFixed(2))})),
+    sourceAxisAlignedBBox:roundRect({
+      x:Math.min(...xs),
+      y:Math.min(...ys),
+      w:Math.max(...xs)-Math.min(...xs),
+      h:Math.max(...ys)-Math.min(...ys),
+    },2),
+  };
+}
+function drawRectOverlay(ctx,rect,scale,color,dashed=false,lineWidth=3) {
+  if(!rect) return;
+  ctx.save();
+  ctx.strokeStyle=color;
+  ctx.lineWidth=Math.max(1,lineWidth*scale);
+  if(dashed) ctx.setLineDash([10*scale,7*scale]);
+  ctx.strokeRect(rect.x*scale,rect.y*scale,rect.w*scale,rect.h*scale);
+  ctx.restore();
+}
+function drawSourceQuadOverlay(ctx,quad,scale,color) {
+  if(!Array.isArray(quad)||quad.length!==4) return;
+  ctx.save();
+  ctx.strokeStyle=color;
+  ctx.lineWidth=Math.max(1,3*scale);
+  ctx.beginPath();
+  ctx.moveTo(quad[0].x*scale,quad[0].y*scale);
+  for(let i=1;i<4;i+=1) ctx.lineTo(quad[i].x*scale,quad[i].y*scale);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
 function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -1707,6 +1799,20 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
   const raw=await sourceCanvas(file);
   const normalized=normalizeCertificateCanvas(raw,1800);
   const diagnostics=matrix?.geometryStage?.diagnostics||[];
+  const browserImage=await browserDecodedImageDimensions(file);
+  const normCtx=normalized.canvas.getContext("2d",{willReadFrequently:true});
+  const normImage=normCtx.getImageData(0,0,normalized.canvas.width,normalized.canvas.height);
+  const diagnosticRawCandidates=detectCertificateQrDensityCandidates2D(
+    normImage.data,
+    normImage.width,
+    normImage.height,
+    {maxCandidates:20}
+  );
+  const diagnosticCoarse=clusterCertificateQrCandidates2D(diagnosticRawCandidates,{
+    maxCandidates:10,
+    xTolerance:.030,
+    rowTolerance:.060,
+  });
   const scale=Math.min(1,1400/Math.max(raw.width,raw.height));
   const overlay=document.createElement("canvas");
   overlay.width=Math.max(1,Math.round(raw.width*scale));
@@ -1717,6 +1823,7 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
   ctx.font=`${Math.max(14,Math.round(18*scale))}px system-ui`;
   ctx.textBaseline="top";
   const cropUrls=[];
+  let coordinateAudit=null;
 
   const drawFinderSet=(finders,color,radius=5)=>{
     ctx.fillStyle=color;
@@ -1773,6 +1880,124 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
       }
 
       const currentSmall=cropCandidate(raw,normalized.paper,candidate,ENSEMBLE_CONFIGS[0]);
+
+      if((normalizeFixedFileName(file)||safeName(file))==="IMG_0942.jpeg"&&item.candidateIndex===1){
+        const rerunCandidate=diagnosticCoarse.candidates[0]||null;
+        const formalCandidate=matrix?.candidateDetection?.physicalCandidates?.find((entry)=>entry.index===1)||null;
+        const candidateForAudit=rerunCandidate||candidate;
+        const sourceWindow=sourceWindowGeometry(normalized.paper,raw,candidateForAudit);
+        const sourceCenter=paperPoint(normalized.paper,raw,candidateForAudit);
+        const fallbackWidth=paperWidthPx(normalized.paper,raw)*ENSEMBLE_CONFIGS[0].widthRel;
+        const fallbackDesignRect=rectFromCenter(sourceCenter,fallbackWidth,fallbackWidth,raw.width,raw.height);
+        const actualDecodeRect=rectFromCropMeta(currentSmall.__qrCropMeta);
+        const displayFallbackRect=rectToDisplay(fallbackDesignRect,scale);
+        const displayActualRect=rectToDisplay(actualDecodeRect,scale);
+        const formalCandidateMatchesRerun=Boolean(
+          formalCandidate&&rerunCandidate&&
+          Math.abs(Number(formalCandidate.x)-Number(rerunCandidate.x))<=.0001&&
+          Math.abs(Number(formalCandidate.y)-Number(rerunCandidate.y))<=.0001
+        );
+        const fallbackVsActualDecodeRectDeltaPx=maxRectDelta(fallbackDesignRect,actualDecodeRect);
+        const sourceDisplayScaleX=browserImage.naturalWidth
+          ?raw.width/browserImage.naturalWidth:null;
+        const sourceDisplayScaleY=browserImage.naturalHeight
+          ?raw.height/browserImage.naturalHeight:null;
+        const scaleConsistent=Number.isFinite(sourceDisplayScaleX)&&Number.isFinite(sourceDisplayScaleY)
+          ?Math.abs(sourceDisplayScaleX-sourceDisplayScaleY)<=.0005
+          :null;
+        const coordinateTransformMismatchDetected=
+          !formalCandidateMatchesRerun||
+          fallbackVsActualDecodeRectDeltaPx==null||
+          fallbackVsActualDecodeRectDeltaPx>.75||
+          scaleConsistent===false;
+        const interpretation=coordinateTransformMismatchDetected
+          ?"coordinate-mismatch-detected-review-transform-path"
+          :"crop-coordinate-consistent-with-candidate-density-false-positive-is-primary-suspect";
+        coordinateAudit={
+          diagnosticOnly:true,
+          fileName:"IMG_0942.jpeg",
+          candidateIndex:1,
+          sourceImage:{
+            browserDecodedNaturalWidth:browserImage.naturalWidth,
+            browserDecodedNaturalHeight:browserImage.naturalHeight,
+            sourceCanvasWidth:raw.width,
+            sourceCanvasHeight:raw.height,
+            sourceCanvasScaleFromNaturalX:sourceDisplayScaleX==null?null:Number(sourceDisplayScaleX.toFixed(6)),
+            sourceCanvasScaleFromNaturalY:sourceDisplayScaleY==null?null:Number(sourceDisplayScaleY.toFixed(6)),
+            uniformScale:scaleConsistent,
+            browserDecodedOrientationUsed:true,
+            manualExifTransformApplied:false,
+            exifTagParsed:false,
+          },
+          normalizedDetectionCanvas:{
+            width:normalized.canvas.width,
+            height:normalized.canvas.height,
+            paperNormalizationMode:normalized.mode,
+            paperNormalizationConfidence:Number(Number(normalized.confidence||0).toFixed(4)),
+            detectorRoiNormalized:{xStart:.34,xEnd:.99,yStart:.68,yEnd:.99},
+          },
+          candidate:{
+            formalCandidateIndex:formalCandidate?.index||1,
+            rerunCandidateIndex:1,
+            formalCandidateMatchesDiagnosticRerun:formalCandidateMatchesRerun,
+            formalNormalized:formalCandidate?{
+              x:Number(Number(formalCandidate.x).toFixed(4)),
+              y:Number(Number(formalCandidate.y).toFixed(4)),
+            }:null,
+            rerunNormalized:sourceWindow.normalized,
+            sourceCenter:{x:Number(sourceCenter.x.toFixed(2)),y:Number(sourceCenter.y.toFixed(2))},
+            sourceWindowQuad:sourceWindow.sourceQuad,
+            sourceAxisAlignedBBox:sourceWindow.sourceAxisAlignedBBox,
+          },
+          fallbackCrop:{
+            configId:ENSEMBLE_CONFIGS[0].id,
+            normalizedToSource:{
+              x:Number((fallbackDesignRect.x/raw.width).toFixed(6)),
+              y:Number((fallbackDesignRect.y/raw.height).toFixed(6)),
+              w:Number((fallbackDesignRect.w/raw.width).toFixed(6)),
+              h:Number((fallbackDesignRect.h/raw.height).toFixed(6)),
+            },
+            sourceRect:roundRect(fallbackDesignRect,2),
+            displayRect:displayFallbackRect,
+          },
+          actualDecodeCrop:{
+            configId:ENSEMBLE_CONFIGS[0].id,
+            sourceRect:roundRect(actualDecodeRect,2),
+            displayRect:displayActualRect,
+            decodeCanvasWidth:currentSmall.width,
+            decodeCanvasHeight:currentSmall.height,
+            padPx:Number(currentSmall.__qrCropMeta?.pad||0),
+            drawWidthPx:Number(currentSmall.__qrCropMeta?.drawWidth||0),
+            drawHeightPx:Number(currentSmall.__qrCropMeta?.drawHeight||0),
+          },
+          displayOverlay:{
+            width:overlay.width,
+            height:overlay.height,
+            sourceToDisplayScale:Number(scale.toFixed(6)),
+          },
+          consistency:{
+            fallbackVsActualDecodeRectDeltaPx,
+            candidateIndexMappingConsistent:formalCandidateMatchesRerun,
+            sourceToDisplayScaleConsistent:scaleConsistent,
+            coordinateTransformMismatchDetected,
+            interpretation,
+          },
+          designAudit:{
+            candidateCoordinatesProducedOnNormalizedPaperCanvas:true,
+            paperPointMapsNormalizedPaperCoordinatesBackToSource:true,
+            cropCandidateUsesSourceSpaceAfterPaperPoint:true,
+            displayOverlayAppliesSourceToDisplayScaleAfterSourceRectComputed:true,
+            bottomRoiVsFullImageBasis:"detector ROI is defined in normalized full-paper coordinates; returned candidate x/y are normalized full-paper coordinates, not ROI-local coordinates",
+          },
+          payloadIncluded:false,
+          imageIncluded:false,
+        };
+
+        drawSourceQuadOverlay(ctx,sourceWindow.sourceQuad,scale,"#00c7be");
+        drawRectOverlay(ctx,fallbackDesignRect,scale,"#ff9f0a",false,5);
+        drawRectOverlay(ctx,actualDecodeRect,scale,"#ff2d55",true,2);
+      }
+
       const currentSmallUrl=await canvasToObjectUrl(currentSmall);
       currentSmall.width=1;
       currentSmall.height=1;
@@ -1799,12 +2024,16 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
     return {
       overlayUrl,
       cropUrls,
+      coordinateAudit,
       legend:{
         coarseCrop:"orange",
         rejectedBestTriplet:"red-dashed",
         selectedFinders:"blue",
         selectedQrQuad:"green",
         selectedQuietQuad:"purple",
+        candidateSourceWindow:"cyan",
+        fallbackCropRect:"orange-thick",
+        actualDecodeCropRect:"pink-dashed",
       },
     };
   } finally {
@@ -3676,7 +3905,7 @@ export default function CertificateQrDecodeExperimentPage() {
     schema:"icb-certificate-qr-decode-experiment-summary-v7",
     summaryVariant:"management-audit-short-v1",
     experimentalHead,
-    diagnosticRevision:"v7-postformal-limited-quality-rescue-3",
+    diagnosticRevision:"v7-postformal-crop-coordinate-audit-4",
     experimentRoute:EXPERIMENT_ROUTE,
     baselineTargetRoute:PATHNAME,
     groundTruthUsedDuringDecode:false,
@@ -3717,6 +3946,7 @@ export default function CertificateQrDecodeExperimentPage() {
       successfulDecodeReference:managementQualityReference,
       priorityCandidates:managementPriorityQuality,
     }:null,
+    coordinateAudit0942Candidate1:visualDiagnostics["IMG_0942.jpeg"]?.coordinateAudit||null,
     limitedQualityRescue:totals?{
       diagnosticOnly:true,
       target:{fileName:LIMITED_QUALITY_RESCUE_TARGET.fileName,candidateIndex:LIMITED_QUALITY_RESCUE_TARGET.candidateIndex},
@@ -3748,7 +3978,7 @@ export default function CertificateQrDecodeExperimentPage() {
     experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
-    diagnosticRevision:"v7-postformal-limited-quality-rescue-3",
+    diagnosticRevision:"v7-postformal-crop-coordinate-audit-4",
     experimentRoute:EXPERIMENT_ROUTE,
     pathname:PATHNAME,
     pathnameRole:"baseline-target-route",
@@ -3864,6 +4094,7 @@ export default function CertificateQrDecodeExperimentPage() {
       imageIncluded:false,
       payloadIncluded:false,
     }:null,
+    coordinateAudit0942Candidate1:visualDiagnostics["IMG_0942.jpeg"]?.coordinateAudit||null,
     limitedQualityRescueTotals:totals?{
       diagnosticOnly:true,
       formalV7ReferenceHead:"339cbf5d832fd2bc9ab5eadfa260cb16adda02f9",
@@ -4062,7 +4293,7 @@ export default function CertificateQrDecodeExperimentPage() {
 
       <section style={{marginTop:18}}>
         <h2>0942 / 0944 browser-local triplet geometry診断</h2>
-        <p style={{fontSize:12}}>橙=current-small、赤破線=rejectされたbest triplet、青=best採用triplet、シアン=alternate採用triplet、緑=QR quad、紫=4-module quiet quad。画像/cropは端末ローカルのみでsummaryに含めません。</p>
+        <p style={{fontSize:12}}>橙=current-small、赤破線=rejectされたbest triplet、青=best採用triplet、シアン=alternate採用triplet、緑=QR quad、紫=4-module quiet quad。IMG_0942 candidate 1だけ追加で、水色=candidate source window、太い橙=fallback crop、ピンク破線=実decode crop。画像/cropは端末ローカルのみでsummaryに含めません。</p>
         {["IMG_0942.jpeg","IMG_0944.jpeg"].map((name)=>{
           const visual=visualDiagnostics[name];
           const result=results.find((r)=>r.fileName===name);
@@ -4071,6 +4302,18 @@ export default function CertificateQrDecodeExperimentPage() {
             <div key={name} style={{marginTop:16,border:"1px solid #ccc",borderRadius:12,padding:12}}>
               <h3 style={{marginTop:0}}>{name}</h3>
               <img src={visual.overlayUrl} alt={name + " triplet geometry overlay"} style={{width:"100%",maxHeight:520,objectFit:"contain",background:"#f4f4f4"}} />
+              {name==="IMG_0942.jpeg"&&visual.coordinateAudit&&(
+                <div style={{marginTop:10,padding:10,border:"1px solid #00c7be",borderRadius:8,fontSize:12}}>
+                  <b>candidate 1 crop座標監査</b>
+                  <div>source {visual.coordinateAudit.sourceImage.sourceCanvasWidth}×{visual.coordinateAudit.sourceImage.sourceCanvasHeight} / display {visual.coordinateAudit.displayOverlay.width}×{visual.coordinateAudit.displayOverlay.height}</div>
+                  <div>candidate normalized x={visual.coordinateAudit.candidate.rerunNormalized.x}, y={visual.coordinateAudit.candidate.rerunNormalized.y}, w={visual.coordinateAudit.candidate.rerunNormalized.w}, h={visual.coordinateAudit.candidate.rerunNormalized.h}</div>
+                  <div>source bbox {JSON.stringify(visual.coordinateAudit.candidate.sourceAxisAlignedBBox)}</div>
+                  <div>fallback {JSON.stringify(visual.coordinateAudit.fallbackCrop.sourceRect)}</div>
+                  <div>actual decode {JSON.stringify(visual.coordinateAudit.actualDecodeCrop.sourceRect)}</div>
+                  <div>fallback↔actual delta {visual.coordinateAudit.consistency.fallbackVsActualDecodeRectDeltaPx}px / transform mismatch {String(visual.coordinateAudit.consistency.coordinateTransformMismatchDetected)}</div>
+                  <div>interpretation: {visual.coordinateAudit.consistency.interpretation}</div>
+                </div>
+              )}
               <div style={{marginTop:12,display:"grid",gap:12}}>
                 {visual.cropUrls.map((crop)=>{
                   const d=result.matrix.geometryStage.diagnostics.find((item)=>item.candidateIndex===crop.candidateIndex);
