@@ -24,10 +24,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install app dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Install Playwright Chromium
         run: |
@@ -74,9 +73,7 @@ jobs:
             console.log(report);
             console.log('\n===== END ' + label + ' =====\n');
             await page.screenshot({ path: '/tmp/' + label.toLowerCase() + '-diagnostic.png', fullPage: true });
-            if (report.includes('ERROR:')) {
-              throw new Error(label + ' diagnostic reported an error');
-            }
+            if (report.includes('ERROR:')) throw new Error(label + ' diagnostic reported an error');
           }
 
           (async () => {
