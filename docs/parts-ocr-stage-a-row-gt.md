@@ -47,3 +47,20 @@
 ```
 
 Stage A scoringではnormalized y-bandを使い、画像の保存名suffixが変わっていても正式識別名へマッピングして使用する。
+
+
+## Vercel Preview annotation UI
+
+評価branch専用のiPhone向けUI:
+
+- Path: `/ocr/diagnostic/row-gt`
+- 複数画像選択
+- IMG_0675〜IMG_0686を正式識別名 IMG_xxxx(1) に正規化
+- 元写真のみ表示
+- pointer/touchによる縦方向row-band指定
+- band削除 / 1つ戻す / 写真単位のやり直し
+- 12枚進捗
+- 完成後にgeometry-only JSONをクリップボードへコピー
+
+禁止情報はUIにもJSONにも表示・保存しない。
+画像はブラウザのObject URLで表示し、network upload / Storage / Supabase / artifact保存を行わない。
