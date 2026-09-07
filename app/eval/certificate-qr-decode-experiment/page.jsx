@@ -1073,72 +1073,81 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
   ctx.textBaseline="top";
   const cropUrls=[];
 
-  const drawTriplet=(triplet,color,dashed=false)=>{
-    const pts=triplet?.findersRaw||[];
-    if(pts.length!==3) return;
-    ctx.save();
-    ctx.strokeStyle=color;
+  const drawFinderSet=(finders,color,radius=5)=>{
     ctx.fillStyle=color;
-    ctx.setLineDash(dashed?[8,6]:[]);
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x*scale,pts[0].y*scale);
-    ctx.lineTo(pts[1].x*scale,pts[1].y*scale);
-    ctx.lineTo(pts[2].x*scale,pts[2].y*scale);
-    ctx.closePath();
-    ctx.stroke();
-    for(const p of pts){
+    for(const p of finders||[]){
       ctx.beginPath();
-      ctx.arc(p.x*scale,p.y*scale,5,0,Math.PI*2);
+      ctx.arc(Number(p.x)*scale,Number(p.y)*scale,radius,0,Math.PI*2);
       ctx.fill();
     }
-    ctx.restore();
   };
-  const drawQuad=(quad,color)=>{
+  const drawQuad=(quad,color,dashed=false)=>{
     if(!Array.isArray(quad)||quad.length!==4) return;
     ctx.save();
     ctx.strokeStyle=color;
+    if(dashed) ctx.setLineDash([8,6]);
     ctx.beginPath();
-    ctx.moveTo(quad[0].x*scale,quad[0].y*scale);
-    for(let i=1;i<4;i+=1) ctx.lineTo(quad[i].x*scale,quad[i].y*scale);
+    ctx.moveTo(Number(quad[0].x)*scale,Number(quad[0].y)*scale);
+    for(let i=1;i<4;i+=1) ctx.lineTo(Number(quad[i].x)*scale,Number(quad[i].y)*scale);
     ctx.closePath();
     ctx.stroke();
     ctx.restore();
   };
 
   try {
-    for (const item of diagnostics) {
-      if (item.skippedBecauseASuccess||item.skippedBecausePhysicalConsensus) continue;
+    for(const item of diagnostics){
+      if(item.skippedBecauseASuccess) continue;
       const candidate={x:item.x,y:item.y};
       const center=paperPoint(normalized.paper,raw,candidate);
       const currentW=paperWidthPx(normalized.paper,raw)*ENSEMBLE_CONFIGS[0].widthRel;
+
       ctx.strokeStyle="#ff9500";
       ctx.strokeRect((center.x-currentW/2)*scale,(center.y-currentW/2)*scale,currentW*scale,currentW*scale);
       ctx.fillStyle="rgba(255,149,0,.92)";
-      ctx.fillRect((center.x-currentW/2)*scale,Math.max(0,(center.y-currentW/2)*scale-20),44,20);
+      ctx.fillRect((center.x-currentW/2)*scale,Math.max(0,(center.y-currentW/2)*scale-20),52,20);
       ctx.fillStyle="#fff";
       ctx.fillText(String(item.candidateIndex),(center.x-currentW/2)*scale+4,Math.max(0,(center.y-currentW/2)*scale-18));
 
-      const best=item.tripletDiagnostics?.[0];
-      const selected=item.tripletDiagnostics?.find((t)=>t.selected);
-      if(best&&!best.selected) drawTriplet(best,"#ff453a",true);
-      if(selected) drawTriplet(selected,selected.rank>1?"#64d2ff":"#0a84ff",false);
-      if(item.geometryValid){
-        drawQuad(item.qrQuad,"#34c759");
-        drawQuad(item.quietQuad,"#bf5af2");
+      const triplets=Array.isArray(item.tripletDiagnostics)?item.tripletDiagnostics:[];
+      const best=triplets.find((triplet)=>triplet.rank===1);
+      const selected=triplets.find((triplet)=>triplet.selected);
+
+      if(best && !best.selected){
+        drawFinderSet(best.findersRaw,"#ff453a",4.5);
+        drawQuad(best.qrQuad,"#ff453a",true);
+      }
+      if(selected){
+        drawFinderSet(selected.findersRaw,"#0a84ff",5.5);
+        drawQuad(selected.qrQuad,"#34c759",false);
+        drawQuad(selected.quietQuad,"#bf5af2",false);
+      } else if(item.geometryValid){
+        drawFinderSet(item.findersRaw,"#0a84ff",5.5);
+        drawQuad(item.qrQuad,"#34c759",false);
+        drawQuad(item.quietQuad,"#bf5af2",false);
       }
 
       const currentSmall=cropCandidate(raw,normalized.paper,candidate,ENSEMBLE_CONFIGS[0]);
       const currentSmallUrl=await canvasToObjectUrl(currentSmall);
-      currentSmall.width=1; currentSmall.height=1;
+      currentSmall.width=1;
+      currentSmall.height=1;
+
       let rectifiedUrl=null;
-      if (item.geometryValid && !item.overlapRejected) {
+      if(item.geometryValid&&!item.overlapRejected){
         const rectified=rectifyQrGeometry(raw,item,GEOMETRY_RECTIFY_CONFIGS[0]);
-        if (rectified) {
+        if(rectified){
           rectifiedUrl=await canvasToObjectUrl(rectified);
-          rectified.width=1; rectified.height=1;
+          rectified.width=1;
+          rectified.height=1;
         }
       }
-      cropUrls.push({candidateIndex:item.candidateIndex,currentSmallUrl,rectifiedUrl});
+      cropUrls.push({
+        candidateIndex:item.candidateIndex,
+        currentSmallUrl,
+        rectifiedUrl,
+        selectedTripletRank:item.selectedTripletRank||null,
+        bestTripletRejectedReason:item.bestTripletRejectedReason||"none",
+        alternateTripletRecoveredCount:Number(item.alternateTripletRecoveredCount||0),
+      });
     }
     const overlayUrl=await canvasToObjectUrl(overlay);
     return {
@@ -1147,16 +1156,18 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
       legend:{
         coarseCrop:"orange",
         rejectedBestTriplet:"red-dashed",
-        selectedTriplet:"blue",
-        alternateSelectedTriplet:"cyan",
-        qrQuad:"green",
-        quietQuad:"purple",
+        selectedFinders:"blue",
+        selectedQrQuad:"green",
+        selectedQuietQuad:"purple",
       },
     };
   } finally {
-    overlay.width=1; overlay.height=1;
-    raw.width=1; raw.height=1;
-    normalized.canvas.width=1; normalized.canvas.height=1;
+    overlay.width=1;
+    overlay.height=1;
+    raw.width=1;
+    raw.height=1;
+    normalized.canvas.width=1;
+    normalized.canvas.height=1;
   }
 }
 function revokeVisualDiagnosticEntry(entry) {
