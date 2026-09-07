@@ -1,7 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
-    "deploymentEnabled": false
+    "deploymentEnabled": {
+      "*": false,
+      "eval/certificate-qr-fast-audit": true
+    }
   },
   "ignoreCommand": "git log -1 --pretty=%B | grep -q '\\[deploy\\]' && exit 1 || exit 0"
 }
