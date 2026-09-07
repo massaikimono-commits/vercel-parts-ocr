@@ -2840,6 +2840,8 @@ export default function CertificateQrDecodeExperimentPage() {
     pathname:PATHNAME,
     groundTruthUsedDuringDecode:false,
     recognitionIsolation:RECOGNITION_ISOLATION,
+    runtimeParserInputExcludesCompactConsensus:true,
+    countingIntegrityFail:totals?Boolean(totals.aCountingIntegrityFail||totals.finalCountingIntegrityFail):null,
     privacy:{
       imageUpload:false,
       qrPayloadIncluded:false,
