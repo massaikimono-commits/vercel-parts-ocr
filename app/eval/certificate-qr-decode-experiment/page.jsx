@@ -1587,6 +1587,202 @@ function structuralFailAuditFromRows(rows, attemptKey) {
     singleEngineStructuralFails,
   };
 }
+function averageRawPositions(a, b) {
+  const valid=[a,b].filter((p)=>Number.isFinite(Number(p?.x))&&Number.isFinite(Number(p?.y)));
+  if(!valid.length) return null;
+  return {
+    x:valid.reduce((sum,p)=>sum+Number(p.x),0)/valid.length,
+    y:valid.reduce((sum,p)=>sum+Number(p.y),0)/valid.length,
+  };
+}
+function compactConsensusAuditFromRows(rows, attemptKey, paperWidthPxValue) {
+  const radius=Math.max(8,Number(paperWidthPxValue||0)*.018);
+  const rawCandidates=[];
+  for(const row of rows||[]){
+    let diagnosticAttempt=null;
+    let acceptedAttempt=null;
+    for(const attempt of row?.[attemptKey]||[]){
+      if(attempt.compactCandidate&&!diagnosticAttempt) diagnosticAttempt=attempt;
+      if(attempt.physicalQrConsensusAccepted&&!acceptedAttempt) acceptedAttempt=attempt;
+    }
+    const chosen=acceptedAttempt||diagnosticAttempt;
+    if(!chosen) continue;
+    const center=averageRawPositions(chosen.jsRawPosition,chosen.zxingRawPosition);
+    rawCandidates.push({
+      candidateIndex:row.candidateIndex,
+      x:row.x,
+      y:row.y,
+      center,
+      physicalQrConsensusAccepted:Boolean(acceptedAttempt),
+      parserSchemaRecognized:false,
+      compactSchemaClass:chosen.compactSchemaClass||"compact-unconfirmed",
+      payloadLength:Number(chosen.jsStructural?.payloadLength||chosen.zxingStructural?.payloadLength||0),
+      printableRatio:Number(chosen.jsStructural?.printableRatio||chosen.zxingStructural?.printableRatio||0),
+      asciiVisibleRatio:Number(chosen.jsStructural?.asciiVisibleRatio||chosen.zxingStructural?.asciiVisibleRatio||0),
+      alnumKnownSymbolRatio:Number(chosen.jsStructural?.alnumKnownSymbolRatio||chosen.zxingStructural?.alnumKnownSymbolRatio||0),
+      separatorPattern:chosen.jsStructural?.separatorPattern||chosen.zxingStructural?.separatorPattern||"none",
+      positionClass:chosen.conflictPositionClass||"position-unavailable",
+      canonicalSet:new Set(acceptedAttempt?.compactCanonicalSet||[]),
+    });
+  }
+
+  const unique=[];
+  for(const candidate of rawCandidates){
+    const duplicate=unique.find((known)=>{
+      if(candidate.center&&known.center){
+        return Math.hypot(candidate.center.x-known.center.x,candidate.center.y-known.center.y)<=radius;
+      }
+      return candidate.candidateIndex===known.candidateIndex;
+    });
+    if(duplicate){
+      if(candidate.physicalQrConsensusAccepted){
+        duplicate.physicalQrConsensusAccepted=true;
+        for(const canonical of candidate.canonicalSet) duplicate.canonicalSet.add(canonical);
+      }
+      continue;
+    }
+    unique.push({...candidate,canonicalSet:new Set(candidate.canonicalSet)});
+  }
+
+  const acceptedCanonicalSet=new Set();
+  for(const item of unique){
+    if(!item.physicalQrConsensusAccepted) continue;
+    for(const canonical of item.canonicalSet) if(canonical) acceptedCanonicalSet.add(canonical);
+  }
+  return {
+    uniqueCompactCandidateCount:unique.length,
+    compactPhysicalConsensusAcceptedCount:unique.filter((item)=>item.physicalQrConsensusAccepted).length,
+    compactParserRecognizedCount:0,
+    diagnostics:unique.map((item)=>({
+      candidateIndex:item.candidateIndex,
+      rawCenter:item.center?{x:Number(item.center.x.toFixed(2)),y:Number(item.center.y.toFixed(2))}:null,
+      physicalQrConsensusAccepted:Boolean(item.physicalQrConsensusAccepted),
+      parserSchemaRecognized:false,
+      compactSchemaClass:item.compactSchemaClass,
+      payloadLength:item.payloadLength,
+      printableRatio:item.printableRatio,
+      asciiVisibleRatio:item.asciiVisibleRatio,
+      alnumKnownSymbolRatio:item.alnumKnownSymbolRatio,
+      separatorPattern:item.separatorPattern,
+      positionClass:item.positionClass,
+    })),
+    acceptedCanonicalSet,
+  };
+}
+function resolvePositionConflicts(rows, attemptKey, paperWidthPxValue, geometryDiagnostics=[]) {
+  const radius=Math.max(8,Number(paperWidthPxValue||0)*.018);
+  const events=[];
+  const entries=[];
+  let multiQrCropConflictCount=0;
+  let samePhysicalQrConflictCount=0;
+  let positionUncertainConflictCount=0;
+
+  for(const row of rows||[]){
+    for(const attempt of row?.[attemptKey]||[]){
+      if(!attempt.crossEngineConflict) continue;
+      const className=attempt.conflictPositionClass||"position-unavailable";
+      if(className==="multi-qr-crop") multiQrCropConflictCount+=1;
+      else if(className==="same-physical-qr") samePhysicalQrConflictCount+=1;
+      else positionUncertainConflictCount+=1;
+      const event={
+        candidateIndex:row.candidateIndex,
+        configId:attempt.configId,
+        className,
+        normalizedDistance:attempt.conflictCenterDistanceNormalized??null,
+        jsRawPosition:attempt.jsRawPosition||null,
+        zxingRawPosition:attempt.zxingRawPosition||null,
+        resolved:false,
+        jsClusterId:null,
+        zxingClusterId:null,
+      };
+      const eventIndex=events.length;
+      events.push(event);
+      if(className!=="multi-qr-crop") continue;
+      if(attempt.jsStructuralPass&&attempt.jsCanonical&&attempt.jsRawPosition){
+        entries.push({eventIndex,side:"js",canonical:attempt.jsCanonical,position:attempt.jsRawPosition,candidateIndex:row.candidateIndex,configId:attempt.configId});
+      }
+      if(attempt.zxingStructuralPass&&attempt.zxingCanonical&&attempt.zxingRawPosition){
+        entries.push({eventIndex,side:"zxing",canonical:attempt.zxingCanonical,position:attempt.zxingRawPosition,candidateIndex:row.candidateIndex,configId:attempt.configId});
+      }
+    }
+  }
+
+  const clusters=[];
+  for(const entry of entries){
+    let cluster=clusters.find((item)=>Math.hypot(item.x-entry.position.x,item.y-entry.position.y)<=radius);
+    if(!cluster){
+      cluster={id:clusters.length,x:entry.position.x,y:entry.position.y,entries:[],canonicalCounts:new Map()};
+      clusters.push(cluster);
+    }
+    const n=cluster.entries.length;
+    cluster.x=(cluster.x*n+entry.position.x)/(n+1);
+    cluster.y=(cluster.y*n+entry.position.y)/(n+1);
+    cluster.entries.push(entry);
+    cluster.canonicalCounts.set(entry.canonical,(cluster.canonicalCounts.get(entry.canonical)||0)+1);
+    events[entry.eventIndex][entry.side==="js"?"jsClusterId":"zxingClusterId"]=cluster.id;
+  }
+
+  const validGeometry=(geometryDiagnostics||[]).filter((item)=>item.geometryValid&&item.qrCenter&&!item.overlapRejected);
+  for(const cluster of clusters){
+    const sorted=[...cluster.canonicalCounts.entries()].sort((a,b)=>b[1]-a[1]);
+    const dominant=sorted[0]||["",0];
+    const second=sorted[1]||["",0];
+    cluster.dominantCanonical=dominant[0];
+    cluster.dominantEvidence=dominant[1];
+    cluster.secondEvidence=second[1];
+    cluster.geometryAligned=validGeometry.some((g)=>Math.hypot(Number(g.qrCenter.x)-cluster.x,Number(g.qrCenter.y)-cluster.y)<=radius*1.7);
+    cluster.stable=Boolean(
+      cluster.dominantCanonical &&
+      cluster.secondEvidence===0 &&
+      (cluster.dominantEvidence>=2||cluster.geometryAligned)
+    );
+  }
+
+  let resolvedConflictEventCount=0;
+  for(const event of events){
+    if(event.className!=="multi-qr-crop") continue;
+    const a=clusters[event.jsClusterId];
+    const b=clusters[event.zxingClusterId];
+    if(a&&b&&a.id!==b.id&&a.stable&&b.stable&&a.dominantCanonical!==b.dominantCanonical){
+      event.resolved=true;
+      resolvedConflictEventCount+=1;
+    }
+  }
+
+  const resolvedCanonicalSet=new Set();
+  const resolvedClusterIds=new Set();
+  for(const event of events){
+    if(!event.resolved) continue;
+    resolvedClusterIds.add(event.jsClusterId);
+    resolvedClusterIds.add(event.zxingClusterId);
+  }
+  for(const id of resolvedClusterIds){
+    const cluster=clusters[id];
+    if(cluster?.stable&&cluster.dominantCanonical) resolvedCanonicalSet.add(cluster.dominantCanonical);
+  }
+
+  return {
+    multiQrCropConflictCount,
+    samePhysicalQrConflictCount,
+    positionUncertainConflictCount,
+    resolvedConflictEventCount,
+    resolvedAsSeparatePhysicalQrCount:resolvedClusterIds.size,
+    remainingAmbiguousConflictCount:
+      samePhysicalQrConflictCount+
+      positionUncertainConflictCount+
+      Math.max(0,multiQrCropConflictCount-resolvedConflictEventCount),
+    diagnostics:events.map((event)=>({
+      candidateIndex:event.candidateIndex,
+      configId:event.configId,
+      conflictPositionClass:event.className,
+      normalizedDistance:event.normalizedDistance,
+      jsRawPosition:event.jsRawPosition,
+      zxingRawPosition:event.zxingRawPosition,
+      resolvedAsSeparatePhysicalQr:Boolean(event.resolved),
+    })),
+    resolvedCanonicalSet,
+  };
+}
 function createStageStats(configs) {
   return Object.fromEntries(configs.map((config) => [config.id, {
     id: config.id,
