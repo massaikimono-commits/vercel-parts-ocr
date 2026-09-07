@@ -960,6 +960,7 @@ function rectifyQrGeometry(raw, geometry, config) {
     }
   }
   ctx.putImageData(out,0,0);
+  canvas.__qrRectifyMeta={h,size};
   return canvas;
 }
 function geometryOverlap(a,b) {
@@ -1277,8 +1278,21 @@ function classifyDecodePositions(js, zx, canvas) {
 }
 
 function canvasPositionToRaw(position, canvas) {
-  const meta = canvas?.__qrCropMeta;
-  if (!position || !meta) return null;
+  if (!position || !canvas) return null;
+  const rectify = canvas.__qrRectifyMeta;
+  if (rectify?.h) {
+    const u=Number(position.x), v=Number(position.y);
+    const h=rectify.h;
+    const denom=h[6]*u+h[7]*v+1;
+    if(Math.abs(denom)>1e-9){
+      return {
+        x:Number(((h[0]*u+h[1]*v+h[2])/denom).toFixed(2)),
+        y:Number(((h[3]*u+h[4]*v+h[5])/denom).toFixed(2)),
+      };
+    }
+  }
+  const meta = canvas.__qrCropMeta;
+  if (!meta) return null;
   const ux = (Number(position.x) - meta.pad) / Math.max(1, meta.drawWidth);
   const uy = (Number(position.y) - meta.pad) / Math.max(1, meta.drawHeight);
   return {
