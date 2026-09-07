@@ -175,17 +175,79 @@ function scoreVariant(rows, paper, image, gtImage, variant) {
   };
 }
 
+const DIMENSION_EPS = 1e-6;
+
+function nearlyEqual(a, b, eps = DIMENSION_EPS) {
+  return Math.abs(a - b) <= eps * Math.max(1, Math.abs(a), Math.abs(b));
+}
+
+function validateDimensionMapping(fileName, g, c) {
+  const rotationDeg = normalizeRotation(g.rotationDeg);
+  const rawWidth = Number(c.raw.width);
+  const rawHeight = Number(c.raw.height);
+  const rotatedWidth = rotationDeg === 90 || rotationDeg === 270 ? rawHeight : rawWidth;
+  const rotatedHeight = rotationDeg === 90 || rotationDeg === 270 ? rawWidth : rawHeight;
+  const gtWidth = Number(g.imageWidth);
+  const gtHeight = Number(g.imageHeight);
+
+  if (![rawWidth, rawHeight, rotatedWidth, rotatedHeight, gtWidth, gtHeight].every((v) => Number.isFinite(v) && v > 0)) {
+    throw new Error(`${fileName}: invalid dimensions`);
+  }
+
+  const exactDimensionMatch = gtWidth === rotatedWidth && gtHeight === rotatedHeight;
+  const scaleX = gtWidth / rotatedWidth;
+  const scaleY = gtHeight / rotatedHeight;
+  const aspectRatioMatch = nearlyEqual(gtWidth / gtHeight, rotatedWidth / rotatedHeight);
+  const uniformScale = scaleX > 0 && scaleY > 0 && nearlyEqual(scaleX, scaleY) && aspectRatioMatch;
+
+  if (!exactDimensionMatch && !uniformScale) {
+    throw new Error(
+      `${fileName}: non-uniform/incompatible dimension mapping: raw=${rawWidth}x${rawHeight} rotation=${rotationDeg} rotated=${rotatedWidth}x${rotatedHeight} GT=${gtWidth}x${gtHeight} scaleX=${scaleX} scaleY=${scaleY} aspectRatioMatch=${aspectRatioMatch}`
+    );
+  }
+
+  return {
+    gtWidth,
+    gtHeight,
+    candidateRawWidth: rawWidth,
+    candidateRawHeight: rawHeight,
+    rotationDeg,
+    candidateRotatedWidth: rotatedWidth,
+    candidateRotatedHeight: rotatedHeight,
+    exactDimensionMatch,
+    scaleX,
+    scaleY,
+    uniformScale,
+    aspectRatioMatch,
+    dimensionMappingMode: exactDimensionMatch ? "exact-dimension-match" : "uniform-scale-normalized-space",
+  };
+}
+
+const dimensionAudit = EXPECTED_FILES.map((fileName) => {
+  const g = gtMap.get(fileName);
+  const c = candidateMap.get(fileName);
+  return { fileName, ...validateDimensionMapping(fileName, g, c) };
+});
+
+const scaleFactors = dimensionAudit.map((x) => x.exactDimensionMatch ? 1 : (x.scaleX + x.scaleY) / 2);
+const commonScaleFactor = scaleFactors[0];
+const allImagesUniformScaleCompatible =
+  dimensionAudit.every((x) => x.exactDimensionMatch || x.uniformScale) &&
+  scaleFactors.every((value) => nearlyEqual(value, commonScaleFactor));
+
+if (!allImagesUniformScaleCompatible) {
+  const details = dimensionAudit
+    .map((x) => `${x.fileName}: mode=${x.dimensionMappingMode} scaleX=${x.scaleX} scaleY=${x.scaleY}`)
+    .join("; ");
+  throw new Error("formal set does not share one compatible dimension scale: " + details);
+}
+
 const perImage = [];
 for (const fileName of EXPECTED_FILES) {
   const g = gtMap.get(fileName);
   const c = candidateMap.get(fileName);
+  const dimension = dimensionAudit.find((x) => x.fileName === fileName);
 
-  const expectedRotation = normalizeRotation(g.rotationDeg);
-  const expectedWidth = expectedRotation === 90 || expectedRotation === 270 ? Number(c.raw.height) : Number(c.raw.width);
-  const expectedHeight = expectedRotation === 90 || expectedRotation === 270 ? Number(c.raw.width) : Number(c.raw.height);
-  if (Number(g.imageWidth) !== expectedWidth || Number(g.imageHeight) !== expectedHeight) {
-    throw new Error(`${fileName}: GT dimensions ${g.imageWidth}x${g.imageHeight} do not match raw+rotation expected ${expectedWidth}x${expectedHeight}`);
-  }
   if (Number(g.rowCount) !== (g.rows || []).length) {
     throw new Error(`${fileName}: rowCount mismatch`);
   }
@@ -195,8 +257,9 @@ for (const fileName of EXPECTED_FILES) {
 
   perImage.push({
     fileName,
-    rotationDeg: expectedRotation,
+    rotationDeg: dimension.rotationDeg,
     gtRowCount: Number(g.rowCount),
+    dimension,
     fixed,
     dynamic,
   });
@@ -224,6 +287,12 @@ const result = {
   candidateSourceHead: candidates.sourceHead,
   scoringRule: "candidate-center-y-inside-manual-gt-row-band; geometry-only; nearest-GT-center tie-break; no OCR text and no tunable threshold",
   gtTotalRows,
+  allImagesUniformScaleCompatible,
+  commonScaleFactor,
+  dimensionMappingMode: dimensionAudit.every((x) => x.exactDimensionMatch)
+    ? "exact-dimension-match"
+    : "uniform-scale-normalized-space",
+  dimensionAudit,
   fixed: aggregate("fixed"),
   dynamic: aggregate("dynamic"),
   perImage,
@@ -232,10 +301,11 @@ const result = {
 const lines = [];
 lines.push("Parts OCR Stage A row coverage");
 lines.push("GT total rows: " + gtTotalRows);
+lines.push(`dimensionMappingMode: ${result.dimensionMappingMode} / allImagesUniformScaleCompatible=${result.allImagesUniformScaleCompatible} / commonScaleFactor=${result.commonScaleFactor}`);
 for (const item of perImage) {
   const pct = (v) => (v * 100).toFixed(1) + "%";
   lines.push(
-    `${item.fileName} GT=${item.gtRowCount} | fixed c=${item.fixed.candidateCount} cover=${item.fixed.gtCoverageCount} recall=${pct(item.fixed.gtRowRecall)} false=${item.fixed.falseCandidateCount} dup=${item.fixed.duplicateCandidateCount} covered=[${item.fixed.coveredGtRowIndices.join(",")}] uncovered=[${item.fixed.uncoveredGtRowIndices.join(",")}] | dynamic c=${item.dynamic.candidateCount} cover=${item.dynamic.gtCoverageCount} recall=${pct(item.dynamic.gtRowRecall)} false=${item.dynamic.falseCandidateCount} dup=${item.dynamic.duplicateCandidateCount} covered=[${item.dynamic.coveredGtRowIndices.join(",")}] uncovered=[${item.dynamic.uncoveredGtRowIndices.join(",")}]`
+    `${item.fileName} GT=${item.gtRowCount} | dim GT=${item.dimension.gtWidth}x${item.dimension.gtHeight} raw=${item.dimension.candidateRawWidth}x${item.dimension.candidateRawHeight} rot=${item.dimension.rotationDeg} rotated=${item.dimension.candidateRotatedWidth}x${item.dimension.candidateRotatedHeight} exact=${item.dimension.exactDimensionMatch} scaleX=${item.dimension.scaleX} scaleY=${item.dimension.scaleY} uniform=${item.dimension.uniformScale} mode=${item.dimension.dimensionMappingMode} | fixed c=${item.fixed.candidateCount} cover=${item.fixed.gtCoverageCount} recall=${pct(item.fixed.gtRowRecall)} false=${item.fixed.falseCandidateCount} dup=${item.fixed.duplicateCandidateCount} covered=[${item.fixed.coveredGtRowIndices.join(",")}] uncovered=[${item.fixed.uncoveredGtRowIndices.join(",")}] | dynamic c=${item.dynamic.candidateCount} cover=${item.dynamic.gtCoverageCount} recall=${pct(item.dynamic.gtRowRecall)} false=${item.dynamic.falseCandidateCount} dup=${item.dynamic.duplicateCandidateCount} covered=[${item.dynamic.coveredGtRowIndices.join(",")}] uncovered=[${item.dynamic.uncoveredGtRowIndices.join(",")}]`
   );
 }
 const pct = (v) => (v * 100).toFixed(1) + "%";
