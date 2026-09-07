@@ -1350,19 +1350,11 @@ function uniqueAcceptedRows(rows, successKey) {
   return { accepted, duplicatePayloadCandidateCount };
 }
 function conflictDetailsFromRows(stage, rows, attemptKey) {
-  const details = [];
-  for (const row of rows) {
-    for (const attempt of row[attemptKey] || []) {
-      if (!attempt.crossEngineConflict) continue;
-      details.push({
-        stage,
-        candidateIndex: row.candidateIndex,
-        configId: attempt.configId,
-        jsStructuralPass: Boolean(attempt.jsStructuralPass),
-        zxingStructuralPass: Boolean(attempt.zxingStructuralPass),
-        adoptedEngine: attempt.adoptedEngine || "none",
-        adoptionReason: attempt.adoptionReason || "none",
-      });
+  const details=[];
+  for(const row of rows||[]){
+    for(const attempt of row?.[attemptKey]||[]){
+      if(!attempt.crossEngineConflict) continue;
+      details.push({stage,candidateIndex:row.candidateIndex,...publicAttempt(attempt)});
     }
   }
   return details;
@@ -1582,6 +1574,8 @@ async function runGeometryFailOnly({ current, raw, normalized, jsQR, reader }) {
 
   const rectifyStarted = performance.now();
   const stats = createStageStats(GEOMETRY_RECTIFY_CONFIGS);
+  const aCanonical=canonicalSetFromRows(current.rows,"currentSuccess");
+  const eSeen=new Set();
   const eRows = [];
   for (const geometry of kept) {
     const row = current.rows.find((item) => item.candidateIndex === geometry.candidateIndex);
@@ -1604,7 +1598,15 @@ async function runGeometryFailOnly({ current, raw, normalized, jsQR, reader }) {
         eRow.geometryAttempts.push({configId:config.id,...result});
         if (result.physicalSuccess) {
           eRow.geometrySuccess=true;
-          for (const canonical of result.canonicalSet) eRow.canonicalSet.add(canonical);
+          let configNetNew=false;
+          for (const canonical of result.canonicalSet) {
+            eRow.canonicalSet.add(canonical);
+            if (!aCanonical.has(canonical) && !eSeen.has(canonical)) {
+              eSeen.add(canonical);
+              configNetNew=true;
+            }
+          }
+          if (configNetNew) stats[config.id].netNewCanonicalQrCount += 1;
           break;
         }
       } finally {
@@ -1617,7 +1619,6 @@ async function runGeometryFailOnly({ current, raw, normalized, jsQR, reader }) {
   }
   const rectifyDecodeElapsedMs=Math.round(performance.now()-rectifyStarted);
 
-  const aCanonical=canonicalSetFromRows(current.rows,"currentSuccess");
   const eCanonical=canonicalSetFromRows(eRows,"geometrySuccess");
   const union=unionCanonicalSets(aCanonical,eCanonical);
   const netNew=canonicalNetNew(eCanonical,aCanonical);
@@ -1631,6 +1632,7 @@ async function runGeometryFailOnly({ current, raw, normalized, jsQR, reader }) {
     geometryKeptCandidateCount: kept.length,
     geometryOverlapMergedCount: overlapMergedCount,
     falseCandidateReductionCount: diagnostics.filter((item)=>!item.skippedBecauseASuccess && !item.geometryValid).length + overlapMergedCount,
+    aCanonicalCount: aCanonical.size,
     eNetNewCanonicalVsA: netNew,
     finalUnionCanonicalCount: union.size,
     stats:Object.values(stats),
@@ -1743,6 +1745,7 @@ async function runMatrix(file) {
         geometryKeptCandidateCount:geometry.geometryKeptCandidateCount,
         geometryOverlapMergedCount:geometry.geometryOverlapMergedCount,
         falseCandidateReductionCount:geometry.falseCandidateReductionCount,
+        aCanonicalCount:geometry.aCanonicalCount,
         eNetNewCanonicalVsA:geometry.eNetNewCanonicalVsA,
         finalUnionCanonicalCount:geometry.finalUnionCanonicalCount,
         stats:geometry.stats,
