@@ -452,6 +452,10 @@ export default function CertificateQrDecodeExperimentPage() {
         await reloadFrame();
         const baseline = await runBaseline(frameRef.current, file);
         if (baseline.privacyFail) throw new Error(`${name}: privacy FAIL`);
+        if (frameRef.current) {
+          frameRef.current.src = "about:blank";
+          await wait(80);
+        }
         const matrix = await runMatrix(file);
         const gt = groundTruth[name] || {};
         out.push({
