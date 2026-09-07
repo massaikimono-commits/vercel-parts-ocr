@@ -13,7 +13,7 @@ function safeName(file) {
 function normalizeFixedFileName(file) {
   const original = String(file?.name || "").normalize("NFKC").trim();
   const leaf = original.split(/[\\/]/).pop() || "";
-  const match = leaf.match(/^IMG_(094[0-7])(?:[\\s_-]*(?:\\(\\d+\\)|\\d+|copy(?:[\\s_-]*\\d+)?))?\\.(jpe?g)$/i);
+  const match = leaf.match(/^IMG_(094[0-7])(?:[\s_-]*(?:\(\d+\)|\d+|copy(?:[\s_-]*\d+)?))?\.(jpe?g)$/i);
   if (!match) return null;
   return `IMG_${match[1]}.jpeg`;
 }
