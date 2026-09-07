@@ -1,6 +1,7 @@
 import fs from "node:fs";
 
 const auto = fs.readFileSync(new URL("../app/ocr/auto/page.tsx", import.meta.url), "utf8");
+const general = fs.readFileSync(new URL("../app/ocr/general/page.tsx", import.meta.url), "utf8");
 const profiles = fs.readFileSync(new URL("../app/ocr/general/slip-profiles.ts", import.meta.url), "utf8");
 
 function requireSource(condition, message) {
@@ -49,6 +50,36 @@ requireSource(
   "White parts-list profile regression: 単価 must not target cost",
 );
 
+// The profile must be wired into the live /ocr/general path, not left as a diagnostic-only helper.
+requireSource(
+  general.includes('detectSlipColumnProfile(text)'),
+  "White parts-list live OCR regression: slip profile must be detected from OCR text",
+);
+requireSource(
+  general.includes('detectHeader(lines, profile)'),
+  "White parts-list live OCR regression: profile-aware headers must drive TSV parsing",
+);
+requireSource(
+  general.includes('parseByColumns(lines, header, profile)'),
+  "White parts-list live OCR regression: profile must reach column parser",
+);
+requireSource(
+  general.includes('fallbackParse(text, profile)'),
+  "White parts-list live OCR regression: profile must reach fallback parser",
+);
+requireSource(
+  general.includes('cost = applyProfileCostRule(profile, cost)'),
+  "White parts-list live OCR regression: parsed cost must honor blank-cost profile",
+);
+requireSource(
+  general.includes('cost: LABELS.cost.filter((label) => label !== "単価")'),
+  "White parts-list live OCR regression: profile-aware header detection must not classify 単価 as cost",
+);
+requireSource(
+  general.includes('retail: [...new Set([...LABELS.retail, "単価"])]'),
+  "White parts-list live OCR regression: profile-aware header detection must classify 単価 as retail",
+);
+
 const whiteStressCases = [
   "部品名称 数量 単価 計",
   "部 品 名 数 量 単 価 計",
@@ -69,4 +100,4 @@ for (const [index, sample] of whiteStressCases.entries()) {
   );
 }
 
-console.log("PASS parts layout semantics: white 単価 routes generic and maps to 定価 with blank 仕入れ; yellow dedicated markers keep priority");
+console.log("PASS parts layout semantics: live white OCR routes 単価 to 定価 with blank 仕入れ; yellow dedicated markers keep priority");
