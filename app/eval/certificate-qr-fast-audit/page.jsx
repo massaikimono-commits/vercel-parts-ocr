@@ -7,6 +7,12 @@ const PATHNAME = "/vehicle-workflow-v2";
 const FAST_WAIT_MS = 12000;
 const INTEGRATION_WAIT_MS = 70000;
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const QR_GROUND_TRUTH_OPTIONS = [
+  { value: "", label: "未設定", expectedQrCount: null },
+  { value: "kei", label: "軽6QR", expectedQrCount: 6 },
+  { value: "registered", label: "登録車5QR", expectedQrCount: 5 },
+  { value: "kei-legacy", label: "軽旧2QR", expectedQrCount: 2 },
+];
 
 function safeName(file) {
   return String(file?.name || "").replace(/[^A-Za-z0-9._-]/g, "_");
@@ -225,7 +231,10 @@ function actualValueForKey(result, key) {
 function scoreResult(result, truthRoot) {
   const images = truthImages(truthRoot);
   const name = result?.normalizedFileName || result?.fileName || "";
-  const truth = images?.[name];
+  const imageTruth = images?.[name];
+  const truth = imageTruth?.fields && typeof imageTruth.fields === "object" && !Array.isArray(imageTruth.fields)
+    ? imageTruth.fields
+    : imageTruth;
   if (!truth || typeof truth !== "object" || Array.isArray(truth)) {
     return { available: false, itemTotalCount: 0, itemCorrectCount: 0, itemWrongCount: 0, itemBlankCount: 0 };
   }
@@ -344,6 +353,8 @@ async function runOne(frame, file, index, phase = "fast") {
       pathname: win.location.pathname,
       fastFired: Boolean(fastEvent || state.token),
       expectedQrCount: expected,
+      runtimeExpectedQrCount: expected,
+      runtimeVehicleKind: state.kind || null,
       densityCentersCount: density.length,
       densityCentersX: density,
       stages: stageCounts(qr),
@@ -386,6 +397,14 @@ function summaryResult(r, score = null) {
     pathname: r.pathname,
     fastFired: r.fastFired,
     expectedQrCount: r.expectedQrCount,
+    runtimeExpectedQrCount: r.runtimeExpectedQrCount,
+    runtimeVehicleKind: r.runtimeVehicleKind,
+    groundTruthVehicleKind: r.groundTruthVehicleKind ?? null,
+    groundTruthExpectedQrCount: r.groundTruthExpectedQrCount ?? null,
+    kindMismatch: r.kindMismatch ?? null,
+    groundTruthQrMissingCount: Number.isFinite(r.groundTruthExpectedQrCount)
+      ? Math.max(0, r.groundTruthExpectedQrCount - r.finalUniqueQrCount)
+      : null,
     densityCentersCount: r.densityCentersCount,
     densityCentersX: r.densityCentersX,
     stages: r.stages,
@@ -420,6 +439,7 @@ export default function CertificateQrFastAuditPage() {
   const [integrationResults, setIntegrationResults] = useState([]);
   const [truthRoot, setTruthRoot] = useState(null);
   const [truthStatus, setTruthStatus] = useState("主要9項目の正解JSONは未読込です。");
+  const [qrGroundTruth, setQrGroundTruth] = useState({});
   const frameRef = useRef(null);
 
   const normalizedSelectedNames = useMemo(() => files.map((f) => normalizeFixedFileName(f)), [files]);
@@ -430,6 +450,16 @@ export default function CertificateQrFastAuditPage() {
     normalizedNameSet.size === 8 &&
     REQUIRED_NAMES.every((name) => normalizedNameSet.has(name));
   const validCount = files.length === 8 && exactSet;
+
+  const updateQrGroundTruth = (fileName, vehicleKind) => {
+    const option = QR_GROUND_TRUTH_OPTIONS.find((item) => item.value === vehicleKind) || QR_GROUND_TRUTH_OPTIONS[0];
+    setQrGroundTruth((prev) => ({
+      ...prev,
+      [fileName]: vehicleKind
+        ? { vehicleKind, expectedQrCount: option.expectedQrCount }
+        : { vehicleKind: null, expectedQrCount: null },
+    }));
+  };
 
   const reloadFrame = () => new Promise((resolve, reject) => {
     const frame = frameRef.current;
@@ -455,6 +485,13 @@ export default function CertificateQrFastAuditPage() {
         setStatus(`${i + 1}/8 ${safeName(ordered[i])} を${phase === "fast" ? "QR Fast" : "OCR統合"}評価中…`);
         await reloadFrame();
         const result = await runOne(frameRef.current, ordered[i], i, phase);
+        const normalizedFileName = normalizeFixedFileName(ordered[i]) || safeName(ordered[i]);
+        const gt = qrGroundTruth[normalizedFileName] || {};
+        result.groundTruthVehicleKind = gt.vehicleKind || null;
+        result.groundTruthExpectedQrCount = Number.isFinite(gt.expectedQrCount) ? gt.expectedQrCount : null;
+        result.kindMismatch = result.groundTruthVehicleKind
+          ? result.runtimeVehicleKind !== result.groundTruthVehicleKind
+          : null;
         out.push(result);
         if (phase === "fast") setResults([...out]);
         else setIntegrationResults([...out]);
@@ -476,8 +513,15 @@ export default function CertificateQrFastAuditPage() {
     try {
       const parsed = JSON.parse(await file.text());
       const images = truthImages(parsed);
-      const counts = REQUIRED_NAMES.map((name) => Object.keys(images?.[name] || {}).length);
-      const valid = REQUIRED_NAMES.every((name) => images?.[name] && typeof images[name] === "object" && !Array.isArray(images[name]) && Object.keys(images[name]).length === 9);
+      const fieldsFor = (name) => {
+        const entry = images?.[name];
+        return entry?.fields && typeof entry.fields === "object" && !Array.isArray(entry.fields) ? entry.fields : entry;
+      };
+      const counts = REQUIRED_NAMES.map((name) => Object.keys(fieldsFor(name) || {}).length);
+      const valid = REQUIRED_NAMES.every((name) => {
+        const fields = fieldsFor(name);
+        return fields && typeof fields === "object" && !Array.isArray(fields) && Object.keys(fields).length === 9;
+      });
       setTruthRoot(parsed);
       setTruthStatus(valid
         ? "正解JSON: 8枚すべて9項目を確認しました（ブラウザメモリ内のみ）。"
@@ -489,12 +533,36 @@ export default function CertificateQrFastAuditPage() {
   };
 
 
+  const groundTruthReady = results.length === 8 && results.every((r) => Number.isFinite(r.groundTruthExpectedQrCount));
+  const groundTruthQrTotals = groundTruthReady
+    ? results.reduce((acc, r) => {
+        acc.acquired += r.finalUniqueQrCount;
+        acc.expected += r.groundTruthExpectedQrCount;
+        if (r.finalUniqueQrCount >= r.groundTruthExpectedQrCount) acc.completeImages += 1;
+        if (r.kindMismatch) acc.kindMismatchCount += 1;
+        return acc;
+      }, { acquired: 0, expected: 0, completeImages: 0, kindMismatchCount: 0 })
+    : null;
+
   const summaryJson = JSON.stringify({
-    schema: "icb-certificate-qr-fast-audit-summary-v2",
+    schema: "icb-certificate-qr-fast-audit-summary-v3",
     generatedAt: new Date().toISOString(),
     pathname: PATHNAME,
     imageCount: results.length,
     privacy: { imageUpload: false, serverMutationBlocked: true, repositoryFixture: false, autoSaveVehicle: false, piiIncluded: false },
+    groundTruth: {
+      ready: groundTruthReady,
+      source: "user-confirmed-browser-local",
+      runtimeExpectedUsedAsGroundTruth: false,
+      totals: groundTruthQrTotals
+        ? {
+            ...groundTruthQrTotals,
+            qrAcquisitionRate: groundTruthQrTotals.expected
+              ? Number((groundTruthQrTotals.acquired / groundTruthQrTotals.expected).toFixed(4))
+              : null,
+          }
+        : null,
+    },
     results: results.map(summaryResult),
   }, null, 2);
   const integrationSummaryJson = JSON.stringify({
@@ -554,6 +622,31 @@ export default function CertificateQrFastAuditPage() {
         {files.length > 0 && (
           <div style={{ marginTop: 8, fontSize: 12, overflowWrap: "anywhere" }}>
             正規化後: {normalizedSelectedNames.map((name) => name || "判定不可").join(" / ")}
+          </div>
+        )}
+        {exactSet && (
+          <div style={{ marginTop: 12, padding: 10, border: "1px solid #ddd", borderRadius: 10 }}>
+            <div style={{ fontWeight: 700 }}>固定8枚 QR種別 Ground Truth（ユーザー確認後に指定 / ブラウザメモリ内のみ）</div>
+            {REQUIRED_NAMES.map((name) => (
+              <label key={name} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 7 }}>
+                <span style={{ minWidth: 120, fontFamily: "monospace" }}>{name}</span>
+                <select
+                  value={qrGroundTruth[name]?.vehicleKind || ""}
+                  disabled={running}
+                  onChange={(e) => updateQrGroundTruth(name, e.target.value)}
+                >
+                  {QR_GROUND_TRUTH_OPTIONS.map((option) => (
+                    <option key={option.value || "unset"} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <span style={{ fontSize: 12 }}>
+                  expected: {qrGroundTruth[name]?.expectedQrCount ?? "未設定"}
+                </span>
+              </label>
+            ))}
+            <div style={{ marginTop: 8, fontSize: 11 }}>
+              runtimeExpectedQrCount は診断値として別記し、正式QR取得率の分母には使いません。
+            </div>
           </div>
         )}
         {!exactSet && files.length > 0 && <div style={{ marginTop: 8 }}>固定セット IMG_0940.jpeg〜IMG_0947.jpeg の8枚を選択してください。</div>}
