@@ -1940,6 +1940,21 @@ function resolvePositionConflicts(rows, attemptKey, paperWidthPxValue, geometryD
     resolvedCanonicalSet,
   };
 }
+function countUniqueResolvedPhysicalQrPositions(audits, paperWidthPxValue) {
+  const radius=Math.max(8,Number(paperWidthPxValue||0)*.018);
+  const positions=[];
+  for(const audit of audits||[]){
+    for(const item of audit?.diagnostics||[]){
+      if(!item?.resolvedAsSeparatePhysicalQr) continue;
+      for(const p of [item.jsRawPosition,item.zxingRawPosition]){
+        if(!Number.isFinite(Number(p?.x))||!Number.isFinite(Number(p?.y))) continue;
+        if(positions.some((known)=>Math.hypot(known.x-Number(p.x),known.y-Number(p.y))<=radius)) continue;
+        positions.push({x:Number(p.x),y:Number(p.y)});
+      }
+    }
+  }
+  return positions.length;
+}
 function createStageStats(configs) {
   return Object.fromEntries(configs.map((config) => [config.id, {
     id: config.id,
@@ -2358,6 +2373,10 @@ async function runMatrix(file) {
     const compactE=compactConsensusAuditFromRows(geometry.rows,"geometryAttempts",paperW);
     const aConflictPosition=resolvePositionConflicts(current.rows,"currentAttempts",paperW,geometry.diagnostics);
     const eConflictPosition=resolvePositionConflicts(geometry.rows,"geometryAttempts",paperW,geometry.diagnostics);
+    const resolvedSeparatePhysicalQrCount=countUniqueResolvedPhysicalQrPositions(
+      [aConflictPosition,eConflictPosition],
+      paperW
+    );
 
     const aStructuralCanonical=canonicalSetFromRows(current.rows,"currentSuccess");
     const eStructuralCanonical=canonicalSetFromRows(geometry.rows,"geometrySuccess");
@@ -2471,7 +2490,7 @@ async function runMatrix(file) {
         samePhysicalQrConflictCount:aConflictPosition.samePhysicalQrConflictCount+eConflictPosition.samePhysicalQrConflictCount,
         positionUncertainConflictCount:aConflictPosition.positionUncertainConflictCount+eConflictPosition.positionUncertainConflictCount,
         resolvedConflictEventCount:aConflictPosition.resolvedConflictEventCount+eConflictPosition.resolvedConflictEventCount,
-        resolvedAsSeparatePhysicalQrCount:resolvedConflictCanonical.size,
+        resolvedAsSeparatePhysicalQrCount:resolvedSeparatePhysicalQrCount,
         remainingAmbiguousConflictCount:aConflictPosition.remainingAmbiguousConflictCount+eConflictPosition.remainingAmbiguousConflictCount,
         diagnostics:[
           ...aConflictPosition.diagnostics.map((item)=>({...item,stage:"A-current-ensemble"})),
