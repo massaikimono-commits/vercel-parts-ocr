@@ -109,6 +109,15 @@ jobs:
           ls -lh /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz /tmp/parts-qg-playwright-${{ matrix.label }}.tar.gz
           find /tmp/parts-qg-assets-${{ matrix.label }} -maxdepth 1 -type f -printf '%f %s bytes\n' || true
 
+      - name: Upload exact Playwright headless shell for private local-photo execution
+        if: ${{ matrix.label == 'latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: parts-ocr-playwright-headless-shell
+          compression-level: 6
+          path: /home/runner/.cache/ms-playwright/chromium_headless_shell-*/
+          if-no-files-found: error
+
       - name: Run formal fixed-set gate when a private runner-local photo directory is provided
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.formal_photo_dir != '' }}
         env:
