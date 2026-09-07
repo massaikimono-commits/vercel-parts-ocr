@@ -59,7 +59,7 @@ jobs:
 
       - name: Prepare proxy route-smoke files
         run: |
-          mkdir -p /tmp/parts-qg
+          mkdir -p /tmp/parts-qg /tmp/parts-qg-assets-${{ matrix.label }}
           base64 -d harness/test/fixtures/parts-diagnostic/yellow-proxy.b64 > /tmp/parts-qg/yellow-proxy.jpg
           base64 -d harness/test/fixtures/parts-diagnostic/white-proxy.b64 > /tmp/parts-qg/white-proxy.jpg
           cat > /tmp/parts-qg/proxy-manifest.json <<'JSON'
@@ -87,13 +87,26 @@ jobs:
           cat /tmp/parts-qg-next-${{ matrix.label }}.log
           exit 1
 
-      - name: Run actual /ocr/auto route smoke
+      - name: Run actual /ocr/auto route smoke and capture exact OCR runtime assets
         env:
           NODE_PATH: ${{ github.workspace }}/app-under-test/node_modules
         run: |
           cp harness/scripts/parts-ocr-browser-quality-gate.cjs app-under-test/.parts-ocr-browser-quality-gate.cjs
           cd app-under-test
-          node .parts-ocr-browser-quality-gate.cjs             --base-url http://127.0.0.1:3000             --manifest /tmp/parts-qg/proxy-manifest.json             --out /tmp/parts-qg-${{ matrix.label }}-proxy.json             --dynamic ${{ matrix.label == 'latest' && 'true' || 'false' }}
+          node .parts-ocr-browser-quality-gate.cjs \
+            --base-url http://127.0.0.1:3000 \
+            --manifest /tmp/parts-qg/proxy-manifest.json \
+            --out /tmp/parts-qg-${{ matrix.label }}-proxy.json \
+            --asset-dir /tmp/parts-qg-assets-${{ matrix.label }} \
+            --dynamic ${{ matrix.label == 'latest' && 'true' || 'false' }}
+
+      - name: Package exact target runtime for private local-photo execution
+        run: |
+          rm -rf app-under-test/.next/cache
+          tar -C app-under-test -czf /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz \
+            .next public node_modules package.json next.config.mjs
+          ls -lh /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz
+          find /tmp/parts-qg-assets-${{ matrix.label }} -maxdepth 1 -type f -printf '%f %s bytes\n' || true
 
       - name: Run formal fixed-set gate when a private runner-local photo directory is provided
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.formal_photo_dir != '' }}
@@ -104,19 +117,26 @@ jobs:
           test -d "$PHOTO_DIR"
           python3 harness/scripts/build-parts-ocr-formal-manifest.py "$PHOTO_DIR" /tmp/parts-qg-formal-manifest.json
           cd app-under-test
-          node .parts-ocr-browser-quality-gate.cjs             --base-url http://127.0.0.1:3000             --manifest /tmp/parts-qg-formal-manifest.json             --out /tmp/parts-qg-${{ matrix.label }}-formal.json             --dynamic ${{ matrix.label == 'latest' && 'true' || 'false' }}
+          node .parts-ocr-browser-quality-gate.cjs \
+            --base-url http://127.0.0.1:3000 \
+            --manifest /tmp/parts-qg-formal-manifest.json \
+            --out /tmp/parts-qg-${{ matrix.label }}-formal.json \
+            --dynamic ${{ matrix.label == 'latest' && 'true' || 'false' }}
 
       - name: Show app log on failure
         if: failure()
         run: cat /tmp/parts-qg-next-${{ matrix.label }}.log || true
 
-      - name: Upload route-smoke and formal results
+      - name: Upload route-smoke, runtime, captured OCR assets and formal results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: parts-ocr-quality-gate-${{ matrix.label }}
+          compression-level: 6
           path: |
             /tmp/parts-qg-${{ matrix.label }}-proxy.json
             /tmp/parts-qg-${{ matrix.label }}-formal.json
             /tmp/parts-qg-next-${{ matrix.label }}.log
+            /tmp/parts-qg-assets-${{ matrix.label }}/
+            /tmp/parts-qg-runtime-${{ matrix.label }}.tar.gz
           if-no-files-found: ignore
