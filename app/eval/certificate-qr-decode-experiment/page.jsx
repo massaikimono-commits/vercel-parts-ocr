@@ -27,6 +27,13 @@ const ENSEMBLE_CONFIGS = [
   { id: "raw-color-medium-3x-nearest", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
   { id: "raw-color-medium-2x-smooth", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 2, interpolation: "smooth", quietZoneRatio: .08 },
 ];
+const OFFSET_SWEEP = [
+  { id: "center", dx: 0, dy: 0, reuseFirstEnsembleAttempt: true },
+  { id: "x-minus", dx: -.012, dy: 0 },
+  { id: "x-plus", dx: .012, dy: 0 },
+  { id: "y-minus", dx: 0, dy: -.012 },
+  { id: "y-plus", dx: 0, dy: .012 },
+];
 const RESCUE_CONFIGS = [
   { id: "rescue-gray-medium-3x", source: "raw", mode: "grayscale", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
   { id: "rescue-contrast-weak-medium-3x", source: "raw", mode: "contrast-weak", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
@@ -276,6 +283,144 @@ function cropCandidate(source, pageGeometry, candidate, config) {
   }
   return canvas;
 }
+function shiftedCandidate(candidate, dx = 0, dy = 0) {
+  return {
+    ...candidate,
+    x: Math.max(0, Math.min(1, Number(candidate.x) + Number(dx || 0))),
+    y: Math.max(0, Math.min(1, Number(candidate.y) + Number(dy || 0))),
+  };
+}
+function documentPerspectiveMetrics(page) {
+  const q = Array.isArray(page?.quad) && page.quad.length === 4 ? page.quad : null;
+  if (!q) return { documentSkewDeg: 0, perspectiveSpreadDeg: 0, quadAvailable: false };
+  const angle = (a, b) => Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  const top = angle(q[0], q[1]);
+  const bottom = angle(q[3], q[2]);
+  const left = angle(q[0], q[3]) - 90;
+  const right = angle(q[1], q[2]) - 90;
+  return {
+    documentSkewDeg: Number((((top + bottom + left + right) / 4)).toFixed(3)),
+    perspectiveSpreadDeg: Number((Math.max(top, bottom, left, right) - Math.min(top, bottom, left, right)).toFixed(3)),
+    quadAvailable: true,
+  };
+}
+function candidateQualityMetrics(raw, page, candidate) {
+  const config = { ...ENSEMBLE_CONFIGS[0], scale: 1, quietZoneRatio: .04 };
+  const canvas = cropCandidate(raw, page, candidate, config);
+  try {
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const count = Math.max(1, image.width * image.height);
+    const gray = new Float32Array(count);
+    let sum = 0;
+    let min = 255;
+    let max = 0;
+    for (let i = 0, p = 0; p < image.data.length; p += 4, i += 1) {
+      const g = image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08;
+      gray[i] = g;
+      sum += g;
+      if (g < min) min = g;
+      if (g > max) max = g;
+    }
+    const mean = sum / count;
+    let variance = 0;
+    let edgeSum = 0;
+    let edgeCount = 0;
+    let lapSum = 0;
+    let lapSqSum = 0;
+    let lapCount = 0;
+    for (let y = 1; y < image.height - 1; y += 1) {
+      for (let x = 1; x < image.width - 1; x += 1) {
+        const i = y * image.width + x;
+        const g = gray[i];
+        variance += (g - mean) * (g - mean);
+        const gx = Math.abs(gray[i + 1] - gray[i - 1]);
+        const gy = Math.abs(gray[i + image.width] - gray[i - image.width]);
+        edgeSum += (gx + gy) / 2;
+        edgeCount += 1;
+        const lap = gray[i - 1] + gray[i + 1] + gray[i - image.width] + gray[i + image.width] - 4 * g;
+        lapSum += lap;
+        lapSqSum += lap * lap;
+        lapCount += 1;
+      }
+    }
+    const lapMean = lapCount ? lapSum / lapCount : 0;
+    const lapVariance = lapCount ? Math.max(0, lapSqSum / lapCount - lapMean * lapMean) : 0;
+    const perspective = documentPerspectiveMetrics(page);
+    return {
+      cropPixelWidth: canvas.width,
+      cropPixelHeight: canvas.height,
+      localContrastRange: Number((max - min).toFixed(2)),
+      localLumaStdDev: Number(Math.sqrt(variance / Math.max(1, edgeCount)).toFixed(2)),
+      edgeStrength: Number((edgeSum / Math.max(1, edgeCount)).toFixed(2)),
+      blurIndicatorLaplacianVariance: Number(lapVariance.toFixed(2)),
+      candidateScore: Number(Number(candidate.score || 0).toFixed(4)),
+      ...perspective,
+    };
+  } finally {
+    canvas.width = 1;
+    canvas.height = 1;
+  }
+}
+function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) return reject(new Error("診断画像の生成に失敗しました"));
+      resolve(URL.createObjectURL(blob));
+    }, type, quality);
+  });
+}
+async function buildCandidateVisualDiagnostics(file, matrix) {
+  const raw = await sourceCanvas(file);
+  const normalized = normalizeCertificateCanvas(raw, 1800);
+  const candidates = matrix?.candidateDetection?.physicalCandidates || [];
+  const scale = Math.min(1, 1400 / Math.max(raw.width, raw.height));
+  const overlay = document.createElement("canvas");
+  overlay.width = Math.max(1, Math.round(raw.width * scale));
+  overlay.height = Math.max(1, Math.round(raw.height * scale));
+  const ctx = overlay.getContext("2d");
+  ctx.drawImage(raw, 0, 0, overlay.width, overlay.height);
+  ctx.lineWidth = Math.max(2, Math.round(3 * scale));
+  ctx.font = `${Math.max(14, Math.round(18 * scale))}px system-ui`;
+  ctx.textBaseline = "top";
+
+  const cropUrls = [];
+  try {
+    for (const candidate of candidates) {
+      const center = paperPoint(normalized.paper, raw, candidate);
+      const cropW = paperWidthPx(normalized.paper, raw) * ENSEMBLE_CONFIGS[0].widthRel;
+      const sx = (center.x - cropW / 2) * scale;
+      const sy = (center.y - cropW / 2) * scale;
+      const sw = cropW * scale;
+      ctx.strokeStyle = "#ff2d55";
+      ctx.fillStyle = "rgba(255,45,85,.92)";
+      ctx.strokeRect(sx, sy, sw, sw);
+      ctx.fillRect(sx, Math.max(0, sy - 20), 34, 20);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(String(candidate.index), sx + 4, Math.max(0, sy - 18));
+
+      const decoderCrop = cropCandidate(raw, normalized.paper, candidate, ENSEMBLE_CONFIGS[0]);
+      const url = await canvasToObjectUrl(decoderCrop);
+      decoderCrop.width = 1;
+      decoderCrop.height = 1;
+      cropUrls.push({ candidateIndex: candidate.index, url });
+    }
+    const overlayUrl = await canvasToObjectUrl(overlay);
+    return { overlayUrl, cropUrls };
+  } finally {
+    overlay.width = 1;
+    overlay.height = 1;
+    raw.width = 1;
+    raw.height = 1;
+    normalized.canvas.width = 1;
+    normalized.canvas.height = 1;
+  }
+}
+function revokeVisualDiagnosticEntry(entry) {
+  if (!entry) return;
+  if (entry.overlayUrl) URL.revokeObjectURL(entry.overlayUrl);
+  for (const item of entry.cropUrls || []) if (item?.url) URL.revokeObjectURL(item.url);
+}
 function canonicalText(value) {
   return String(value ?? "")
     .replace(/\0+$/g, "")
@@ -432,13 +577,14 @@ function publicAttempt(attempt) {
   };
 }
 async function runMatrix(file) {
-  const started = performance.now();
+  const totalStarted = performance.now();
   const raw = await sourceCanvas(file);
   const normalized = normalizeCertificateCanvas(raw, 1800);
   const norm = normalized.canvas;
   const normCtx = norm.getContext("2d", { willReadFrequently: true });
   const normImage = normCtx.getImageData(0, 0, norm.width, norm.height);
 
+  const detectionStarted = performance.now();
   const rawCandidates = detectCertificateQrDensityCandidates2D(
     normImage.data,
     normImage.width,
@@ -455,12 +601,29 @@ async function runMatrix(file) {
     xTolerance: .045,
     rowTolerance: .060,
   });
+  const candidateDetectionElapsedMs = Math.round(performance.now() - detectionStarted);
   const candidates = conservative.candidates;
   const [reader, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
   const jsQR = jsMod.default || jsMod;
 
+  const rows = candidates.map((candidate, index) => ({
+    candidateIndex: index + 1,
+    x: candidate.x,
+    y: candidate.y,
+    score: candidate.score,
+    mergedPeakCount: candidate.mergedPeakCount || 1,
+    quality: candidateQualityMetrics(raw, normalized.paper, candidate),
+    ensembleAttempts: [],
+    offsetAttempts: [],
+    rescueAttempts: [],
+    canonicalSet: new Set(),
+    ensembleSuccess: false,
+    offsetSuccess: false,
+    rescueSuccess: false,
+  }));
+
   const ensembleStats = Object.fromEntries(ENSEMBLE_CONFIGS.map((config) => [config.id, {
-    ...config,
+    id: config.id,
     attempts: 0,
     jsqrSuccesses: 0,
     zxingSuccesses: 0,
@@ -469,36 +632,23 @@ async function runMatrix(file) {
     crossEngineConflictCount: 0,
   }]));
   const rescueStats = Object.fromEntries(RESCUE_CONFIGS.map((config) => [config.id, {
-    ...config,
+    id: config.id,
     attempts: 0,
     jsqrSuccesses: 0,
     zxingSuccesses: 0,
     physicalSuccesses: 0,
     crossEngineDuplicateRemovedCount: 0,
     crossEngineConflictCount: 0,
+    netNewCanonicalQrCount: 0,
   }]));
 
-  const physicalRows = [];
   let totalEnsembleAttempts = 0;
   let skippedEnsembleAttempts = 0;
-  let totalRescueAttempts = 0;
 
   try {
-    for (let ci = 0; ci < candidates.length; ci += 1) {
-      const candidate = candidates[ci];
-      const row = {
-        candidateIndex: ci + 1,
-        x: candidate.x,
-        y: candidate.y,
-        score: candidate.score,
-        mergedPeakCount: candidate.mergedPeakCount || 1,
-        ensembleAttempts: [],
-        rescueAttempts: [],
-        canonicalSet: new Set(),
-        ensembleSuccess: false,
-        rescueSuccess: false,
-      };
-
+    const ensembleStarted = performance.now();
+    for (const row of rows) {
+      const candidate = candidates[row.candidateIndex - 1];
       for (let configIndex = 0; configIndex < ENSEMBLE_CONFIGS.length; configIndex += 1) {
         const config = ENSEMBLE_CONFIGS[configIndex];
         const result = await decodeWithConfig({ jsQR, reader, raw, normalized, candidate, config });
@@ -519,37 +669,62 @@ async function runMatrix(file) {
         }
         await wait(0);
       }
-
-      if (!row.ensembleSuccess) {
-        for (const config of RESCUE_CONFIGS) {
-          const result = await decodeWithConfig({ jsQR, reader, raw, normalized, candidate, config });
-          totalRescueAttempts += 1;
-          const stat = rescueStats[config.id];
-          stat.attempts += 1;
-          if (result.jsqrSuccess) stat.jsqrSuccesses += 1;
-          if (result.zxingSuccess) stat.zxingSuccesses += 1;
-          if (result.physicalSuccess) stat.physicalSuccesses += 1;
-          if (result.crossEngineDuplicate) stat.crossEngineDuplicateRemovedCount += 1;
-          if (result.crossEngineConflict) stat.crossEngineConflictCount += 1;
-          row.rescueAttempts.push({ configId: config.id, ...result });
-          if (result.physicalSuccess) {
-            row.rescueSuccess = true;
-            for (const canonical of result.canonicalSet) row.canonicalSet.add(canonical);
-          }
-          await wait(0);
-        }
-      }
-      physicalRows.push(row);
     }
+    const ensembleOnlyElapsedMs = Math.round(performance.now() - ensembleStarted);
 
-    const acceptUnique = (rows, includeRescue) => {
+    const offsetStarted = performance.now();
+    let offsetActualDecodeAttempts = 0;
+    let offsetSkippedAttemptsBySuccess = 0;
+    for (const row of rows) {
+      if (row.ensembleSuccess) continue;
+      const candidate = candidates[row.candidateIndex - 1];
+      const centerAttempt = row.ensembleAttempts.find((attempt) => attempt.configId === ENSEMBLE_CONFIGS[0].id);
+      row.offsetAttempts.push({
+        offsetId: "center",
+        reused: true,
+        dx: 0,
+        dy: 0,
+        physicalSuccess: Boolean(centerAttempt?.physicalSuccess),
+        jsqrSuccess: Boolean(centerAttempt?.jsqrSuccess),
+        zxingSuccess: Boolean(centerAttempt?.zxingSuccess),
+      });
+      for (let oi = 1; oi < OFFSET_SWEEP.length; oi += 1) {
+        const offset = OFFSET_SWEEP[oi];
+        const shifted = shiftedCandidate(candidate, offset.dx, offset.dy);
+        const result = await decodeWithConfig({
+          jsQR,
+          reader,
+          raw,
+          normalized,
+          candidate: shifted,
+          config: ENSEMBLE_CONFIGS[0],
+        });
+        offsetActualDecodeAttempts += 1;
+        row.offsetAttempts.push({
+          offsetId: offset.id,
+          reused: false,
+          dx: offset.dx,
+          dy: offset.dy,
+          ...result,
+        });
+        if (result.physicalSuccess) {
+          row.offsetSuccess = true;
+          for (const canonical of result.canonicalSet) row.canonicalSet.add(canonical);
+          offsetSkippedAttemptsBySuccess += OFFSET_SWEEP.length - oi - 1;
+          break;
+        }
+        await wait(0);
+      }
+    }
+    const offsetSweepElapsedMs = Math.round(performance.now() - offsetStarted);
+
+    const acceptUnique = (includeOffset = true, includeRescue = false) => {
       const accepted = [];
       let crossCandidatePayloadDuplicateRemovedCount = 0;
       for (const row of rows) {
-        const success = row.ensembleSuccess || (includeRescue && row.rescueSuccess);
+        const success = row.ensembleSuccess || (includeOffset && row.offsetSuccess) || (includeRescue && row.rescueSuccess);
         if (!success) continue;
-        const duplicate = accepted.some((known) => samePhysicalPayloadNear(known, row));
-        if (duplicate) {
+        if (accepted.some((known) => samePhysicalPayloadNear(known, row))) {
           crossCandidatePayloadDuplicateRemovedCount += 1;
           continue;
         }
@@ -557,15 +732,74 @@ async function runMatrix(file) {
       }
       return { accepted, crossCandidatePayloadDuplicateRemovedCount };
     };
-    const ensembleUnique = acceptUnique(physicalRows, false);
-    const rescueUnique = acceptUnique(physicalRows, true);
 
+    const ensembleOnlyUnique = (() => {
+      const accepted = [];
+      let dropped = 0;
+      for (const row of rows) {
+        if (!row.ensembleSuccess) continue;
+        if (accepted.some((known) => samePhysicalPayloadNear(known, row))) dropped += 1;
+        else accepted.push(row);
+      }
+      return { accepted, crossCandidatePayloadDuplicateRemovedCount: dropped };
+    })();
+    const afterOffsetUnique = acceptUnique(true, false);
+
+    const baselineCanonicalsForRescue = new Set();
+    for (const row of afterOffsetUnique.accepted) for (const canonical of row.canonicalSet) baselineCanonicalsForRescue.add(canonical);
+
+    const rescueStarted = performance.now();
+    let totalRescueAttempts = 0;
+    for (const config of RESCUE_CONFIGS) {
+      const configCanonicalCandidates = [];
+      for (const row of rows) {
+        if (row.ensembleSuccess || row.offsetSuccess) continue;
+        const candidate = candidates[row.candidateIndex - 1];
+        const result = await decodeWithConfig({ jsQR, reader, raw, normalized, candidate, config });
+        totalRescueAttempts += 1;
+        const stat = rescueStats[config.id];
+        stat.attempts += 1;
+        if (result.jsqrSuccess) stat.jsqrSuccesses += 1;
+        if (result.zxingSuccess) stat.zxingSuccesses += 1;
+        if (result.physicalSuccess) stat.physicalSuccesses += 1;
+        if (result.crossEngineDuplicate) stat.crossEngineDuplicateRemovedCount += 1;
+        if (result.crossEngineConflict) stat.crossEngineConflictCount += 1;
+        row.rescueAttempts.push({ configId: config.id, ...result });
+        if (result.physicalSuccess) configCanonicalCandidates.push({ row, result });
+        await wait(0);
+      }
+
+      const localSeen = new Set();
+      for (const { row, result } of configCanonicalCandidates) {
+        let netNew = false;
+        for (const canonical of result.canonicalSet) {
+          if (!baselineCanonicalsForRescue.has(canonical) && !localSeen.has(canonical)) {
+            localSeen.add(canonical);
+            netNew = true;
+          }
+        }
+        if (netNew) rescueStats[config.id].netNewCanonicalQrCount += 1;
+      }
+    }
+    const rescueOnlyElapsedMs = Math.round(performance.now() - rescueStarted);
+
+    for (const row of rows) {
+      if (row.ensembleSuccess || row.offsetSuccess) continue;
+      for (const attempt of row.rescueAttempts) {
+        if (!attempt.physicalSuccess) continue;
+        row.rescueSuccess = true;
+        for (const canonical of attempt.canonicalSet || []) row.canonicalSet.add(canonical);
+      }
+    }
+
+    const rescueUnique = acceptUnique(true, true);
     const decodedItems = rescueUnique.accepted
       .map((row) => [...row.canonicalSet][0])
       .filter(Boolean)
       .map((data) => ({ data }));
     const decodedRuntime = expectedCertificateQrCount(decodedItems, "");
 
+    const totalExperimentalElapsedMs = Math.round(performance.now() - totalStarted);
     return {
       candidateDetection: {
         dominantRowY: conservative.dominantRowY,
@@ -586,51 +820,63 @@ async function runMatrix(file) {
       },
       ensemble: {
         order: ENSEMBLE_CONFIGS.map((config) => config.id),
-        physicalUniqueQrCount: ensembleUnique.accepted.length,
-        crossCandidatePayloadDuplicateRemovedCount: ensembleUnique.crossCandidatePayloadDuplicateRemovedCount,
+        physicalUniqueQrCount: ensembleOnlyUnique.accepted.length,
+        crossCandidatePayloadDuplicateRemovedCount: ensembleOnlyUnique.crossCandidatePayloadDuplicateRemovedCount,
         totalAttempts: totalEnsembleAttempts,
         skippedAttemptsByEarlySuccess: skippedEnsembleAttempts,
         averageAttemptsPerPhysicalCandidate: candidates.length
           ? Number((totalEnsembleAttempts / candidates.length).toFixed(3))
           : 0,
-        stats: Object.values(ensembleStats).map((stat) => ({
-          id: stat.id,
-          attempts: stat.attempts,
-          jsqrSuccesses: stat.jsqrSuccesses,
-          zxingSuccesses: stat.zxingSuccesses,
-          physicalSuccesses: stat.physicalSuccesses,
-          crossEngineDuplicateRemovedCount: stat.crossEngineDuplicateRemovedCount,
-          crossEngineConflictCount: stat.crossEngineConflictCount,
-        })),
+        stats: Object.values(ensembleStats),
+      },
+      offsetSweep: {
+        offsets: OFFSET_SWEEP.map(({ id, dx, dy }) => ({ id, dx, dy })),
+        physicalUniqueQrCountAfterOffset: afterOffsetUnique.accepted.length,
+        addedPhysicalQrCount: Math.max(0, afterOffsetUnique.accepted.length - ensembleOnlyUnique.accepted.length),
+        actualDecodeAttempts: offsetActualDecodeAttempts,
+        skippedAttemptsBySuccess: offsetSkippedAttemptsBySuccess,
       },
       rescueStudy: {
         physicalUniqueQrCountAfterRescue: rescueUnique.accepted.length,
-        addedPhysicalQrCount: Math.max(0, rescueUnique.accepted.length - ensembleUnique.accepted.length),
+        addedPhysicalQrCountVsEnsemble: Math.max(0, rescueUnique.accepted.length - ensembleOnlyUnique.accepted.length),
+        addedPhysicalQrCountVsOffset: Math.max(0, rescueUnique.accepted.length - afterOffsetUnique.accepted.length),
         totalAttempts: totalRescueAttempts,
         stats: Object.values(rescueStats).map((stat) => ({
-          id: stat.id,
-          attempts: stat.attempts,
-          jsqrSuccesses: stat.jsqrSuccesses,
-          zxingSuccesses: stat.zxingSuccesses,
-          physicalSuccesses: stat.physicalSuccesses,
-          crossEngineDuplicateRemovedCount: stat.crossEngineDuplicateRemovedCount,
-          crossEngineConflictCount: stat.crossEngineConflictCount,
+          ...stat,
+          recommendedKeep: stat.netNewCanonicalQrCount > 0,
         })),
+      },
+      timing: {
+        candidateDetectionElapsedMs,
+        ensembleOnlyElapsedMs,
+        offsetSweepElapsedMs,
+        rescueOnlyElapsedMs,
+        totalExperimentalElapsedMs,
       },
       decodedRuntimeVehicleKind: decodedRuntime?.kind || null,
       decodedRuntimeExpectedQrCount: Number(decodedRuntime?.count || 0) || null,
-      candidateDiagnostics: physicalRows.map((row) => ({
+      candidateDiagnostics: rows.map((row) => ({
         candidateIndex: row.candidateIndex,
         x: row.x,
         y: row.y,
         score: row.score,
         mergedPeakCount: row.mergedPeakCount,
+        quality: row.quality,
         ensembleSuccess: row.ensembleSuccess,
+        offsetSuccess: row.offsetSuccess,
         rescueSuccess: row.rescueSuccess,
         ensembleAttempts: row.ensembleAttempts.map(publicAttempt),
+        offsetAttempts: row.offsetAttempts.map((attempt) => ({
+          offsetId: attempt.offsetId,
+          reused: Boolean(attempt.reused),
+          dx: Number(attempt.dx || 0),
+          dy: Number(attempt.dy || 0),
+          jsqrSuccess: Boolean(attempt.jsqrSuccess),
+          zxingSuccess: Boolean(attempt.zxingSuccess),
+          physicalSuccess: Boolean(attempt.physicalSuccess),
+        })),
         rescueAttempts: row.rescueAttempts.map(publicAttempt),
       })),
-      elapsedMs: Math.round(performance.now() - started),
       normalizeMode: normalized.mode,
       normalizeConfidence: Number(Number(normalized.confidence || 0).toFixed(3)),
     };
@@ -644,64 +890,97 @@ async function runMatrix(file) {
 function applyCountingIntegrity(matrix, expectedQrCount) {
   const expected = Number(expectedQrCount);
   const ensembleCount = Number(matrix?.ensemble?.physicalUniqueQrCount || 0);
+  const offsetCount = Number(matrix?.offsetSweep?.physicalUniqueQrCountAfterOffset || 0);
   const rescueCount = Number(matrix?.rescueStudy?.physicalUniqueQrCountAfterRescue || 0);
+  const fail = (count) => Number.isFinite(expected) ? count > expected : false;
   return {
     ...matrix,
-    ensemble: {
-      ...matrix.ensemble,
-      countingIntegrityFail: Number.isFinite(expected) ? ensembleCount > expected : false,
-    },
-    rescueStudy: {
-      ...matrix.rescueStudy,
-      countingIntegrityFail: Number.isFinite(expected) ? rescueCount > expected : false,
-    },
+    ensemble: { ...matrix.ensemble, countingIntegrityFail: fail(ensembleCount) },
+    offsetSweep: { ...matrix.offsetSweep, countingIntegrityFail: fail(offsetCount) },
+    rescueStudy: { ...matrix.rescueStudy, countingIntegrityFail: fail(rescueCount) },
   };
 }
 function aggregateExperiment(results) {
   return results.reduce((acc, result) => {
     const expected = Number(result.groundTruthExpectedQrCount || 0);
     const ensemble = result.matrix?.ensemble || {};
+    const offset = result.matrix?.offsetSweep || {};
     const rescue = result.matrix?.rescueStudy || {};
+    const timing = result.matrix?.timing || {};
     acc.expected += expected;
     acc.baselinePhysicalUnique += Number(result.baseline.qrCount || 0);
     acc.ensemblePhysicalUnique += Number(ensemble.physicalUniqueQrCount || 0);
+    acc.offsetPhysicalUnique += Number(offset.physicalUniqueQrCountAfterOffset || 0);
     acc.rescuePhysicalUnique += Number(rescue.physicalUniqueQrCountAfterRescue || 0);
     if (result.baseline.qrCount === expected) acc.baselineCompleteImages += 1;
     if (ensemble.physicalUniqueQrCount === expected) acc.ensembleCompleteImages += 1;
+    if (offset.physicalUniqueQrCountAfterOffset === expected) acc.offsetCompleteImages += 1;
     if (rescue.physicalUniqueQrCountAfterRescue === expected) acc.rescueCompleteImages += 1;
     if (ensemble.countingIntegrityFail) acc.ensembleCountingIntegrityFail = true;
+    if (offset.countingIntegrityFail) acc.offsetCountingIntegrityFail = true;
     if (rescue.countingIntegrityFail) acc.rescueCountingIntegrityFail = true;
     acc.ensembleAttempts += Number(ensemble.totalAttempts || 0);
     acc.skippedEnsembleAttempts += Number(ensemble.skippedAttemptsByEarlySuccess || 0);
+    acc.offsetAttempts += Number(offset.actualDecodeAttempts || 0);
+    acc.skippedOffsetAttempts += Number(offset.skippedAttemptsBySuccess || 0);
     acc.rescueAttempts += Number(rescue.totalAttempts || 0);
     acc.candidatePositionDuplicateRemovedCount += Number(result.matrix?.candidateDetection?.candidatePositionDuplicateRemovedCount || 0);
-    acc.matrixElapsedMs += Number(result.matrix?.elapsedMs || 0);
     acc.baselineElapsedMs += Number(result.baseline?.elapsedMs || 0);
+    acc.ensembleOnlyElapsedMs += Number(timing.ensembleOnlyElapsedMs || 0);
+    acc.offsetSweepElapsedMs += Number(timing.offsetSweepElapsedMs || 0);
+    acc.rescueOnlyElapsedMs += Number(timing.rescueOnlyElapsedMs || 0);
+    acc.totalExperimentalElapsedMs += Number(timing.totalExperimentalElapsedMs || 0);
     for (const stat of ensemble.stats || []) {
       acc.ensembleJsqrSuccesses += Number(stat.jsqrSuccesses || 0);
       acc.ensembleZxingSuccesses += Number(stat.zxingSuccesses || 0);
       acc.crossEngineDuplicateRemovedCount += Number(stat.crossEngineDuplicateRemovedCount || 0);
+    }
+    for (const stat of rescue.stats || []) {
+      const key = stat.id;
+      if (!acc.rescueNetNewByConfig[key]) {
+        acc.rescueNetNewByConfig[key] = {
+          id: key,
+          netNewCanonicalQrCount: 0,
+          physicalSuccesses: 0,
+          attempts: 0,
+          recommendedKeep: false,
+        };
+      }
+      acc.rescueNetNewByConfig[key].netNewCanonicalQrCount += Number(stat.netNewCanonicalQrCount || 0);
+      acc.rescueNetNewByConfig[key].physicalSuccesses += Number(stat.physicalSuccesses || 0);
+      acc.rescueNetNewByConfig[key].attempts += Number(stat.attempts || 0);
+      acc.rescueNetNewByConfig[key].recommendedKeep =
+        acc.rescueNetNewByConfig[key].netNewCanonicalQrCount > 0;
     }
     return acc;
   }, {
     expected: 0,
     baselinePhysicalUnique: 0,
     ensemblePhysicalUnique: 0,
+    offsetPhysicalUnique: 0,
     rescuePhysicalUnique: 0,
     baselineCompleteImages: 0,
     ensembleCompleteImages: 0,
+    offsetCompleteImages: 0,
     rescueCompleteImages: 0,
     ensembleCountingIntegrityFail: false,
+    offsetCountingIntegrityFail: false,
     rescueCountingIntegrityFail: false,
     ensembleAttempts: 0,
     skippedEnsembleAttempts: 0,
+    offsetAttempts: 0,
+    skippedOffsetAttempts: 0,
     rescueAttempts: 0,
     candidatePositionDuplicateRemovedCount: 0,
-    matrixElapsedMs: 0,
     baselineElapsedMs: 0,
+    ensembleOnlyElapsedMs: 0,
+    offsetSweepElapsedMs: 0,
+    rescueOnlyElapsedMs: 0,
+    totalExperimentalElapsedMs: 0,
     ensembleJsqrSuccesses: 0,
     ensembleZxingSuccesses: 0,
     crossEngineDuplicateRemovedCount: 0,
+    rescueNetNewByConfig: {},
   });
 }
 function publicResult(result) {
