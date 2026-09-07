@@ -2963,7 +2963,7 @@ export default function CertificateQrDecodeExperimentPage() {
 
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
-      <h1>車検証QR decode A/E geometry 実験</h1>
+      <h1>車検証QR decode A/E geometry 実験 v7</h1>
       <p>Baselineは実際の {PATHNAME} → CertificateQrFast。A=現current ensemble、E=A失敗candidateだけlocal finder/quad推定＋4-module quiet付きperspective rectifyです。</p>
       <p><b>禁止:</b> QR payloadの表示・保存・送信。本ページのsummaryは座標・設定・成功/失敗・件数のみです。</p>
       <p style={{fontSize:12}}>experimental HEAD: <code>{experimentalHead || "URL head未指定"}</code></p>
