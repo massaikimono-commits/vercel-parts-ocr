@@ -485,6 +485,10 @@ export default function CertificateQrFastAuditPage() {
         setStatus(`${i + 1}/8 ${safeName(ordered[i])} を${phase === "fast" ? "QR Fast" : "OCR統合"}評価中…`);
         await reloadFrame();
         const result = await runOne(frameRef.current, ordered[i], i, phase);
+        if (phase === "fast" && frameRef.current) {
+          frameRef.current.src = "about:blank";
+          await wait(40);
+        }
         const normalizedFileName = normalizeFixedFileName(ordered[i]) || safeName(ordered[i]);
         const gt = qrGroundTruth[normalizedFileName] || {};
         result.groundTruthVehicleKind = gt.vehicleKind || null;
