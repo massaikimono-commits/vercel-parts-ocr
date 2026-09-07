@@ -1062,9 +1062,11 @@ export default function CertificateQrDecodeExperimentPage() {
   const [thumbnailUrls, setThumbnailUrls] = useState({});
   const [expandedName, setExpandedName] = useState("");
   const [results, setResults] = useState([]);
+  const [visualDiagnostics, setVisualDiagnostics] = useState({});
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("固定8枚を選択してください。");
   const frameRef = useRef(null);
+  const visualDiagnosticsRef = useRef({});
 
   const normalizedNames = useMemo(() => files.map(normalizeFixedFileName), [files]);
   const nameSet = useMemo(() => new Set(normalizedNames.filter(Boolean)), [normalizedNames]);
@@ -1090,6 +1092,20 @@ export default function CertificateQrDecodeExperimentPage() {
     };
   }, [filesByName]);
 
+  const clearVisualDiagnostics = () => {
+    for (const entry of Object.values(visualDiagnosticsRef.current)) revokeVisualDiagnosticEntry(entry);
+    visualDiagnosticsRef.current = {};
+    setVisualDiagnostics({});
+  };
+
+  useEffect(() => {
+    clearVisualDiagnostics();
+    return () => {
+      for (const entry of Object.values(visualDiagnosticsRef.current)) revokeVisualDiagnosticEntry(entry);
+      visualDiagnosticsRef.current = {};
+    };
+  }, [files]);
+
   const setGt = (name, kind) => {
     const opt = GT_OPTIONS.find((x) => x.value === kind) || GT_OPTIONS[0];
     setGroundTruth((prev) => ({ ...prev, [name]: { vehicleKind: kind || null, expectedQrCount: opt.expected } }));
@@ -1106,6 +1122,7 @@ export default function CertificateQrDecodeExperimentPage() {
     if (!valid || running) return;
     setRunning(true);
     setResults([]);
+    clearVisualDiagnostics();
     const ordered = [...files].sort((a, b) => normalizeFixedFileName(a).localeCompare(normalizeFixedFileName(b)));
     const out = [];
     try {
@@ -1123,6 +1140,14 @@ export default function CertificateQrDecodeExperimentPage() {
         // Recognition isolation contract: runMatrix receives only the selected image File.
         // Ground Truth is intentionally read only after decode has fully finished.
         const rawMatrix = await runMatrix(file);
+        if (name === "IMG_0942.jpeg" || name === "IMG_0944.jpeg") {
+          setStatus(`${i + 1}/8 ${name}: browser-local crop診断画像を生成中…`);
+          const visual = await buildCandidateVisualDiagnostics(file, rawMatrix);
+          const previous = visualDiagnosticsRef.current[name];
+          if (previous) revokeVisualDiagnosticEntry(previous);
+          visualDiagnosticsRef.current = { ...visualDiagnosticsRef.current, [name]: visual };
+          setVisualDiagnostics({ ...visualDiagnosticsRef.current });
+        }
         const gt = groundTruth[name] || {};
         const matrix = applyCountingIntegrity(rawMatrix, gt.expectedQrCount);
         out.push({
@@ -1147,6 +1172,9 @@ export default function CertificateQrDecodeExperimentPage() {
   const ensembleRate = totals && !totals.ensembleCountingIntegrityFail && totals.expected
     ? Number((totals.ensemblePhysicalUnique / totals.expected).toFixed(4))
     : null;
+  const offsetRate = totals && !totals.offsetCountingIntegrityFail && totals.expected
+    ? Number((totals.offsetPhysicalUnique / totals.expected).toFixed(4))
+    : null;
   const rescueRate = totals && !totals.rescueCountingIntegrityFail && totals.expected
     ? Number((totals.rescuePhysicalUnique / totals.expected).toFixed(4))
     : null;
@@ -1156,9 +1184,15 @@ export default function CertificateQrDecodeExperimentPage() {
         return candidates ? Number((Number(totals?.ensembleAttempts || 0) / candidates).toFixed(3)) : 0;
       })()
     : null;
+  const runtimeVehicleKindCorrectCount = gtReady
+    ? results.filter((r) => r.matrix?.decodedRuntimeVehicleKind === r.groundTruthVehicleKind).length
+    : null;
+  const runtimeVehicleKindAccuracy = gtReady
+    ? Number((runtimeVehicleKindCorrectCount / 8).toFixed(4))
+    : null;
 
   const summary = JSON.stringify({
-    schema: "icb-certificate-qr-decode-experiment-summary-v3",
+    schema: "icb-certificate-qr-decode-experiment-summary-v4",
     generatedAt: new Date().toISOString(),
     branchRole: "experimental-only",
     pathname: PATHNAME,
@@ -1169,6 +1203,7 @@ export default function CertificateQrDecodeExperimentPage() {
       qrPayloadIncluded: false,
       canonicalPayloadIncluded: false,
       thumbnailIncluded: false,
+      candidateCropImageIncluded: false,
       browserMemoryOnly: true,
     },
     groundTruth: {
@@ -1182,7 +1217,7 @@ export default function CertificateQrDecodeExperimentPage() {
       expectedQrCount: totals.expected,
       qrAcquisitionRate: totals.expected ? Number((totals.baselinePhysicalUnique / totals.expected).toFixed(4)) : null,
       completeImageCount: totals.baselineCompleteImages,
-      elapsedMs: totals.baselineElapsedMs,
+      baselineElapsedMs: totals.baselineElapsedMs,
     } : null,
     ensembleTotals: totals ? {
       physicalUniqueQrCount: totals.ensemblePhysicalUnique,
@@ -1197,7 +1232,18 @@ export default function CertificateQrDecodeExperimentPage() {
       zxingSuccesses: totals.ensembleZxingSuccesses,
       crossEngineDuplicateRemovedCount: totals.crossEngineDuplicateRemovedCount,
       candidatePositionDuplicateRemovedCount: totals.candidatePositionDuplicateRemovedCount,
-      elapsedMs: totals.matrixElapsedMs,
+      ensembleOnlyElapsedMs: totals.ensembleOnlyElapsedMs,
+    } : null,
+    offsetSweepTotals: totals ? {
+      physicalUniqueQrCountAfterOffset: totals.offsetPhysicalUnique,
+      expectedQrCount: totals.expected,
+      qrAcquisitionRateAfterOffset: offsetRate,
+      completeImageCountAfterOffset: totals.offsetCompleteImages,
+      countingIntegrityFail: totals.offsetCountingIntegrityFail,
+      actualDecodeAttempts: totals.offsetAttempts,
+      skippedAttemptsBySuccess: totals.skippedOffsetAttempts,
+      offsetSweepElapsedMs: totals.offsetSweepElapsedMs,
+      stats: Object.values(totals.offsetById),
     } : null,
     rescueStudyTotals: totals ? {
       physicalUniqueQrCountAfterRescue: totals.rescuePhysicalUnique,
@@ -1206,6 +1252,20 @@ export default function CertificateQrDecodeExperimentPage() {
       completeImageCountAfterRescue: totals.rescueCompleteImages,
       countingIntegrityFail: totals.rescueCountingIntegrityFail,
       totalRescueAttempts: totals.rescueAttempts,
+      rescueOnlyElapsedMs: totals.rescueOnlyElapsedMs,
+      netNewCanonicalByConfig: Object.values(totals.rescueNetNewByConfig),
+    } : null,
+    timingTotals: totals ? {
+      baselineElapsedMs: totals.baselineElapsedMs,
+      ensembleOnlyElapsedMs: totals.ensembleOnlyElapsedMs,
+      offsetSweepElapsedMs: totals.offsetSweepElapsedMs,
+      rescueOnlyElapsedMs: totals.rescueOnlyElapsedMs,
+      totalExperimentalElapsedMs: totals.totalExperimentalElapsedMs,
+    } : null,
+    runtimeVehicleKindTotals: gtReady ? {
+      correctCount: runtimeVehicleKindCorrectCount,
+      imageCount: 8,
+      accuracy: runtimeVehicleKindAccuracy,
     } : null,
     results: results.map(publicResult),
   }, null, 2);
@@ -1227,7 +1287,7 @@ export default function CertificateQrDecodeExperimentPage() {
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
       <h1>車検証QR decode A/B 実験</h1>
-      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。改善候補はdynamic XY物理候補ごとに3段adaptive fallbackし、未取得候補だけgeneric rescue変換を比較します。</p>
+      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。改善候補はdynamic XY物理候補ごとに3段adaptive fallbackし、未取得候補だけ5点offset sweep→generic rescue診断を行います。</p>
       <p><b>禁止:</b> QR payloadの表示・保存・送信。本ページのsummaryは座標・設定・成功/失敗・件数のみです。</p>
 
       <section style={{ border: "1px solid #ccc", borderRadius: 12, padding: 14 }}>
@@ -1298,12 +1358,14 @@ export default function CertificateQrDecodeExperimentPage() {
             <b>{r.fileName}</b> — GT {r.groundTruthExpectedQrCount ?? "未設定"} —
             Baseline {r.baseline.qrCount} —
             Ensemble {r.matrix.ensemble.physicalUniqueQrCount} {r.matrix.ensemble.countingIntegrityFail ? "COUNTING FAIL" : ""} —
+            Offset後 {r.matrix.offsetSweep.physicalUniqueQrCountAfterOffset} {r.matrix.offsetSweep.countingIntegrityFail ? "COUNTING FAIL" : ""} —
             Rescue後 {r.matrix.rescueStudy.physicalUniqueQrCountAfterRescue} {r.matrix.rescueStudy.countingIntegrityFail ? "COUNTING FAIL" : ""} —
             candidates {r.matrix.candidateDetection.conservativePhysicalCandidateCount}
             / previous-cluster {r.matrix.candidateDetection.previousStylePhysicalCandidateCount} —
-            avg attempt {r.matrix.ensemble.averageAttemptsPerPhysicalCandidate} —
-            skip {r.matrix.ensemble.skippedAttemptsByEarlySuccess} —
-            {r.matrix.elapsedMs}ms —
+            ensemble {r.matrix.timing.ensembleOnlyElapsedMs}ms /
+            offset {r.matrix.timing.offsetSweepElapsedMs}ms /
+            rescue {r.matrix.timing.rescueOnlyElapsedMs}ms /
+            total {r.matrix.timing.totalExperimentalElapsedMs}ms —
             decoded kind {r.matrix.decodedRuntimeVehicleKind || "?"}
           </div>
         ))}
@@ -1315,10 +1377,75 @@ export default function CertificateQrDecodeExperimentPage() {
         <div>Ground Truth合計: 47 QR</div>
         <div>Baseline: {totals ? `${totals.baselinePhysicalUnique}/${totals.expected}` : "-"}</div>
         <div>Ensemble: {totals ? `${totals.ensemblePhysicalUnique}/${totals.expected}` : "-"} / rate {ensembleRate ?? "-"}</div>
-        <div>完全取得: {totals ? `${totals.ensembleCompleteImages}/8` : "-"}</div>
-        <div>平均attempt/候補: {averageEnsembleAttemptsPerCandidate ?? "-"}</div>
+        <div>Offset後: {totals ? `${totals.offsetPhysicalUnique}/${totals.expected}` : "-"} / rate {offsetRate ?? "-"}</div>
+        <div>Rescue後: {totals ? `${totals.rescuePhysicalUnique}/${totals.expected}` : "-"} / rate {rescueRate ?? "-"}</div>
+        <div>完全取得: ensemble {totals ? `${totals.ensembleCompleteImages}/8` : "-"} / offset {totals ? `${totals.offsetCompleteImages}/8` : "-"} / rescue {totals ? `${totals.rescueCompleteImages}/8` : "-"}</div>
+        <div>平均ensemble attempt/候補: {averageEnsembleAttemptsPerCandidate ?? "-"}</div>
         <div>早期成功skip: {totals?.skippedEnsembleAttempts ?? "-"}</div>
-        <div>Rescue study後: {totals ? `${totals.rescuePhysicalUnique}/${totals.expected}` : "-"} / rate {rescueRate ?? "-"}</div>
+        <div>runtime車種判定: {runtimeVehicleKindCorrectCount ?? "-"}/8 ({runtimeVehicleKindAccuracy ?? "-"})</div>
+        <div>時間: baseline {totals?.baselineElapsedMs ?? "-"}ms / ensemble {totals?.ensembleOnlyElapsedMs ?? "-"}ms / offset {totals?.offsetSweepElapsedMs ?? "-"}ms / rescue {totals?.rescueOnlyElapsedMs ?? "-"}ms / experimental total {totals?.totalExperimentalElapsedMs ?? "-"}ms</div>
+        {totals && (
+          <div style={{ marginTop: 10 }}>
+            <b>Rescue純増（逐次canonical）</b>
+            {Object.values(totals.rescueNetNewByConfig).map((item) => (
+              <div key={item.id} style={{ fontSize: 13, marginTop: 3 }}>
+                {item.id}: netNew {item.netNewCanonicalQrCount} / physicalSuccess {item.physicalSuccesses} / attempts {item.attempts} / {item.recommendedKeep ? "KEEP候補" : "削除候補"}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section style={{ marginTop: 18 }}>
+        <h2>0942 / 0944 browser-local candidate crop診断</h2>
+        <p style={{ fontSize: 12 }}>画像/cropは端末ローカルobjectURLのみ。赤枠=small、青枠=medium。summaryには画像を含めません。</p>
+        {["IMG_0942.jpeg", "IMG_0944.jpeg"].map((name) => {
+          const visual = visualDiagnostics[name];
+          const result = results.find((r) => r.fileName === name);
+          if (!visual || !result) return <div key={name} style={{ marginTop: 10 }}>{name}: 実験完了後に表示</div>;
+          return (
+            <div key={name} style={{ marginTop: 16, border: "1px solid #ccc", borderRadius: 12, padding: 12 }}>
+              <h3 style={{ marginTop: 0 }}>{name}</h3>
+              <img src={visual.overlayUrl} alt={`${name} candidate overlay`} style={{ width: "100%", maxHeight: 520, objectFit: "contain", background: "#f4f4f4" }} />
+              <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+                {visual.cropUrls.map((crop) => {
+                  const diagnostic = result.matrix.candidateDiagnostics.find((item) => item.candidateIndex === crop.candidateIndex);
+                  const q = diagnostic?.quality || {};
+                  return (
+                    <div key={crop.candidateIndex} style={{ borderTop: "1px solid #ddd", paddingTop: 10 }}>
+                      <b>candidate {crop.candidateIndex}</b>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>
+                        x={diagnostic?.x} y={diagnostic?.y} score={diagnostic?.score} /
+                        ensemble={String(Boolean(diagnostic?.ensembleSuccess))} /
+                        offset={String(Boolean(diagnostic?.offsetSuccess))} /
+                        rescue={String(Boolean(diagnostic?.rescueSuccess))}
+                      </div>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>
+                        crop {q.cropPixelWidth}×{q.cropPixelHeight}px /
+                        contrastRange {q.localContrastRange} /
+                        lumaStd {q.localLumaStdDev} /
+                        edge {q.edgeStrength} /
+                        blurVar {q.blurIndicatorLaplacianVariance} /
+                        docSkew {q.documentSkewDeg}° /
+                        perspectiveSpread {q.perspectiveSpreadDeg}°
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginTop: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700 }}>small 2x decoder crop</div>
+                          <img src={crop.smallUrl} alt={`${name} candidate ${crop.candidateIndex} small crop`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700 }}>medium 3x decoder crop</div>
+                          <img src={crop.mediumUrl} alt={`${name} candidate ${crop.candidateIndex} medium crop`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </section>
 
       <section style={{ marginTop: 18 }}>
