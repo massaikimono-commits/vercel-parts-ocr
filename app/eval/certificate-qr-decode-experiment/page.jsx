@@ -13,6 +13,15 @@ const GT_OPTIONS = [
   { value: "registered", label: "登録車5QR", expected: 5 },
   { value: "kei-legacy", label: "軽旧2QR", expected: 2 },
 ];
+const RECOGNITION_ISOLATION = Object.freeze({
+  groundTruthUsedDuringDecode: false,
+  decodeInput: "selected-image-file-only",
+  groundTruthAvailableToCandidateDetection: false,
+  groundTruthAvailableToDecodeStopping: false,
+  groundTruthAvailableToFallbackControl: false,
+  groundTruthAvailableToRuntimeVehicleKind: false,
+  groundTruthAvailableToRuntimeExpectedQrCount: false,
+});
 const ENSEMBLE_CONFIGS = [
   { id: "raw-color-small-2x-nearest", source: "raw", mode: "color", crop: "small", widthRel: .10, scale: 2, interpolation: "nearest", quietZoneRatio: .08 },
   { id: "raw-color-medium-3x-nearest", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
@@ -700,6 +709,7 @@ function publicResult(result) {
     fileName: result.fileName,
     groundTruthVehicleKind: result.groundTruthVehicleKind,
     groundTruthExpectedQrCount: result.groundTruthExpectedQrCount,
+    groundTruthUsedDuringDecode: false,
     baseline: {
       ...result.baseline,
       physicalUniqueQrCount: result.baseline.qrCount,
@@ -782,6 +792,8 @@ export default function CertificateQrDecodeExperimentPage() {
           frameRef.current.src = "about:blank";
           await wait(80);
         }
+        // Recognition isolation contract: runMatrix receives only the selected image File.
+        // Ground Truth is intentionally read only after decode has fully finished.
         const rawMatrix = await runMatrix(file);
         const gt = groundTruth[name] || {};
         const matrix = applyCountingIntegrity(rawMatrix, gt.expectedQrCount);
@@ -822,6 +834,8 @@ export default function CertificateQrDecodeExperimentPage() {
     generatedAt: new Date().toISOString(),
     branchRole: "experimental-only",
     pathname: PATHNAME,
+    groundTruthUsedDuringDecode: false,
+    recognitionIsolation: RECOGNITION_ISOLATION,
     privacy: {
       imageUpload: false,
       qrPayloadIncluded: false,
@@ -833,6 +847,7 @@ export default function CertificateQrDecodeExperimentPage() {
       ready: gtReady,
       totalExpectedQrCount: gtReady ? 47 : null,
       runtimeExpectedUsedAsGroundTruth: false,
+      usedForScoringOnlyAfterDecode: true,
     },
     baselineTotals: totals ? {
       physicalUniqueQrCount: totals.baselinePhysicalUnique,
@@ -894,6 +909,9 @@ export default function CertificateQrDecodeExperimentPage() {
         {valid && (
           <div style={{ marginTop: 14 }}>
             <b>QR Ground Truth（写真を見て確認 / ブラウザローカルのみ）</b>
+            <div style={{ marginTop: 6, fontSize: 12, fontWeight: 700 }}>
+              ※ Ground Truthはdecode完了後の採点専用です。候補検出・decode停止・fallback・車種判定には使用しません。
+            </div>
             <div style={{ marginTop: 8, display: "grid", gap: 12 }}>
               {REQUIRED_NAMES.map((name) => (
                 <div key={name} style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12 }}>
