@@ -628,8 +628,8 @@ function nearestQrDimension(estimate) {
   const version = Math.max(1, Math.min(40, Math.round((clamped - 17) / 4)));
   return 17 + 4 * version;
 }
-function chooseFinderTriplet(finders) {
-  let best = null;
+function rankFinderTriplets(finders, candidateCenter) {
+  const ranked = [];
   const points = (finders || []).slice(0, 10);
   for (let i = 0; i < points.length; i += 1) {
     for (let j = 0; j < points.length; j += 1) {
@@ -641,25 +641,55 @@ function chooseFinderTriplet(finders) {
         const vx = b.x - tl.x, vy = b.y - tl.y;
         const du = Math.hypot(ux, uy), dv = Math.hypot(vx, vy);
         if (du < 16 || dv < 16) continue;
-        const cos = Math.abs((ux * vx + uy * vy) / (du * dv));
-        if (cos > .38) continue;
+        const cos = Math.abs((ux * vx + uy * vy) / Math.max(1, du * dv));
+        if (cos > .42) continue;
         const legRatio = Math.max(du, dv) / Math.max(1, Math.min(du, dv));
-        if (legRatio > 2.0) continue;
+        if (legRatio > 2.1) continue;
         const modules = [tl.module, a.module, b.module];
         const moduleRatio = Math.max(...modules) / Math.max(.1, Math.min(...modules));
         if (moduleRatio > 2.0) continue;
         const cross = ux * vy - uy * vx;
         const tr = cross >= 0 ? a : b;
         const bl = cross >= 0 ? b : a;
-        const geometryScore = (tl.score + a.score + b.score) / 3
+        const avgModule = (tl.module + tr.module + bl.module) / 3;
+        const estimatedDimension = ((du + dv) / 2) / Math.max(.1, avgModule) + 7;
+        const nearestDimension = nearestQrDimension(estimatedDimension);
+        const dimensionResidual = Math.abs(estimatedDimension - nearestDimension);
+        const estimatedCenter = {
+          x: tl.x + (tr.x - tl.x) * .5 + (bl.x - tl.x) * .5,
+          y: tl.y + (tr.y - tl.y) * .5 + (bl.y - tl.y) * .5,
+        };
+        const centerDistance = candidateCenter
+          ? Math.hypot(estimatedCenter.x - candidateCenter.x, estimatedCenter.y - candidateCenter.y)
+          : 0;
+        const finderScore = (tl.score + tr.score + bl.score) / 3;
+        const sizeSupport = Math.min(1, Math.min(du, dv) / Math.max(18, avgModule * 15));
+        const centerSupport = 1 / (1 + centerDistance / 42);
+        const dimensionSupport = 1 / (1 + dimensionResidual / 3);
+        const tripletRankScore = finderScore
           * (1 - cos)
           * (1 / legRatio)
-          * (1 / moduleRatio);
-        if (!best || geometryScore > best.geometryScore) best = { tl, tr, bl, geometryScore, cos, legRatio, moduleRatio };
+          * (1 / moduleRatio)
+          * (.65 + .35 * sizeSupport)
+          * centerSupport
+          * dimensionSupport;
+        ranked.push({
+          tl, tr, bl,
+          cos,
+          legRatio,
+          moduleRatio,
+          estimatedDimension,
+          nearestDimension,
+          dimensionResidual,
+          estimatedCenter,
+          centerDistance,
+          tripletRankScore,
+        });
       }
     }
   }
-  return best;
+  ranked.sort((a,b)=>b.tripletRankScore-a.tripletRankScore);
+  return { tripletCandidateCount: ranked.length, topTriplets: ranked.slice(0, 3) };
 }
 function pointAdd(a, b, scale = 1) { return { x: a.x + b.x * scale, y: a.y + b.y * scale }; }
 function pointSub(a, b) { return { x: a.x - b.x, y: a.y - b.y }; }
@@ -675,6 +705,69 @@ function quadArea(quad) {
     area += a.x * b.y - b.x * a.y;
   }
   return Math.abs(area) / 2;
+}
+function buildTripletGeometry(raw, triplet, context) {
+  const { sx, sy, sw, sh, analysisSize, candidateRawCenter, searchRawW } = context;
+  const scaleX = sw / analysisSize;
+  const scaleY = sh / analysisSize;
+  const toRaw = (p) => ({ x: sx + p.x * scaleX, y: sy + p.y * scaleY });
+  const tl = toRaw(triplet.tl), tr = toRaw(triplet.tr), bl = toRaw(triplet.bl);
+  const moduleRaw = ((triplet.tl.module + triplet.tr.module + triplet.bl.module) / 3) * Math.sqrt(scaleX * scaleY);
+  const du = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+  const dv = Math.hypot(bl.x - tl.x, bl.y - tl.y);
+  const dimension = nearestQrDimension(((du + dv) / 2) / Math.max(1, moduleRaw) + 7);
+  const uModule = pointScale(pointSub(tr, tl), 1 / Math.max(1, dimension - 7));
+  const vModule = pointScale(pointSub(bl, tl), 1 / Math.max(1, dimension - 7));
+  const p0 = pointAdd(pointAdd(tl, uModule, -3.5), vModule, -3.5);
+  const p1 = pointAdd(pointAdd(tl, uModule, dimension - 3.5), vModule, -3.5);
+  const p3 = pointAdd(pointAdd(tl, uModule, -3.5), vModule, dimension - 3.5);
+  const p2 = pointAdd(pointAdd(tl, uModule, dimension - 3.5), vModule, dimension - 3.5);
+  const q0 = pointAdd(pointAdd(tl, uModule, -7.5), vModule, -7.5);
+  const q1 = pointAdd(pointAdd(tl, uModule, dimension + .5), vModule, -7.5);
+  const q3 = pointAdd(pointAdd(tl, uModule, -7.5), vModule, dimension + .5);
+  const q2 = pointAdd(pointAdd(tl, uModule, dimension + .5), vModule, dimension + .5);
+  const quietQuad = [q0, q1, q2, q3];
+  const qrQuad = [p0, p1, p2, p3];
+  const qrCenter = {
+    x: (p0.x + p1.x + p2.x + p3.x) / 4,
+    y: (p0.y + p1.y + p2.y + p3.y) / 4,
+  };
+
+  const bounds = quadBounds(quietQuad);
+  const inBounds = bounds.x0 >= -2 && bounds.y0 >= -2 && bounds.x1 <= raw.width + 2 && bounds.y1 <= raw.height + 2;
+  const widthTop = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+  const widthBottom = Math.hypot(p2.x - p3.x, p2.y - p3.y);
+  const heightLeft = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+  const heightRight = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const minSide = Math.min(widthTop, widthBottom, heightLeft, heightRight);
+  const maxSide = Math.max(widthTop, widthBottom, heightLeft, heightRight);
+  const area = quadArea(qrQuad);
+  const minPhysicalSide = Math.max(28, moduleRaw * 18);
+  const centerDistanceRaw = Math.hypot(qrCenter.x - candidateRawCenter.x, qrCenter.y - candidateRawCenter.y);
+  const perspectiveSpread = maxSide / Math.max(1, minSide);
+
+  let rejectReason = "none";
+  if (!inBounds) rejectReason = "quad-out-of-bounds";
+  else if (minSide < minPhysicalSide || area < minPhysicalSide * minPhysicalSide) rejectReason = "quad-too-small";
+  else if (centerDistanceRaw > searchRawW * .42) rejectReason = "qr-center-too-far";
+  else if (perspectiveSpread > 2.35) rejectReason = "quad-side-spread-too-large";
+
+  return {
+    geometryValid: rejectReason === "none",
+    geometryFailReason: rejectReason,
+    geometryScore: Number(triplet.tripletRankScore.toFixed(4)),
+    qrDimension: dimension,
+    modulePx: Number(moduleRaw.toFixed(2)),
+    perspectiveScaleSpread: Number(perspectiveSpread.toFixed(3)),
+    candidateCenterDistancePx: Number(centerDistanceRaw.toFixed(2)),
+    qrCenter: {
+      x: Number(qrCenter.x.toFixed(2)),
+      y: Number(qrCenter.y.toFixed(2)),
+    },
+    findersRaw: [tl, tr, bl].map((p) => ({ x: Number(p.x.toFixed(2)), y: Number(p.y.toFixed(2)) })),
+    qrQuad: qrQuad.map((p) => ({ x: Number(p.x.toFixed(2)), y: Number(p.y.toFixed(2)) })),
+    quietQuad: quietQuad.map((p) => ({ x: Number(p.x.toFixed(2)), y: Number(p.y.toFixed(2)) })),
+  };
 }
 function detectLocalQrGeometry(raw, page, candidate) {
   const center = paperPoint(page, raw, candidate);
@@ -703,68 +796,85 @@ function detectLocalQrGeometry(raw, page, candidate) {
     const horizontal = scanFinderRuns(binary, analysisSize, analysisSize, true);
     const vertical = scanFinderRuns(binary, analysisSize, analysisSize, false);
     const finders = clusterFinderIntersections(horizontal, vertical);
-    const triplet = chooseFinderTriplet(finders);
-    if (!triplet) {
+    const candidateCenterAnalysis = {
+      x: (center.x - sx) / Math.max(1, sw) * analysisSize,
+      y: (center.y - sy) / Math.max(1, sh) * analysisSize,
+    };
+    const ranked = rankFinderTriplets(finders, candidateCenterAnalysis);
+
+    if (!ranked.topTriplets.length) {
       return {
         geometryValid: false,
         geometryFailReason: finders.length < 3 ? "finder-count-under-3" : "finder-triplet-inconsistent",
         finderCount: finders.length,
-        finders: finders.map((f) => ({ x: f.x, y: f.y, module: f.module, score: Number(f.score.toFixed(4)) })),
+        tripletCandidateCount: ranked.tripletCandidateCount,
+        bestTripletRejectedReason: finders.length < 3 ? "finder-count-under-3" : "finder-triplet-inconsistent",
+        alternateTripletTriedCount: 0,
+        alternateTripletRecoveredCount: 0,
+        finderAtLeast3ButNoValidQuad: finders.length >= 3,
+        tripletDiagnostics: [],
       };
     }
 
-    const scaleX = sw / analysisSize;
-    const scaleY = sh / analysisSize;
-    const toRaw = (p) => ({ x: sx + p.x * scaleX, y: sy + p.y * scaleY });
-    const tl = toRaw(triplet.tl), tr = toRaw(triplet.tr), bl = toRaw(triplet.bl);
-    const moduleRaw = ((triplet.tl.module + triplet.tr.module + triplet.bl.module) / 3) * Math.sqrt(scaleX * scaleY);
-    const du = Math.hypot(tr.x - tl.x, tr.y - tl.y);
-    const dv = Math.hypot(bl.x - tl.x, bl.y - tl.y);
-    const dimension = nearestQrDimension(((du + dv) / 2) / Math.max(1, moduleRaw) + 7);
-    const uModule = pointScale(pointSub(tr, tl), 1 / Math.max(1, dimension - 7));
-    const vModule = pointScale(pointSub(bl, tl), 1 / Math.max(1, dimension - 7));
-    const p0 = pointAdd(pointAdd(tl, uModule, -3.5), vModule, -3.5);
-    const p1 = pointAdd(pointAdd(tl, uModule, dimension - 3.5), vModule, -3.5);
-    const p3 = pointAdd(pointAdd(tl, uModule, -3.5), vModule, dimension - 3.5);
-    const p2 = pointAdd(pointAdd(tl, uModule, dimension - 3.5), vModule, dimension - 3.5);
-    const q0 = pointAdd(pointAdd(tl, uModule, -7.5), vModule, -7.5);
-    const q1 = pointAdd(pointAdd(tl, uModule, dimension + .5), vModule, -7.5);
-    const q3 = pointAdd(pointAdd(tl, uModule, -7.5), vModule, dimension + .5);
-    const q2 = pointAdd(pointAdd(tl, uModule, dimension + .5), vModule, dimension + .5);
-    const quietQuad = [q0, q1, q2, q3];
-    const qrQuad = [p0, p1, p2, p3];
-    const bounds = quadBounds(quietQuad);
-    const inBounds = bounds.x0 >= -2 && bounds.y0 >= -2 && bounds.x1 <= raw.width + 2 && bounds.y1 <= raw.height + 2;
-    const area = quadArea(qrQuad);
-    const minArea = Math.pow(Math.max(18, moduleRaw * 12), 2);
-    if (!inBounds || area < minArea) {
+    const context = {
+      sx, sy, sw, sh, analysisSize,
+      candidateRawCenter: center,
+      searchRawW,
+    };
+    const evaluated = [];
+    let selected = null;
+    let selectedIndex = -1;
+    for (let i = 0; i < ranked.topTriplets.length; i += 1) {
+      const geometry = buildTripletGeometry(raw, ranked.topTriplets[i], context);
+      evaluated.push({ rank: i + 1, ...geometry });
+      if (geometry.geometryValid) {
+        selected = geometry;
+        selectedIndex = i;
+        break;
+      }
+    }
+    const bestTripletRejectedReason = evaluated[0]?.geometryValid ? "none" : (evaluated[0]?.geometryFailReason || "unknown");
+    const alternateTripletTriedCount = Math.max(0, evaluated.length - 1);
+    const alternateTripletRecoveredCount = selectedIndex > 0 ? 1 : 0;
+    const finderAtLeast3ButNoValidQuad = finders.length >= 3 && !selected;
+    const tripletDiagnostics = evaluated.map((item, index) => ({
+      rank: item.rank,
+      selected: Boolean(selected && index === selectedIndex),
+      geometryValid: Boolean(item.geometryValid),
+      rejectedReason: item.geometryFailReason || "unknown",
+      geometryScore: Number(item.geometryScore || 0),
+      qrDimension: item.qrDimension || null,
+      modulePx: item.modulePx || null,
+      candidateCenterDistancePx: item.candidateCenterDistancePx || null,
+      findersRaw: item.findersRaw || [],
+      qrQuad: item.qrQuad || [],
+      quietQuad: item.quietQuad || [],
+    }));
+
+    if (!selected) {
       return {
         geometryValid: false,
-        geometryFailReason: !inBounds ? "quad-out-of-bounds" : "quad-too-small",
+        geometryFailReason: bestTripletRejectedReason,
         finderCount: finders.length,
-        geometryScore: Number(triplet.geometryScore.toFixed(4)),
+        tripletCandidateCount: ranked.tripletCandidateCount,
+        bestTripletRejectedReason,
+        alternateTripletTriedCount,
+        alternateTripletRecoveredCount,
+        finderAtLeast3ButNoValidQuad,
+        tripletDiagnostics,
       };
     }
-    const widthTop = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-    const widthBottom = Math.hypot(p2.x - p3.x, p2.y - p3.y);
-    const heightLeft = Math.hypot(p3.x - p0.x, p3.y - p0.y);
-    const heightRight = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-    const spread = Math.max(widthTop, widthBottom, heightLeft, heightRight) / Math.max(1, Math.min(widthTop, widthBottom, heightLeft, heightRight));
+
     return {
-      geometryValid: true,
-      geometryFailReason: "none",
+      ...selected,
       finderCount: finders.length,
-      geometryScore: Number(triplet.geometryScore.toFixed(4)),
-      qrDimension: dimension,
-      modulePx: Number(moduleRaw.toFixed(2)),
-      perspectiveScaleSpread: Number(spread.toFixed(3)),
-      qrCenter: {
-        x: Number(((p0.x + p1.x + p2.x + p3.x) / 4).toFixed(2)),
-        y: Number(((p0.y + p1.y + p2.y + p3.y) / 4).toFixed(2)),
-      },
-      findersRaw: [tl, tr, bl].map((p) => ({ x: Number(p.x.toFixed(2)), y: Number(p.y.toFixed(2)) })),
-      qrQuad: qrQuad.map((p) => ({ x: Number(p.x.toFixed(2)), y: Number(p.y.toFixed(2)) })),
-      quietQuad: quietQuad.map((p) => ({ x: Number(p.x.toFixed(2)), y: Number(p.y.toFixed(2)) })),
+      tripletCandidateCount: ranked.tripletCandidateCount,
+      bestTripletRejectedReason,
+      alternateTripletTriedCount,
+      alternateTripletRecoveredCount,
+      finderAtLeast3ButNoValidQuad,
+      selectedTripletRank: selectedIndex + 1,
+      tripletDiagnostics,
     };
   } finally {
     canvas.width = 1;
