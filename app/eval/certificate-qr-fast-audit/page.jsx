@@ -4,7 +4,8 @@ import { useMemo, useRef, useState } from "react";
 
 const REQUIRED_NAMES = Array.from({ length: 8 }, (_, i) => `IMG_${String(940 + i).padStart(4, "0")}.jpeg`);
 const PATHNAME = "/vehicle-workflow-v2";
-const MAX_WAIT_MS = 70000;
+const FAST_WAIT_MS = 12000;
+const INTEGRATION_WAIT_MS = 70000;
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 function safeName(file) {
@@ -193,6 +194,57 @@ async function waitForInput(frame) {
   }
   throw new Error("vehicle-workflow-v2 の車検証 file input を検出できませんでした");
 }
+async function waitForFastAuditReady(frame) {
+  const started = performance.now();
+  while (performance.now() - started < 10000) {
+    const win = frame.contentWindow;
+    if (win?.__certificateQrFastAuditReady === true) return;
+    await wait(80);
+  }
+  throw new Error("CertificateQrFast audit listener の準備完了を確認できませんでした");
+}
+function scoreText(value) {
+  return String(value ?? "").normalize("NFKC").replace(/\s+/g, "").trim();
+}
+function truthImages(root) {
+  if (!root || typeof root !== "object" || Array.isArray(root)) return {};
+  return root.images && typeof root.images === "object" && !Array.isArray(root.images) ? root.images : root;
+}
+function actualValueForKey(result, key) {
+  const wanted = scoreText(key);
+  const sources = [result?.browserOnlyFieldValues || {}, result?.browserOnlyQrPriorityValues || {}];
+  for (const source of sources) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) return source[key];
+    for (const [candidate, value] of Object.entries(source)) {
+      const got = scoreText(candidate);
+      if (got === wanted || got.startsWith(wanted) || wanted.startsWith(got)) return value;
+    }
+  }
+  return "";
+}
+function scoreResult(result, truthRoot) {
+  const images = truthImages(truthRoot);
+  const name = result?.normalizedFileName || result?.fileName || "";
+  const truth = images?.[name];
+  if (!truth || typeof truth !== "object" || Array.isArray(truth)) {
+    return { available: false, itemTotalCount: 0, itemCorrectCount: 0, itemWrongCount: 0, itemBlankCount: 0 };
+  }
+  const entries = Object.entries(truth);
+  let correct = 0, wrong = 0, blank = 0;
+  for (const [key, expected] of entries) {
+    const actual = actualValueForKey(result, key);
+    if (!scoreText(actual)) blank += 1;
+    else if (scoreText(actual) === scoreText(expected)) correct += 1;
+    else wrong += 1;
+  }
+  return {
+    available: entries.length === 9,
+    itemTotalCount: entries.length,
+    itemCorrectCount: correct,
+    itemWrongCount: wrong,
+    itemBlankCount: blank,
+  };
+}
 function summarizeTrace(trace = {}) {
   const events = Array.isArray(trace.events) ? trace.events : [];
   const jsqr = events.filter((e) => e.type === "jsqr-result");
@@ -215,7 +267,7 @@ function summarizeTrace(trace = {}) {
     budgetStops: budgetStops.map((e) => ({ stage: e.stage, center: e.center })),
   };
 }
-async function runOne(frame, file, index) {
+async function runOne(frame, file, index, phase = "fast") {
   const win = frame.contentWindow;
   const doc = frame.contentDocument;
   if (!win || !doc) throw new Error("iframeへアクセスできません");
@@ -240,21 +292,27 @@ async function runOne(frame, file, index) {
   const started = performance.now();
   try {
     const input = await waitForInput(frame);
+    await waitForFastAuditReady(frame);
     const dt = new win.DataTransfer();
     dt.items.add(file);
     Object.defineProperty(input, "files", { configurable: true, value: dt.files });
     input.dispatchEvent(new win.Event("change", { bubbles: true }));
 
     let timedOut = false;
-    while (performance.now() - started < MAX_WAIT_MS) {
+    const waitLimit = phase === "fast" ? FAST_WAIT_MS : INTEGRATION_WAIT_MS;
+    while (performance.now() - started < waitLimit) {
       const state = win.__vehicleCertificateQrFastState;
-      const progress = doc.querySelector(".progress");
-      const rescue = doc.getElementById("certificate-qr-rescue-status");
-      const apply = doc.getElementById("certificate-qr-applied-fixed");
-      if (state?.running === false && !progress && rescue && apply) { await wait(1200); break; }
-      await wait(200);
+      if (phase === "fast") {
+        if (fastEvent || state?.running === false) { await wait(80); break; }
+      } else {
+        const progress = doc.querySelector(".progress");
+        const rescue = doc.getElementById("certificate-qr-rescue-status");
+        const apply = doc.getElementById("certificate-qr-applied-fixed");
+        if (state?.running === false && !progress && rescue && apply) { await wait(1200); break; }
+      }
+      await wait(phase === "fast" ? 80 : 200);
     }
-    if (performance.now() - started >= MAX_WAIT_MS) timedOut = true;
+    if (performance.now() - started >= waitLimit) timedOut = true;
 
     const state = win.__vehicleCertificateQrFastState || {};
     const qr = Array.isArray(win.__vehicleCertificateQr) ? win.__vehicleCertificateQr : [];
@@ -281,6 +339,8 @@ async function runOne(frame, file, index) {
     return {
       imageIndex: index + 1,
       fileName: safeName(file),
+      normalizedFileName: normalizeFixedFileName(file) || safeName(file),
+      phase,
       pathname: win.location.pathname,
       fastFired: Boolean(fastEvent || state.token),
       expectedQrCount: expected,
@@ -308,6 +368,7 @@ async function runOne(frame, file, index) {
       jsErrors: jsErrors.filter((x) => !x.includes("AUDIT_BLOCKED_")),
       timeout: timedOut,
       browserOnlyFieldValues: fields,
+      browserOnlyQrPriorityValues: qrPriority,
     };
   } finally {
     win.removeEventListener("error", onError);
@@ -316,10 +377,12 @@ async function runOne(frame, file, index) {
     win.removeEventListener("vehicle-certificate-authoritative", onApply);
   }
 }
-function summaryResult(r) {
+function summaryResult(r, score = null) {
   return {
     imageIndex: r.imageIndex,
     fileName: r.fileName,
+    normalizedFileName: r.normalizedFileName,
+    phase: r.phase,
     pathname: r.pathname,
     fastFired: r.fastFired,
     expectedQrCount: r.expectedQrCount,
@@ -342,7 +405,11 @@ function summaryResult(r) {
     privacyFail: r.privacyFail,
     jsErrors: r.jsErrors,
     timeout: r.timeout,
-    itemCorrectCount: null,
+    itemCorrectCount: score?.itemCorrectCount ?? null,
+    itemTotalCount: score?.itemTotalCount ?? null,
+    itemWrongCount: score?.itemWrongCount ?? null,
+    itemBlankCount: score?.itemBlankCount ?? null,
+    scoringAvailable: score?.available ?? false,
   };
 }
 export default function CertificateQrFastAuditPage() {
@@ -350,6 +417,9 @@ export default function CertificateQrFastAuditPage() {
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("固定8枚を選択してください。");
   const [results, setResults] = useState([]);
+  const [integrationResults, setIntegrationResults] = useState([]);
+  const [truthRoot, setTruthRoot] = useState(null);
+  const [truthStatus, setTruthStatus] = useState("主要9項目の正解JSONは未読込です。");
   const frameRef = useRef(null);
 
   const normalizedSelectedNames = useMemo(() => files.map((f) => normalizeFixedFileName(f)), [files]);
@@ -369,28 +439,55 @@ export default function CertificateQrFastAuditPage() {
     frame.src = `${PATHNAME}?certificateQrAudit=1&nonce=${Date.now()}`;
   });
 
-  const start = async () => {
+  const runBatch = async (phase) => {
     if (!validCount || running) return;
+    if (phase === "integration" && !truthRoot) {
+      setStatus("OCR統合評価には端末ローカルの主要9項目正解JSONを先に読み込んでください。");
+      return;
+    }
     setRunning(true);
-    setResults([]);
+    if (phase === "fast") setResults([]);
+    else setIntegrationResults([]);
     const ordered = [...files].sort((a, b) => String(normalizeFixedFileName(a) || safeName(a)).localeCompare(String(normalizeFixedFileName(b) || safeName(b))));
     const out = [];
     try {
       for (let i = 0; i < ordered.length; i += 1) {
-        setStatus(`${i + 1}/8 ${safeName(ordered[i])} を評価中…`);
+        setStatus(`${i + 1}/8 ${safeName(ordered[i])} を${phase === "fast" ? "QR Fast" : "OCR統合"}評価中…`);
         await reloadFrame();
-        const result = await runOne(frameRef.current, ordered[i], i);
+        const result = await runOne(frameRef.current, ordered[i], i, phase);
         out.push(result);
-        setResults([...out]);
+        if (phase === "fast") setResults([...out]);
+        else setIntegrationResults([...out]);
         if (result.privacyFail) throw new Error(`${safeName(ordered[i])}: 画像/File/Blob送信試行を検出したためFAIL`);
       }
-      setStatus("8枚の評価が完了しました。共有用summaryをコピーし、詳細は必要なら端末へ保存してください。");
+      setStatus(phase === "fast"
+        ? "8枚のQR Fast評価が完了しました。Fast完了時点で確定しており、OCR完了待ちはしていません。"
+        : "8枚のOCR統合評価が完了しました。共有summaryには正誤件数だけを含めます。");
     } catch (e) {
       setStatus(`評価停止: ${e?.message || e}`);
     } finally {
       setRunning(false);
     }
   };
+
+  const loadTruth = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const images = truthImages(parsed);
+      const counts = REQUIRED_NAMES.map((name) => Object.keys(images?.[name] || {}).length);
+      const valid = REQUIRED_NAMES.every((name) => images?.[name] && typeof images[name] === "object" && !Array.isArray(images[name]) && Object.keys(images[name]).length === 9);
+      setTruthRoot(parsed);
+      setTruthStatus(valid
+        ? "正解JSON: 8枚すべて9項目を確認しました（ブラウザメモリ内のみ）。"
+        : `正解JSON読込済み。ただし各画像9項目ではありません: ${counts.join("/")}`);
+    } catch (e) {
+      setTruthRoot(null);
+      setTruthStatus(`正解JSON読込エラー: ${e?.message || e}`);
+    }
+  };
+
 
   const summaryJson = JSON.stringify({
     schema: "icb-certificate-qr-fast-audit-summary-v2",
@@ -400,18 +497,39 @@ export default function CertificateQrFastAuditPage() {
     privacy: { imageUpload: false, serverMutationBlocked: true, repositoryFixture: false, autoSaveVehicle: false, piiIncluded: false },
     results: results.map(summaryResult),
   }, null, 2);
+  const integrationSummaryJson = JSON.stringify({
+    schema: "icb-certificate-qr-fast-audit-integration-summary-v3",
+    generatedAt: new Date().toISOString(),
+    pathname: PATHNAME,
+    imageCount: integrationResults.length,
+    privacy: { imageUpload: false, truthUpload: false, piiIncluded: false, scoringCountsOnly: true },
+    results: integrationResults.map((r) => summaryResult(r, scoreResult(r, truthRoot))),
+    totals: integrationResults.reduce((acc, r) => {
+      const s = scoreResult(r, truthRoot);
+      acc.itemCorrectCount += s.itemCorrectCount;
+      acc.itemTotalCount += s.itemTotalCount;
+      acc.itemWrongCount += s.itemWrongCount;
+      acc.itemBlankCount += s.itemBlankCount;
+      return acc;
+    }, { itemCorrectCount: 0, itemTotalCount: 0, itemWrongCount: 0, itemBlankCount: 0 }),
+  }, null, 2);
   const detailJson = JSON.stringify({
     schema: "icb-certificate-qr-fast-audit-local-detail-v2",
     generatedAt: new Date().toISOString(),
     pathname: PATHNAME,
     imageCount: results.length,
     privacy: { localOnly: true, autoUpload: false, containsVehicleFieldValues: true },
-    results,
+    fastResults: results,
+    integrationResults,
   }, null, 2);
 
   const copySummary = async () => {
     await navigator.clipboard.writeText(summaryJson);
     setStatus("共有可能な非PII summary JSONをコピーしました。");
+  };
+  const copyIntegrationSummary = async () => {
+    await navigator.clipboard.writeText(integrationSummaryJson);
+    setStatus("OCR統合評価の非PII正誤件数summaryをコピーしました。");
   };
   const downloadDetail = () => {
     const blob = new Blob([detailJson], { type: "application/json" });
@@ -439,7 +557,16 @@ export default function CertificateQrFastAuditPage() {
           </div>
         )}
         {!exactSet && files.length > 0 && <div style={{ marginTop: 8 }}>固定セット IMG_0940.jpeg〜IMG_0947.jpeg の8枚を選択してください。</div>}
-        <button onClick={start} disabled={!validCount || running} style={{ marginTop: 14, padding: "10px 18px", fontWeight: 700 }}>{running ? "評価中…" : "評価開始"}</button>
+        <div style={{ marginTop: 12 }}>
+          <button onClick={() => runBatch("fast")} disabled={!validCount || running} style={{ marginRight: 8, padding: "10px 18px", fontWeight: 700 }}>{running ? "評価中…" : "QR Fast評価開始"}</button>
+          <button onClick={() => runBatch("integration")} disabled={!validCount || running || !truthRoot} style={{ padding: "10px 18px", fontWeight: 700 }}>OCR統合評価開始</button>
+        </div>
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #ddd" }}>
+          <div style={{ fontWeight: 700 }}>主要9項目 正解JSON（端末ローカルのみ）</div>
+          <input type="file" accept="application/json,.json" disabled={running} onChange={loadTruth} style={{ marginTop: 8 }} />
+          <div style={{ marginTop: 6, fontSize: 12 }}>{truthStatus}</div>
+          <div style={{ marginTop: 4, fontSize: 11 }}>形式: {"{ images: { \"IMG_0940.jpeg\": { \"UIラベルまたは内部キー\": \"正解値\", ...9項目 }, ... } }"}</div>
+        </div>
         <div style={{ marginTop: 12, fontWeight: 700 }}>{status}</div>
       </section>
 
@@ -449,8 +576,17 @@ export default function CertificateQrFastAuditPage() {
       </section>
 
       <section style={{ marginTop: 18 }}>
-        <button onClick={copySummary} disabled={!results.length} style={{ marginRight: 8, padding: "9px 14px" }}>共有用summaryをコピー</button>
-        <button onClick={downloadDetail} disabled={!results.length} style={{ padding: "9px 14px" }}>端末ローカル詳細を保存</button>
+        <h2 style={{ fontSize: 18 }}>OCR統合評価</h2>
+        {integrationResults.map((r) => {
+          const s = scoreResult(r, truthRoot);
+          return <div key={r.fileName} style={{ padding: 10, borderBottom: "1px solid #ddd" }}>{r.imageIndex}/8 {r.fileName} — {s.itemCorrectCount}/{s.itemTotalCount} 正解 — 誤読 {s.itemWrongCount} — 空欄 {s.itemBlankCount} — {r.timeout ? "timeout" : "完了"}</div>;
+        })}
+      </section>
+
+      <section style={{ marginTop: 18 }}>
+        <button onClick={copySummary} disabled={!results.length} style={{ marginRight: 8, padding: "9px 14px" }}>QR Fast summaryをコピー</button>
+        <button onClick={copyIntegrationSummary} disabled={!integrationResults.length} style={{ marginRight: 8, padding: "9px 14px" }}>OCR統合summaryをコピー</button>
+        <button onClick={downloadDetail} disabled={!results.length && !integrationResults.length} style={{ padding: "9px 14px" }}>端末ローカル詳細を保存</button>
       </section>
 
       <iframe ref={frameRef} title="vehicle-workflow-v2 audit" style={{ width: "100%", height: 620, marginTop: 20, border: "1px solid #bbb" }} />
