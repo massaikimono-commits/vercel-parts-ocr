@@ -1423,6 +1423,72 @@ function priorityRelativeToReference(entry, referenceSummary) {
   }
   return out;
 }
+const MANAGEMENT_SHORT_QUALITY_METRICS = Object.freeze([
+  ["rawGradientEnergy","originalGeometryAxisCrop.gradientEnergy"],
+  ["rawLaplacianVariance","originalGeometryAxisCrop.blurIndicatorLaplacianVariance"],
+  ["rawEdgeStrength","originalGeometryAxisCrop.edgeStrength"],
+  ["rawLocalContrast","originalGeometryAxisCrop.localContrastRange"],
+  ["rawLocalLumaStdDev","originalGeometryAxisCrop.localLumaStdDev"],
+  ["rectifiedGradientEnergy","rectifiedCrop.gradientEnergy"],
+  ["rectifiedLaplacianVariance","rectifiedCrop.blurIndicatorLaplacianVariance"],
+  ["rectifiedEdgeStrength","rectifiedCrop.edgeStrength"],
+  ["gradientEnergyRetentionRatio","rectifySharpnessRetention.gradientEnergyRatio"],
+  ["laplacianVarianceRetentionRatio","rectifySharpnessRetention.laplacianVarianceRatio"],
+  ["edgeStrengthRetentionRatio","rectifySharpnessRetention.edgeStrengthRatio"],
+  ["estimatedModuleWidthRawPx","moduleQuality.estimatedModuleWidthRawPx"],
+  ["estimatedModuleWidthRectifiedPx","moduleQuality.estimatedModuleWidthRectifiedPx"],
+  ["qrDimension","qrDimension"],
+  ["finderEdgeStrengthMean","moduleQuality.finderEdgeStrengthMean"],
+  ["finderGradientEnergyMean","moduleQuality.finderGradientEnergyMean"],
+  ["finderLaplacianVarianceMean","moduleQuality.finderLaplacianVarianceMean"],
+  ["blackWhiteSeparationP75P25","moduleQuality.blackWhiteSeparationP75P25"],
+  ["bimodalMeanSeparation","moduleQuality.bimodalMeanSeparation"],
+  ["moduleBoundaryContrastP75","moduleQuality.moduleBoundaryContrastP75"],
+  ["activeBoundaryContrastTopQuartileMean","moduleQuality.activeBoundaryContrastTopQuartileMean"],
+  ["quietZoneLumaMean","moduleQuality.quietZoneLumaMean"],
+  ["quietZoneLumaStdDev","moduleQuality.quietZoneLumaStdDev"],
+  ["qrBorderLumaMean","moduleQuality.qrBorderLumaMean"],
+  ["quietVsQrBorderMeanContrast","moduleQuality.quietVsQrBorderMeanContrast"],
+  ["quietVsDarkQuartileContrast","moduleQuality.quietVsDarkQuartileContrast"],
+]);
+function buildManagementQualityReferenceSummary(entries=[]) {
+  const metrics={};
+  for(const [key,path] of MANAGEMENT_SHORT_QUALITY_METRICS){
+    const values=entries.map((item)=>Number(metricAt(item,path))).filter(Number.isFinite);
+    metrics[key]={
+      p25:values.length?Number(percentile(values,.25).toFixed(4)):null,
+      median:values.length?Number(percentile(values,.5).toFixed(4)):null,
+      p75:values.length?Number(percentile(values,.75).toFixed(4)):null,
+    };
+  }
+  return {
+    candidateCount:entries.length,
+    imageCount:new Set(entries.map((item)=>item.fileName)).size,
+    metrics,
+  };
+}
+function buildManagementPriorityQuality(item, overlayClassification, referenceSummary) {
+  const read=(path)=>{
+    const value=metricAt(item,path);
+    return Number.isFinite(Number(value))?Number(value):null;
+  };
+  const relative={};
+  for(const [key,path] of MANAGEMENT_SHORT_QUALITY_METRICS){
+    const value=read(path);
+    const median=Number(referenceSummary?.metrics?.[key]?.median);
+    relative[key]=value!=null&&Number.isFinite(median)&&median!==0
+      ?Number((value/median).toFixed(4))
+      :null;
+  }
+  const values=Object.fromEntries(MANAGEMENT_SHORT_QUALITY_METRICS.map(([key,path])=>[key,read(path)]));
+  return {
+    fileName:item.fileName,
+    candidateIndex:item.candidateIndex,
+    overlayClassification:overlayClassification||item.priorOverlayClassification||null,
+    ...values,
+    relativeToSuccessfulReferenceMedian:relative,
+  };
+}
 function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -3363,6 +3429,72 @@ export default function CertificateQrDecodeExperimentPage() {
     classification:overlayClassifications[item.key]||null,
   }));
   const overlayClassificationComplete=overlayClassificationRows.every((item)=>Boolean(item.classification));
+  const managementQualityReference=totals
+    ?buildManagementQualityReferenceSummary(totals.qualityReferenceDiagnostics)
+    :null;
+  const managementPriorityQuality=totals
+    ?priorityQualityWithRelative.map((item)=>{
+      const overlay=overlayClassificationRows.find(
+        (row)=>row.fileName===item.fileName&&row.candidateIndex===item.candidateIndex
+      );
+      return buildManagementPriorityQuality(item,overlay?.classification,managementQualityReference);
+    })
+    :[];
+  const managementAuditSummary=JSON.stringify({
+    schema:"icb-certificate-qr-decode-experiment-summary-v7",
+    summaryVariant:"management-audit-short-v1",
+    experimentalHead,
+    diagnosticRevision:"v7-postformal-quality-audit-2",
+    experimentRoute:EXPERIMENT_ROUTE,
+    baselineTargetRoute:PATHNAME,
+    groundTruthUsedDuringDecode:false,
+    countingIntegrityFail:totals?Boolean(totals.aCountingIntegrityFail||totals.finalCountingIntegrityFail):null,
+    formalDecode:totals?{
+      baseline:{physicalUniqueQrCount:totals.baselinePhysicalUnique,expectedQrCount:47},
+      aLegacyCompatible:{physicalUniqueQrCount:totals.aLegacyCompatible,expectedQrCount:47},
+      aStructuralAdopted:{physicalUniqueQrCount:totals.aStructuralAdopted,expectedQrCount:47},
+      aPhysicalSafe:{physicalUniqueQrCount:totals.aPhysicalSafe,expectedQrCount:47},
+      eNetNewCanonicalVsA:totals.eNetNew,
+      finalSafeUnion:{physicalUniqueQrCount:totals.finalUnion,expectedQrCount:47},
+      parserEligibleUnion:{physicalUniqueQrCount:totals.parserEligibleUnion,expectedQrCount:47},
+      fullyAcquiredImageCount:totals.finalCompleteImages,
+      regressionImageCount:regressionImages.length,
+    }:null,
+    imageResults:results.map((result)=>({
+      fileName:result.fileName,
+      finalUnionCanonicalCount:Number(result.matrix?.geometryStage?.finalUnionCanonicalCount||0),
+      expectedQrCount:Number(result.groundTruthExpectedQrCount||0),
+    })),
+    geometry:totals?{
+      finderAtLeast3ButNoValidQuadCount:totals.finderAtLeast3ButNoValidQuadCount,
+      tripletCandidateCount:totals.tripletCandidateCount,
+      alternateTripletTriedCount:totals.alternateTripletTriedCount,
+      alternateTripletRecoveredCount:totals.alternateTripletRecoveredCount,
+      nativeRectifyNetNewCanonicalCount:totals.nativeRectifyNetNewCanonicalCount,
+    }:null,
+    compactConflict:totals?{
+      uniqueCompactCandidateCount:totals.uniqueCompactCandidateCount,
+      compactPhysicalConsensusAcceptedCount:totals.compactPhysicalConsensusAcceptedCount,
+      compactParserRecognizedCount:totals.compactParserRecognizedCount,
+      samePhysicalQrConflictCount:totals.samePhysicalQrConflictCount,
+      uniqueSamePhysicalConflictCount:totals.uniqueSamePhysicalConflictCount,
+      remainingAmbiguousConflictCount:totals.remainingAmbiguousConflictCount,
+    }:null,
+    overlayClassifications:overlayClassificationRows,
+    qualityDiagnostic:totals?{
+      successfulDecodeReference:managementQualityReference,
+      priorityCandidates:managementPriorityQuality,
+    }:null,
+    timing:totals?{
+      failOnlyExpectedElapsedMs:totals.failOnlyExpectedElapsedMs,
+      qualityDiagnosticElapsedMs:totals.qualityDiagnosticElapsedMs,
+    }:null,
+    runtime:gtReady?{
+      accuracy:runtimeVehicleKindAccuracy,
+      correctCount:runtimeVehicleKindCorrectCount,
+      imageCount:8,
+    }:null,
+  },null,2);
 
   const summary=JSON.stringify({
     schema:"icb-certificate-qr-decode-experiment-summary-v7",
@@ -3519,6 +3651,10 @@ export default function CertificateQrDecodeExperimentPage() {
   const copySummary = async () => {
     await navigator.clipboard.writeText(summary);
     setStatus("非PII decode A/E summaryをコピーしました。");
+  };
+  const copyManagementAuditSummary = async () => {
+    await navigator.clipboard.writeText(managementAuditSummary);
+    setStatus("総合管理監査用の短縮summaryをコピーしました。");
   };
   const downloadSummary = () => {
     const blob = new Blob([summary], { type: "application/json" });
@@ -3735,8 +3871,9 @@ export default function CertificateQrDecodeExperimentPage() {
         <div style={{fontSize:12,marginBottom:8,fontWeight:700}}>
           overlay分類: {overlayClassificationComplete ? "前回分類を引き継ぎ済み（再分類不要）" : "分類情報不足"} / 画質diagnosticはsummaryへ自動出力
         </div>
-        <button disabled={!results.length} onClick={copySummary} style={{ marginRight: 8, padding: "9px 14px" }}>非PII summaryをコピー</button>
-        <button disabled={!results.length} onClick={downloadSummary} style={{ padding: "9px 14px" }}>summaryを端末保存</button>
+        <button disabled={!results.length} onClick={copySummary} style={{ marginRight: 8, marginBottom: 8, padding: "9px 14px" }}>非PII summaryをコピー</button>
+        <button disabled={!totals} onClick={copyManagementAuditSummary} style={{ marginRight: 8, marginBottom: 8, padding: "9px 14px", fontWeight: 800 }}>総合管理監査用summaryをコピー</button>
+        <button disabled={!results.length} onClick={downloadSummary} style={{ marginBottom: 8, padding: "9px 14px" }}>summaryを端末保存</button>
       </section>
 
       {expandedName && thumbnailUrls[expandedName] && (
