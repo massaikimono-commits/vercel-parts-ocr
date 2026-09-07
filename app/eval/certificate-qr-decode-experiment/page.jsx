@@ -11,6 +11,10 @@ const OVERLAY_PRIORITY_CANDIDATES = Object.freeze({
   "IMG_0942.jpeg": [4, 7, 8, 9],
   "IMG_0944.jpeg": [1, 2, 3, 5, 8],
 });
+const OWNERSHIP_CLASSIFICATION_CANDIDATES = Object.freeze({
+  "IMG_0942.jpeg": [1,2,3,4,5,6,7,8,9,10],
+  "IMG_0944.jpeg": [1,2,3,5,8],
+});
 const OVERLAY_CLASS_OPTIONS = Object.freeze([
   { value: "A", label: "A: 正しい1QRを正確に囲う" },
   { value: "B", label: "B: 複数QRのfinder混在" },
@@ -18,6 +22,7 @@ const OVERLAY_CLASS_OPTIONS = Object.freeze([
   { value: "D", label: "D: QRだがquad/角度/quiet不適切" },
 ]);
 const PRIOR_OVERLAY_CLASSIFICATIONS = Object.freeze({
+  "IMG_0942.jpeg#1":"C",
   "IMG_0942.jpeg#4":"B",
   "IMG_0942.jpeg#7":"B",
   "IMG_0942.jpeg#8":"D",
@@ -3881,7 +3886,7 @@ export default function CertificateQrDecodeExperimentPage() {
     ...item,
     relativeToSuccessfulReferenceMedian:priorityRelativeToReference(item,successfulQualityReferenceSummary),
   })):[];
-  const requiredOverlayClassifications=Object.entries(OVERLAY_PRIORITY_CANDIDATES).flatMap(([fileName,indexes])=>
+  const requiredOverlayClassifications=Object.entries(OWNERSHIP_CLASSIFICATION_CANDIDATES).flatMap(([fileName,indexes])=>
     indexes.map((candidateIndex)=>({fileName,candidateIndex,key:`${fileName}#${candidateIndex}`}))
   );
   const overlayClassificationRows=requiredOverlayClassifications.map((item)=>({
@@ -3890,6 +3895,12 @@ export default function CertificateQrDecodeExperimentPage() {
     classification:overlayClassifications[item.key]||null,
   }));
   const overlayClassificationComplete=overlayClassificationRows.every((item)=>Boolean(item.classification));
+  const img0942OwnershipClassifications=OWNERSHIP_CLASSIFICATION_CANDIDATES["IMG_0942.jpeg"].map((candidateIndex)=>({
+    candidateIndex,
+    classification:overlayClassifications[`IMG_0942.jpeg#${candidateIndex}`]||null,
+  }));
+  const img0942OwnershipClassifiedCount=img0942OwnershipClassifications.filter((item)=>Boolean(item.classification)).length;
+  const img0942OwnershipComplete=img0942OwnershipClassifiedCount===img0942OwnershipClassifications.length;
   const managementQualityReference=totals
     ?buildManagementQualityReferenceSummary(totals.qualityReferenceDiagnostics)
     :null;
@@ -3905,7 +3916,7 @@ export default function CertificateQrDecodeExperimentPage() {
     schema:"icb-certificate-qr-decode-experiment-summary-v7",
     summaryVariant:"management-audit-short-v1",
     experimentalHead,
-    diagnosticRevision:"v7-postformal-crop-coordinate-audit-4",
+    diagnosticRevision:"v7-postformal-0942-ownership-audit-5",
     experimentRoute:EXPERIMENT_ROUTE,
     baselineTargetRoute:PATHNAME,
     groundTruthUsedDuringDecode:false,
@@ -3942,6 +3953,8 @@ export default function CertificateQrDecodeExperimentPage() {
       remainingAmbiguousConflictCount:totals.remainingAmbiguousConflictCount,
     }:null,
     overlayClassifications:overlayClassificationRows,
+    img0942OwnershipClassifications,
+    img0942OwnershipComplete,
     qualityDiagnostic:totals?{
       successfulDecodeReference:managementQualityReference,
       priorityCandidates:managementPriorityQuality,
@@ -3978,7 +3991,7 @@ export default function CertificateQrDecodeExperimentPage() {
     experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
-    diagnosticRevision:"v7-postformal-crop-coordinate-audit-4",
+    diagnosticRevision:"v7-postformal-0942-ownership-audit-5",
     experimentRoute:EXPERIMENT_ROUTE,
     pathname:PATHNAME,
     pathnameRole:"baseline-target-route",
@@ -4112,6 +4125,14 @@ export default function CertificateQrDecodeExperimentPage() {
       payloadIncluded:false,
       canonicalPayloadIncluded:false,
     }:null,
+    img0942OwnershipAudit:{
+      classifications:img0942OwnershipClassifications,
+      complete:img0942OwnershipComplete,
+      classifiedCount:img0942OwnershipClassifiedCount,
+      totalCandidateCount:10,
+      payloadIncluded:false,
+      browserLocalVisualOnly:true,
+    },
     visualOverlayAudit:{
       requiredPriorityCandidates:requiredOverlayClassifications.map(({fileName,candidateIndex})=>({fileName,candidateIndex})),
       classifications:overlayClassificationRows,
@@ -4333,9 +4354,11 @@ export default function CertificateQrDecodeExperimentPage() {
                         perspectiveSpread={d?.perspectiveScaleSpread??"-"} /
                         overlapRejected={String(Boolean(d?.overlapRejected))}
                       </div>
-                      {OVERLAY_PRIORITY_CANDIDATES[name]?.includes(crop.candidateIndex)&&(
+                      {OWNERSHIP_CLASSIFICATION_CANDIDATES[name]?.includes(crop.candidateIndex)&&(
                         <div style={{marginTop:8,padding:8,border:"1px solid #f0ad4e",borderRadius:8}}>
-                          <div style={{fontSize:12,fontWeight:800}}>★ 総合管理指定の優先分類candidate</div>
+                          <div style={{fontSize:12,fontWeight:800}}>
+                            {name==="IMG_0942.jpeg" ? "★ IMG_0942 ownership分類candidate" : "★ 総合管理指定の既存分類candidate"}
+                          </div>
                           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:6,marginTop:6}}>
                             {OVERLAY_CLASS_OPTIONS.map((option)=>{
                               const key=`${name}#${crop.candidateIndex}`;
@@ -4378,7 +4401,9 @@ export default function CertificateQrDecodeExperimentPage() {
 
       <section style={{ marginTop: 18 }}>
         <div style={{fontSize:12,marginBottom:8,fontWeight:700}}>
-          overlay分類: {overlayClassificationComplete ? "前回分類を引き継ぎ済み（再分類不要）" : "分類情報不足"} / 画質diagnosticはsummaryへ自動出力
+          IMG_0942 ownership分類: {img0942OwnershipClassifiedCount}/10
+          {img0942OwnershipComplete ? "（全candidate分類完了）" : "（未分類candidateをA/B/C/D選択）"}
+          {" / "}既存0944分類は引き継ぎ済み
         </div>
         <button disabled={!results.length} onClick={copySummary} style={{ marginRight: 8, marginBottom: 8, padding: "9px 14px" }}>非PII summaryをコピー</button>
         <button disabled={!totals} onClick={copyManagementAuditSummary} style={{ marginRight: 8, marginBottom: 8, padding: "9px 14px", fontWeight: 800 }}>総合管理監査用summaryをコピー</button>
