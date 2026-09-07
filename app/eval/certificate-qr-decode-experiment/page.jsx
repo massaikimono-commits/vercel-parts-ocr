@@ -1244,6 +1244,38 @@ function normalizeDecodePosition(center, canvas) {
     ny: Number((center.y / canvas.height).toFixed(4)),
   };
 }
+function normalizeDecodePoints(points = [], canvas) {
+  if (!canvas?.width || !canvas?.height) return [];
+  return points
+    .filter((p) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)))
+    .map((p) => ({
+      nx: Number((Number(p.x) / canvas.width).toFixed(4)),
+      ny: Number((Number(p.y) / canvas.height).toFixed(4)),
+    }));
+}
+function classifyDecodePositions(js, zx, canvas) {
+  const jsRaw = canvasPositionToRaw(js?.position, canvas);
+  const zxRaw = canvasPositionToRaw(zx?.position, canvas);
+  if (!js?.position || !zx?.position) {
+    return {
+      className: "position-unavailable",
+      normalizedDistance: null,
+      jsRawPosition: jsRaw,
+      zxingRawPosition: zxRaw,
+    };
+  }
+  const distance = Math.hypot(
+    Number(js.position.nx) - Number(zx.position.nx),
+    Number(js.position.ny) - Number(zx.position.ny)
+  );
+  return {
+    className: distance <= .12 ? "same-physical-qr" : distance >= .24 ? "multi-qr-crop" : "position-uncertain",
+    normalizedDistance: Number(distance.toFixed(4)),
+    jsRawPosition: jsRaw,
+    zxingRawPosition: zxRaw,
+  };
+}
+
 function canvasPositionToRaw(position, canvas) {
   const meta = canvas?.__qrCropMeta;
   if (!position || !meta) return null;
@@ -1264,7 +1296,7 @@ function compactConsensusValidation(js, zx, conflictPositionClass) {
     a.recognizedSchemaClass === b.recognizedSchemaClass;
   const strictCompact =
     same &&
-    conflictPositionClass !== "multi-qr-crop" &&
+    conflictPositionClass === "same-physical-qr" &&
     stableFeatureMatch &&
     a.payloadLength === 60 &&
     a.printableRatio === 1 &&
@@ -1301,9 +1333,10 @@ async function decodeJs(jsQR, canvas) {
       location.bottomLeftCorner,
     ].filter(Boolean);
     const position = normalizeDecodePosition(pointCenter(points), canvas);
-    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical), position };
+    const decodePoints = normalizeDecodePoints(points, canvas);
+    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical), position, decodePoints };
   } catch {
-    return { success: false, canonical: "", structural: structuralValidation(""), position: null };
+    return { success: false, canonical: "", structural: structuralValidation(""), position: null, decodePoints: [] };
   }
 }
 async function makeReader(options = {}) {
@@ -1336,7 +1369,8 @@ async function decodeZxing(reader, canvas) {
       y: Number(p?.getY?.() ?? p?.y),
     })).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
     const position = normalizeDecodePosition(pointCenter(points), canvas);
-    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical), position };
+    const decodePoints = normalizeDecodePoints(points, canvas);
+    return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical), position, decodePoints };
   } catch {
     return { success: false, canonical: "", structural: structuralValidation(""), position: null };
   }
@@ -1440,8 +1474,10 @@ function samePhysicalPayloadNear(a, b) {
 async function decodeCanvasPair({ jsQR, reader, canvas }) {
   const js = await decodeJs(jsQR, canvas);
   const zx = await decodeZxing(reader, canvas);
+  const positionAudit = classifyDecodePositions(js, zx, canvas);
   const adopted = adoptCanonical(js, zx);
   const samePayloadBothEngines = Boolean(js.success && zx.success && sameCanonical(js.canonical, zx.canonical));
+  const compact = compactConsensusValidation(js, zx, positionAudit.className);
   return {
     jsqrSuccess: js.success,
     zxingSuccess: zx.success,
@@ -1449,12 +1485,27 @@ async function decodeCanvasPair({ jsQR, reader, canvas }) {
     zxingStructuralPass: Boolean(zx.structural?.pass),
     jsStructural: js.structural,
     zxingStructural: zx.structural,
+    jsCanonical: js.canonical,
+    zxingCanonical: zx.canonical,
+    jsDecodePosition: js.position,
+    zxingDecodePosition: zx.position,
+    jsDecodePoints: js.decodePoints || [],
+    zxingDecodePoints: zx.decodePoints || [],
+    jsRawPosition: positionAudit.jsRawPosition,
+    zxingRawPosition: positionAudit.zxingRawPosition,
+    conflictPositionClass: positionAudit.className,
+    conflictCenterDistanceNormalized: positionAudit.normalizedDistance,
     samePayloadBothEngines,
     physicalSuccess: Boolean(adopted.canonical),
     crossEngineDuplicate: samePayloadBothEngines,
     crossEngineConflict: adopted.conflict,
     adoptedEngine: adopted.adoptedEngine,
     adoptionReason: adopted.adoptionReason,
+    compactCandidate: compact.compactCandidate,
+    physicalQrConsensusAccepted: compact.physicalQrConsensusAccepted,
+    parserSchemaRecognized: compact.parserSchemaRecognized,
+    compactSchemaClass: compact.compactSchemaClass,
+    compactCanonicalSet: new Set(compact.physicalQrConsensusAccepted && js.canonical ? [js.canonical] : []),
     rawCanonicalSet: new Set([js?.success ? js.canonical : "", zx?.success ? zx.canonical : ""].filter(Boolean)),
     canonicalSet: new Set(adopted.canonical ? [adopted.canonical] : []),
   };
@@ -1482,13 +1533,28 @@ function publicAttempt(attempt) {
     zxingPayloadLength: Number(zx.payloadLength || 0),
     jsPrintableRatio: Number(js.printableRatio || 0),
     zxingPrintableRatio: Number(zx.printableRatio || 0),
+    jsAsciiVisibleRatio: Number(js.asciiVisibleRatio || 0),
+    zxingAsciiVisibleRatio: Number(zx.asciiVisibleRatio || 0),
+    jsAlnumKnownSymbolRatio: Number(js.alnumKnownSymbolRatio || 0),
+    zxingAlnumKnownSymbolRatio: Number(zx.alnumKnownSymbolRatio || 0),
     jsSeparatorPattern: js.separatorPattern || "none",
     zxingSeparatorPattern: zx.separatorPattern || "none",
     jsRecognizedSchemaClass: js.recognizedSchemaClass || "unknown",
     zxingRecognizedSchemaClass: zx.recognizedSchemaClass || "unknown",
     jsStructuralFailReason: js.structuralFailReason || "no-decode",
     zxingStructuralFailReason: zx.structuralFailReason || "no-decode",
+    jsDecodePosition: attempt.jsDecodePosition || null,
+    zxingDecodePosition: attempt.zxingDecodePosition || null,
+    jsDecodePoints: attempt.jsDecodePoints || [],
+    zxingDecodePoints: attempt.zxingDecodePoints || [],
+    jsRawPosition: attempt.jsRawPosition || null,
+    zxingRawPosition: attempt.zxingRawPosition || null,
+    conflictPositionClass: attempt.conflictPositionClass || "position-unavailable",
+    conflictCenterDistanceNormalized: attempt.conflictCenterDistanceNormalized ?? null,
     physicalSuccess: Boolean(attempt.physicalSuccess),
+    physicalQrConsensusAccepted: Boolean(attempt.physicalQrConsensusAccepted),
+    parserSchemaRecognized: Boolean(attempt.parserSchemaRecognized),
+    compactSchemaClass: attempt.compactSchemaClass || "none",
     crossEngineDuplicate: Boolean(attempt.crossEngineDuplicate),
     crossEngineConflict: Boolean(attempt.crossEngineConflict),
     adoptedEngine: attempt.adoptedEngine || "none",
