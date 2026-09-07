@@ -1,0 +1,114 @@
+name: Parts OCR browser diagnostic
+
+on:
+  push:
+    branches:
+      - eval/parts-ocr-diagnostic-auto
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Decode diagnostic proxy fixtures
+        run: |
+          base64 -d test/fixtures/parts-diagnostic/yellow-proxy.b64 > /tmp/yellow-proxy.jpg
+          base64 -d test/fixtures/parts-diagnostic/white-proxy.b64 > /tmp/white-proxy.jpg
+          file /tmp/yellow-proxy.jpg /tmp/white-proxy.jpg
+
+      - name: Build diagnostic app
+        run: npm run build
+
+      - name: Start diagnostic app
+        run: |
+          npm start -- --hostname 127.0.0.1 > /tmp/parts-diag-next.log 2>&1 &
+          echo $! > /tmp/parts-diag-next.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/ocr/diagnostic >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/parts-diag-next.log
+          exit 1
+
+      - name: Run browser diagnostics
+        run: |
+          cat > /tmp/run-parts-diagnostic.cjs <<'NODE'
+          const { chromium } = require('playwright');
+
+          async function runOne(page, label, file) {
+            await page.goto('http://127.0.0.1:3000/ocr/diagnostic', { waitUntil: 'networkidle', timeout: 120000 });
+            await page.locator('input[type="file"]').setInputFiles(file);
+            await page.waitForFunction(() => {
+              const el = document.querySelector('textarea');
+              const value = el && 'value' in el ? el.value : '';
+              return value.includes('12. 診断継続走査結果') || value.includes('ERROR:');
+            }, { timeout: 420000 });
+            const report = await page.locator('textarea').inputValue();
+            console.log('\n===== ' + label + ' DIAGNOSTIC =====\n');
+            console.log(report);
+            console.log('\n===== END ' + label + ' =====\n');
+            await page.screenshot({ path: '/tmp/' + label.toLowerCase() + '-diagnostic.png', fullPage: true });
+            if (report.includes('ERROR:')) {
+              throw new Error(label + ' diagnostic reported an error');
+            }
+          }
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              const context = await browser.newContext({ viewport: { width: 1280, height: 1600 } });
+              const page = await context.newPage();
+              page.on('console', msg => console.log('[browser console]', msg.type(), msg.text()));
+              page.on('pageerror', err => console.log('[browser pageerror]', err.message));
+              await runOne(page, 'YELLOW', '/tmp/yellow-proxy.jpg');
+              await runOne(page, 'WHITE', '/tmp/white-proxy.jpg');
+            } finally {
+              await browser.close();
+            }
+          })().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          NODE
+          node /tmp/run-parts-diagnostic.cjs
+
+      - name: Show app log on failure
+        if: failure()
+        run: cat /tmp/parts-diag-next.log || true
+
+      - name: Upload diagnostic screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parts-ocr-browser-diagnostic
+          path: |
+            /tmp/yellow-diagnostic.png
+            /tmp/white-diagnostic.png
+            /tmp/parts-diag-next.log
+          if-no-files-found: ignore
