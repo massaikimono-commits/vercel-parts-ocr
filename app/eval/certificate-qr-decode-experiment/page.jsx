@@ -1188,6 +1188,12 @@ function canonicalDecode(text, bytes = []) {
   if (direct) return direct;
   return decodeBytesText(bytes);
 }
+function parserSchemaRecognition(canonical) {
+  const text = canonicalText(canonical).trim();
+  if (/^K\//.test(text)) return { recognized: true, parserSchemaClass: "kei-slash" };
+  if (/^2\//.test(text)) return { recognized: true, parserSchemaClass: "registered-slash" };
+  return { recognized: false, parserSchemaClass: "unrecognized" };
+}
 function structuralValidation(canonical) {
   const text = canonicalText(canonical);
   const chars = [...text];
@@ -1246,9 +1252,12 @@ function structuralValidation(canonical) {
   if (printableRatio >= .98) score += 2;
   if (replacementCount === 0 && controlCount === 0) score += 1;
   const pass = failReasons.length === 0;
+  const parserSchema = parserSchemaRecognition(text);
 
   return {
     pass,
+    parserSchemaRecognized: parserSchema.recognized,
+    parserSchemaClass: parserSchema.parserSchemaClass,
     score,
     payloadLength: length,
     printableRatio: Number(printableRatio.toFixed(4)),
@@ -1264,6 +1273,31 @@ function structuralValidation(canonical) {
     fieldCountBucket: slashFields <= 1 ? "0-1" : slashFields <= 8 ? "2-8" : slashFields <= 20 ? "9-20" : "21+",
     printableRatioBucket: printableRatio >= .98 ? "high" : printableRatio >= .96 ? "borderline" : "low",
   };
+}
+function qrCenterFromResultPoints(points = []) {
+  const valid = points.filter((p) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)));
+  if (valid.length >= 4) return pointCenter(valid);
+  if (valid.length === 3) {
+    let best = null;
+    for (let i = 0; i < 3; i += 1) {
+      const o = valid[i];
+      const a = valid[(i + 1) % 3];
+      const b = valid[(i + 2) % 3];
+      const ux = a.x - o.x, uy = a.y - o.y;
+      const vx = b.x - o.x, vy = b.y - o.y;
+      const du = Math.hypot(ux, uy), dv = Math.hypot(vx, vy);
+      if (!du || !dv) continue;
+      const cos = Math.abs((ux * vx + uy * vy) / (du * dv));
+      if (!best || cos < best.cos) best = { o, a, b, cos };
+    }
+    if (best) {
+      return {
+        x: best.o.x + (best.a.x - best.o.x) * .5 + (best.b.x - best.o.x) * .5,
+        y: best.o.y + (best.a.y - best.o.y) * .5 + (best.b.y - best.o.y) * .5,
+      };
+    }
+  }
+  return pointCenter(valid);
 }
 function pointCenter(points = []) {
   const valid = points.filter((p) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)));
@@ -1365,7 +1399,7 @@ function compactConsensusValidation(js, zx, conflictPositionClass) {
   return {
     compactCandidate: same && a.recognizedSchemaClass === "compact-printable" && b.recognizedSchemaClass === "compact-printable",
     physicalQrConsensusAccepted: strictCompact,
-    parserSchemaRecognized: false,
+    parserSchemaRecognized: Boolean(strictCompact && a.parserSchemaRecognized && b.parserSchemaRecognized),
     compactSchemaClass: strictCompact ? "compact-consensus-60" : "compact-unconfirmed",
   };
 }
@@ -1383,7 +1417,7 @@ async function decodeJs(jsQR, canvas) {
       location.bottomRightCorner,
       location.bottomLeftCorner,
     ].filter(Boolean);
-    const position = normalizeDecodePosition(pointCenter(points), canvas);
+    const position = normalizeDecodePosition(qrCenterFromResultPoints(points), canvas);
     const decodePoints = normalizeDecodePoints(points, canvas);
     return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical), position, decodePoints };
   } catch {
@@ -1592,6 +1626,10 @@ function publicAttempt(attempt) {
     zxingSeparatorPattern: zx.separatorPattern || "none",
     jsRecognizedSchemaClass: js.recognizedSchemaClass || "unknown",
     zxingRecognizedSchemaClass: zx.recognizedSchemaClass || "unknown",
+    jsParserSchemaRecognized: Boolean(js.parserSchemaRecognized),
+    zxingParserSchemaRecognized: Boolean(zx.parserSchemaRecognized),
+    jsParserSchemaClass: js.parserSchemaClass || "unrecognized",
+    zxingParserSchemaClass: zx.parserSchemaClass || "unrecognized",
     jsStructuralFailReason: js.structuralFailReason || "no-decode",
     zxingStructuralFailReason: zx.structuralFailReason || "no-decode",
     jsDecodePosition: attempt.jsDecodePosition || null,
