@@ -79,7 +79,7 @@ export function detectCertificateQrDensityCandidates2D(rgba, width, height, opti
   }
 
   scored.sort((a, b) => b.score - a.score);
-  const maxCandidates = Math.max(4, Math.min(12, Number(options.maxCandidates) || 8));
+  const maxCandidates = Math.max(6, Math.min(24, Number(options.maxCandidates) || 16));
   const selected = [];
   for (const item of scored) {
     if (selected.some((p) =>
@@ -99,4 +99,127 @@ export function detectCertificateQrDensityCandidates2D(rgba, width, height, opti
       windowWidth: Number(item.windowWidth.toFixed(4)),
       windowHeight: Number(item.windowHeight.toFixed(4)),
     }));
+}
+
+
+/**
+ * Collapse 2D density peaks into physical QR candidates without assuming a
+ * fixed Y coordinate. The dominant row is chosen from the candidate geometry
+ * and scores, then near-identical XY peaks are merged.
+ */
+export function clusterCertificateQrCandidates2D(candidates, options = {}) {
+  const input = (Array.isArray(candidates) ? candidates : [])
+    .map((item) => ({
+      x: Number(item?.x),
+      y: Number(item?.y),
+      score: Math.max(0.0001, Number(item?.score) || 0),
+      windowWidth: Number(item?.windowWidth) || 0,
+      windowHeight: Number(item?.windowHeight) || 0,
+    }))
+    .filter((item) =>
+      Number.isFinite(item.x) && item.x >= 0 && item.x <= 1 &&
+      Number.isFinite(item.y) && item.y >= 0 && item.y <= 1
+    );
+
+  if (!input.length) {
+    return {
+      dominantRowY: null,
+      inputCandidateCount: 0,
+      rowClusterCount: 0,
+      candidatePositionDuplicateRemovedCount: 0,
+      discardedOffRowCount: 0,
+      candidates: [],
+    };
+  }
+
+  const rowTolerance = Math.max(.025, Math.min(.09, Number(options.rowTolerance) || .06));
+  const xTolerance = Math.max(.025, Math.min(.07, Number(options.xTolerance) || .045));
+  const maxCandidates = Math.max(2, Math.min(10, Number(options.maxCandidates) || 8));
+
+  const rows = [];
+  for (const point of [...input].sort((a, b) => b.score - a.score)) {
+    let best = null;
+    let bestDistance = Infinity;
+    for (const row of rows) {
+      const distance = Math.abs(point.y - row.y);
+      if (distance <= rowTolerance && distance < bestDistance) {
+        best = row;
+        bestDistance = distance;
+      }
+    }
+    if (!best) {
+      rows.push({ y: point.y, weight: point.score, scoreSum: point.score, points: [point] });
+      continue;
+    }
+    best.points.push(point);
+    best.scoreSum += point.score;
+    best.y = (best.y * best.weight + point.y * point.score) / (best.weight + point.score);
+    best.weight += point.score;
+  }
+
+  const uniqueXCount = (points) => {
+    const selected = [];
+    for (const point of [...points].sort((a, b) => b.score - a.score)) {
+      if (selected.some((known) => Math.abs(known.x - point.x) <= xTolerance)) continue;
+      selected.push(point);
+    }
+    return selected.length;
+  };
+
+  rows.forEach((row) => {
+    row.uniqueXCount = uniqueXCount(row.points);
+    const xs = row.points.map((p) => p.x);
+    row.xSpan = xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+    // QR rows have several distinct X positions and meaningful horizontal span.
+    row.rank = row.uniqueXCount * 100 + Math.min(.6, row.xSpan) * 20 + row.scoreSum;
+  });
+  rows.sort((a, b) => b.rank - a.rank || b.scoreSum - a.scoreSum);
+  const dominant = rows[0];
+
+  const xClusters = [];
+  for (const point of [...dominant.points].sort((a, b) => a.x - b.x || b.score - a.score)) {
+    let cluster = xClusters.find((item) => Math.abs(item.x - point.x) <= xTolerance);
+    if (!cluster) {
+      xClusters.push({
+        x: point.x,
+        y: point.y,
+        weight: point.score,
+        scoreSum: point.score,
+        points: [point],
+      });
+      continue;
+    }
+    cluster.points.push(point);
+    cluster.scoreSum += point.score;
+    cluster.x = (cluster.x * cluster.weight + point.x * point.score) / (cluster.weight + point.score);
+    cluster.y = (cluster.y * cluster.weight + point.y * point.score) / (cluster.weight + point.score);
+    cluster.weight += point.score;
+  }
+
+  const merged = xClusters
+    .map((cluster) => {
+      const strongest = [...cluster.points].sort((a, b) => b.score - a.score)[0];
+      return {
+        x: Number(cluster.x.toFixed(4)),
+        y: Number(cluster.y.toFixed(4)),
+        score: Number(strongest.score.toFixed(4)),
+        windowWidth: Number(strongest.windowWidth.toFixed(4)),
+        windowHeight: Number(strongest.windowHeight.toFixed(4)),
+        mergedPeakCount: cluster.points.length,
+      };
+    })
+    .sort((a, b) => a.x - b.x)
+    .slice(0, maxCandidates);
+
+  const discardedOffRowCount = input.length - dominant.points.length;
+  const duplicateRemovedInRow = dominant.points.length - merged.length;
+
+  return {
+    dominantRowY: Number(dominant.y.toFixed(4)),
+    inputCandidateCount: input.length,
+    rowClusterCount: rows.length,
+    candidatePositionDuplicateRemovedCount: Math.max(0, duplicateRemovedInRow),
+    discardedOffRowCount: Math.max(0, discardedOffRowCount),
+    candidates: merged,
+  };
 }
