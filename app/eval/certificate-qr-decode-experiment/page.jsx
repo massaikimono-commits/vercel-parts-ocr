@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { normalizeCertificateCanvas } from "../../lib/certificate-photo-normalize";
+import { normalizeCertificateCanvas, expectedCertificateQrCount } from "../../lib/certificate-photo-normalize";
 import { detectCertificateQrDensityCandidates2D, clusterCertificateQrCandidates2D } from "../../lib/certificate-qr-density-2d.mjs";
 
 const REQUIRED_NAMES = Array.from({ length: 8 }, (_, i) => `IMG_${String(940 + i).padStart(4, "0")}.jpeg`);
@@ -13,20 +13,29 @@ const GT_OPTIONS = [
   { value: "registered", label: "登録車5QR", expected: 5 },
   { value: "kei-legacy", label: "軽旧2QR", expected: 2 },
 ];
-const CONFIGS = [
-  { id: "raw-color-medium-3x-nearest", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest" },
-  { id: "raw-color-medium-2x-smooth", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 2, interpolation: "smooth" },
-  { id: "raw-color-small-2x-nearest", source: "raw", mode: "color", crop: "small", widthRel: .10, scale: 2, interpolation: "nearest" },
+const ENSEMBLE_CONFIGS = [
+  { id: "raw-color-small-2x-nearest", source: "raw", mode: "color", crop: "small", widthRel: .10, scale: 2, interpolation: "nearest", quietZoneRatio: .08 },
+  { id: "raw-color-medium-3x-nearest", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
+  { id: "raw-color-medium-2x-smooth", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 2, interpolation: "smooth", quietZoneRatio: .08 },
+];
+const RESCUE_CONFIGS = [
+  { id: "rescue-gray-medium-3x", source: "raw", mode: "grayscale", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
+  { id: "rescue-contrast-weak-medium-3x", source: "raw", mode: "contrast-weak", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
+  { id: "rescue-contrast-medium-medium-3x", source: "raw", mode: "contrast-medium", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
+  { id: "rescue-sharpen-medium-3x", source: "raw", mode: "sharpen", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
+  { id: "rescue-rotate-plus1-medium-3x", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08, rotateDeg: 1.0 },
+  { id: "rescue-rotate-minus1-medium-3x", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08, rotateDeg: -1.0 },
+  { id: "rescue-quiet-medium-3x", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .14 },
 ];
 const DEFAULT_GROUND_TRUTH = {
-  "IMG_0940.jpeg": { vehicleKind: "registered", expectedQrCount: 5 },
+  "IMG_0940.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
   "IMG_0941.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
   "IMG_0942.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
   "IMG_0943.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
   "IMG_0944.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
   "IMG_0945.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
   "IMG_0946.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
-  "IMG_0947.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
+  "IMG_0947.jpeg": { vehicleKind: "registered", expectedQrCount: 5 },
 };
 
 function safeName(file) {
@@ -181,6 +190,26 @@ function paperWidthPx(pageGeometry, source) {
   }
   return Math.max(1, Number(pageGeometry?.bounds?.w || pageGeometry?.w || source.width));
 }
+function sharpenImageData(image) {
+  const { data, width, height } = image;
+  const src = new Uint8ClampedArray(data);
+  const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      for (let channel = 0; channel < 3; channel += 1) {
+        let value = 0;
+        let ki = 0;
+        for (let ky = -1; ky <= 1; ky += 1) {
+          for (let kx = -1; kx <= 1; kx += 1) {
+            const p = ((y + ky) * width + (x + kx)) * 4 + channel;
+            value += src[p] * kernel[ki++];
+          }
+        }
+        data[(y * width + x) * 4 + channel] = Math.max(0, Math.min(255, value));
+      }
+    }
+  }
+}
 function cropCandidate(source, pageGeometry, candidate, config) {
   const center = paperPoint(pageGeometry, source, candidate);
   const cropW = Math.max(12, paperWidthPx(pageGeometry, source) * config.widthRel);
@@ -192,7 +221,8 @@ function cropCandidate(source, pageGeometry, candidate, config) {
   const sw = Math.max(1, Math.min(source.width - sx, cropW));
   const sh = Math.max(1, Math.min(source.height - sy, cropH));
   const scale = Math.max(.8, Math.min(3, Number(config.scale) || 1));
-  const pad = Math.max(12, Math.round(Math.min(sw, sh) * scale * .08));
+  const quietZoneRatio = Math.max(.04, Math.min(.20, Number(config.quietZoneRatio) || .08));
+  const pad = Math.max(12, Math.round(Math.min(sw, sh) * scale * quietZoneRatio));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sw * scale) + pad * 2);
   canvas.height = Math.max(1, Math.round(sh * scale) + pad * 2);
@@ -201,7 +231,16 @@ function cropCandidate(source, pageGeometry, candidate, config) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = config.interpolation === "smooth";
   if (ctx.imageSmoothingEnabled) ctx.imageSmoothingQuality = "high";
+
+  const rotate = Number(config.rotateDeg) || 0;
+  if (rotate) {
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(rotate * Math.PI / 180);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+  }
   ctx.drawImage(source, sx, sy, sw, sh, pad, pad, canvas.width - pad * 2, canvas.height - pad * 2);
+  if (rotate) ctx.restore();
 
   if (config.mode !== "color") {
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -212,15 +251,18 @@ function cropCandidate(source, pageGeometry, candidate, config) {
       image.data[p] = image.data[p + 1] = image.data[p + 2] = g;
     }
     const avg = sum / Math.max(1, image.data.length / 4);
-    const threshold = Math.max(90, Math.min(225, avg - 8));
-    for (let p = 0; p < image.data.length; p += 4) {
-      const g = image.data[p];
-      const v = config.mode === "binary"
-        ? (g < threshold ? 0 : 255)
-        : Math.max(0, Math.min(255, Math.round((g - 128) * 2.05 + 150)));
-      image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
-      image.data[p + 3] = 255;
+    let contrast = 1;
+    let midpoint = 128;
+    if (config.mode === "contrast-weak") { contrast = 1.35; midpoint = avg; }
+    if (config.mode === "contrast-medium") { contrast = 1.70; midpoint = avg; }
+    if (config.mode === "contrast-weak" || config.mode === "contrast-medium") {
+      for (let p = 0; p < image.data.length; p += 4) {
+        const g = image.data[p];
+        const v = Math.max(0, Math.min(255, Math.round((g - midpoint) * contrast + midpoint)));
+        image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
+      }
     }
+    if (config.mode === "sharpen") sharpenImageData(image);
     ctx.putImageData(image, 0, 0);
   }
   return canvas;
@@ -339,6 +381,47 @@ async function runBaseline(frame, file) {
     win.removeEventListener("vehicle-certificate-qr-fast-ready", onFast);
   }
 }
+function decodePairCanonicalSet(js, zx) {
+  return new Set([js?.success ? js.canonical : "", zx?.success ? zx.canonical : ""].filter(Boolean));
+}
+function samePhysicalPayloadNear(a, b) {
+  const near =
+    Math.abs(Number(a.x) - Number(b.x)) <= .055 &&
+    Math.abs(Number(a.y) - Number(b.y)) <= .065;
+  if (!near) return false;
+  for (const canonical of a.canonicalSet || []) {
+    if (b.canonicalSet?.has(canonical)) return true;
+  }
+  return false;
+}
+async function decodeWithConfig({ jsQR, reader, raw, normalized, candidate, config }) {
+  const canvas = cropCandidate(raw, normalized.paper, candidate, config);
+  try {
+    const js = await decodeJs(jsQR, canvas);
+    const zx = await decodeZxing(reader, canvas);
+    return {
+      jsqrSuccess: js.success,
+      zxingSuccess: zx.success,
+      physicalSuccess: js.success || zx.success,
+      crossEngineDuplicate: js.success && zx.success && sameCanonical(js.canonical, zx.canonical),
+      crossEngineConflict: js.success && zx.success && !sameCanonical(js.canonical, zx.canonical),
+      canonicalSet: decodePairCanonicalSet(js, zx),
+    };
+  } finally {
+    canvas.width = 1;
+    canvas.height = 1;
+  }
+}
+function publicAttempt(attempt) {
+  return {
+    configId: attempt.configId,
+    jsqrSuccess: attempt.jsqrSuccess,
+    zxingSuccess: attempt.zxingSuccess,
+    physicalSuccess: attempt.physicalSuccess,
+    crossEngineDuplicate: attempt.crossEngineDuplicate,
+    crossEngineConflict: attempt.crossEngineConflict,
+  };
+}
 async function runMatrix(file) {
   const started = performance.now();
   const raw = await sourceCanvas(file);
@@ -346,139 +429,145 @@ async function runMatrix(file) {
   const norm = normalized.canvas;
   const normCtx = norm.getContext("2d", { willReadFrequently: true });
   const normImage = normCtx.getImageData(0, 0, norm.width, norm.height);
+
   const rawCandidates = detectCertificateQrDensityCandidates2D(
     normImage.data,
     normImage.width,
     normImage.height,
-    { maxCandidates: 16 }
+    { maxCandidates: 20 }
   );
-  const clustered = clusterCertificateQrCandidates2D(rawCandidates, { maxCandidates: 8 });
-  const candidates = clustered.candidates;
+  const conservative = clusterCertificateQrCandidates2D(rawCandidates, {
+    maxCandidates: 10,
+    xTolerance: .030,
+    rowTolerance: .060,
+  });
+  const previousStyle = clusterCertificateQrCandidates2D(rawCandidates, {
+    maxCandidates: 10,
+    xTolerance: .045,
+    rowTolerance: .060,
+  });
+  const candidates = conservative.candidates;
   const [reader, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
   const jsQR = jsMod.default || jsMod;
 
-  const configs = Object.fromEntries(CONFIGS.map((c) => [c.id, {
-    ...c,
-    jsqrAttempts: 0,
+  const ensembleStats = Object.fromEntries(ENSEMBLE_CONFIGS.map((config) => [config.id, {
+    ...config,
+    attempts: 0,
     jsqrSuccesses: 0,
-    zxingAttempts: 0,
     zxingSuccesses: 0,
+    physicalSuccesses: 0,
     crossEngineDuplicateRemovedCount: 0,
     crossEngineConflictCount: 0,
-    crossCandidatePayloadDuplicateRemovedCount: 0,
-    candidateRows: [],
   }]));
-  const candidateDiagnostics = [];
+  const rescueStats = Object.fromEntries(RESCUE_CONFIGS.map((config) => [config.id, {
+    ...config,
+    attempts: 0,
+    jsqrSuccesses: 0,
+    zxingSuccesses: 0,
+    physicalSuccesses: 0,
+    crossEngineDuplicateRemovedCount: 0,
+    crossEngineConflictCount: 0,
+  }]));
+
+  const physicalRows = [];
+  let totalEnsembleAttempts = 0;
+  let skippedEnsembleAttempts = 0;
+  let totalRescueAttempts = 0;
 
   try {
     for (let ci = 0; ci < candidates.length; ci += 1) {
       const candidate = candidates[ci];
       const row = {
-        index: ci + 1,
+        candidateIndex: ci + 1,
         x: candidate.x,
         y: candidate.y,
         score: candidate.score,
         mergedPeakCount: candidate.mergedPeakCount || 1,
-        attempts: [],
+        ensembleAttempts: [],
+        rescueAttempts: [],
+        canonicalSet: new Set(),
+        ensembleSuccess: false,
+        rescueSuccess: false,
       };
 
-      for (const config of CONFIGS) {
-        const source = config.source === "raw" ? raw : norm;
-        const pageGeometry = config.source === "raw"
-          ? normalized.paper
-          : { bounds: { x: 0, y: 0, w: norm.width, h: norm.height } };
-        const canvas = cropCandidate(source, pageGeometry, candidate, config);
-        try {
-          const stat = configs[config.id];
-          stat.jsqrAttempts += 1;
-          const js = await decodeJs(jsQR, canvas);
-          if (js.success) stat.jsqrSuccesses += 1;
-
-          stat.zxingAttempts += 1;
-          const zx = await decodeZxing(reader, canvas);
-          if (zx.success) stat.zxingSuccesses += 1;
-
-          const crossEngineDuplicate = js.success && zx.success && sameCanonical(js.canonical, zx.canonical);
-          const crossEngineConflict = js.success && zx.success && !sameCanonical(js.canonical, zx.canonical);
-          if (crossEngineDuplicate) stat.crossEngineDuplicateRemovedCount += 1;
-          if (crossEngineConflict) stat.crossEngineConflictCount += 1;
-
-          const canonicalSet = new Set(
-            [js.success ? js.canonical : "", zx.success ? zx.canonical : ""].filter(Boolean)
-          );
-          const physicalSuccess = js.success || zx.success;
-          stat.candidateRows.push({
-            candidateIndex: ci + 1,
-            x: candidate.x,
-            y: candidate.y,
-            physicalSuccess,
-            canonicalSet,
-          });
-          row.attempts.push({
-            configId: config.id,
-            jsqrSuccess: js.success,
-            zxingSuccess: zx.success,
-            crossEngineDuplicate,
-            crossEngineConflict,
-            physicalSuccess,
-          });
-        } finally {
-          canvas.width = 1;
-          canvas.height = 1;
+      for (let configIndex = 0; configIndex < ENSEMBLE_CONFIGS.length; configIndex += 1) {
+        const config = ENSEMBLE_CONFIGS[configIndex];
+        const result = await decodeWithConfig({ jsQR, reader, raw, normalized, candidate, config });
+        totalEnsembleAttempts += 1;
+        const stat = ensembleStats[config.id];
+        stat.attempts += 1;
+        if (result.jsqrSuccess) stat.jsqrSuccesses += 1;
+        if (result.zxingSuccess) stat.zxingSuccesses += 1;
+        if (result.physicalSuccess) stat.physicalSuccesses += 1;
+        if (result.crossEngineDuplicate) stat.crossEngineDuplicateRemovedCount += 1;
+        if (result.crossEngineConflict) stat.crossEngineConflictCount += 1;
+        row.ensembleAttempts.push({ configId: config.id, ...result });
+        if (result.physicalSuccess) {
+          row.ensembleSuccess = true;
+          for (const canonical of result.canonicalSet) row.canonicalSet.add(canonical);
+          skippedEnsembleAttempts += ENSEMBLE_CONFIGS.length - configIndex - 1;
+          break;
         }
         await wait(0);
       }
-      candidateDiagnostics.push(row);
+
+      if (!row.ensembleSuccess) {
+        for (const config of RESCUE_CONFIGS) {
+          const result = await decodeWithConfig({ jsQR, reader, raw, normalized, candidate, config });
+          totalRescueAttempts += 1;
+          const stat = rescueStats[config.id];
+          stat.attempts += 1;
+          if (result.jsqrSuccess) stat.jsqrSuccesses += 1;
+          if (result.zxingSuccess) stat.zxingSuccesses += 1;
+          if (result.physicalSuccess) stat.physicalSuccesses += 1;
+          if (result.crossEngineDuplicate) stat.crossEngineDuplicateRemovedCount += 1;
+          if (result.crossEngineConflict) stat.crossEngineConflictCount += 1;
+          row.rescueAttempts.push({ configId: config.id, ...result });
+          if (result.physicalSuccess) {
+            row.rescueSuccess = true;
+            for (const canonical of result.canonicalSet) row.canonicalSet.add(canonical);
+          }
+          await wait(0);
+        }
+      }
+      physicalRows.push(row);
     }
 
-    const publicConfigs = Object.values(configs).map((stat) => {
+    const acceptUnique = (rows, includeRescue) => {
       const accepted = [];
-      for (const row of stat.candidateRows) {
-        if (!row.physicalSuccess) continue;
-        const payloadDuplicate = accepted.some((known) => {
-          const nearSamePosition =
-            Math.abs(Number(known.x) - Number(row.x)) <= .055 &&
-            Math.abs(Number(known.y) - Number(row.y)) <= .065;
-          if (!nearSamePosition) return false;
-          for (const canonical of row.canonicalSet) {
-            if (known.canonicalSet.has(canonical)) return true;
-          }
-          return false;
-        });
-        if (payloadDuplicate) {
-          stat.crossCandidatePayloadDuplicateRemovedCount += 1;
+      let crossCandidatePayloadDuplicateRemovedCount = 0;
+      for (const row of rows) {
+        const success = row.ensembleSuccess || (includeRescue && row.rescueSuccess);
+        if (!success) continue;
+        const duplicate = accepted.some((known) => samePhysicalPayloadNear(known, row));
+        if (duplicate) {
+          crossCandidatePayloadDuplicateRemovedCount += 1;
           continue;
         }
         accepted.push(row);
       }
-      return {
-        id: stat.id,
-        source: stat.source,
-        mode: stat.mode,
-        crop: stat.crop,
-        widthRel: stat.widthRel,
-        scale: stat.scale,
-        interpolation: stat.interpolation,
-        jsqrAttempts: stat.jsqrAttempts,
-        jsqrSuccesses: stat.jsqrSuccesses,
-        zxingAttempts: stat.zxingAttempts,
-        zxingSuccesses: stat.zxingSuccesses,
-        crossEngineDuplicateRemovedCount: stat.crossEngineDuplicateRemovedCount,
-        crossEngineConflictCount: stat.crossEngineConflictCount,
-        crossCandidatePayloadDuplicateRemovedCount: stat.crossCandidatePayloadDuplicateRemovedCount,
-        physicalUniqueQrCount: accepted.length,
-      };
-    });
+      return { accepted, crossCandidatePayloadDuplicateRemovedCount };
+    };
+    const ensembleUnique = acceptUnique(physicalRows, false);
+    const rescueUnique = acceptUnique(physicalRows, true);
+
+    const decodedItems = rescueUnique.accepted
+      .map((row) => [...row.canonicalSet][0])
+      .filter(Boolean)
+      .map((data) => ({ data }));
+    const decodedRuntime = expectedCertificateQrCount(decodedItems, "");
 
     return {
       candidateDetection: {
-        dominantRowY: clustered.dominantRowY,
-        rawCandidateCount: clustered.inputCandidateCount,
-        physicalCandidateCount: candidates.length,
-        rowClusterCount: clustered.rowClusterCount,
-        candidatePositionDuplicateRemovedCount: clustered.candidatePositionDuplicateRemovedCount,
-        discardedOffRowCount: clustered.discardedOffRowCount,
-        physicalCandidates: candidates.map((candidate, index) => ({
+        dominantRowY: conservative.dominantRowY,
+        rawCandidateCount: conservative.inputCandidateCount,
+        conservativePhysicalCandidateCount: conservative.candidates.length,
+        previousStylePhysicalCandidateCount: previousStyle.candidates.length,
+        candidateCountDeltaVsPreviousStyle: conservative.candidates.length - previousStyle.candidates.length,
+        rowClusterCount: conservative.rowClusterCount,
+        candidatePositionDuplicateRemovedCount: conservative.candidatePositionDuplicateRemovedCount,
+        discardedOffRowCount: conservative.discardedOffRowCount,
+        physicalCandidates: conservative.candidates.map((candidate, index) => ({
           index: index + 1,
           x: candidate.x,
           y: candidate.y,
@@ -486,8 +575,52 @@ async function runMatrix(file) {
           mergedPeakCount: candidate.mergedPeakCount || 1,
         })),
       },
-      candidateDiagnostics,
-      configs: publicConfigs,
+      ensemble: {
+        order: ENSEMBLE_CONFIGS.map((config) => config.id),
+        physicalUniqueQrCount: ensembleUnique.accepted.length,
+        crossCandidatePayloadDuplicateRemovedCount: ensembleUnique.crossCandidatePayloadDuplicateRemovedCount,
+        totalAttempts: totalEnsembleAttempts,
+        skippedAttemptsByEarlySuccess: skippedEnsembleAttempts,
+        averageAttemptsPerPhysicalCandidate: candidates.length
+          ? Number((totalEnsembleAttempts / candidates.length).toFixed(3))
+          : 0,
+        stats: Object.values(ensembleStats).map((stat) => ({
+          id: stat.id,
+          attempts: stat.attempts,
+          jsqrSuccesses: stat.jsqrSuccesses,
+          zxingSuccesses: stat.zxingSuccesses,
+          physicalSuccesses: stat.physicalSuccesses,
+          crossEngineDuplicateRemovedCount: stat.crossEngineDuplicateRemovedCount,
+          crossEngineConflictCount: stat.crossEngineConflictCount,
+        })),
+      },
+      rescueStudy: {
+        physicalUniqueQrCountAfterRescue: rescueUnique.accepted.length,
+        addedPhysicalQrCount: Math.max(0, rescueUnique.accepted.length - ensembleUnique.accepted.length),
+        totalAttempts: totalRescueAttempts,
+        stats: Object.values(rescueStats).map((stat) => ({
+          id: stat.id,
+          attempts: stat.attempts,
+          jsqrSuccesses: stat.jsqrSuccesses,
+          zxingSuccesses: stat.zxingSuccesses,
+          physicalSuccesses: stat.physicalSuccesses,
+          crossEngineDuplicateRemovedCount: stat.crossEngineDuplicateRemovedCount,
+          crossEngineConflictCount: stat.crossEngineConflictCount,
+        })),
+      },
+      decodedRuntimeVehicleKind: decodedRuntime?.kind || null,
+      decodedRuntimeExpectedQrCount: Number(decodedRuntime?.count || 0) || null,
+      candidateDiagnostics: physicalRows.map((row) => ({
+        candidateIndex: row.candidateIndex,
+        x: row.x,
+        y: row.y,
+        score: row.score,
+        mergedPeakCount: row.mergedPeakCount,
+        ensembleSuccess: row.ensembleSuccess,
+        rescueSuccess: row.rescueSuccess,
+        ensembleAttempts: row.ensembleAttempts.map(publicAttempt),
+        rescueAttempts: row.rescueAttempts.map(publicAttempt),
+      })),
       elapsedMs: Math.round(performance.now() - started),
       normalizeMode: normalized.mode,
       normalizeConfidence: Number(Number(normalized.confidence || 0).toFixed(3)),
@@ -501,60 +634,66 @@ async function runMatrix(file) {
 }
 function applyCountingIntegrity(matrix, expectedQrCount) {
   const expected = Number(expectedQrCount);
-  const configs = (matrix?.configs || []).map((config) => ({
-    ...config,
-    countingIntegrityFail: Number.isFinite(expected)
-      ? Number(config.physicalUniqueQrCount || 0) > expected
-      : false,
-  }));
-  return { ...matrix, configs };
+  const ensembleCount = Number(matrix?.ensemble?.physicalUniqueQrCount || 0);
+  const rescueCount = Number(matrix?.rescueStudy?.physicalUniqueQrCountAfterRescue || 0);
+  return {
+    ...matrix,
+    ensemble: {
+      ...matrix.ensemble,
+      countingIntegrityFail: Number.isFinite(expected) ? ensembleCount > expected : false,
+    },
+    rescueStudy: {
+      ...matrix.rescueStudy,
+      countingIntegrityFail: Number.isFinite(expected) ? rescueCount > expected : false,
+    },
+  };
 }
-function aggregateConfigs(results) {
-  const map = new Map();
-  for (const result of results) {
-    for (const config of result?.matrix?.configs || []) {
-      const prev = map.get(config.id) || {
-        id: config.id,
-        source: config.source,
-        mode: config.mode,
-        crop: config.crop,
-        widthRel: config.widthRel,
-        scale: config.scale,
-        interpolation: config.interpolation,
-        physicalQrCountSum: 0,
-        completeImageCount: 0,
-        countingIntegrityFailImageCount: 0,
-        jsqrAttempts: 0,
-        jsqrSuccesses: 0,
-        zxingAttempts: 0,
-        zxingSuccesses: 0,
-        crossEngineDuplicateRemovedCount: 0,
-        crossEngineConflictCount: 0,
-        crossCandidatePayloadDuplicateRemovedCount: 0,
-      };
-      const count = Number(config.physicalUniqueQrCount || 0);
-      prev.physicalQrCountSum += count;
-      if (Number.isFinite(result.groundTruthExpectedQrCount) && count === result.groundTruthExpectedQrCount) {
-        prev.completeImageCount += 1;
-      }
-      if (config.countingIntegrityFail) prev.countingIntegrityFailImageCount += 1;
-      prev.jsqrAttempts += Number(config.jsqrAttempts || 0);
-      prev.jsqrSuccesses += Number(config.jsqrSuccesses || 0);
-      prev.zxingAttempts += Number(config.zxingAttempts || 0);
-      prev.zxingSuccesses += Number(config.zxingSuccesses || 0);
-      prev.crossEngineDuplicateRemovedCount += Number(config.crossEngineDuplicateRemovedCount || 0);
-      prev.crossEngineConflictCount += Number(config.crossEngineConflictCount || 0);
-      prev.crossCandidatePayloadDuplicateRemovedCount += Number(config.crossCandidatePayloadDuplicateRemovedCount || 0);
-      map.set(config.id, prev);
+function aggregateExperiment(results) {
+  return results.reduce((acc, result) => {
+    const expected = Number(result.groundTruthExpectedQrCount || 0);
+    const ensemble = result.matrix?.ensemble || {};
+    const rescue = result.matrix?.rescueStudy || {};
+    acc.expected += expected;
+    acc.baselinePhysicalUnique += Number(result.baseline.qrCount || 0);
+    acc.ensemblePhysicalUnique += Number(ensemble.physicalUniqueQrCount || 0);
+    acc.rescuePhysicalUnique += Number(rescue.physicalUniqueQrCountAfterRescue || 0);
+    if (result.baseline.qrCount === expected) acc.baselineCompleteImages += 1;
+    if (ensemble.physicalUniqueQrCount === expected) acc.ensembleCompleteImages += 1;
+    if (rescue.physicalUniqueQrCountAfterRescue === expected) acc.rescueCompleteImages += 1;
+    if (ensemble.countingIntegrityFail) acc.ensembleCountingIntegrityFail = true;
+    if (rescue.countingIntegrityFail) acc.rescueCountingIntegrityFail = true;
+    acc.ensembleAttempts += Number(ensemble.totalAttempts || 0);
+    acc.skippedEnsembleAttempts += Number(ensemble.skippedAttemptsByEarlySuccess || 0);
+    acc.rescueAttempts += Number(rescue.totalAttempts || 0);
+    acc.candidatePositionDuplicateRemovedCount += Number(result.matrix?.candidateDetection?.candidatePositionDuplicateRemovedCount || 0);
+    acc.matrixElapsedMs += Number(result.matrix?.elapsedMs || 0);
+    acc.baselineElapsedMs += Number(result.baseline?.elapsedMs || 0);
+    for (const stat of ensemble.stats || []) {
+      acc.ensembleJsqrSuccesses += Number(stat.jsqrSuccesses || 0);
+      acc.ensembleZxingSuccesses += Number(stat.zxingSuccesses || 0);
+      acc.crossEngineDuplicateRemovedCount += Number(stat.crossEngineDuplicateRemovedCount || 0);
     }
-  }
-  return [...map.values()].sort((a, b) =>
-    a.countingIntegrityFailImageCount - b.countingIntegrityFailImageCount ||
-    b.physicalQrCountSum - a.physicalQrCountSum ||
-    b.completeImageCount - a.completeImageCount ||
-    b.zxingSuccesses - a.zxingSuccesses ||
-    b.jsqrSuccesses - a.jsqrSuccesses
-  );
+    return acc;
+  }, {
+    expected: 0,
+    baselinePhysicalUnique: 0,
+    ensemblePhysicalUnique: 0,
+    rescuePhysicalUnique: 0,
+    baselineCompleteImages: 0,
+    ensembleCompleteImages: 0,
+    rescueCompleteImages: 0,
+    ensembleCountingIntegrityFail: false,
+    rescueCountingIntegrityFail: false,
+    ensembleAttempts: 0,
+    skippedEnsembleAttempts: 0,
+    rescueAttempts: 0,
+    candidatePositionDuplicateRemovedCount: 0,
+    matrixElapsedMs: 0,
+    baselineElapsedMs: 0,
+    ensembleJsqrSuccesses: 0,
+    ensembleZxingSuccesses: 0,
+    crossEngineDuplicateRemovedCount: 0,
+  });
 }
 function publicResult(result) {
   return {
@@ -573,6 +712,9 @@ function publicResult(result) {
         : null,
     },
     matrix: result.matrix,
+    decodedRuntimeKindMismatch: result.groundTruthVehicleKind
+      ? result.matrix.decodedRuntimeVehicleKind !== result.groundTruthVehicleKind
+      : null,
   };
 }
 
@@ -660,49 +802,23 @@ export default function CertificateQrDecodeExperimentPage() {
     }
   };
 
-  const aggregate = aggregateConfigs(results);
-  const best = aggregate.find((config) => config.countingIntegrityFailImageCount === 0) || aggregate[0] || null;
   const gtReady = results.length === 8 && results.every((r) => Number.isFinite(r.groundTruthExpectedQrCount));
-  const bestHasIntegrityFail = Boolean(best?.countingIntegrityFailImageCount);
-  const candidateTotals = gtReady && best && !bestHasIntegrityFail
-    ? results.reduce((acc, r) => {
-        const config = r.matrix.configs.find((c) => c.id === best.id);
-        const count = Number(config?.physicalUniqueQrCount || 0);
-        acc.expected += r.groundTruthExpectedQrCount;
-        acc.physicalUnique += count;
-        if (count === r.groundTruthExpectedQrCount) acc.completeImages += 1;
-        acc.jsqrSuccesses += Number(config?.jsqrSuccesses || 0);
-        acc.zxingSuccesses += Number(config?.zxingSuccesses || 0);
-        acc.crossEngineDuplicateRemovedCount += Number(config?.crossEngineDuplicateRemovedCount || 0);
-        acc.crossCandidatePayloadDuplicateRemovedCount += Number(config?.crossCandidatePayloadDuplicateRemovedCount || 0);
-        acc.candidatePositionDuplicateRemovedCount += Number(r.matrix?.candidateDetection?.candidatePositionDuplicateRemovedCount || 0);
-        acc.elapsedMs += Number(r.matrix?.elapsedMs || 0);
-        return acc;
-      }, {
-        expected: 0,
-        physicalUnique: 0,
-        completeImages: 0,
-        jsqrSuccesses: 0,
-        zxingSuccesses: 0,
-        crossEngineDuplicateRemovedCount: 0,
-        crossCandidatePayloadDuplicateRemovedCount: 0,
-        candidatePositionDuplicateRemovedCount: 0,
-        elapsedMs: 0,
-      })
+  const totals = gtReady ? aggregateExperiment(results) : null;
+  const ensembleRate = totals && !totals.ensembleCountingIntegrityFail && totals.expected
+    ? Number((totals.ensemblePhysicalUnique / totals.expected).toFixed(4))
     : null;
-  const baselineTotals = gtReady
-    ? results.reduce((acc, r) => {
-        acc.expected += r.groundTruthExpectedQrCount;
-        acc.physicalUnique += r.baseline.qrCount;
-        if (r.baseline.qrCount === r.groundTruthExpectedQrCount) acc.completeImages += 1;
-        if (r.baseline.qrCount > r.groundTruthExpectedQrCount) acc.countingIntegrityFail = true;
-        acc.elapsedMs += Number(r.baseline.elapsedMs || 0);
-        return acc;
-      }, { expected: 0, physicalUnique: 0, completeImages: 0, countingIntegrityFail: false, elapsedMs: 0 })
+  const rescueRate = totals && !totals.rescueCountingIntegrityFail && totals.expected
+    ? Number((totals.rescuePhysicalUnique / totals.expected).toFixed(4))
+    : null;
+  const averageEnsembleAttemptsPerCandidate = results.length
+    ? (() => {
+        const candidates = results.reduce((sum, r) => sum + Number(r.matrix?.candidateDetection?.conservativePhysicalCandidateCount || 0), 0);
+        return candidates ? Number((Number(totals?.ensembleAttempts || 0) / candidates).toFixed(3)) : 0;
+      })()
     : null;
 
   const summary = JSON.stringify({
-    schema: "icb-certificate-qr-decode-experiment-summary-v2",
+    schema: "icb-certificate-qr-decode-experiment-summary-v3",
     generatedAt: new Date().toISOString(),
     branchRole: "experimental-only",
     pathname: PATHNAME,
@@ -715,30 +831,39 @@ export default function CertificateQrDecodeExperimentPage() {
     },
     groundTruth: {
       ready: gtReady,
-      totalExpectedQrCount: gtReady ? results.reduce((sum, r) => sum + r.groundTruthExpectedQrCount, 0) : null,
+      totalExpectedQrCount: gtReady ? 47 : null,
       runtimeExpectedUsedAsGroundTruth: false,
     },
-    baselineTotals: baselineTotals ? {
-      ...baselineTotals,
-      qrAcquisitionRate: !baselineTotals.countingIntegrityFail && baselineTotals.expected
-        ? Number((baselineTotals.physicalUnique / baselineTotals.expected).toFixed(4))
-        : null,
+    baselineTotals: totals ? {
+      physicalUniqueQrCount: totals.baselinePhysicalUnique,
+      expectedQrCount: totals.expected,
+      qrAcquisitionRate: totals.expected ? Number((totals.baselinePhysicalUnique / totals.expected).toFixed(4)) : null,
+      completeImageCount: totals.baselineCompleteImages,
+      elapsedMs: totals.baselineElapsedMs,
     } : null,
-    selectedCandidateConfig: best ? {
-      ...best,
-      usableForRate: !bestHasIntegrityFail,
+    ensembleTotals: totals ? {
+      physicalUniqueQrCount: totals.ensemblePhysicalUnique,
+      expectedQrCount: totals.expected,
+      qrAcquisitionRate: ensembleRate,
+      completeImageCount: totals.ensembleCompleteImages,
+      countingIntegrityFail: totals.ensembleCountingIntegrityFail,
+      totalAttempts: totals.ensembleAttempts,
+      averageAttemptsPerPhysicalCandidate: averageEnsembleAttemptsPerCandidate,
+      skippedAttemptsByEarlySuccess: totals.skippedEnsembleAttempts,
+      jsqrSuccesses: totals.ensembleJsqrSuccesses,
+      zxingSuccesses: totals.ensembleZxingSuccesses,
+      crossEngineDuplicateRemovedCount: totals.crossEngineDuplicateRemovedCount,
+      candidatePositionDuplicateRemovedCount: totals.candidatePositionDuplicateRemovedCount,
+      elapsedMs: totals.matrixElapsedMs,
     } : null,
-    candidateTotals: candidateTotals ? {
-      ...candidateTotals,
-      qrAcquisitionRate: candidateTotals.expected
-        ? Number((candidateTotals.physicalUnique / candidateTotals.expected).toFixed(4))
-        : null,
-      countingIntegrityFail: false,
-    } : {
-      countingIntegrityFail: bestHasIntegrityFail,
-      qrAcquisitionRate: null,
-    },
-    configAggregate: aggregate,
+    rescueStudyTotals: totals ? {
+      physicalUniqueQrCountAfterRescue: totals.rescuePhysicalUnique,
+      expectedQrCount: totals.expected,
+      qrAcquisitionRateAfterRescue: rescueRate,
+      completeImageCountAfterRescue: totals.rescueCompleteImages,
+      countingIntegrityFail: totals.rescueCountingIntegrityFail,
+      totalRescueAttempts: totals.rescueAttempts,
+    } : null,
     results: results.map(publicResult),
   }, null, 2);
 
@@ -759,7 +884,7 @@ export default function CertificateQrDecodeExperimentPage() {
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
       <h1>車検証QR decode A/B 実験</h1>
-      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。改善候補は同じ画像をブラウザ内だけで dynamic XY候補を物理クラスタリングし、3つのraw color有力構成だけで比較します。</p>
+      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。改善候補はdynamic XY物理候補ごとに3段adaptive fallbackし、未取得候補だけgeneric rescue変換を比較します。</p>
       <p><b>禁止:</b> QR payloadの表示・保存・送信。本ページのsummaryは座標・設定・成功/失敗・件数のみです。</p>
 
       <section style={{ border: "1px solid #ccc", borderRadius: 12, padding: 14 }}>
@@ -822,25 +947,32 @@ export default function CertificateQrDecodeExperimentPage() {
 
       <section style={{ marginTop: 18 }}>
         <h2>画像別</h2>
-        {results.map((r) => {
-          const bestRow = r.matrix.configs.find((c) => c.id === best?.id);
-          return (
-            <div key={r.fileName} style={{ borderBottom: "1px solid #ddd", padding: "10px 0" }}>
-              <b>{r.fileName}</b> — GT {r.groundTruthExpectedQrCount ?? "未設定"} —
-              Baseline {r.baseline.qrCount} QR / jsQR {r.baseline.jsqrSuccesses}/{r.baseline.jsqrAttempts} / ZXing {r.baseline.zxingSuccesses}/{r.baseline.zxingAttempts} / {r.baseline.elapsedMs}ms —
-              Physical candidates {r.matrix.candidateDetection.physicalCandidateCount} — duplicate positions removed {r.matrix.candidateDetection.candidatePositionDuplicateRemovedCount} — best-global physical {bestRow?.physicalUniqueQrCount ?? "-"} QR {bestRow?.countingIntegrityFail ? " / COUNTING FAIL" : ""} — matrix {r.matrix.elapsedMs}ms
-            </div>
-          );
-        })}
+        {results.map((r) => (
+          <div key={r.fileName} style={{ borderBottom: "1px solid #ddd", padding: "10px 0" }}>
+            <b>{r.fileName}</b> — GT {r.groundTruthExpectedQrCount ?? "未設定"} —
+            Baseline {r.baseline.qrCount} —
+            Ensemble {r.matrix.ensemble.physicalUniqueQrCount} {r.matrix.ensemble.countingIntegrityFail ? "COUNTING FAIL" : ""} —
+            Rescue後 {r.matrix.rescueStudy.physicalUniqueQrCountAfterRescue} {r.matrix.rescueStudy.countingIntegrityFail ? "COUNTING FAIL" : ""} —
+            candidates {r.matrix.candidateDetection.conservativePhysicalCandidateCount}
+            / previous-cluster {r.matrix.candidateDetection.previousStylePhysicalCandidateCount} —
+            avg attempt {r.matrix.ensemble.averageAttemptsPerPhysicalCandidate} —
+            skip {r.matrix.ensemble.skippedAttemptsByEarlySuccess} —
+            {r.matrix.elapsedMs}ms —
+            decoded kind {r.matrix.decodedRuntimeVehicleKind || "?"}
+          </div>
+        ))}
       </section>
 
       <section style={{ marginTop: 18 }}>
-        <h2>共通設定ランキング</h2>
-        {aggregate.slice(0, 11).map((c, i) => (
-          <div key={c.id} style={{ padding: 6, borderBottom: "1px solid #eee" }}>
-            {i + 1}. {c.id} — physical QR sum {c.physicalQrCountSum} — complete {c.completeImageCount}/8 — integrity FAIL {c.countingIntegrityFailImageCount} — jsQR {c.jsqrSuccesses}/{c.jsqrAttempts} — ZXing {c.zxingSuccesses}/{c.zxingAttempts} — cross-engine dedupe {c.crossEngineDuplicateRemovedCount}
-          </div>
-        ))}
+        <h2>Adaptive fallback 集計</h2>
+        <div>順番: {ENSEMBLE_CONFIGS.map((c) => c.id).join(" → ")}</div>
+        <div>Ground Truth合計: 47 QR</div>
+        <div>Baseline: {totals ? `${totals.baselinePhysicalUnique}/${totals.expected}` : "-"}</div>
+        <div>Ensemble: {totals ? `${totals.ensemblePhysicalUnique}/${totals.expected}` : "-"} / rate {ensembleRate ?? "-"}</div>
+        <div>完全取得: {totals ? `${totals.ensembleCompleteImages}/8` : "-"}</div>
+        <div>平均attempt/候補: {averageEnsembleAttemptsPerCandidate ?? "-"}</div>
+        <div>早期成功skip: {totals?.skippedEnsembleAttempts ?? "-"}</div>
+        <div>Rescue study後: {totals ? `${totals.rescuePhysicalUnique}/${totals.expected}` : "-"} / rate {rescueRate ?? "-"}</div>
       </section>
 
       <section style={{ marginTop: 18 }}>
