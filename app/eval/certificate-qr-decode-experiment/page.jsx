@@ -616,7 +616,7 @@ function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
 async function buildCandidateVisualDiagnostics(file, matrix) {
   const raw = await sourceCanvas(file);
   const normalized = normalizeCertificateCanvas(raw, 1800);
-  const candidates = matrix?.candidateDetection?.physicalCandidates || [];
+  const candidates = matrix?.candidateRefinement?.refinedCandidates || [];
   const scale = Math.min(1, 1400 / Math.max(raw.width, raw.height));
   const overlay = document.createElement("canvas");
   overlay.width = Math.max(1, Math.round(raw.width * scale));
@@ -630,37 +630,37 @@ async function buildCandidateVisualDiagnostics(file, matrix) {
   const cropUrls = [];
   try {
     for (const candidate of candidates) {
-      const center = paperPoint(normalized.paper, raw, candidate);
-      const smallW = paperWidthPx(normalized.paper, raw) * ENSEMBLE_CONFIGS[0].widthRel;
-      const mediumW = paperWidthPx(normalized.paper, raw) * ENSEMBLE_CONFIGS[1].widthRel;
-      const drawBox = (cropW, stroke, labelOffset) => {
-        const sx = (center.x - cropW / 2) * scale;
-        const sy = (center.y - cropW / 2) * scale;
-        const sw = cropW * scale;
-        ctx.strokeStyle = stroke;
-        ctx.strokeRect(sx, sy, sw, sw);
-        if (labelOffset === 0) {
-          ctx.fillStyle = "rgba(255,45,85,.92)";
-          ctx.fillRect(sx, Math.max(0, sy - 20), 38, 20);
-          ctx.fillStyle = "#fff";
-          ctx.fillText(String(candidate.index), sx + 4, Math.max(0, sy - 18));
-        }
-      };
-      drawBox(mediumW, "#0a84ff", 1);
-      drawBox(smallW, "#ff2d55", 0);
+      const coarseCenter = paperPoint(normalized.paper, raw, candidate);
+      const currentSmallW = paperWidthPx(normalized.paper, raw) * ENSEMBLE_CONFIGS[0].widthRel;
+      const rx = Number(candidate.refinedRawCenterX || coarseCenter.x);
+      const ry = Number(candidate.refinedRawCenterY || coarseCenter.y);
+      const rw = Number(candidate.refinedRawBboxWidth || currentSmallW * .55);
+      const rh = Number(candidate.refinedRawBboxHeight || rw);
 
-      const smallCrop = cropCandidate(raw, normalized.paper, candidate, ENSEMBLE_CONFIGS[0]);
-      const mediumCrop = cropCandidate(raw, normalized.paper, candidate, ENSEMBLE_CONFIGS[1]);
-      const [smallUrl, mediumUrl] = await Promise.all([
-        canvasToObjectUrl(smallCrop),
-        canvasToObjectUrl(mediumCrop),
+      ctx.strokeStyle = "#ff2d55";
+      ctx.strokeRect((coarseCenter.x - currentSmallW / 2) * scale, (coarseCenter.y - currentSmallW / 2) * scale, currentSmallW * scale, currentSmallW * scale);
+      ctx.strokeStyle = "#34c759";
+      ctx.strokeRect((rx - rw / 2) * scale, (ry - rh / 2) * scale, rw * scale, rh * scale);
+      ctx.fillStyle = "rgba(52,199,89,.92)";
+      ctx.fillRect((rx - rw / 2) * scale, Math.max(0, (ry - rh / 2) * scale - 20), 42, 20);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(String(candidate.index), (rx - rw / 2) * scale + 4, Math.max(0, (ry - rh / 2) * scale - 18));
+
+      const currentSmall = cropCandidate(raw, normalized.paper, candidate, ENSEMBLE_CONFIGS[0]);
+      const tightSmall = cropCandidate(raw, normalized.paper, candidate, REFINED_CORE_CONFIGS[0]);
+      const tightMedium = cropCandidate(raw, normalized.paper, candidate, REFINED_CORE_CONFIGS[1]);
+      const [currentSmallUrl, tightSmallUrl, tightMediumUrl] = await Promise.all([
+        canvasToObjectUrl(currentSmall),
+        canvasToObjectUrl(tightSmall),
+        canvasToObjectUrl(tightMedium),
       ]);
-      smallCrop.width = 1; smallCrop.height = 1;
-      mediumCrop.width = 1; mediumCrop.height = 1;
-      cropUrls.push({ candidateIndex: candidate.index, smallUrl, mediumUrl });
+      currentSmall.width = 1; currentSmall.height = 1;
+      tightSmall.width = 1; tightSmall.height = 1;
+      tightMedium.width = 1; tightMedium.height = 1;
+      cropUrls.push({ candidateIndex: candidate.index, currentSmallUrl, tightSmallUrl, tightMediumUrl });
     }
     const overlayUrl = await canvasToObjectUrl(overlay);
-    return { overlayUrl, cropUrls, legend: { small: "red", medium: "blue" } };
+    return { overlayUrl, cropUrls, legend: { currentSmall: "red", refinedBbox: "green" } };
   } finally {
     overlay.width = 1;
     overlay.height = 1;
@@ -674,8 +674,9 @@ function revokeVisualDiagnosticEntry(entry) {
   if (!entry) return;
   if (entry.overlayUrl) URL.revokeObjectURL(entry.overlayUrl);
   for (const item of entry.cropUrls || []) {
-    if (item?.smallUrl) URL.revokeObjectURL(item.smallUrl);
-    if (item?.mediumUrl) URL.revokeObjectURL(item.mediumUrl);
+    if (item?.currentSmallUrl) URL.revokeObjectURL(item.currentSmallUrl);
+    if (item?.tightSmallUrl) URL.revokeObjectURL(item.tightSmallUrl);
+    if (item?.tightMediumUrl) URL.revokeObjectURL(item.tightMediumUrl);
   }
 }
 function canonicalText(value) {
@@ -1901,8 +1902,8 @@ export default function CertificateQrDecodeExperimentPage() {
       </section>
 
       <section style={{ marginTop: 18 }}>
-        <h2>0942 / 0944 browser-local candidate crop診断</h2>
-        <p style={{ fontSize: 12 }}>画像/cropは端末ローカルobjectURLのみ。赤枠=small、青枠=medium。summaryには画像を含めません。</p>
+        <h2>0942 / 0944 browser-local refine診断</h2>
+        <p style={{ fontSize: 12 }}>画像/cropは端末ローカルobjectURLのみ。赤枠=旧current-small、緑枠=QR-like refined bbox。summaryには画像を含めません。</p>
         {["IMG_0942.jpeg", "IMG_0944.jpeg"].map((name) => {
           const visual = visualDiagnostics[name];
           const result = results.find((r) => r.fileName === name);
@@ -1910,37 +1911,45 @@ export default function CertificateQrDecodeExperimentPage() {
           return (
             <div key={name} style={{ marginTop: 16, border: "1px solid #ccc", borderRadius: 12, padding: 12 }}>
               <h3 style={{ marginTop: 0 }}>{name}</h3>
-              <img src={visual.overlayUrl} alt={`${name} candidate overlay`} style={{ width: "100%", maxHeight: 520, objectFit: "contain", background: "#f4f4f4" }} />
+              <img src={visual.overlayUrl} alt={`${name} refined candidate overlay`} style={{ width: "100%", maxHeight: 520, objectFit: "contain", background: "#f4f4f4" }} />
               <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
                 {visual.cropUrls.map((crop) => {
                   const diagnostic = result.matrix.candidateDiagnostics.find((item) => item.candidateIndex === crop.candidateIndex);
+                  const refined = result.matrix.candidateRefinement.refinedCandidates.find((item) => item.index === crop.candidateIndex);
                   const q = diagnostic?.quality || {};
                   return (
                     <div key={crop.candidateIndex} style={{ borderTop: "1px solid #ddd", paddingTop: 10 }}>
                       <b>candidate {crop.candidateIndex}</b>
                       <div style={{ fontSize: 12, marginTop: 4 }}>
-                        x={diagnostic?.x} y={diagnostic?.y} score={diagnostic?.score} /
-                        ensemble={String(Boolean(diagnostic?.ensembleSuccess))} /
-                        offset={String(Boolean(diagnostic?.offsetSuccess))} /
-                        rescue={String(Boolean(diagnostic?.rescueSuccess))}
+                        x={diagnostic?.x} y={diagnostic?.y} / qrLike={diagnostic?.qrLikeScore} /
+                        B={String(Boolean(diagnostic?.coreSuccess))} /
+                        C={String(Boolean(diagnostic?.thresholdSuccess))} /
+                        D={String(Boolean(diagnostic?.rotateRescueSuccess))}
+                      </div>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>
+                        bboxRel {refined?.bboxWidthRel}×{refined?.bboxHeightRel} /
+                        refineOffset x={refined?.refineOffsetXRel} y={refined?.refineOffsetYRel} /
+                        axisBalance {refined?.axisBalance} /
+                        darkRatio {refined?.darkRatio}
                       </div>
                       <div style={{ fontSize: 12, marginTop: 4 }}>
                         crop {q.cropPixelWidth}×{q.cropPixelHeight}px /
                         contrastRange {q.localContrastRange} /
-                        lumaStd {q.localLumaStdDev} /
                         edge {q.edgeStrength} /
-                        blurVar {q.blurIndicatorLaplacianVariance} /
-                        docSkew {q.documentSkewDeg}° /
-                        perspectiveSpread {q.perspectiveSpreadDeg}°
+                        blurVar {q.blurIndicatorLaplacianVariance}
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginTop: 8 }}>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 700 }}>small 2x decoder crop</div>
-                          <img src={crop.smallUrl} alt={`${name} candidate ${crop.candidateIndex} small crop`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
+                          <div style={{ fontSize: 11, fontWeight: 700 }}>A current-small</div>
+                          <img src={crop.currentSmallUrl} alt={`${name} candidate ${crop.candidateIndex} current small`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
                         </div>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 700 }}>medium 3x decoder crop</div>
-                          <img src={crop.mediumUrl} alt={`${name} candidate ${crop.candidateIndex} medium crop`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
+                          <div style={{ fontSize: 11, fontWeight: 700 }}>B tight-small</div>
+                          <img src={crop.tightSmallUrl} alt={`${name} candidate ${crop.candidateIndex} tight small`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700 }}>B tight-medium</div>
+                          <img src={crop.tightMediumUrl} alt={`${name} candidate ${crop.candidateIndex} tight medium`} style={{ width: "100%", maxHeight: 220, objectFit: "contain", background: "#fff", border: "1px solid #ddd" }} />
                         </div>
                       </div>
                     </div>
