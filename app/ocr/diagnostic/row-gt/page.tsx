@@ -1,6 +1,6 @@
 "use client";
 
-import { PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { PointerEvent, useMemo, useRef, useState } from "react";
 
 type Band = {
   rowIndex: number;
@@ -123,12 +123,6 @@ export default function PartsOcrRowGtPage() {
     () => new Set(photos.map((p) => p.canonicalName)).size,
     [photos],
   );
-
-  useEffect(() => {
-    return () => {
-      photos.forEach((p) => URL.revokeObjectURL(p.url));
-    };
-  }, [photos]);
 
   function rebuildIndices(bands: Band[], height: number) {
     return [...bands]
