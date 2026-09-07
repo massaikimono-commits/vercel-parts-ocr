@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { consumeOCRTransferImage, prepareOCRInputFile } from "../transfer";
+import { applyProfileCostRule, detectSlipColumnProfile, type SlipColumnProfile } from "./slip-profiles";
 
 type Part = {
   id: string;
@@ -71,6 +72,15 @@ function normalize(text: string) {
 
 function labelText(text: string) {
   return normalize(text).replace(/[\s:：・|｜/／.()（）\[\]［］-]/g, "");
+}
+
+function labelsForProfile(profile: SlipColumnProfile | null): Record<ColumnKey, string[]> {
+  if (profile?.unitPriceTarget !== "retail") return LABELS;
+  return {
+    ...LABELS,
+    retail: [...new Set([...LABELS.retail, "単価"])],
+    cost: LABELS.cost.filter((label) => label !== "単価"),
+  };
 }
 
 function isHeaderLike(text: string) {
@@ -236,13 +246,14 @@ function findLabelInWords(words: Word[], labels: string[]) {
   return null;
 }
 
-function detectHeader(lines: OCRLine[]) {
+function detectHeader(lines: OCRLine[], profile: SlipColumnProfile | null) {
+  const labels = labelsForProfile(profile);
   let best: { index: number; matches: HeaderMatch[] } | null = null;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     const matches: HeaderMatch[] = [];
-    for (const key of Object.keys(LABELS) as ColumnKey[]) {
-      const found = findLabelInWords(line.words, LABELS[key]);
+    for (const key of Object.keys(labels) as ColumnKey[]) {
+      const found = findLabelInWords(line.words, labels[key]);
       if (found) matches.push({ key, x: found.x, label: found.label });
     }
     const list = [...new Map(matches.map((x) => [x.key, x])).values()];
@@ -257,7 +268,7 @@ function nearestColumn(word: Word, headers: HeaderMatch[]) {
   return [...headers].sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx))[0]?.key;
 }
 
-function parseByColumns(lines: OCRLine[], header: { index: number; matches: HeaderMatch[] }) {
+function parseByColumns(lines: OCRLine[], header: { index: number; matches: HeaderMatch[] }, profile: SlipColumnProfile | null) {
   const found: Part[] = [];
   let pendingName = "";
   const headers = header.matches;
@@ -275,6 +286,7 @@ function parseByColumns(lines: OCRLine[], header: { index: number; matches: Head
     let cost = hasCost ? moneyValue(cells.cost.join(" ")) : "";
     if (!hasRetail && hasCost) cost = moneyValue(cells.cost.join(" "));
     if (hasRetail && !hasCost) retail = moneyValue(cells.retail.join(" "));
+    cost = applyProfileCostRule(profile, cost);
     const hasPrice = Boolean(retail || cost);
     if (!hasPrice && rawName) { pendingName = pendingName ? `${pendingName} ${rawName}` : rawName; continue; }
     if (!hasPrice) continue;
@@ -291,7 +303,7 @@ function amountValues(line: string) {
   return matches.map((raw) => ({ raw, value: Number(raw.replace(/\D/g, "")) })).filter((x) => x.value >= 100 && x.value <= 5000000);
 }
 
-function fallbackParse(text: string) {
+function fallbackParse(text: string, profile: SlipColumnProfile | null) {
   const lines = normalize(text).split(/\n+/).map((x) => x.trim()).filter(Boolean);
   const found: Part[] = [];
   let previousName = "";
@@ -305,7 +317,9 @@ function fallbackParse(text: string) {
       if (!name) name = previousName;
       const small = before.match(/(?:^|\s)(\d{1,3})(?=\s|$)/g) || [];
       const qty = small.length ? qtyValue(small[small.length - 1]) || "1" : "1";
-      found.push({ id: uid(), name, qty, retail: amounts[0] ? String(amounts[0].value) : "", cost: amounts[1] ? String(amounts[1].value) : "", source: line });
+      const retail = amounts[0] ? String(amounts[0].value) : "";
+      const cost = applyProfileCostRule(profile, amounts[1] ? String(amounts[1].value) : "");
+      found.push({ id: uid(), name, qty, retail, cost, source: line });
       previousName = "";
     } else {
       const candidate = cleanName(line);
@@ -361,16 +375,18 @@ export default function GeneralOCRPage() {
       const text = result.data.text || "";
       const tsv = result.data.tsv || "";
       setRawText(text);
+      const profile = detectSlipColumnProfile(text);
       const lines = parseTSV(tsv);
-      const header = detectHeader(lines);
+      const header = detectHeader(lines, profile);
       let extracted: Part[] = [];
-      if (header && header.matches.length >= 3) extracted = parseByColumns(lines, header);
-      if (!extracted.length) extracted = fallbackParse(text);
+      if (header && header.matches.length >= 3) extracted = parseByColumns(lines, header, profile);
+      if (!extracted.length) extracted = fallbackParse(text, profile);
       extracted = dedupe(extracted);
       setParts(extracted);
+      const profileDebug = profile ? `帳票プロファイル: ${profile.label}\n価格意味: 単価→定価 / 仕入れ→空欄` : "帳票プロファイル: 汎用";
       const headerDebug = header ? `見出し行: ${header.index + 1}\n検出列: ${header.matches.map((x) => `${x.key}=${x.label}`).join(" / ")}` : "見出し行: 自動検出できず（全文フォールバック使用）";
       const lineDebug = lines.slice(0, 80).map((x, i) => `${i + 1}: ${x.text}`).join("\n");
-      setDebug(`${headerDebug}\n\nOCR行データ\n${lineDebug}`);
+      setDebug(`${profileDebug}\n${headerDebug}\n\nOCR行データ\n${lineDebug}`);
       setProgress(100);
       setMessage(extracted.length ? `${extracted.length}件を候補抽出しました。内容を確認して保存してください。` : "候補を自動抽出できませんでした。OCR全文は残してあるので、実物に合わせて調整できます。");
     } catch (error) {
