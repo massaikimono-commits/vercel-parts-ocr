@@ -149,12 +149,42 @@ async function sourceCanvas(file) {
     URL.revokeObjectURL(url);
   }
 }
-function cropCandidate(source, pageBounds, candidate, config) {
-  const b = pageBounds || { x: 0, y: 0, w: source.width, h: source.height };
-  const cropW = Math.max(12, b.w * config.widthRel);
+function paperPoint(pageGeometry, source, candidate) {
+  const q = Array.isArray(pageGeometry?.quad) && pageGeometry.quad.length === 4 ? pageGeometry.quad : null;
+  if (q) {
+    const x = Math.max(0, Math.min(1, Number(candidate.x) || 0));
+    const y = Math.max(0, Math.min(1, Number(candidate.y) || 0));
+    const top = {
+      x: q[0].x * (1 - x) + q[1].x * x,
+      y: q[0].y * (1 - x) + q[1].y * x,
+    };
+    const bottom = {
+      x: q[3].x * (1 - x) + q[2].x * x,
+      y: q[3].y * (1 - x) + q[2].y * x,
+    };
+    return {
+      x: top.x * (1 - y) + bottom.x * y,
+      y: top.y * (1 - y) + bottom.y * y,
+    };
+  }
+  const b = pageGeometry?.bounds || pageGeometry || { x: 0, y: 0, w: source.width, h: source.height };
+  return { x: b.x + b.w * candidate.x, y: b.y + b.h * candidate.y };
+}
+function paperWidthPx(pageGeometry, source) {
+  const q = Array.isArray(pageGeometry?.quad) && pageGeometry.quad.length === 4 ? pageGeometry.quad : null;
+  if (q) {
+    const top = Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y);
+    const bottom = Math.hypot(q[2].x - q[3].x, q[2].y - q[3].y);
+    return Math.max(1, (top + bottom) / 2);
+  }
+  return Math.max(1, Number(pageGeometry?.bounds?.w || pageGeometry?.w || source.width));
+}
+function cropCandidate(source, pageGeometry, candidate, config) {
+  const center = paperPoint(pageGeometry, source, candidate);
+  const cropW = Math.max(12, paperWidthPx(pageGeometry, source) * config.widthRel);
   const cropH = cropW;
-  let sx = b.x + b.w * candidate.x - cropW / 2;
-  let sy = b.y + b.h * candidate.y - cropH / 2;
+  let sx = center.x - cropW / 2;
+  let sy = center.y - cropH / 2;
   sx = Math.max(0, Math.min(source.width - cropW, sx));
   sy = Math.max(0, Math.min(source.height - cropH, sy));
   const sw = Math.max(1, Math.min(source.width - sx, cropW));
@@ -316,10 +346,10 @@ async function runMatrix(file) {
       const row = { index: ci + 1, ...candidate, attempts: [], successCount: 0 };
       for (const config of CONFIGS) {
         const source = config.source === "raw" ? raw : norm;
-        const bounds = config.source === "raw"
-          ? normalized.paper?.bounds
-          : { x: 0, y: 0, w: norm.width, h: norm.height };
-        const canvas = cropCandidate(source, bounds, candidate, config);
+        const pageGeometry = config.source === "raw"
+          ? normalized.paper
+          : { bounds: { x: 0, y: 0, w: norm.width, h: norm.height } };
+        const canvas = cropCandidate(source, pageGeometry, candidate, config);
         try {
           const stat = configs[config.id];
           stat.jsqrAttempts += 1;
