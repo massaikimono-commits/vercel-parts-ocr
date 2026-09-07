@@ -150,7 +150,7 @@ function classify(text: string): { mode: Mode; reason: string; auto: boolean } {
   const dedicatedFormatHeaders = ["受注数", "出庫数", "標準価格", "倉庫", "棚番", "受注残"];
   const formatHits = dedicatedFormatHeaders.filter((x) => t.includes(normalize(x)));
   if (formatHits.length >= 3) return { mode: "dedicated", reason: `専用伝票の列構成を検出: ${formatHits.join(" / ")}`, auto: true };
-  const genericHeaders = ["部品名称", "部品名", "品名", "商品名", "名称", "個数", "数量", "定価", "希望小売価格", "売価", "仕入れ", "仕入", "原価", "仕切", "仕切価格"];
+  const genericHeaders = ["部品名称", "部品名", "品名", "商品名", "名称", "個数", "数量", "定価", "単価", "希望小売価格", "売価", "仕入れ", "仕入", "原価", "仕切", "仕切価格"];
   const headerHits = genericHeaders.filter((x) => t.includes(normalize(x)));
   if (headerHits.length >= 3) return { mode: "general", reason: `汎用表の見出しを${headerHits.length}個検出: ${headerHits.slice(0, 6).join(" / ")}`, auto: true };
   return { mode: "unknown", reason: "専用伝票・汎用伝票のどちらかを安全に確定できませんでした。誤判定を避けるため自動移動を止めました。", auto: false };
