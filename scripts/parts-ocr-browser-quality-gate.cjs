@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { chromium } = require("playwright");
 
 function arg(name, fallback = "") {
@@ -10,19 +11,12 @@ const baseURL = arg("base-url", "http://127.0.0.1:3000").replace(/\/$/, "");
 const manifestPath = arg("manifest");
 const outPath = arg("out", "parts-ocr-quality-gate.json");
 const runDynamic = arg("dynamic", "false") === "true";
+const assetDir = arg("asset-dir", "");
 if (!manifestPath) throw new Error("--manifest is required");
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 if (!Array.isArray(manifest)) throw new Error("manifest must be an array");
-
-const READY_PATTERNS = [
-  /\d+件を抽出しました/,
-  /\d+件を候補抽出しました/,
-  /まだ部品行を抽出できませんでした/,
-  /候補を自動抽出できませんでした/,
-  /OCR処理でエラー/,
-  /汎用OCR処理でエラー/,
-];
+if (assetDir) fs.mkdirSync(assetDir, { recursive: true });
 
 function now() { return Date.now(); }
 
@@ -44,24 +38,28 @@ async function prepareInitialState(page) {
 
 async function waitForAutoDecision(page, timeoutMs) {
   await page.waitForFunction(() => {
-    const p = location.pathname;
-    if (p === "/ocr" || p === "/ocr/general") return true;
-    if (p !== "/ocr/auto") return true;
-    const body = document.body?.innerText || "";
-    return body.includes("判定保留") || body.includes("自動判定を確定できませんでした") || body.includes("自動判定を止めました");
+    if (location.pathname !== "/ocr/auto") return true;
+    const section = Array.from(document.querySelectorAll("section")).find((s) =>
+      (s.querySelector("h2")?.textContent || "").includes("判定結果")
+    );
+    if (!section) return false;
+    const firstDiv = section.querySelector("div");
+    const result = (firstDiv?.textContent || "").trim();
+    return result === "大一用品商会 専用OCR" || result === "汎用A4・他社伝票OCR" || result === "判定保留";
   }, { timeout: timeoutMs });
 }
 
+async function waitForExpectedRedirect(page, mode) {
+  if (mode !== "dedicated" && mode !== "general") return;
+  const target = mode === "dedicated" ? "/ocr" : "/ocr/general";
+  await page.waitForURL((url) => url.pathname === target, { timeout: 15000 }).catch(() => {});
+}
+
 async function waitForOcrCompletion(page, timeoutMs) {
-  await page.waitForFunction((patterns) => {
+  await page.waitForFunction(() => {
     const body = document.body?.innerText || "";
-    return patterns.some((s) => body.includes(s));
-  }, READY_PATTERNS.map((r) => r.source.replace(/\\d\+/, "")), { timeout: timeoutMs }).catch(async () => {
-    await page.waitForFunction(() => {
-      const body = document.body?.innerText || "";
-      return /\d+件を抽出しました|\d+件を候補抽出しました|まだ部品行を抽出できませんでした|候補を自動抽出できませんでした|OCR処理でエラー|汎用OCR処理でエラー/.test(body);
-    }, { timeout: timeoutMs });
-  });
+    return /\d+件を抽出しました|\d+件を候補抽出しました|まだ部品行を抽出できませんでした|候補を自動抽出できませんでした|OCR処理でエラー|汎用OCR処理でエラー/.test(body);
+  }, { timeout: timeoutMs });
 }
 
 async function extractParts(page) {
@@ -117,9 +115,14 @@ async function supplementalDynamic(page, file, timeoutMs) {
   return result;
 }
 
+function shouldCaptureAsset(url) {
+  return /tesseract|traineddata|tessdata|projectnaptha|jsdelivr|unpkg/i.test(url);
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const all = [];
+  const capturedAssets = {};
   try {
     for (const item of manifest) {
       const file = path.resolve(item.path);
@@ -140,6 +143,7 @@ async function supplementalDynamic(page, file, timeoutMs) {
         jsExceptions: [],
         timedOut: false,
         dynamic: null,
+        externalRequests: [],
       };
       if (!fs.existsSync(file)) {
         row.timedOut = true;
@@ -152,21 +156,59 @@ async function supplementalDynamic(page, file, timeoutMs) {
       await context.addInitScript(() => {
         setInterval(() => {
           if (location.pathname !== "/ocr/auto") return;
-          const body = document.body?.innerText || "";
+          const sections = Array.from(document.querySelectorAll("section"));
+          const resultSection = sections.find((s) => (s.querySelector("h2")?.textContent || "").includes("判定結果"));
+          const resultText = (resultSection?.querySelector("div")?.textContent || "").trim();
+          const mode = resultText === "大一用品商会 専用OCR" ? "dedicated"
+            : resultText === "汎用A4・他社伝票OCR" ? "general"
+            : resultText === "判定保留" ? "unknown" : "";
+          const reason = (resultSection?.querySelector("p")?.textContent || "").trim();
           const raw = document.querySelector("textarea")?.value || "";
-          const mode = body.includes("大一用品商会 専用OCR") ? "dedicated"
-            : body.includes("汎用A4・他社伝票OCR") ? "general"
-            : body.includes("判定保留") ? "unknown" : "";
-          sessionStorage.setItem("__qg_auto_snapshot", JSON.stringify({
-            pathname: location.pathname,
-            mode,
-            body: body.slice(0, 8000),
-            raw: raw.slice(0, 16000),
-          }));
-        }, 80);
+          if (mode) {
+            sessionStorage.setItem("__qg_auto_snapshot", JSON.stringify({
+              pathname: location.pathname,
+              mode,
+              reason,
+              resultText,
+              raw: raw.slice(0, 20000),
+            }));
+          }
+        }, 50);
       });
       const page = await context.newPage();
+      const assetTasks = [];
       page.on("pageerror", (err) => row.jsExceptions.push(err.message));
+      page.on("request", (req) => {
+        const url = req.url();
+        if (/^https?:\/\//.test(url) && !url.startsWith(baseURL)) {
+          if (!row.externalRequests.includes(url)) row.externalRequests.push(url);
+        }
+      });
+      if (assetDir) {
+        page.on("response", (response) => {
+          const url = response.url();
+          if (!shouldCaptureAsset(url) || !response.ok()) return;
+          const task = (async () => {
+            try {
+              const body = await response.body();
+              const hash = crypto.createHash("sha256").update(url).digest("hex").slice(0, 20);
+              const pathname = (() => { try { return new URL(url).pathname; } catch { return ""; } })();
+              const ext = path.extname(pathname).slice(0, 12) || ".bin";
+              const filename = hash + ext;
+              fs.writeFileSync(path.join(assetDir, filename), body);
+              capturedAssets[url] = {
+                file: filename,
+                contentType: response.headers()["content-type"] || "",
+                size: body.length,
+              };
+            } catch (e) {
+              capturedAssets[url] = { error: e instanceof Error ? e.message : String(e) };
+            }
+          })();
+          assetTasks.push(task);
+        });
+      }
+
       const started = now();
       try {
         await prepareInitialState(page);
@@ -175,14 +217,18 @@ async function supplementalDynamic(page, file, timeoutMs) {
         if (!count) throw new Error("no file input on /ocr/auto");
         await inputs.nth(Math.max(0, count - 1)).setInputFiles(file);
         await waitForAutoDecision(page, Number(item.autoTimeoutMs || 300000));
-        row.finalPathname = new URL(page.url()).pathname;
 
-        const snapshot = await getAutoSnapshot(page);
-        row.autoDecision = snapshot?.mode || (row.finalPathname === "/ocr" ? "dedicated" : row.finalPathname === "/ocr/general" ? "general" : "unknown");
-        const reasonLine = (snapshot?.body || "").split("\n").find((line) =>
-          line.includes("特徴を検出") || line.includes("列構成を検出") || line.includes("汎用表の見出し") || line.includes("安全に確定")
-        );
-        row.autoReason = reasonLine || "";
+        let snapshot = await getAutoSnapshot(page);
+        row.autoDecision = snapshot?.mode || "";
+        row.autoReason = snapshot?.reason || "";
+        await waitForExpectedRedirect(page, row.autoDecision);
+        row.finalPathname = new URL(page.url()).pathname;
+        if (!row.autoDecision) {
+          row.autoDecision = row.finalPathname === "/ocr" ? "dedicated"
+            : row.finalPathname === "/ocr/general" ? "general" : "unknown";
+          snapshot = await getAutoSnapshot(page);
+          row.autoReason = snapshot?.reason || row.autoReason;
+        }
 
         if (row.finalPathname === "/ocr" || row.finalPathname === "/ocr/general") {
           await waitForOcrCompletion(page, Number(item.ocrTimeoutMs || 600000));
@@ -208,7 +254,11 @@ async function supplementalDynamic(page, file, timeoutMs) {
         row.timedOut = /Timeout/i.test(String(e));
         row.jsExceptions.push(e instanceof Error ? e.message : String(e));
         try { row.finalPathname = new URL(page.url()).pathname; } catch {}
+        const snapshot = await getAutoSnapshot(page).catch(() => null);
+        if (!row.autoDecision && snapshot?.mode) row.autoDecision = snapshot.mode;
+        if (!row.autoReason && snapshot?.reason) row.autoReason = snapshot.reason;
       } finally {
+        await Promise.allSettled(assetTasks);
         await context.close();
       }
       all.push(row);
@@ -217,11 +267,15 @@ async function supplementalDynamic(page, file, timeoutMs) {
   } finally {
     await browser.close();
   }
+  if (assetDir) {
+    fs.writeFileSync(path.join(assetDir, "assets-manifest.json"), JSON.stringify(capturedAssets, null, 2));
+  }
   fs.writeFileSync(outPath, JSON.stringify({
     generatedAt: new Date().toISOString(),
     baseURL,
     viewport: { width: 1280, height: 1600 },
     results: all,
+    capturedAssets,
   }, null, 2));
 })().catch((e) => {
   console.error(e);
