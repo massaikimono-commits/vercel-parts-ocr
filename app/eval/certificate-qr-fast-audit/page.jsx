@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 
-const REQUIRED_NAMES = Array.from({ length: 8 }, (_, i) => `IMG_${940 + i}.jpeg`);
+const REQUIRED_NAMES = Array.from({ length: 8 }, (_, i) => `IMG_${String(940 + i).padStart(4, "0")}.jpeg`);
 const PATHNAME = "/vehicle-workflow-v2";
 const MAX_WAIT_MS = 70000;
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
