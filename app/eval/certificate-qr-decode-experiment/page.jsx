@@ -1625,30 +1625,23 @@ export default function CertificateQrDecodeExperimentPage() {
 
   const gtReady = results.length === 8 && results.every((r) => Number.isFinite(r.groundTruthExpectedQrCount));
   const totals = gtReady ? aggregateExperiment(results) : null;
-  const ensembleRate = totals && !totals.ensembleCountingIntegrityFail && totals.expected
-    ? Number((totals.ensemblePhysicalUnique / totals.expected).toFixed(4))
+  const rate = (count, fail) => totals && !fail && totals.expected
+    ? Number((Number(count || 0) / totals.expected).toFixed(4))
     : null;
-  const offsetRate = totals && !totals.offsetCountingIntegrityFail && totals.expected
-    ? Number((totals.offsetPhysicalUnique / totals.expected).toFixed(4))
-    : null;
-  const rescueRate = totals && !totals.rescueCountingIntegrityFail && totals.expected
-    ? Number((totals.rescuePhysicalUnique / totals.expected).toFixed(4))
-    : null;
-  const averageEnsembleAttemptsPerCandidate = results.length
-    ? (() => {
-        const candidates = results.reduce((sum, r) => sum + Number(r.matrix?.candidateDetection?.conservativePhysicalCandidateCount || 0), 0);
-        return candidates ? Number((Number(totals?.ensembleAttempts || 0) / candidates).toFixed(3)) : 0;
-      })()
-    : null;
+  const currentRate = rate(totals?.currentPhysicalUnique, totals?.currentCountingIntegrityFail);
+  const coreRate = rate(totals?.corePhysicalUnique, totals?.coreCountingIntegrityFail);
+  const thresholdRate = rate(totals?.thresholdPhysicalUnique, totals?.thresholdCountingIntegrityFail);
+  const rescueRate = rate(totals?.rescuePhysicalUnique, totals?.rescueCountingIntegrityFail);
   const runtimeVehicleKindCorrectCount = gtReady
     ? results.filter((r) => r.matrix?.decodedRuntimeVehicleKind === r.groundTruthVehicleKind).length
     : null;
   const runtimeVehicleKindAccuracy = gtReady
     ? Number((runtimeVehicleKindCorrectCount / 8).toFixed(4))
     : null;
+  const sumStats = (map, key) => Object.values(map || {}).reduce((sum, item) => sum + Number(item?.[key] || 0), 0);
 
   const summary = JSON.stringify({
-    schema: "icb-certificate-qr-decode-experiment-summary-v4",
+    schema: "icb-certificate-qr-decode-experiment-summary-v5",
     generatedAt: new Date().toISOString(),
     branchRole: "experimental-only",
     pathname: PATHNAME,
@@ -1675,47 +1668,88 @@ export default function CertificateQrDecodeExperimentPage() {
       completeImageCount: totals.baselineCompleteImages,
       baselineElapsedMs: totals.baselineElapsedMs,
     } : null,
-    ensembleTotals: totals ? {
-      physicalUniqueQrCount: totals.ensemblePhysicalUnique,
+    aCurrentEnsembleTotals: totals ? {
+      physicalUniqueQrCount: totals.currentPhysicalUnique,
       expectedQrCount: totals.expected,
-      qrAcquisitionRate: ensembleRate,
-      completeImageCount: totals.ensembleCompleteImages,
-      countingIntegrityFail: totals.ensembleCountingIntegrityFail,
-      totalAttempts: totals.ensembleAttempts,
-      averageAttemptsPerPhysicalCandidate: averageEnsembleAttemptsPerCandidate,
-      skippedAttemptsByEarlySuccess: totals.skippedEnsembleAttempts,
-      jsqrSuccesses: totals.ensembleJsqrSuccesses,
-      zxingSuccesses: totals.ensembleZxingSuccesses,
-      crossEngineDuplicateRemovedCount: totals.crossEngineDuplicateRemovedCount,
-      candidatePositionDuplicateRemovedCount: totals.candidatePositionDuplicateRemovedCount,
-      ensembleOnlyElapsedMs: totals.ensembleOnlyElapsedMs,
+      qrAcquisitionRate: currentRate,
+      completeImageCount: totals.currentCompleteImages,
+      countingIntegrityFail: totals.currentCountingIntegrityFail,
+      jsqrSuccesses: sumStats(totals.currentStats, "jsqrSuccesses"),
+      zxingSuccesses: sumStats(totals.currentStats, "zxingSuccesses"),
+      crossEngineConflictCount: sumStats(totals.currentStats, "crossEngineConflictCount"),
+      currentEnsembleElapsedMs: totals.currentEnsembleElapsedMs,
+      stats: Object.values(totals.currentStats),
     } : null,
-    offsetSweepTotals: totals ? {
-      physicalUniqueQrCountAfterOffset: totals.offsetPhysicalUnique,
+    bRefinedCoreTotals: totals ? {
+      physicalUniqueQrCount: totals.corePhysicalUnique,
       expectedQrCount: totals.expected,
-      qrAcquisitionRateAfterOffset: offsetRate,
-      completeImageCountAfterOffset: totals.offsetCompleteImages,
-      countingIntegrityFail: totals.offsetCountingIntegrityFail,
-      actualDecodeAttempts: totals.offsetAttempts,
-      skippedAttemptsBySuccess: totals.skippedOffsetAttempts,
-      offsetSweepElapsedMs: totals.offsetSweepElapsedMs,
-      stats: Object.values(totals.offsetById),
+      qrAcquisitionRate: coreRate,
+      completeImageCount: totals.coreCompleteImages,
+      countingIntegrityFail: totals.coreCountingIntegrityFail,
+      jsqrSuccesses: sumStats(totals.coreStats, "jsqrSuccesses"),
+      zxingSuccesses: sumStats(totals.coreStats, "zxingSuccesses"),
+      crossEngineConflictCount: sumStats(totals.coreStats, "crossEngineConflictCount"),
+      refinedCoreElapsedMs: totals.refinedCoreElapsedMs,
+      stats: Object.values(totals.coreStats),
     } : null,
-    rescueStudyTotals: totals ? {
+    candidateRefinementTotals: totals ? {
+      coarseCandidateCount: totals.coarseCandidateCount,
+      refinedCandidateCount: totals.refinedCandidateCount,
+      weakRejectedCount: totals.weakRejectedCount,
+      overlapDuplicateMergedCount: totals.overlapDuplicateMergedCount,
+      falseOrDuplicateCandidateReductionCount: totals.falseOrDuplicateCandidateReductionCount,
+      candidateRefineElapsedMs: totals.candidateRefineElapsedMs,
+    } : null,
+    cThresholdTotals: totals ? {
+      physicalUniqueQrCountAfterThreshold: totals.thresholdPhysicalUnique,
+      expectedQrCount: totals.expected,
+      qrAcquisitionRateAfterThreshold: thresholdRate,
+      completeImageCountAfterThreshold: totals.thresholdCompleteImages,
+      countingIntegrityFail: totals.thresholdCountingIntegrityFail,
+      netNewCanonicalQrCount: Math.max(0, totals.thresholdPhysicalUnique - totals.corePhysicalUnique),
+      jsqrSuccesses: sumStats(totals.thresholdStats, "jsqrSuccesses"),
+      zxingSuccesses: sumStats(totals.thresholdStats, "zxingSuccesses"),
+      crossEngineConflictCount: sumStats(totals.thresholdStats, "crossEngineConflictCount"),
+      thresholdElapsedMs: totals.thresholdElapsedMs,
+      stats: Object.values(totals.thresholdStats),
+    } : null,
+    dRotateRescueTotals: totals ? {
       physicalUniqueQrCountAfterRescue: totals.rescuePhysicalUnique,
       expectedQrCount: totals.expected,
       qrAcquisitionRateAfterRescue: rescueRate,
       completeImageCountAfterRescue: totals.rescueCompleteImages,
       countingIntegrityFail: totals.rescueCountingIntegrityFail,
-      totalRescueAttempts: totals.rescueAttempts,
-      rescueOnlyElapsedMs: totals.rescueOnlyElapsedMs,
-      netNewCanonicalByConfig: Object.values(totals.rescueNetNewByConfig),
+      netNewCanonicalQrCount: Math.max(0, totals.rescuePhysicalUnique - totals.thresholdPhysicalUnique),
+      jsqrSuccesses: sumStats(totals.rescueStats, "jsqrSuccesses"),
+      zxingSuccesses: sumStats(totals.rescueStats, "zxingSuccesses"),
+      crossEngineConflictCount: sumStats(totals.rescueStats, "crossEngineConflictCount"),
+      rotateRescueElapsedMs: totals.rotateRescueElapsedMs,
+      stats: Object.values(totals.rescueStats),
+    } : null,
+    structuralValidationTotals: totals ? {
+      crossEngineConflictCount: totals.crossEngineConflictCount,
+      conflicts: totals.conflicts,
+      adoptionRule: "single structural pass wins; both pass requires structural score lead >=2; ambiguous conflict is not adopted",
+      payloadIncluded: false,
+    } : null,
+    zxingAuditTotals: totals ? {
+      tryHarderAlreadyEnabled: true,
+      hybridBinarizerAlreadyInBrowserDecodePath: true,
+      alsoInvertedHintAvailable: totals.zxingInvertedHintAvailable,
+      invertedProbeTestedCandidateCount: totals.zxingInvertedTestedCandidateCount,
+      invertedProbeStructuralPassCount: totals.zxingInvertedStructuralPassCount,
+      invertedProbeAdditionalStructuralPassVsBase: totals.zxingInvertedAdditionalStructuralPassVsBase,
+      invertedProbeElapsedMs: totals.zxingInvertedProbeElapsedMs,
+      includedInFinalQrCount: false,
     } : null,
     timingTotals: totals ? {
       baselineElapsedMs: totals.baselineElapsedMs,
-      ensembleOnlyElapsedMs: totals.ensembleOnlyElapsedMs,
-      offsetSweepElapsedMs: totals.offsetSweepElapsedMs,
-      rescueOnlyElapsedMs: totals.rescueOnlyElapsedMs,
+      currentEnsembleElapsedMs: totals.currentEnsembleElapsedMs,
+      candidateRefineElapsedMs: totals.candidateRefineElapsedMs,
+      refinedCoreElapsedMs: totals.refinedCoreElapsedMs,
+      thresholdElapsedMs: totals.thresholdElapsedMs,
+      rotateRescueElapsedMs: totals.rotateRescueElapsedMs,
+      zxingInvertedProbeElapsedMs: totals.zxingInvertedProbeElapsedMs,
       totalExperimentalElapsedMs: totals.totalExperimentalElapsedMs,
     } : null,
     runtimeVehicleKindTotals: gtReady ? {
@@ -1743,7 +1777,7 @@ export default function CertificateQrDecodeExperimentPage() {
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
       <h1>車検証QR decode A/B 実験</h1>
-      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。改善候補はdynamic XY物理候補ごとに3段adaptive fallbackし、未取得候補だけ5点offset sweep→generic rescue診断を行います。</p>
+      <p>Baselineは実際の {PATHNAME} → CertificateQrFast。A=現Ensemble、B=QR-like candidate精製＋tight raw crop、C=Otsu/adaptive threshold、D=±1° rescueだけを比較します。</p>
       <p><b>禁止:</b> QR payloadの表示・保存・送信。本ページのsummaryは座標・設定・成功/失敗・件数のみです。</p>
 
       <section style={{ border: "1px solid #ccc", borderRadius: 12, padding: 14 }}>
@@ -1808,46 +1842,60 @@ export default function CertificateQrDecodeExperimentPage() {
       </section>
 
       <section style={{ marginTop: 18 }}>
-        <h2>画像別</h2>
+        <h2>画像別 A/B/C/D</h2>
         {results.map((r) => (
           <div key={r.fileName} style={{ borderBottom: "1px solid #ddd", padding: "10px 0" }}>
             <b>{r.fileName}</b> — GT {r.groundTruthExpectedQrCount ?? "未設定"} —
-            Baseline {r.baseline.qrCount} —
-            Ensemble {r.matrix.ensemble.physicalUniqueQrCount} {r.matrix.ensemble.countingIntegrityFail ? "COUNTING FAIL" : ""} —
-            Offset後 {r.matrix.offsetSweep.physicalUniqueQrCountAfterOffset} {r.matrix.offsetSweep.countingIntegrityFail ? "COUNTING FAIL" : ""} —
-            Rescue後 {r.matrix.rescueStudy.physicalUniqueQrCountAfterRescue} {r.matrix.rescueStudy.countingIntegrityFail ? "COUNTING FAIL" : ""} —
-            candidates {r.matrix.candidateDetection.conservativePhysicalCandidateCount}
-            / previous-cluster {r.matrix.candidateDetection.previousStylePhysicalCandidateCount} —
-            ensemble {r.matrix.timing.ensembleOnlyElapsedMs}ms /
-            offset {r.matrix.timing.offsetSweepElapsedMs}ms /
-            rescue {r.matrix.timing.rescueOnlyElapsedMs}ms /
+            Baseline {r.baseline.qrCount} →
+            A {r.matrix.currentEnsemble.physicalUniqueQrCount} →
+            B {r.matrix.refinedCore.physicalUniqueQrCount} →
+            C {r.matrix.thresholdStage.physicalUniqueQrCountAfterThreshold} →
+            D {r.matrix.rotateRescueStage.physicalUniqueQrCountAfterRescue} —
+            candidates {r.matrix.candidateDetection.coarsePhysicalCandidateCount}→{r.matrix.candidateRefinement.refinedCandidateCount}
+            (削減 {r.matrix.candidateRefinement.falseOrDuplicateCandidateReductionCount}) —
+            A {r.matrix.timing.currentEnsembleElapsedMs}ms /
+            refine {r.matrix.timing.candidateRefineElapsedMs}ms /
+            B {r.matrix.timing.refinedCoreElapsedMs}ms /
+            threshold {r.matrix.timing.thresholdElapsedMs}ms /
+            ±1° {r.matrix.timing.rotateRescueElapsedMs}ms /
             total {r.matrix.timing.totalExperimentalElapsedMs}ms —
-            decoded kind {r.matrix.decodedRuntimeVehicleKind || "?"}
+            conflict {r.matrix.structuralValidation.crossEngineConflictCount} —
+            kind {r.matrix.decodedRuntimeVehicleKind || "?"}
           </div>
         ))}
       </section>
 
       <section style={{ marginTop: 18 }}>
-        <h2>Adaptive fallback 集計</h2>
-        <div>順番: {ENSEMBLE_CONFIGS.map((c) => c.id).join(" → ")}</div>
+        <h2>A/B/C/D 集計</h2>
         <div>Ground Truth合計: 47 QR</div>
         <div>Baseline: {totals ? `${totals.baselinePhysicalUnique}/${totals.expected}` : "-"}</div>
-        <div>Ensemble: {totals ? `${totals.ensemblePhysicalUnique}/${totals.expected}` : "-"} / rate {ensembleRate ?? "-"}</div>
-        <div>Offset後: {totals ? `${totals.offsetPhysicalUnique}/${totals.expected}` : "-"} / rate {offsetRate ?? "-"}</div>
-        <div>Rescue後: {totals ? `${totals.rescuePhysicalUnique}/${totals.expected}` : "-"} / rate {rescueRate ?? "-"}</div>
-        <div>完全取得: ensemble {totals ? `${totals.ensembleCompleteImages}/8` : "-"} / offset {totals ? `${totals.offsetCompleteImages}/8` : "-"} / rescue {totals ? `${totals.rescueCompleteImages}/8` : "-"}</div>
-        <div>平均ensemble attempt/候補: {averageEnsembleAttemptsPerCandidate ?? "-"}</div>
-        <div>早期成功skip: {totals?.skippedEnsembleAttempts ?? "-"}</div>
+        <div>A 現Ensemble: {totals ? `${totals.currentPhysicalUnique}/${totals.expected}` : "-"} / rate {currentRate ?? "-"}</div>
+        <div>B candidate精製+tight: {totals ? `${totals.corePhysicalUnique}/${totals.expected}` : "-"} / rate {coreRate ?? "-"}</div>
+        <div>C +threshold: {totals ? `${totals.thresholdPhysicalUnique}/${totals.expected}` : "-"} / rate {thresholdRate ?? "-"}</div>
+        <div>D +±1°: {totals ? `${totals.rescuePhysicalUnique}/${totals.expected}` : "-"} / rate {rescueRate ?? "-"}</div>
+        <div>完全取得: A {totals?.currentCompleteImages ?? "-"}/8 / B {totals?.coreCompleteImages ?? "-"}/8 / C {totals?.thresholdCompleteImages ?? "-"}/8 / D {totals?.rescueCompleteImages ?? "-"}/8</div>
+        <div>candidate: coarse {totals?.coarseCandidateCount ?? "-"} → refined {totals?.refinedCandidateCount ?? "-"} / weak除外 {totals?.weakRejectedCount ?? "-"} / overlap統合 {totals?.overlapDuplicateMergedCount ?? "-"}</div>
+        <div>crossEngineConflict: {totals?.crossEngineConflictCount ?? "-"}</div>
         <div>runtime車種判定: {runtimeVehicleKindCorrectCount ?? "-"}/8 ({runtimeVehicleKindAccuracy ?? "-"})</div>
-        <div>時間: baseline {totals?.baselineElapsedMs ?? "-"}ms / ensemble {totals?.ensembleOnlyElapsedMs ?? "-"}ms / offset {totals?.offsetSweepElapsedMs ?? "-"}ms / rescue {totals?.rescueOnlyElapsedMs ?? "-"}ms / experimental total {totals?.totalExperimentalElapsedMs ?? "-"}ms</div>
+        <div>時間: baseline {totals?.baselineElapsedMs ?? "-"}ms / A {totals?.currentEnsembleElapsedMs ?? "-"}ms / refine {totals?.candidateRefineElapsedMs ?? "-"}ms / B {totals?.refinedCoreElapsedMs ?? "-"}ms / threshold {totals?.thresholdElapsedMs ?? "-"}ms / ±1° {totals?.rotateRescueElapsedMs ?? "-"}ms / total {totals?.totalExperimentalElapsedMs ?? "-"}ms</div>
         {totals && (
           <div style={{ marginTop: 10 }}>
-            <b>Rescue純増（逐次canonical）</b>
-            {Object.values(totals.rescueNetNewByConfig).map((item) => (
-              <div key={item.id} style={{ fontSize: 13, marginTop: 3 }}>
-                {item.id}: netNew {item.netNewCanonicalQrCount} / physicalSuccess {item.physicalSuccesses} / attempts {item.attempts} / {item.recommendedKeep ? "KEEP候補" : "削除候補"}
-              </div>
+            <b>Threshold / ±1° 純増</b>
+            {Object.values(totals.thresholdStats).map((item) => (
+              <div key={item.id} style={{ fontSize: 13 }}>{item.id}: netNew {item.netNewCanonicalQrCount} / attempts {item.attempts}</div>
             ))}
+            {Object.values(totals.rescueStats).map((item) => (
+              <div key={item.id} style={{ fontSize: 13 }}>{item.id}: netNew {item.netNewCanonicalQrCount} / attempts {item.attempts}</div>
+            ))}
+          </div>
+        )}
+        {totals && (
+          <div style={{ marginTop: 10 }}>
+            <b>ZXing audit probe（最終件数には不算入）</b>
+            <div style={{ fontSize: 13 }}>
+              TRY_HARDER=on / HybridBinarizer=built-in / ALSO_INVERTED available={String(totals.zxingInvertedHintAvailable)} /
+              tested {totals.zxingInvertedTestedCandidateCount} / extra structural pass {totals.zxingInvertedAdditionalStructuralPassVsBase}
+            </div>
           </div>
         )}
       </section>
