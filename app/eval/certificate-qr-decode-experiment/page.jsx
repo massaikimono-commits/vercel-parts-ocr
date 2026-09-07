@@ -2091,6 +2091,127 @@ function buildImg0942AQuadTooSmallAudit(result,currentReferenceMedian) {
     imageIncluded:false,
   };
 }
+const IMG_0942_NEAR_THRESHOLD_COUNTERFACTUAL_TARGETS = Object.freeze([
+  {candidateIndex:3,tripletRank:1},
+  {candidateIndex:5,tripletRank:1},
+  {candidateIndex:5,tripletRank:2},
+]);
+async function runImg0942NearThresholdCounterfactualRescue({
+  file,raw,geometry,jsQR,reader,formalFinalPhysicalSafeCanonical,
+}) {
+  const fileName=normalizeFixedFileName(file)||safeName(file);
+  const started=performance.now();
+  if(fileName!=="IMG_0942.jpeg"){
+    return {
+      diagnosticOnly:true,
+      formalDecodeLogicChanged:false,
+      eligible:false,
+      targetFileName:"IMG_0942.jpeg",
+      attempts:[],
+      rescueNetNewCanonicalCount:0,
+      elapsedMs:Math.round(performance.now()-started),
+      payloadIncluded:false,
+    };
+  }
+  const diagnosticsByIndex=new Map((geometry?.diagnostics||[]).map((item)=>[item.candidateIndex,item]));
+  const attempts=[];
+  const recoveredCanonicals=new Set();
+  for(const target of IMG_0942_NEAR_THRESHOLD_COUNTERFACTUAL_TARGETS){
+    const diagnostic=diagnosticsByIndex.get(target.candidateIndex)||null;
+    const triplet=(diagnostic?.tripletDiagnostics||[]).find((item)=>Number(item.rank)===target.tripletRank)||null;
+    if(!triplet){
+      attempts.push({
+        candidateIndex:target.candidateIndex,
+        tripletRank:target.tripletRank,
+        sideRatio:null,
+        areaRatio:null,
+        rectifyCreated:false,
+        skipReason:"formal-triplet-diagnostic-missing",
+        jsqrSuccess:false,
+        zxingSuccess:false,
+        jsStructuralPass:false,
+        zxingStructuralPass:false,
+        diagnosticPhysicalSafeSuccess:false,
+        netNewCanonicalCount:0,
+      });
+      continue;
+    }
+    const side=quadSideMetricsFromDiagnostic(triplet.qrQuad);
+    const modulePx=Number(triplet.modulePx||0)||null;
+    const minPhysicalSidePx=modulePx!=null?Math.max(28,modulePx*18):null;
+    const sideRatio=side&&minPhysicalSidePx
+      ?Number((side.minSidePx/minPhysicalSidePx).toFixed(4)):null;
+    const areaRatio=side&&minPhysicalSidePx
+      ?Number((side.areaPx2/(minPhysicalSidePx*minPhysicalSidePx)).toFixed(4)):null;
+
+    const counterfactualGeometry={
+      geometryValid:true,
+      qrQuad:Array.isArray(triplet.qrQuad)?triplet.qrQuad:null,
+      quietQuad:Array.isArray(triplet.quietQuad)?triplet.quietQuad:null,
+      qrDimension:Number(triplet.qrDimension||0)||null,
+      modulePx,
+      perspectiveScaleSpread:Number(triplet.perspectiveScaleSpread||0)||null,
+    };
+    const canvas=rectifyQrGeometry(raw,counterfactualGeometry,GEOMETRY_RECTIFY_CONFIGS[0]);
+    if(!canvas){
+      attempts.push({
+        candidateIndex:target.candidateIndex,
+        tripletRank:target.tripletRank,
+        sideRatio,
+        areaRatio,
+        rectifyCreated:false,
+        skipReason:"rectify-canvas-unavailable",
+        jsqrSuccess:false,
+        zxingSuccess:false,
+        jsStructuralPass:false,
+        zxingStructuralPass:false,
+        diagnosticPhysicalSafeSuccess:false,
+        netNewCanonicalCount:0,
+      });
+      continue;
+    }
+    try{
+      const result=await decodeCanvasPair({jsQR,reader,canvas});
+      const diagnosticSafeCanonical=unionCanonicalSets(result.canonicalSet,result.compactCanonicalSet);
+      const netNew=canonicalNetNew(diagnosticSafeCanonical,formalFinalPhysicalSafeCanonical);
+      for(const canonical of diagnosticSafeCanonical){
+        if(canonical&&!formalFinalPhysicalSafeCanonical.has(canonical)) recoveredCanonicals.add(canonical);
+      }
+      attempts.push({
+        candidateIndex:target.candidateIndex,
+        tripletRank:target.tripletRank,
+        sideRatio,
+        areaRatio,
+        rectifyCreated:true,
+        skipReason:null,
+        jsqrSuccess:Boolean(result.jsqrSuccess),
+        zxingSuccess:Boolean(result.zxingSuccess),
+        jsStructuralPass:Boolean(result.jsStructuralPass),
+        zxingStructuralPass:Boolean(result.zxingStructuralPass),
+        diagnosticPhysicalSafeSuccess:Boolean(result.physicalSuccess),
+        netNewCanonicalCount:Number(netNew||0),
+      });
+    } finally {
+      canvas.width=1;
+      canvas.height=1;
+    }
+    await wait(0);
+  }
+  return {
+    diagnosticOnly:true,
+    formalDecodeLogicChanged:false,
+    formalSizeGateBypassedInDiagnosticOnly:true,
+    formalGeometryValidUnchanged:true,
+    targetFileName:"IMG_0942.jpeg",
+    targetCount:3,
+    eligible:true,
+    attempts,
+    rescueNetNewCanonicalCount:recoveredCanonicals.size,
+    elapsedMs:Math.round(performance.now()-started),
+    payloadIncluded:false,
+    canonicalPayloadIncluded:false,
+  };
+}
 function canvasToObjectUrl(canvas, type = "image/jpeg", quality = .82) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -3741,6 +3862,14 @@ async function runMatrix(file) {
         ePhysicalSafeCanonical,
       })
       :[];
+    const img0942NearThresholdCounterfactualRescue=await runImg0942NearThresholdCounterfactualRescue({
+      file,
+      raw,
+      geometry,
+      jsQR,
+      reader:readerBundle.reader,
+      formalFinalPhysicalSafeCanonical:finalPhysicalSafeCanonical,
+    });
     const limitedQualityRescueExperiment=await runLimitedQualityRescueExperiment({
       file,
       raw,
@@ -3834,6 +3963,7 @@ async function runMatrix(file) {
       },
       qualityDiagnosticAudit,
       img0942ACandidateDecodePathAudit,
+      img0942NearThresholdCounterfactualRescue,
       limitedQualityRescueExperiment,
       timing:{
         candidateDetectionElapsedMs,
@@ -4236,7 +4366,7 @@ export default function CertificateQrDecodeExperimentPage() {
     schema:"icb-certificate-qr-decode-experiment-summary-v7",
     summaryVariant:"management-audit-short-v1",
     experimentalHead,
-    diagnosticRevision:"v7-postformal-0942-A-quad-too-small-audit-7",
+    diagnosticRevision:"v7-postformal-0942-near-threshold-counterfactual-8",
     experimentRoute:EXPERIMENT_ROUTE,
     baselineTargetRoute:PATHNAME,
     groundTruthUsedDuringDecode:false,
@@ -4276,6 +4406,7 @@ export default function CertificateQrDecodeExperimentPage() {
     img0942OwnershipClassifications,
     img0942OwnershipComplete,
     img0942AQuadTooSmallAudit,
+    img0942NearThresholdCounterfactualRescue:img0942Result?.matrix?.img0942NearThresholdCounterfactualRescue||null,
     img0942ACandidateDecodePathAudit,
     qualityDiagnostic:totals?{
       successfulDecodeReference:managementQualityReference,
@@ -4313,7 +4444,7 @@ export default function CertificateQrDecodeExperimentPage() {
     experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
-    diagnosticRevision:"v7-postformal-0942-A-quad-too-small-audit-7",
+    diagnosticRevision:"v7-postformal-0942-near-threshold-counterfactual-8",
     experimentRoute:EXPERIMENT_ROUTE,
     pathname:PATHNAME,
     pathnameRole:"baseline-target-route",
@@ -4448,6 +4579,7 @@ export default function CertificateQrDecodeExperimentPage() {
       canonicalPayloadIncluded:false,
     }:null,
     img0942AQuadTooSmallAudit,
+    img0942NearThresholdCounterfactualRescue:img0942Result?.matrix?.img0942NearThresholdCounterfactualRescue||null,
     img0942ACandidateDecodePathAudit,
     img0942OwnershipAudit:{
       classifications:img0942OwnershipClassifications,
@@ -4725,7 +4857,7 @@ export default function CertificateQrDecodeExperimentPage() {
 
       <section style={{ marginTop: 18 }}>
         <div style={{fontSize:12,marginBottom:8,fontWeight:700}}>
-          IMG_0942 ownership分類: {img0942OwnershipClassifiedCount}/10 / A quad-too-small audit: 3/5/6
+          IMG_0942 ownership分類: {img0942OwnershipClassifiedCount}/10 / near-threshold counterfactual: c3r1 / c5r1 / c5r2
           {img0942OwnershipComplete ? "（全candidate分類完了）" : "（未分類candidateをA/B/C/D選択）"}
           {" / "}既存0944分類は引き継ぎ済み
         </div>
