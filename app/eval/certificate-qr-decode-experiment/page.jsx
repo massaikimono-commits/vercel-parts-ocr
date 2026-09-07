@@ -1501,7 +1501,7 @@ async function decodeZxing(reader, canvas) {
       x: Number(p?.getX?.() ?? p?.x),
       y: Number(p?.getY?.() ?? p?.y),
     })).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
-    const position = normalizeDecodePosition(pointCenter(points), canvas);
+    const position = normalizeDecodePosition(qrCenterFromResultPoints(points), canvas);
     const decodePoints = normalizeDecodePoints(points, canvas);
     return { success: Boolean(canonical), canonical, structural: structuralValidation(canonical), position, decodePoints };
   } catch {
@@ -2904,6 +2904,8 @@ export default function CertificateQrDecodeExperimentPage() {
     }:null,
     compactSchemaTotals:totals?{
       uniqueCompactCandidateCount:totals.uniqueCompactCandidateCount,
+      compactPhysicalConsensusAcceptedCount:totals.compactPhysicalConsensusAcceptedCount,
+      compactParserRecognizedCount:totals.compactParserRecognizedCount,
       physicalQrConsensusAcceptedCount:totals.compactPhysicalConsensusAcceptedCount,
       parserSchemaRecognizedCount:totals.compactParserRecognizedCount,
       physicalQrConsensusAccepted:totals.compactPhysicalConsensusAcceptedCount,
