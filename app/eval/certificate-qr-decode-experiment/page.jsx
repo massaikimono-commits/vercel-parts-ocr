@@ -27,21 +27,18 @@ const ENSEMBLE_CONFIGS = [
   { id: "raw-color-medium-3x-nearest", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
   { id: "raw-color-medium-2x-smooth", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 2, interpolation: "smooth", quietZoneRatio: .08 },
 ];
-const OFFSET_SWEEP = [
-  { id: "center", dx: 0, dy: 0, reuseFirstEnsembleAttempt: true },
-  { id: "x-minus", dx: -.012, dy: 0 },
-  { id: "x-plus", dx: .012, dy: 0 },
-  { id: "y-minus", dx: 0, dy: -.012 },
-  { id: "y-plus", dx: 0, dy: .012 },
+const REFINED_CORE_CONFIGS = [
+  { id: "tight-small-quiet", mode: "color", useRefinedBbox: true, bboxMargin: .12, scale: 2, interpolation: "nearest" },
+  { id: "tight-medium-quiet", mode: "color", useRefinedBbox: true, bboxMargin: .24, scale: 3, interpolation: "nearest" },
+  { id: "current-small-fallback", mode: "color", widthRel: .10, scale: 2, interpolation: "nearest", quietZoneRatio: .08 },
 ];
-const RESCUE_CONFIGS = [
-  { id: "rescue-gray-medium-3x", source: "raw", mode: "grayscale", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
-  { id: "rescue-contrast-weak-medium-3x", source: "raw", mode: "contrast-weak", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
-  { id: "rescue-contrast-medium-medium-3x", source: "raw", mode: "contrast-medium", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
-  { id: "rescue-sharpen-medium-3x", source: "raw", mode: "sharpen", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08 },
-  { id: "rescue-rotate-plus1-medium-3x", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08, rotateDeg: 1.0 },
-  { id: "rescue-rotate-minus1-medium-3x", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .08, rotateDeg: -1.0 },
-  { id: "rescue-quiet-medium-3x", source: "raw", mode: "color", crop: "medium", widthRel: .13, scale: 3, interpolation: "nearest", quietZoneRatio: .14 },
+const THRESHOLD_CONFIGS = [
+  { id: "tight-otsu", mode: "otsu", useRefinedBbox: true, bboxMargin: .20, scale: 3, interpolation: "nearest" },
+  { id: "tight-adaptive", mode: "adaptive", useRefinedBbox: true, bboxMargin: .20, scale: 3, interpolation: "nearest" },
+];
+const ROTATE_RESCUE_CONFIGS = [
+  { id: "tight-rotate-plus1", mode: "color", useRefinedBbox: true, bboxMargin: .20, scale: 3, interpolation: "nearest", rotateDeg: 1 },
+  { id: "tight-rotate-minus1", mode: "color", useRefinedBbox: true, bboxMargin: .20, scale: 3, interpolation: "nearest", rotateDeg: -1 },
 ];
 const DEFAULT_GROUND_TRUTH = {
   "IMG_0940.jpeg": { vehicleKind: "kei", expectedQrCount: 6 },
@@ -206,6 +203,15 @@ function paperWidthPx(pageGeometry, source) {
   }
   return Math.max(1, Number(pageGeometry?.bounds?.w || pageGeometry?.w || source.width));
 }
+function paperHeightPx(pageGeometry, source) {
+  const q = Array.isArray(pageGeometry?.quad) && pageGeometry.quad.length === 4 ? pageGeometry.quad : null;
+  if (q) {
+    const left = Math.hypot(q[3].x - q[0].x, q[3].y - q[0].y);
+    const right = Math.hypot(q[2].x - q[1].x, q[2].y - q[1].y);
+    return Math.max(1, (left + right) / 2);
+  }
+  return Math.max(1, Number(pageGeometry?.bounds?.h || pageGeometry?.h || source.height));
+}
 function sharpenImageData(image) {
   const { data, width, height } = image;
   const src = new Uint8ClampedArray(data);
@@ -226,10 +232,86 @@ function sharpenImageData(image) {
     }
   }
 }
+function otsuThreshold(gray) {
+  const hist = new Uint32Array(256);
+  for (const value of gray) hist[value] += 1;
+  const total = gray.length;
+  let sum = 0;
+  for (let i = 0; i < 256; i += 1) sum += i * hist[i];
+  let sumB = 0;
+  let weightB = 0;
+  let bestVariance = -1;
+  let threshold = 128;
+  for (let t = 0; t < 256; t += 1) {
+    weightB += hist[t];
+    if (!weightB) continue;
+    const weightF = total - weightB;
+    if (!weightF) break;
+    sumB += t * hist[t];
+    const meanB = sumB / weightB;
+    const meanF = (sum - sumB) / weightF;
+    const between = weightB * weightF * (meanB - meanF) * (meanB - meanF);
+    if (between > bestVariance) {
+      bestVariance = between;
+      threshold = t;
+    }
+  }
+  return threshold;
+}
+function thresholdCanvas(ctx, canvas, mode) {
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const count = canvas.width * canvas.height;
+  const gray = new Uint8Array(count);
+  for (let i = 0, p = 0; i < count; i += 1, p += 4) {
+    gray[i] = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+  }
+  if (mode === "otsu") {
+    const threshold = otsuThreshold(gray);
+    for (let i = 0, p = 0; i < count; i += 1, p += 4) {
+      const value = gray[i] <= threshold ? 0 : 255;
+      image.data[p] = image.data[p + 1] = image.data[p + 2] = value;
+    }
+  } else {
+    const w = canvas.width;
+    const h = canvas.height;
+    const integral = new Uint32Array((w + 1) * (h + 1));
+    for (let y = 0; y < h; y += 1) {
+      let row = 0;
+      for (let x = 0; x < w; x += 1) {
+        row += gray[y * w + x];
+        integral[(y + 1) * (w + 1) + x + 1] = integral[y * (w + 1) + x + 1] + row;
+      }
+    }
+    const radius = Math.max(6, Math.round(Math.min(w, h) * .055));
+    const bias = 7;
+    for (let y = 0; y < h; y += 1) {
+      const y0 = Math.max(0, y - radius);
+      const y1 = Math.min(h, y + radius + 1);
+      for (let x = 0; x < w; x += 1) {
+        const x0 = Math.max(0, x - radius);
+        const x1 = Math.min(w, x + radius + 1);
+        const sum = integral[y1 * (w + 1) + x1] - integral[y0 * (w + 1) + x1] - integral[y1 * (w + 1) + x0] + integral[y0 * (w + 1) + x0];
+        const mean = sum / Math.max(1, (x1 - x0) * (y1 - y0));
+        const value = gray[y * w + x] <= mean - bias ? 0 : 255;
+        const p = (y * w + x) * 4;
+        image.data[p] = image.data[p + 1] = image.data[p + 2] = value;
+      }
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+}
 function cropCandidate(source, pageGeometry, candidate, config) {
-  const center = paperPoint(pageGeometry, source, candidate);
-  const cropW = Math.max(12, paperWidthPx(pageGeometry, source) * config.widthRel);
-  const cropH = cropW;
+  let center = paperPoint(pageGeometry, source, candidate);
+  let cropW = Math.max(12, paperWidthPx(pageGeometry, source) * (Number(config.widthRel) || .10));
+  let cropH = cropW;
+  if (config.useRefinedBbox && Number.isFinite(candidate?.refinedRawCenterX) && Number.isFinite(candidate?.refinedRawCenterY)) {
+    center = { x: candidate.refinedRawCenterX, y: candidate.refinedRawCenterY };
+    const margin = Math.max(.04, Math.min(.45, Number(config.bboxMargin) || .16));
+    const baseW = Math.max(12, Number(candidate.refinedRawBboxWidth) || cropW * .55);
+    const baseH = Math.max(12, Number(candidate.refinedRawBboxHeight) || baseW);
+    cropW = baseW * (1 + margin * 2);
+    cropH = baseH * (1 + margin * 2);
+  }
   let sx = center.x - cropW / 2;
   let sy = center.y - cropH / 2;
   sx = Math.max(0, Math.min(source.width - cropW, sx));
@@ -237,8 +319,8 @@ function cropCandidate(source, pageGeometry, candidate, config) {
   const sw = Math.max(1, Math.min(source.width - sx, cropW));
   const sh = Math.max(1, Math.min(source.height - sy, cropH));
   const scale = Math.max(.8, Math.min(3, Number(config.scale) || 1));
-  const quietZoneRatio = Math.max(.04, Math.min(.20, Number(config.quietZoneRatio) || .08));
-  const pad = Math.max(12, Math.round(Math.min(sw, sh) * scale * quietZoneRatio));
+  const quietZoneRatio = config.useRefinedBbox ? .05 : Math.max(.04, Math.min(.20, Number(config.quietZoneRatio) || .08));
+  const pad = Math.max(10, Math.round(Math.min(sw, sh) * scale * quietZoneRatio));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sw * scale) + pad * 2);
   canvas.height = Math.max(1, Math.round(sh * scale) + pad * 2);
@@ -258,37 +340,8 @@ function cropCandidate(source, pageGeometry, candidate, config) {
   ctx.drawImage(source, sx, sy, sw, sh, pad, pad, canvas.width - pad * 2, canvas.height - pad * 2);
   if (rotate) ctx.restore();
 
-  if (config.mode !== "color") {
-    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    let sum = 0;
-    for (let p = 0; p < image.data.length; p += 4) {
-      const g = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
-      sum += g;
-      image.data[p] = image.data[p + 1] = image.data[p + 2] = g;
-    }
-    const avg = sum / Math.max(1, image.data.length / 4);
-    let contrast = 1;
-    let midpoint = 128;
-    if (config.mode === "contrast-weak") { contrast = 1.35; midpoint = avg; }
-    if (config.mode === "contrast-medium") { contrast = 1.70; midpoint = avg; }
-    if (config.mode === "contrast-weak" || config.mode === "contrast-medium") {
-      for (let p = 0; p < image.data.length; p += 4) {
-        const g = image.data[p];
-        const v = Math.max(0, Math.min(255, Math.round((g - midpoint) * contrast + midpoint)));
-        image.data[p] = image.data[p + 1] = image.data[p + 2] = v;
-      }
-    }
-    if (config.mode === "sharpen") sharpenImageData(image);
-    ctx.putImageData(image, 0, 0);
-  }
+  if (config.mode === "otsu" || config.mode === "adaptive") thresholdCanvas(ctx, canvas, config.mode);
   return canvas;
-}
-function shiftedCandidate(candidate, dx = 0, dy = 0) {
-  return {
-    ...candidate,
-    x: Math.max(0, Math.min(1, Number(candidate.x) + Number(dx || 0))),
-    y: Math.max(0, Math.min(1, Number(candidate.y) + Number(dy || 0))),
-  };
 }
 function documentPerspectiveMetrics(page) {
   const q = Array.isArray(page?.quad) && page.quad.length === 4 ? page.quad : null;
