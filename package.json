@@ -7,7 +7,7 @@
     "build": "npm run test:certificate && npm run test:parts && next build",
     "start": "next start",
     "test:certificate": "node scripts/vehicle-certificate-regression.mjs",
-    "test:parts": "node scripts/parts-slip-regression.mjs"
+    "test:parts": "node scripts/parts-slip-regression.mjs && node scripts/parts-layout-semantics-regression.mjs"
   },
   "dependencies": {
     "next": "14.2.25",
