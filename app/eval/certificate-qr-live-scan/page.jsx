@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-spatial-guided-remaining-one-rescue";
+const LIVE_SCAN_REVISION = "live-poc-v2-physical-slot-guided-remaining-one-rescue";
 const FRAME_INTERVAL_MS = 250;
 const MAX_DECODE_DIMENSION = 1280;
 const LOCAL_RESCUE_STALL_FRAMES = 16;
@@ -425,6 +425,116 @@ function subRoiGuideLabel(id) {
   })[id] || "ガイド内";
 }
 
+function guideXLabel(x) {
+  const value = Number(x);
+  if (!Number.isFinite(value)) return "ガイド内";
+  if (value < .16) return "左端付近";
+  if (value < .36) return "左寄り";
+  if (value < .64) return "中央付近";
+  if (value < .84) return "右寄り";
+  return "右端付近";
+}
+
+function recentGuideXFromEntry(entry, recentCount = 12) {
+  const values = (entry?.guidePositions || [])
+    .slice(-recentCount)
+    .map((position) => Number(position?.nx))
+    .filter(Number.isFinite);
+  return medianNumber(values);
+}
+
+function fitMissingSlot(xs, expected, missingIndex) {
+  const slotIndexes = Array.from({ length: expected }, (_, index) => index)
+    .filter((index) => index !== missingIndex);
+  if (xs.length !== slotIndexes.length || xs.length < 2) return null;
+
+  const meanS = slotIndexes.reduce((sum, value) => sum + value, 0) / slotIndexes.length;
+  const meanX = xs.reduce((sum, value) => sum + value, 0) / xs.length;
+  let cov = 0;
+  let varS = 0;
+  for (let i = 0; i < xs.length; i += 1) {
+    cov += (slotIndexes[i] - meanS) * (xs[i] - meanX);
+    varS += (slotIndexes[i] - meanS) ** 2;
+  }
+  const spacing = varS > 0 ? cov / varS : 0;
+  if (!(spacing > .015)) return null;
+  const offset = meanX - spacing * meanS;
+  const residuals = xs.map((x, index) => x - (offset + spacing * slotIndexes[index]));
+  const rmse = Math.sqrt(residuals.reduce((sum, value) => sum + value * value, 0) / residuals.length);
+  const normalizedRmse = rmse / spacing;
+  const missingX = offset + spacing * missingIndex;
+  const outOfGuidePenalty = missingX < -.08 || missingX > 1.08
+    ? .8 + Math.abs(missingX < 0 ? missingX : missingX - 1)
+    : 0;
+
+  return {
+    missingIndex,
+    missingX,
+    offset,
+    spacing,
+    normalizedRmse,
+    score: normalizedRmse + outOfGuidePenalty,
+    slotXs: Array.from({ length: expected }, (_, index) => offset + spacing * index),
+  };
+}
+
+function inferMissingPhysicalSlot(evidenceMap, expected) {
+  if (!Number.isInteger(expected) || expected < 2) return null;
+  const confirmed = [...evidenceMap.values()]
+    .filter((entry) => entry.confirmed)
+    .map((entry) => ({
+      diagnosticId: entry.diagnosticId,
+      x: recentGuideXFromEntry(entry),
+    }))
+    .filter((entry) => Number.isFinite(entry.x))
+    .sort((a, b) => a.x - b.x);
+
+  if (confirmed.length !== expected - 1) return null;
+
+  const xs = confirmed.map((entry) => entry.x);
+  const fits = Array.from({ length: expected }, (_, missingIndex) =>
+    fitMissingSlot(xs, expected, missingIndex)
+  ).filter(Boolean).sort((a, b) => a.score - b.score);
+
+  if (!fits.length) return null;
+  const best = fits[0];
+  const second = fits[1] || null;
+  const margin = second ? second.score - best.score : 1;
+  let confidence = "low";
+  if (best.normalizedRmse <= .18 && margin >= .12) confidence = "high";
+  else if (best.normalizedRmse <= .32 && margin >= .05) confidence = "medium";
+
+  const slotStates = Array.from({ length: expected }, (_, index) => ({
+    index,
+    state: index === best.missingIndex ? "missing-candidate" : "confirmed-order",
+    predictedX: Number(best.slotXs[index].toFixed(4)),
+  }));
+
+  return {
+    expected,
+    confirmedCount: confirmed.length,
+    missingIndex: best.missingIndex,
+    missingX: Number(best.missingX.toFixed(4)),
+    missingLabel: guideXLabel(best.missingX),
+    confidence,
+    normalizedRmse: Number(best.normalizedRmse.toFixed(4)),
+    scoreMargin: Number(margin.toFixed(4)),
+    slotStates,
+    alternateMissingIndex: second && margin < .12 ? second.missingIndex : null,
+    evidenceOrder: confirmed.map((entry) => entry.diagnosticId),
+  };
+}
+
+function nearestSubRoiForGuideX(x) {
+  const value = Number(x);
+  if (!Number.isFinite(value)) return null;
+  return [...SUB_ROIS].sort((a, b) => {
+    const ac = a.x + a.w / 2;
+    const bc = b.x + b.w / 2;
+    return Math.abs(ac - value) - Math.abs(bc - value);
+  })[0] || null;
+}
+
 function subRoiStatsSnapshot(statsMap) {
   return SUB_ROIS.map((roi) => {
     const stats = statsMap.get(roi.id) || {};
@@ -487,6 +597,8 @@ function completionFromEvidenceMap(map) {
 }
 function candidateView(entry) {
   const xs = (entry.guidePositions || []).map((position) => Number(position?.nx)).filter(Number.isFinite);
+  const recentXs = (entry.guidePositions || []).slice(-12)
+    .map((position) => Number(position?.nx)).filter(Number.isFinite);
   return {
     diagnosticId: entry.diagnosticId,
     fingerprint: entry.fingerprint,
@@ -503,6 +615,7 @@ function candidateView(entry) {
     firstSeenEngine: entry.firstSeenEngine || null,
     firstSeenGuideX: Number.isFinite(entry.firstSeenGuidePosition?.nx) ? entry.firstSeenGuidePosition.nx : null,
     medianGuideX: xs.length ? Number(medianNumber(xs).toFixed(4)) : null,
+    recentMedianGuideX: recentXs.length ? Number(medianNumber(recentXs).toFixed(4)) : null,
     subRoiIds: [...entry.subRoiIds].sort(),
   };
 }
@@ -547,35 +660,16 @@ export default function CertificateQrLiveScanPoc() {
   const complete = kindEvidence.expected != null && confirmedCount >= kindEvidence.expected;
 
   const confirmedGuideMarkers = useMemo(() => candidates
-    .filter((item) => item.confirmed && Number.isFinite(Number(item.medianGuideX)))
+    .filter((item) => item.confirmed && Number.isFinite(Number(item.recentMedianGuideX)))
     .map((item) => ({
       id: item.diagnosticId,
-      x: Math.max(0, Math.min(1, Number(item.medianGuideX))),
+      x: Math.max(0, Math.min(1, Number(item.recentMedianGuideX))),
     })), [candidates]);
 
-  const guidedTarget = useMemo(() => {
-    if (!running || complete) return null;
-    let roi = null;
-    if (localRescueUi.active && localRescueUi.targetRoiId) {
-      roi = SUB_ROIS.find((item) => item.id === localRescueUi.targetRoiId) || null;
-    }
-    if (!roi) {
-      const selected = selectSubRois(
-        Number(frameStats.processed || 0) + 1,
-        evidenceRef.current,
-        subRoiStatsRef.current
-      );
-      roi = selected[0] || null;
-    }
-    if (!roi) return null;
-    return {
-      id: roi.id,
-      label: subRoiGuideLabel(roi.id),
-      x: roi.x,
-      w: roi.w,
-      localRescueActive: Boolean(localRescueUi.active),
-    };
-  }, [running, complete, frameStats.processed, candidates, subRoiStats, localRescueUi]);
+  const physicalSlotGuide = useMemo(() => {
+    if (kindEvidence.expected == null) return null;
+    return inferMissingPhysicalSlot(evidenceRef.current, kindEvidence.expected);
+  }, [kindEvidence.expected, candidates]);
 
   const provisionalRemaining = kindEvidence.expected == null
     ? null
@@ -797,7 +891,13 @@ export default function CertificateQrLiveScanPoc() {
         !normalNovelStructural &&
         stalledFrames >= LOCAL_RESCUE_STALL_FRAMES
       ) {
-        const target = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
+        const inferredSlot = inferMissingPhysicalSlot(
+          evidenceRef.current,
+          completionBeforeRescue.expected
+        );
+        const target = inferredSlot
+          ? nearestSubRoiForGuideX(inferredSlot.missingX)
+          : selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
         if (target) {
           rescueState.active = true;
           rescueState.activatedFrame = frameId;
@@ -812,7 +912,13 @@ export default function CertificateQrLiveScanPoc() {
           rescueState.rescueFrameCount > 0 &&
           rescueState.rescueFrameCount % LOCAL_RESCUE_RETARGET_EVERY_FRAMES === 0
         ) {
-          const retarget = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
+          const inferredSlot = inferMissingPhysicalSlot(
+            evidenceRef.current,
+            completionBeforeRescue.expected
+          );
+          const retarget = inferredSlot
+            ? nearestSubRoiForGuideX(inferredSlot.missingX)
+            : selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
           if (retarget) rescueState.targetRoiId = retarget.id;
         }
 
@@ -980,6 +1086,7 @@ export default function CertificateQrLiveScanPoc() {
         confirmedRegionPolicy: "deprioritize-not-exclude",
         starvationProtection: true,
       },
+      physicalSlotGuidance: physicalSlotGuide,
       remainingOneLocalRescue: {
         provisionalTrigger: true,
         triggerRule: "expected known AND confirmedCount = expected-1 AND no new structural canonical for >=16 processed frames",
@@ -1048,13 +1155,13 @@ export default function CertificateQrLiveScanPoc() {
             pointerEvents: "none",
           }}
         >
-          {running && !complete && guidedTarget && (
+          {running && !complete && physicalSlotGuide && (
             <div
               style={{
                 position: "absolute",
-                left: `${guidedTarget.x * 100}%`,
+                left: `${Math.max(0, Math.min(.88, physicalSlotGuide.missingX - .06)) * 100}%`,
                 top: 0,
-                width: `${guidedTarget.w * 100}%`,
+                width: "12%",
                 height: "100%",
                 boxSizing: "border-box",
                 border: "2px dashed rgba(255,193,7,.95)",
@@ -1100,7 +1207,7 @@ export default function CertificateQrLiveScanPoc() {
         }}>
           {status}
         </div>
-        {running && !complete && guidedTarget && (
+        {running && !complete && (
           <div style={{
             position: "absolute",
             left: 10,
@@ -1108,7 +1215,7 @@ export default function CertificateQrLiveScanPoc() {
             bottom: 10,
             padding: "9px 11px",
             borderRadius: 10,
-            background: "rgba(0,0,0,.74)",
+            background: "rgba(0,0,0,.76)",
             color: "#fff",
             textAlign: "center",
             fontSize: 14,
@@ -1123,19 +1230,91 @@ export default function CertificateQrLiveScanPoc() {
                 ? ` ／ PoC上あと${provisionalRemaining}件`
                 : ""}
             </div>
-            <div style={{ marginTop: 2, color: "#ffd54f" }}>
-              {guidedTarget.localRescueActive
-                ? `残り1件：${guidedTarget.label}付近を少し上下左右に動かしながらガイドへ合わせてください`
-                : `次は${guidedTarget.label}をガイドへ合わせてください`}
-            </div>
-            <div style={{ marginTop: 1, fontSize: 11, fontWeight: 600, color: "#ddd" }}>
-              黄色は現在の探索優先エリアです。未読QR位置を断定する表示ではありません。
-            </div>
+            {physicalSlotGuide ? (
+              <>
+                <div style={{ marginTop: 2, color: "#ffd54f" }}>
+                  {physicalSlotGuide.missingLabel}が未取得候補です。
+                  ゆっくりその付近をガイドへ合わせてください
+                </div>
+                <div style={{ marginTop: 1, fontSize: 11, fontWeight: 600, color: "#ddd" }}>
+                  左右順と最近の位置からの推定
+                  {physicalSlotGuide.confidence === "high"
+                    ? "（確信度 高）"
+                    : physicalSlotGuide.confidence === "medium"
+                      ? "（確信度 中）"
+                      : "（候補推定・断定ではありません）"}
+                </div>
+              </>
+            ) : (
+              <div style={{ marginTop: 2, fontSize: 12, color: "#ddd" }}>
+                QR位置を取得中です。緑の✓が取得済み位置です。
+              </div>
+            )}
           </div>
         )}
       </section>
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
+
+      {!complete && kindEvidence.expected != null && (
+        <section style={{
+          marginTop: 12,
+          padding: "11px 12px",
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          background: "#fafafa",
+        }}>
+          <div style={{ fontWeight: 900, fontSize: 15 }}>
+            QR取得状況：{confirmedCount} / {kindEvidence.expected}
+          </div>
+          <div style={{ display: "flex", gap: 7, marginTop: 9, alignItems: "center" }}>
+            {Array.from({ length: kindEvidence.expected }, (_, index) => {
+              const missingCandidate = physicalSlotGuide?.missingIndex === index;
+              const stateKnown = Boolean(physicalSlotGuide);
+              return (
+                <div
+                  key={index}
+                  title={missingCandidate ? "未取得候補" : stateKnown ? "取得済み順序候補" : "位置推定中"}
+                  style={{
+                    flex: "1 1 0",
+                    minWidth: 34,
+                    height: 40,
+                    borderRadius: 9,
+                    display: "grid",
+                    placeItems: "center",
+                    border: missingCandidate
+                      ? "2px solid #f0a000"
+                      : stateKnown
+                        ? "2px solid #34a853"
+                        : "2px solid #bbb",
+                    background: missingCandidate
+                      ? "#fff7d6"
+                      : stateKnown
+                        ? "#eef9f0"
+                        : "#f3f3f3",
+                    color: missingCandidate ? "#9a6500" : stateKnown ? "#1f7a37" : "#777",
+                    fontSize: 20,
+                    fontWeight: 950,
+                  }}
+                >
+                  {missingCandidate ? "□" : stateKnown ? "✓" : "·"}
+                </div>
+              );
+            })}
+          </div>
+          {physicalSlotGuide && (
+            <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+              <b style={{ color: "#9a6500" }}>
+                未取得候補：{physicalSlotGuide.missingLabel}
+              </b>
+              <span style={{ color: "#666" }}>
+                {" "}／ 左→右の相対順から推定
+                {physicalSlotGuide.confidence === "low" ? "（確信度低・候補表示）" : ""}
+              </span>
+            </div>
+          )}
+        </section>
+      )}
 
       {complete ? (
         <section style={{
