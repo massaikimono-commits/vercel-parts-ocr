@@ -279,6 +279,69 @@ function summarizeVariant(rows: any[]) {
   );
 }
 
+function summarizeComplementarity(images: any[], tsvVariantName: string) {
+  const aggregate = {
+    rulesCoveredRows: 0,
+    tsvCoveredRows: 0,
+    bothCoveredRows: 0,
+    rulesOnlyCoveredRows: 0,
+    tsvOnlyNewRescueRows: 0,
+    bothMissRows: 0,
+    unionCoveredRows: 0,
+  };
+
+  const perImage = images.map((img) => {
+    const rules = new Set<number>(img.variants.rulesOnly.coveredGtRows || []);
+    const tsv = new Set<number>(img.variants[tsvVariantName].coveredGtRows || []);
+
+    const counts = {
+      rulesCoveredRows: 0,
+      tsvCoveredRows: 0,
+      bothCoveredRows: 0,
+      rulesOnlyCoveredRows: 0,
+      tsvOnlyNewRescueRows: 0,
+      bothMissRows: 0,
+      unionCoveredRows: 0,
+    };
+
+    for (let rowIndex = 1; rowIndex <= img.gtRowCount; rowIndex += 1) {
+      const byRules = rules.has(rowIndex);
+      const byTsv = tsv.has(rowIndex);
+
+      if (byRules) counts.rulesCoveredRows += 1;
+      if (byTsv) counts.tsvCoveredRows += 1;
+
+      if (byRules && byTsv) {
+        counts.bothCoveredRows += 1;
+        counts.unionCoveredRows += 1;
+      } else if (byRules) {
+        counts.rulesOnlyCoveredRows += 1;
+        counts.unionCoveredRows += 1;
+      } else if (byTsv) {
+        counts.tsvOnlyNewRescueRows += 1;
+        counts.unionCoveredRows += 1;
+      } else {
+        counts.bothMissRows += 1;
+      }
+    }
+
+    for (const key of Object.keys(aggregate) as Array<keyof typeof aggregate>) {
+      aggregate[key] += counts[key];
+    }
+
+    return {
+      fileName: img.fileName,
+      gtRowCount: img.gtRowCount,
+      ...counts,
+    };
+  });
+
+  return {
+    ...aggregate,
+    perImage,
+  };
+}
+
 export default function StageA4Page() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -436,6 +499,11 @@ export default function StageA4Page() {
         };
       }
 
+      const complementarity = {
+        tsvWordGroup: summarizeComplementarity(images, "tsvWordGroupOnly"),
+        tsvLevel4Line: summarizeComplementarity(images, "tsvLineOnly"),
+      };
+
       const contractAggregate = {
         allHeaderless:
           images.every((img) => img.runtimeTsvContract.headerPresent === false),
@@ -469,6 +537,7 @@ export default function StageA4Page() {
         },
         images,
         aggregate,
+        complementarity,
       };
 
       setResult(payload);
@@ -510,6 +579,7 @@ export default function StageA4Page() {
         ),
       })),
       aggregate: result.aggregate,
+      complementarity: result.complementarity,
     };
   }
 
