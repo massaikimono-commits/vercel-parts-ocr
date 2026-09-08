@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-2d-physical-qr-locator";
+const LIVE_SCAN_REVISION = "live-poc-v2-counting-integrity-diagnostic-1";
+const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
+const COUNTING_DIAGNOSTIC_SHORT_WINDOW_FRAMES = 3;
+const COUNTING_DIAGNOSTIC_SPATIAL_CLUSTER_DISTANCE = .11;
 const FRAME_INTERVAL_MS = 250;
 const MAX_DECODE_DIMENSION = 1280;
 const PHYSICAL_LOCATOR_EVERY_FRAMES = 4;
@@ -269,6 +272,383 @@ async function decodeZxing(reader, canvas) {
   } catch {
     return [];
   }
+}
+
+function rawDiagnosticMetrics(text, bytes = []) {
+  const decoded = canonicalDecode(text || "", bytes);
+  const chars = [...decoded];
+  const length = chars.length;
+  const slashCount = (decoded.match(/\//g) || []).length;
+  const slashFieldCount = decoded.split("/").filter(Boolean).length;
+  const replacementCount = (decoded.match(/�/g) || []).length;
+  const controlCount = chars.filter((ch) => {
+    const code = ch.charCodeAt(0);
+    return code < 32 && ch !== "\n" && ch !== "\t";
+  }).length;
+  const printableRatio = length ? (length - replacementCount - controlCount) / length : 0;
+  const parser = parserSchemaRecognition(decoded);
+  const structural = structuralValidation(decoded);
+  return {
+    decoded,
+    rawByteLength: Array.from(bytes || []).length,
+    decodedTextLength: length,
+    slashCount,
+    slashFieldCount,
+    printableRatio: Number(printableRatio.toFixed(4)),
+    replacementCount,
+    controlCount,
+    parserSchemaClass: parser.parserSchemaClass,
+    structuralPass: structural.pass,
+    structuralFailReason: structural.structuralFailReason,
+  };
+}
+
+function diagnosticDecodeJsRaw(jsQR, sourceCanvas) {
+  try {
+    const ctx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+    const image = ctx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+    const result = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
+    if (!result) return [];
+    const bytes = Array.from(result.binaryData || []);
+    const metrics = rawDiagnosticMetrics(result.data || "", bytes);
+    const bounds = qrBounds(result, sourceCanvas.width, sourceCanvas.height);
+    const localPosition = bounds ? {
+      nx: Number((((bounds.left + bounds.right) / 2) / sourceCanvas.width).toFixed(4)),
+      ny: Number((((bounds.top + bounds.bottom) / 2) / sourceCanvas.height).toFixed(4)),
+    } : null;
+    return [{ engine: "jsqr", localPosition, ...metrics }];
+  } catch {
+    return [];
+  }
+}
+
+async function diagnosticDecodeZxingRaw(reader, canvas) {
+  try {
+    const result = await reader.decodeFromCanvas(canvas);
+    const bytes = Array.from(result?.getRawBytes?.() || result?.rawBytes || []);
+    const text = result?.getText?.() || result?.text || "";
+    return [{
+      engine: "zxing",
+      localPosition: zxingLocalPosition(result, canvas),
+      ...rawDiagnosticMetrics(text, bytes),
+    }];
+  } catch {
+    return [];
+  }
+}
+
+function spatialCluster2d(points = [], threshold = COUNTING_DIAGNOSTIC_SPATIAL_CLUSTER_DISTANCE) {
+  const clusters = [];
+  for (const point of points.filter((item) => Number.isFinite(item?.x) && Number.isFinite(item?.y))) {
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const cluster of clusters) {
+      const distance = Math.hypot(point.x - cluster.x, point.y - cluster.y);
+      if (distance <= threshold && distance < nearestDistance) {
+        nearest = cluster;
+        nearestDistance = distance;
+      }
+    }
+    if (!nearest) {
+      clusters.push({ x: point.x, y: point.y, count: 1 });
+    } else {
+      const weight = nearest.count;
+      nearest.x = (nearest.x * weight + point.x) / (weight + 1);
+      nearest.y = (nearest.y * weight + point.y) / (weight + 1);
+      nearest.count += 1;
+    }
+  }
+  return clusters;
+}
+
+function maxPairDistance(points = []) {
+  let max = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    for (let j = i + 1; j < points.length; j += 1) {
+      max = Math.max(max, Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y));
+    }
+  }
+  return Number(max.toFixed(4));
+}
+
+function createCountingIntegrityState() {
+  return {
+    rawDecodeCount: 0,
+    rawCandidates: new Map(),
+    diagnosticIdByDecoded: new Map(),
+    diagnosticSeq: 0,
+    preDedupeCanonicalHits: [],
+    sameCanonicalSpatialEvents: [],
+    maxPhysicalQrCandidateCount: 0,
+    locatorRunCountObserved: 0,
+  };
+}
+
+function countingDiagnosticId(state, decoded) {
+  const key = String(decoded || "");
+  if (!state.diagnosticIdByDecoded.has(key)) {
+    state.diagnosticSeq += 1;
+    state.diagnosticIdByDecoded.set(key, `raw-${String(state.diagnosticSeq).padStart(2, "0")}`);
+  }
+  return state.diagnosticIdByDecoded.get(key);
+}
+
+function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = []) {
+  for (const hit of hits) {
+    const diagnosticId = countingDiagnosticId(state, hit.decoded);
+    state.rawDecodeCount += 1;
+    let candidate = state.rawCandidates.get(diagnosticId);
+    if (!candidate) {
+      candidate = {
+        diagnosticId,
+        firstSeenFrame: frameId,
+        lastSeenFrame: frameId,
+        frameIds: new Set(),
+        jsqrFrames: new Set(),
+        zxingFrames: new Set(),
+        positions: [],
+        rawByteLengths: [],
+        decodedTextLengths: [],
+        slashCounts: [],
+        slashFieldCounts: [],
+        printableRatios: [],
+        replacementCounts: [],
+        controlCounts: [],
+        parserSchemaClasses: new Set(),
+        structuralPass: Boolean(hit.structuralPass),
+        structuralFailReasons: new Map(),
+      };
+      state.rawCandidates.set(diagnosticId, candidate);
+    }
+    candidate.lastSeenFrame = frameId;
+    candidate.frameIds.add(frameId);
+    if (hit.engine === "jsqr") candidate.jsqrFrames.add(frameId);
+    if (hit.engine === "zxing") candidate.zxingFrames.add(frameId);
+    candidate.rawByteLengths.push(hit.rawByteLength);
+    candidate.decodedTextLengths.push(hit.decodedTextLength);
+    candidate.slashCounts.push(hit.slashCount);
+    candidate.slashFieldCounts.push(hit.slashFieldCount);
+    candidate.printableRatios.push(hit.printableRatio);
+    candidate.replacementCounts.push(hit.replacementCount);
+    candidate.controlCounts.push(hit.controlCount);
+    candidate.parserSchemaClasses.add(hit.parserSchemaClass);
+    candidate.structuralPass = candidate.structuralPass || Boolean(hit.structuralPass);
+    candidate.structuralFailReasons.set(
+      hit.structuralFailReason,
+      Number(candidate.structuralFailReasons.get(hit.structuralFailReason) || 0) + 1
+    );
+    const position = guidePositionFromHit(hit, roi);
+    if (position) candidate.positions.push({
+      frameId,
+      x: position.nx,
+      y: position.ny,
+      engine: hit.engine,
+      subRoiId,
+    });
+  }
+}
+
+function recordPreDedupeCanonicalHits(state, frameId, hits = []) {
+  const byCanonical = new Map();
+  for (const hit of hits) {
+    if (!hit.canonical || !hit.guidePosition) continue;
+    if (!byCanonical.has(hit.canonical)) byCanonical.set(hit.canonical, []);
+    byCanonical.get(hit.canonical).push(hit);
+  }
+  for (const [canonical, items] of byCanonical.entries()) {
+    const diagnosticId = countingDiagnosticId(state, canonical);
+    const points = items.map((item) => ({
+      x: Number(item.guidePosition.nx),
+      y: Number(item.guidePosition.ny),
+      engine: item.engine,
+      subRoiId: item.subRoiId,
+    }));
+    const clusters = spatialCluster2d(points);
+    state.preDedupeCanonicalHits.push({
+      diagnosticId,
+      frameId,
+      sameFrameHitCount: items.length,
+      sameFrameSpatialClusterCount: clusters.length,
+      maxHitDistance: maxPairDistance(points),
+      hits: points,
+    });
+    if (clusters.length >= 2) {
+      state.sameCanonicalSpatialEvents.push({
+        diagnosticId,
+        frameId,
+        window: "same-frame",
+        spatialClusterCount: clusters.length,
+        maxHitDistance: maxPairDistance(points),
+      });
+    }
+
+    const recent = state.preDedupeCanonicalHits.filter((row) =>
+      row.diagnosticId === diagnosticId &&
+      frameId - row.frameId <= COUNTING_DIAGNOSTIC_SHORT_WINDOW_FRAMES
+    );
+    const recentPoints = recent.flatMap((row) => row.hits.map((point) => ({
+      x: point.x, y: point.y,
+    })));
+    const recentClusters = spatialCluster2d(recentPoints);
+    if (recentClusters.length >= 2 && maxPairDistance(recentPoints) >= .18) {
+      const duplicate = state.sameCanonicalSpatialEvents.some((event) =>
+        event.diagnosticId === diagnosticId &&
+        event.frameId === frameId &&
+        event.window === "short-window"
+      );
+      if (!duplicate) {
+        state.sameCanonicalSpatialEvents.push({
+          diagnosticId,
+          frameId,
+          window: "short-window",
+          spatialClusterCount: recentClusters.length,
+          maxHitDistance: maxPairDistance(recentPoints),
+        });
+      }
+    }
+  }
+  if (state.preDedupeCanonicalHits.length > 600) {
+    state.preDedupeCanonicalHits = state.preDedupeCanonicalHits.slice(-600);
+  }
+  if (state.sameCanonicalSpatialEvents.length > 160) {
+    state.sameCanonicalSpatialEvents = state.sameCanonicalSpatialEvents.slice(-160);
+  }
+}
+
+function countingIntegritySnapshot(state, evidenceMap, physicalLocatorUi) {
+  const rawCandidates = [...state.rawCandidates.values()].map((candidate) => {
+    const positions = candidate.positions || [];
+    const clusters = spatialCluster2d(positions.map((position) => ({ x: position.x, y: position.y })));
+    const schemaClasses = [...candidate.parserSchemaClasses];
+    const failHistogram = Object.fromEntries([...candidate.structuralFailReasons.entries()]);
+    const canonicalEntry = [...evidenceMap.values()].find((entry) =>
+      entry.diagnosticId && countingDiagnosticId(state, entry.canonical) === candidate.diagnosticId
+    );
+    return {
+      diagnosticId: candidate.diagnosticId,
+      firstSeenFrame: candidate.firstSeenFrame,
+      lastSeenFrame: candidate.lastSeenFrame,
+      frameHitCount: candidate.frameIds.size,
+      jsqrFrameCount: candidate.jsqrFrames.size,
+      zxingFrameCount: candidate.zxingFrames.size,
+      rawByteLengthMedian: medianNumber(candidate.rawByteLengths),
+      decodedTextLengthMedian: medianNumber(candidate.decodedTextLengths),
+      slashCountMedian: medianNumber(candidate.slashCounts),
+      slashFieldCountMedian: medianNumber(candidate.slashFieldCounts),
+      printableRatioMedian: medianNumber(candidate.printableRatios),
+      replacementCountMax: candidate.replacementCounts.length ? Math.max(...candidate.replacementCounts) : 0,
+      controlCountMax: candidate.controlCounts.length ? Math.max(...candidate.controlCounts) : 0,
+      parserSchemaClasses: schemaClasses,
+      structuralPass: candidate.structuralPass,
+      structuralFailReasonHistogram: failHistogram,
+      positionClusterCount: clusters.length,
+      positionClusters: clusters.map((cluster) => ({
+        x: Number(cluster.x.toFixed(4)),
+        y: Number(cluster.y.toFixed(4)),
+        hitCount: cluster.count,
+      })),
+      confirmedInEvidence: Boolean(canonicalEntry?.confirmed),
+      confirmedFalseReason: canonicalEntry?.confirmed
+        ? "none"
+        : candidate.structuralPass
+          ? "structural-pass-but-not-confirmed"
+          : "structural-fail",
+    };
+  }).sort((a, b) => a.firstSeenFrame - b.firstSeenFrame);
+
+  const failReasonHistogram = {};
+  for (const candidate of rawCandidates) {
+    if (candidate.structuralPass) continue;
+    for (const [reason, count] of Object.entries(candidate.structuralFailReasonHistogram)) {
+      failReasonHistogram[reason] = Number(failReasonHistogram[reason] || 0) + Number(count || 0);
+    }
+  }
+
+  const unconfirmedStructural = [...evidenceMap.values()]
+    .filter((entry) => !entry.confirmed)
+    .map((entry) => {
+      const positions = entry.guidePositions || [];
+      const clusters = spatialCluster2d(positions.map((position) => ({
+        x: Number(position.nx), y: Number(position.ny),
+      })));
+      return {
+        diagnosticId: entry.diagnosticId,
+        firstSeenFrame: entry.firstSeenFrame,
+        lastSeenFrame: entry.lastSeenFrame,
+        frameHitCount: entry.frameIds.size,
+        jsqrFrameCount: entry.jsqrFrames.size,
+        zxingFrameCount: entry.zxingFrames.size,
+        payloadLength: entry.payloadLength,
+        parserSchemaClass: entry.parserSchemaClass,
+        positionClusterCount: clusters.length,
+        positionClusters: clusters.map((cluster) => ({
+          x: Number(cluster.x.toFixed(4)),
+          y: Number(cluster.y.toFixed(4)),
+          hitCount: cluster.count,
+        })),
+        confirmed: false,
+        confirmedFalseReason: entry.frameIds.size < 2 && entry.bothEngineFrames.size === 0
+          ? "single-frame-no-both-engine"
+          : "confirmation-not-met",
+      };
+    });
+
+  const oneOffPatternMap = new Map();
+  for (const entry of unconfirmedStructural.filter((item) => item.frameHitCount === 1)) {
+    const position = entry.positionClusters[0] || null;
+    const xCell = position ? Math.round(position.x / .15) : -1;
+    const yCell = position ? Math.round(position.y / .18) : -1;
+    const key = `${entry.parserSchemaClass}|${entry.payloadLength}|${xCell}|${yCell}`;
+    if (!oneOffPatternMap.has(key)) {
+      oneOffPatternMap.set(key, {
+        parserSchemaClass: entry.parserSchemaClass,
+        payloadLength: entry.payloadLength,
+        xCell,
+        yCell,
+        candidateIds: [],
+      });
+    }
+    oneOffPatternMap.get(key).candidateIds.push(entry.diagnosticId);
+  }
+
+  const physicalCurrentCount = (physicalLocatorUi?.tracks || []).filter((track) =>
+    track.confidence !== "low" &&
+    physicalLocatorUi.lastFrame != null &&
+    track.lastSeenFrame === physicalLocatorUi.lastFrame
+  ).length;
+  state.maxPhysicalQrCandidateCount = Math.max(state.maxPhysicalQrCandidateCount, physicalCurrentCount);
+  if (physicalLocatorUi?.lastFrame != null) state.locatorRunCountObserved = Math.max(
+    state.locatorRunCountObserved,
+    Number(physicalLocatorUi.runs || 0)
+  );
+
+  return {
+    schema: COUNTING_INTEGRITY_SCHEMA,
+    diagnosticOnly: true,
+    normalDecodeControlChanged: false,
+    dedupeChanged: false,
+    completionRuleChanged: false,
+    rescueChanged: false,
+    payloadIncluded: false,
+    rawDecodeCount: state.rawDecodeCount,
+    rawUniqueDiagnosticCandidateCount: rawCandidates.length,
+    structuralPassUniqueCount: rawCandidates.filter((item) => item.structuralPass).length,
+    structuralFailUniqueCount: rawCandidates.filter((item) => !item.structuralPass).length,
+    failReasonHistogram,
+    rawCandidates,
+    unconfirmedStructuralPassCandidates: unconfirmedStructural,
+    oneOffPatternGroups: [...oneOffPatternMap.values()]
+      .filter((group) => group.candidateIds.length >= 2)
+      .map((group) => ({ ...group, candidateCount: group.candidateIds.length })),
+    sameCanonicalMultiplePhysicalPositionEvents: state.sameCanonicalSpatialEvents,
+    duplicatePayloadPhysicalQrCandidateDetected: state.sameCanonicalSpatialEvents.some((event) =>
+      event.spatialClusterCount >= 2 && event.maxHitDistance >= .18
+    ),
+    physicalQrCandidateCount: physicalCurrentCount,
+    maxSimultaneousPhysicalQrCandidateCount: state.maxPhysicalQrCandidateCount,
+    distinctCanonicalCount: evidenceMap.size,
+    confirmedCanonicalCount: [...evidenceMap.values()].filter((entry) => entry.confirmed).length,
+  };
 }
 
 function cropSubRoi(source, roi) {
@@ -903,6 +1283,7 @@ export default function CertificateQrLiveScanPoc() {
   const physicalLocatorSeqRef = useRef(0);
   const recentDecodedPositionsRef = useRef([]);
   const physicalLocatorStatsRef = useRef({ runs: 0, totalLatencyMs: 0 });
+  const countingIntegrityRef = useRef(createCountingIntegrityState());
   const completionStoppedRef = useRef(false);
   const timersRef = useRef(new Set());
 
@@ -989,6 +1370,7 @@ export default function CertificateQrLiveScanPoc() {
     physicalLocatorSeqRef.current = 0;
     recentDecodedPositionsRef.current = [];
     physicalLocatorStatsRef.current = { runs: 0, totalLatencyMs: 0 };
+    countingIntegrityRef.current = createCountingIntegrityState();
     completionStoppedRef.current = false;
     frameSeqRef.current = 0;
     setCandidates([]);
@@ -1245,6 +1627,7 @@ export default function CertificateQrLiveScanPoc() {
 
       const selectedRois = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current);
       const allHits = [];
+      const diagnosticRawHits = [];
       for (const roi of selectedRois) {
         const stats = subRoiStatsRef.current.get(roi.id);
         stats.frameAttempts += 1;
@@ -1253,10 +1636,20 @@ export default function CertificateQrLiveScanPoc() {
         try {
           stats.jsqrAttempts += 1;
           stats.zxingAttempts += 1;
-          const [jsHits, zxHits] = await Promise.all([
+          const [jsHits, zxHits, diagnosticJsRaw, diagnosticZxRaw] = await Promise.all([
             Promise.resolve(decodeJsMulti(jsQrRef.current, subCanvas, 3)),
             decodeZxing(readerRef.current, subCanvas),
+            Promise.resolve(diagnosticDecodeJsRaw(jsQrRef.current, subCanvas)),
+            diagnosticDecodeZxingRaw(readerRef.current, subCanvas),
           ]);
+          recordRawDiagnosticHits(
+            countingIntegrityRef.current,
+            frameId,
+            roi.id,
+            roi,
+            [...diagnosticJsRaw, ...diagnosticZxRaw]
+          );
+          diagnosticRawHits.push(...diagnosticJsRaw, ...diagnosticZxRaw);
           stats.jsqrRawSuccesses += jsHits.length;
           stats.zxingRawSuccesses += zxHits.length;
           for (const hit of [...jsHits, ...zxHits]) {
@@ -1271,6 +1664,8 @@ export default function CertificateQrLiveScanPoc() {
           subCanvas.height = 1;
         }
       }
+
+      recordPreDedupeCanonicalHits(countingIntegrityRef.current, frameId, allHits);
 
       const grouped = new Map();
       for (const hit of allHits) {
@@ -1503,6 +1898,11 @@ export default function CertificateQrLiveScanPoc() {
         starvationProtection: true,
       },
       physicalSlotGuidanceDiagnosticOnly: physicalSlotGuide,
+      countingIntegrityDiagnostic: countingIntegritySnapshot(
+        countingIntegrityRef.current,
+        evidenceRef.current,
+        physicalLocatorUi
+      ),
       physicalQrLocator: {
         mode: "finder-pattern-triplet-2d",
         decodeIndependent: true,
@@ -1560,9 +1960,13 @@ export default function CertificateQrLiveScanPoc() {
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: "16px", fontFamily: "system-ui, sans-serif" }}>
       <h1 style={{ margin: "0 0 6px", fontSize: 24 }}>車検証 Guided Live QR Scan PoC v2</h1>
-      <p style={{ margin: "0 0 12px", color: "#555", fontSize: 14 }}>
-        QR固有spatial search検証用。最終UIではありません。QR列全体をガイド枠内へ入れてください。
+      <p style={{ margin: "0 0 8px", color: "#555", fontSize: 14 }}>
+        6th QR counting-integrity評価専用。通常decode/dedupe/completionは変更していません。
       </p>
+      <div style={{ marginBottom: 12, padding: 9, borderRadius: 9, background: "#fff4d6", fontSize: 12, lineHeight: 1.5 }}>
+        このPreviewではH2観測用の並列raw diagnostic decodeを追加しているため、処理速度はbaseline比較に使用しません。
+        payload本文・画像はsummaryへ出しません。
+      </div>
 
       <section style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "#111", aspectRatio: "4 / 3" }}>
         <video
