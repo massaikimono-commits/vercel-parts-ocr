@@ -895,7 +895,7 @@ export default function CertificateQrLiveScanPoc() {
           evidenceRef.current,
           completionBeforeRescue.expected
         );
-        const target = inferredSlot
+        const target = inferredSlot && inferredSlot.confidence !== "low"
           ? nearestSubRoiForGuideX(inferredSlot.missingX)
           : selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
         if (target) {
@@ -916,7 +916,7 @@ export default function CertificateQrLiveScanPoc() {
             evidenceRef.current,
             completionBeforeRescue.expected
           );
-          const retarget = inferredSlot
+          const retarget = inferredSlot && inferredSlot.confidence !== "low"
             ? nearestSubRoiForGuideX(inferredSlot.missingX)
             : selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
           if (retarget) rescueState.targetRoiId = retarget.id;
@@ -1309,7 +1309,11 @@ export default function CertificateQrLiveScanPoc() {
               </b>
               <span style={{ color: "#666" }}>
                 {" "}／ 左→右の相対順から推定
-                {physicalSlotGuide.confidence === "low" ? "（確信度低・候補表示）" : ""}
+                {physicalSlotGuide.confidence === "high"
+                  ? "（確信度 高）"
+                  : physicalSlotGuide.confidence === "medium"
+                    ? "（確信度 中）"
+                    : "（確信度 低・候補表示）"}
               </span>
             </div>
           )}
