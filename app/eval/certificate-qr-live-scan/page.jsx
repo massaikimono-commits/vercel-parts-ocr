@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-counting-integrity-diagnostic-1";
+const LIVE_SCAN_REVISION = "live-poc-v2-decode-integrity-parser-separation-counterfactual-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
+const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separation-counterfactual-v1";
 const COUNTING_DIAGNOSTIC_SHORT_WINDOW_FRAMES = 3;
 const COUNTING_DIAGNOSTIC_SPATIAL_CLUSTER_DISTANCE = .11;
 const FRAME_INTERVAL_MS = 250;
@@ -102,6 +103,32 @@ function structuralValidation(canonical) {
     payloadLength: length,
     printableRatio: Number(printableRatio.toFixed(4)),
     structuralFailReason: failReasons.length ? failReasons.join("+") : "none",
+  };
+}
+
+function decodeIntegrityValidation(canonical) {
+  const text = canonicalText(canonical);
+  const chars = [...text];
+  const length = chars.length;
+  const replacementCount = (text.match(/�/g) || []).length;
+  const controlCount = chars.filter((ch) => {
+    const code = ch.charCodeAt(0);
+    return code < 32 && ch !== "\n" && ch !== "\t";
+  }).length;
+  const printableRatio = length ? (length - replacementCount - controlCount) / length : 0;
+  const failReasons = [];
+  if (length < 3) failReasons.push("too-short");
+  if (length > 1200) failReasons.push("too-long");
+  if (printableRatio < .96) failReasons.push("low-printable-ratio");
+  if (replacementCount > 0) failReasons.push("replacement-char");
+  if (controlCount > 0) failReasons.push("control-char");
+  return {
+    pass: failReasons.length === 0,
+    payloadLength: length,
+    printableRatio: Number(printableRatio.toFixed(4)),
+    replacementCount,
+    controlCount,
+    failReason: failReasons.length ? failReasons.join("+") : "none",
   };
 }
 
@@ -288,6 +315,7 @@ function rawDiagnosticMetrics(text, bytes = []) {
   const printableRatio = length ? (length - replacementCount - controlCount) / length : 0;
   const parser = parserSchemaRecognition(decoded);
   const structural = structuralValidation(decoded);
+  const decodeIntegrity = decodeIntegrityValidation(decoded);
   return {
     decoded,
     rawByteLength: Array.from(bytes || []).length,
@@ -297,7 +325,10 @@ function rawDiagnosticMetrics(text, bytes = []) {
     printableRatio: Number(printableRatio.toFixed(4)),
     replacementCount,
     controlCount,
+    parserSchemaRecognized: parser.recognized,
     parserSchemaClass: parser.parserSchemaClass,
+    decodeIntegrityPass: decodeIntegrity.pass,
+    decodeIntegrityFailReason: decodeIntegrity.failReason,
     structuralPass: structural.pass,
     structuralFailReason: structural.structuralFailReason,
   };
@@ -406,6 +437,8 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = []) {
         frameIds: new Set(),
         jsqrFrames: new Set(),
         zxingFrames: new Set(),
+        bothEngineFrames: new Set(),
+        enginesByFrame: new Map(),
         positions: [],
         rawByteLengths: [],
         decodedTextLengths: [],
@@ -415,6 +448,9 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = []) {
         replacementCounts: [],
         controlCounts: [],
         parserSchemaClasses: new Set(),
+        parserSchemaRecognized: Boolean(hit.parserSchemaRecognized),
+        decodeIntegrityPass: Boolean(hit.decodeIntegrityPass),
+        decodeIntegrityFailReasons: new Map(),
         structuralPass: Boolean(hit.structuralPass),
         structuralFailReasons: new Map(),
       };
@@ -424,6 +460,11 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = []) {
     candidate.frameIds.add(frameId);
     if (hit.engine === "jsqr") candidate.jsqrFrames.add(frameId);
     if (hit.engine === "zxing") candidate.zxingFrames.add(frameId);
+    if (!candidate.enginesByFrame.has(frameId)) candidate.enginesByFrame.set(frameId, new Set());
+    candidate.enginesByFrame.get(frameId).add(hit.engine);
+    if (candidate.enginesByFrame.get(frameId).has("jsqr") && candidate.enginesByFrame.get(frameId).has("zxing")) {
+      candidate.bothEngineFrames.add(frameId);
+    }
     candidate.rawByteLengths.push(hit.rawByteLength);
     candidate.decodedTextLengths.push(hit.decodedTextLength);
     candidate.slashCounts.push(hit.slashCount);
@@ -432,6 +473,12 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = []) {
     candidate.replacementCounts.push(hit.replacementCount);
     candidate.controlCounts.push(hit.controlCount);
     candidate.parserSchemaClasses.add(hit.parserSchemaClass);
+    candidate.parserSchemaRecognized = candidate.parserSchemaRecognized || Boolean(hit.parserSchemaRecognized);
+    candidate.decodeIntegrityPass = candidate.decodeIntegrityPass || Boolean(hit.decodeIntegrityPass);
+    candidate.decodeIntegrityFailReasons.set(
+      hit.decodeIntegrityFailReason,
+      Number(candidate.decodeIntegrityFailReasons.get(hit.decodeIntegrityFailReason) || 0) + 1
+    );
     candidate.structuralPass = candidate.structuralPass || Boolean(hit.structuralPass);
     candidate.structuralFailReasons.set(
       hit.structuralFailReason,
@@ -531,6 +578,7 @@ function countingIntegritySnapshot(state, evidenceMap, physicalLocatorUi) {
       frameHitCount: candidate.frameIds.size,
       jsqrFrameCount: candidate.jsqrFrames.size,
       zxingFrameCount: candidate.zxingFrames.size,
+      bothEngineFrameCount: candidate.bothEngineFrames?.size || 0,
       rawByteLengthMedian: medianNumber(candidate.rawByteLengths),
       decodedTextLengthMedian: medianNumber(candidate.decodedTextLengths),
       slashCountMedian: medianNumber(candidate.slashCounts),
@@ -538,7 +586,10 @@ function countingIntegritySnapshot(state, evidenceMap, physicalLocatorUi) {
       printableRatioMedian: medianNumber(candidate.printableRatios),
       replacementCountMax: candidate.replacementCounts.length ? Math.max(...candidate.replacementCounts) : 0,
       controlCountMax: candidate.controlCounts.length ? Math.max(...candidate.controlCounts) : 0,
+      parserSchemaRecognized: Boolean(candidate.parserSchemaRecognized),
       parserSchemaClasses: schemaClasses,
+      decodeIntegrityPass: Boolean(candidate.decodeIntegrityPass),
+      decodeIntegrityFailReasonHistogram: Object.fromEntries([...candidate.decodeIntegrityFailReasons.entries()]),
       structuralPass: candidate.structuralPass,
       structuralFailReasonHistogram: failHistogram,
       positionClusterCount: clusters.length,
@@ -651,6 +702,126 @@ function countingIntegritySnapshot(state, evidenceMap, physicalLocatorUi) {
     maxSimultaneousPhysicalQrCandidateCount: state.maxPhysicalQrCandidateCount,
     distinctCanonicalCount: evidenceMap.size,
     confirmedCanonicalCount: [...evidenceMap.values()].filter((entry) => entry.confirmed).length,
+  };
+}
+
+function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
+  const currentCompletion = completionFromEvidenceMap(evidenceMap);
+  const candidates = [...state.rawCandidates.values()].map((candidate) => {
+    const positions = candidate.positions || [];
+    const clusters = spatialCluster2d(positions.map((position) => ({ x: position.x, y: position.y })));
+    const schemaClasses = [...candidate.parserSchemaClasses];
+    const parserSchemaClass = schemaClasses.includes("kei-slash")
+      ? "kei-slash"
+      : schemaClasses.includes("registered-slash")
+        ? "registered-slash"
+        : "unrecognized-safe";
+    const recognizedSchema = parserSchemaClass === "kei-slash" || parserSchemaClass === "registered-slash";
+    const repeatedFrameSupport = candidate.frameIds.size >= 2;
+    const bothEngineSameFrameSupport = (candidate.bothEngineFrames?.size || 0) > 0;
+    const genericConfirmationPass =
+      Boolean(candidate.decodeIntegrityPass) &&
+      (repeatedFrameSupport || bothEngineSameFrameSupport);
+    return {
+      diagnosticId: candidate.diagnosticId,
+      firstSeenFrame: candidate.firstSeenFrame,
+      lastSeenFrame: candidate.lastSeenFrame,
+      frameHitCount: candidate.frameIds.size,
+      jsqrFrameCount: candidate.jsqrFrames.size,
+      zxingFrameCount: candidate.zxingFrames.size,
+      bothEngineFrameCount: candidate.bothEngineFrames?.size || 0,
+      payloadLength: medianNumber(candidate.decodedTextLengths),
+      rawByteLengthMedian: medianNumber(candidate.rawByteLengths),
+      decodeIntegrityPass: Boolean(candidate.decodeIntegrityPass),
+      decodeIntegrityFailReasonHistogram: Object.fromEntries([...candidate.decodeIntegrityFailReasons.entries()]),
+      parserSchemaRecognized: recognizedSchema,
+      parserSchemaClass,
+      genericConfirmationPass,
+      confirmationSupport: {
+        repeatedFrameSupport,
+        bothEngineSameFrameSupport,
+      },
+      positionClusterCount: clusters.length,
+      positionClusters: clusters.map((cluster) => ({
+        x: Number(cluster.x.toFixed(4)),
+        y: Number(cluster.y.toFixed(4)),
+        hitCount: cluster.count,
+      })),
+    };
+  }).sort((a, b) => a.firstSeenFrame - b.firstSeenFrame);
+
+  const decodeIntegritySafe = candidates.filter((candidate) => candidate.decodeIntegrityPass);
+  const recognizedSchema = decodeIntegritySafe.filter((candidate) => candidate.parserSchemaRecognized);
+  const unrecognizedSafe = decodeIntegritySafe.filter((candidate) =>
+    !candidate.parserSchemaRecognized && candidate.genericConfirmationPass
+  );
+  const counterfactualConfirmed = decodeIntegritySafe.filter((candidate) => candidate.genericConfirmationPass);
+  const expected = currentCompletion.expected;
+  const counterfactualComplete = expected != null && counterfactualConfirmed.length >= expected;
+
+  return {
+    schema: PARSER_SEPARATION_SCHEMA,
+    diagnosticOnly: true,
+    currentLogicChanged: false,
+    currentStructuralValidationChanged: false,
+    currentEvidenceChanged: false,
+    currentCompletionChanged: false,
+    rescueChanged: false,
+    locatorChanged: false,
+    payloadIncluded: false,
+    layer1DecodeIntegrity: {
+      required: [
+        "length-3-to-1200",
+        "printable-ratio-at-least-0.96",
+        "replacement-char-none",
+        "control-char-none",
+      ],
+      slashSchemaRequired: false,
+    },
+    layer2ParserSchema: {
+      recognizedClasses: ["kei-slash", "registered-slash"],
+      unknownClass: "unrecognized-safe",
+      kindFromUnrecognizedSafe: false,
+    },
+    strictUnrecognizedSafeConfirmation: {
+      repeatedSameCanonicalFramesAtLeast: 2,
+      orSameFrameBothEngines: true,
+    },
+    rawUniqueCount: candidates.length,
+    decodeIntegritySafeUniqueCount: decodeIntegritySafe.length,
+    recognizedSchemaUniqueCount: recognizedSchema.length,
+    unrecognizedSafeUniqueCount: unrecognizedSafe.length,
+    currentConfirmedCount: currentCompletion.confirmedCount,
+    counterfactualConfirmedCount: counterfactualConfirmed.length,
+    currentCompletion: {
+      kind: currentCompletion.kind,
+      expectedQrCount: currentCompletion.expected,
+      complete: currentCompletion.complete,
+    },
+    counterfactualCompletion: {
+      kind: currentCompletion.kind,
+      kindSource: "recognized-schema-current-evidence-only",
+      expectedQrCount: expected,
+      confirmedEvidenceTotal: counterfactualConfirmed.length,
+      complete: counterfactualComplete,
+    },
+    unrecognizedSafeCandidates: unrecognizedSafe.map((candidate) => ({
+      diagnosticId: candidate.diagnosticId,
+      firstSeenFrame: candidate.firstSeenFrame,
+      lastSeenFrame: candidate.lastSeenFrame,
+      frameHitCount: candidate.frameHitCount,
+      jsqrFrameCount: candidate.jsqrFrameCount,
+      zxingFrameCount: candidate.zxingFrameCount,
+      bothEngineFrameCount: candidate.bothEngineFrameCount,
+      payloadLength: candidate.payloadLength,
+      rawByteLengthMedian: candidate.rawByteLengthMedian,
+      parserSchemaClass: candidate.parserSchemaClass,
+      decodeIntegrityPass: candidate.decodeIntegrityPass,
+      confirmationSupport: candidate.confirmationSupport,
+      positionClusterCount: candidate.positionClusterCount,
+      positionClusters: candidate.positionClusters,
+    })),
+    allCandidateDiagnostics: candidates,
   };
 }
 
@@ -1337,6 +1508,11 @@ export default function CertificateQrLiveScanPoc() {
 
   const locatorPrimaryTarget = locatorUndecodedTracks[0] || null;
 
+  const parserSeparationUi = useMemo(() => parserSeparationCounterfactualSnapshot(
+    countingIntegrityRef.current,
+    evidenceRef.current
+  ), [frameStats.processed, candidates]);
+
   const clearTimers = () => {
     for (const id of timersRef.current) clearTimeout(id);
     timersRef.current.clear();
@@ -1906,6 +2082,10 @@ export default function CertificateQrLiveScanPoc() {
         evidenceRef.current,
         physicalLocatorUi
       ),
+      parserSeparationCounterfactual: parserSeparationCounterfactualSnapshot(
+        countingIntegrityRef.current,
+        evidenceRef.current
+      ),
       physicalQrLocator: {
         mode: "finder-pattern-triplet-2d",
         decodeIndependent: true,
@@ -1964,12 +2144,47 @@ export default function CertificateQrLiveScanPoc() {
     <main style={{ maxWidth: 760, margin: "0 auto", padding: "16px", fontFamily: "system-ui, sans-serif" }}>
       <h1 style={{ margin: "0 0 6px", fontSize: 24 }}>車検証 Guided Live QR Scan PoC v2</h1>
       <p style={{ margin: "0 0 8px", color: "#555", fontSize: 14 }}>
-        6th QR counting-integrity評価専用。通常decode/dedupe/completionは変更していません。
+        decode-integrity / parser-schema分離counterfactual評価専用。通常decode/dedupe/completionは変更していません。
       </p>
       <div style={{ marginBottom: 12, padding: 9, borderRadius: 9, background: "#fff4d6", fontSize: 12, lineHeight: 1.5 }}>
-        このPreviewではH2観測用の並列raw diagnostic decodeを追加しているため、処理速度はbaseline比較に使用しません。
-        payload本文・画像はsummaryへ出しません。
+        評価専用です。slash schemaはCurrent側では従来通り必須のままです。
+        Counterfactual側だけdecode integrityとparser schemaを分離します。payload本文・画像はsummaryへ出しません。
       </div>
+      <section style={{
+        marginBottom: 12,
+        padding: "10px 12px",
+        border: "1px solid #ddd",
+        borderRadius: 10,
+        background: "#fafafa",
+        fontSize: 13,
+        lineHeight: 1.55,
+      }}>
+        <div style={{ fontWeight: 900 }}>Current / Counterfactual</div>
+        <div>
+          Current confirmed：
+          <b>{parserSeparationUi.currentConfirmedCount}</b>
+          {parserSeparationUi.currentCompletion.expectedQrCount != null
+            ? ` / ${parserSeparationUi.currentCompletion.expectedQrCount}`
+            : ""}
+        </div>
+        <div>
+          Decode-integrity-safe：
+          <b>{parserSeparationUi.decodeIntegritySafeUniqueCount}</b>
+          {" ／ "}recognized schema：
+          <b>{parserSeparationUi.recognizedSchemaUniqueCount}</b>
+          {" ／ "}unrecognized-safe：
+          <b>{parserSeparationUi.unrecognizedSafeUniqueCount}</b>
+        </div>
+        <div>
+          Counterfactual confirmed：
+          <b>{parserSeparationUi.counterfactualConfirmedCount}</b>
+          {parserSeparationUi.counterfactualCompletion.expectedQrCount != null
+            ? ` / ${parserSeparationUi.counterfactualCompletion.expectedQrCount}`
+            : ""}
+          {" "}
+          {parserSeparationUi.counterfactualCompletion.complete ? "✓ counterfactual complete" : ""}
+        </div>
+      </section>
 
       <section style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "#111", aspectRatio: "4 / 3" }}>
         <video
