@@ -1627,7 +1627,6 @@ export default function CertificateQrLiveScanPoc() {
 
       const selectedRois = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current);
       const allHits = [];
-      const diagnosticRawHits = [];
       for (const roi of selectedRois) {
         const stats = subRoiStatsRef.current.get(roi.id);
         stats.frameAttempts += 1;
@@ -1636,9 +1635,11 @@ export default function CertificateQrLiveScanPoc() {
         try {
           stats.jsqrAttempts += 1;
           stats.zxingAttempts += 1;
-          const [jsHits, zxHits, diagnosticJsRaw, diagnosticZxRaw] = await Promise.all([
+          const [jsHits, zxHits] = await Promise.all([
             Promise.resolve(decodeJsMulti(jsQrRef.current, subCanvas, 3)),
             decodeZxing(readerRef.current, subCanvas),
+          ]);
+          const [diagnosticJsRaw, diagnosticZxRaw] = await Promise.all([
             Promise.resolve(diagnosticDecodeJsRaw(jsQrRef.current, subCanvas)),
             diagnosticDecodeZxingRaw(readerRef.current, subCanvas),
           ]);
@@ -1649,7 +1650,6 @@ export default function CertificateQrLiveScanPoc() {
             roi,
             [...diagnosticJsRaw, ...diagnosticZxRaw]
           );
-          diagnosticRawHits.push(...diagnosticJsRaw, ...diagnosticZxRaw);
           stats.jsqrRawSuccesses += jsHits.length;
           stats.zxingRawSuccesses += zxHits.length;
           for (const hit of [...jsHits, ...zxHits]) {
