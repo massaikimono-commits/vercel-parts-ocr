@@ -1594,6 +1594,7 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
       frameId: attempt.frameId,
       targetRoiId: attempt.targetRoiId,
       variantId: attempt.variantId,
+      subRoiId: attempt.subRoiId,
       engine: attempt.engine,
       guideRegion: attempt.guideRegion,
       containsCandidatePosition,
@@ -1630,17 +1631,23 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     : null;
 
   const targetHistory = Array.isArray(rescueState?.targetHistory) ? rescueState.targetHistory : [];
-  const targetSwitchDiagnostics = targetHistory.map((entry) => {
+  const targetSwitchDiagnostics = targetHistory.map((entry, index) => {
+    const nextFrame = Number(targetHistory[index + 1]?.frameId);
     const targetAttempts = candidateAttempts.filter((attempt) =>
       attempt.targetRoiId === entry.targetRoiId &&
-      Number(attempt.frameId) >= Number(entry.frameId)
+      Number(attempt.frameId) >= Number(entry.frameId) &&
+      (!Number.isFinite(nextFrame) || Number(attempt.frameId) < nextFrame)
     );
     const firstAttempt = targetAttempts[0] || null;
+    const coveredAttemptCount = targetAttempts.filter((attempt) => attempt.containsCandidatePosition === true).length;
     return {
       frameId: entry.frameId,
+      nextTargetChangeFrame: Number.isFinite(nextFrame) ? nextFrame : null,
       targetRoiId: entry.targetRoiId,
       previousTargetRoiId: entry.previousTargetRoiId || null,
       reason: entry.reason,
+      segmentAttemptCount: targetAttempts.length,
+      segmentCoveredAttemptCount: coveredAttemptCount,
       firstAttemptContainsCandidatePosition: firstAttempt?.containsCandidatePosition ?? null,
       firstAttemptDistance: firstAttempt?.candidatePositionToRoiDistance ?? null,
     };
@@ -3148,6 +3155,7 @@ export default function CertificateQrLiveScanPoc() {
               frameId,
               targetRoiId: target.id,
               variantId: variant.id,
+              subRoiId: `rescue-${target.id}-${variant.id}`,
               engine: "zxing",
               cropRoi: {
                 x: Number(cropRoi.x.toFixed(4)),
