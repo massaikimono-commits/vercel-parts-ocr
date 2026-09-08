@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-decode-integrity-parser-separation-counterfactual-1";
+const LIVE_SCAN_REVISION = "live-poc-v2-parser-separated-evaluation-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
-const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separation-counterfactual-v1";
+const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
 const EVALUATION_BRANCH = "eval/certificate-qr-live-parser-separation";
 const LIVE_BASELINE_HEAD = "00d932767837d7cf501ea8ac96e8a4f6e945204a";
@@ -758,13 +758,16 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
   const unrecognizedSafe = decodeIntegritySafe.filter((candidate) =>
     !candidate.parserSchemaRecognized && candidate.genericConfirmationPass
   );
-  const counterfactualConfirmed = decodeIntegritySafe.filter((candidate) => candidate.genericConfirmationPass);
+  const separatedConfirmed = decodeIntegritySafe.filter((candidate) => candidate.genericConfirmationPass);
   const expected = currentCompletion.expected;
-  const counterfactualComplete = expected != null && counterfactualConfirmed.length >= expected;
+  const separatedComplete = expected != null && separatedConfirmed.length >= expected;
 
   return {
     schema: PARSER_SEPARATION_SCHEMA,
     diagnosticOnly: true,
+    evaluationVariant: "CURRENT-vs-PARSER_SEPARATED",
+    timingComparableToBaseline: false,
+    gtUsedInRuntimeOrControl: false,
     currentLogicChanged: false,
     currentStructuralValidationChanged: false,
     currentEvidenceChanged: false,
@@ -795,18 +798,20 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
     recognizedSchemaUniqueCount: recognizedSchema.length,
     unrecognizedSafeUniqueCount: unrecognizedSafe.length,
     currentConfirmedCount: currentCompletion.confirmedCount,
-    counterfactualConfirmedCount: counterfactualConfirmed.length,
+    separatedConfirmedCount: separatedConfirmed.length,
     currentCompletion: {
+      variant: "CURRENT",
       kind: currentCompletion.kind,
       expectedQrCount: currentCompletion.expected,
       complete: currentCompletion.complete,
     },
-    counterfactualCompletion: {
+    separatedCompletion: {
+      variant: "PARSER_SEPARATED",
       kind: currentCompletion.kind,
       kindSource: "recognized-schema-current-evidence-only",
       expectedQrCount: expected,
-      confirmedEvidenceTotal: counterfactualConfirmed.length,
-      complete: counterfactualComplete,
+      confirmedEvidenceTotal: separatedConfirmed.length,
+      complete: separatedComplete,
     },
     unrecognizedSafeCandidates: unrecognizedSafe.map((candidate) => ({
       diagnosticId: candidate.diagnosticId,
@@ -834,7 +839,7 @@ function topHistogramEntry(histogram = {}) {
 
 function managementShortFromLiveFull(full, runtimeHead = null) {
   const counting = full?.countingIntegrityDiagnostic || {};
-  const cf = full?.parserSeparationCounterfactual || {};
+  const separated = full?.parserSeparatedEvaluation || full?.parserSeparationCounterfactual || {};
   const completion = full?.completion || {};
   const mainFail = topHistogramEntry(counting.failReasonHistogram);
   const structuralFails = (counting.rawCandidates || [])
@@ -852,7 +857,7 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       failReasonHistogram: candidate.structuralFailReasonHistogram,
       positionClusterCount: candidate.positionClusterCount,
     }));
-  const unknownSafe = (cf.unrecognizedSafeCandidates || []).slice(0, 2).map((candidate) => ({
+  const unknownSafe = (separated.unrecognizedSafeCandidates || []).slice(0, 2).map((candidate) => ({
     diagnosticId: candidate.diagnosticId,
     frameHitCount: candidate.frameHitCount,
     jsqrFrameCount: candidate.jsqrFrameCount,
@@ -885,16 +890,16 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
     baseline: full?.evaluation?.baseline || LIVE_BASELINE_HEAD,
     majorResult: {
       processedFrames: full?.processedFrameCount ?? null,
-      currentConfirmed: full?.confirmedQrCount ?? cf.currentConfirmedCount ?? null,
-      expectedQrCount: completion.expectedQrCount ?? cf.currentCompletion?.expectedQrCount ?? null,
-      currentComplete: Boolean(completion.complete ?? cf.currentCompletion?.complete),
-      rawUnique: counting.rawUniqueDiagnosticCandidateCount ?? cf.rawUniqueCount ?? null,
-      decodeIntegritySafeUnique: cf.decodeIntegritySafeUniqueCount ?? null,
-      recognizedSchemaUnique: cf.recognizedSchemaUniqueCount ?? null,
-      unrecognizedSafeUnique: cf.unrecognizedSafeUniqueCount ?? null,
+      currentConfirmed: full?.confirmedQrCount ?? separated.currentConfirmedCount ?? null,
+      expectedQrCount: completion.expectedQrCount ?? separated.currentCompletion?.expectedQrCount ?? null,
+      currentComplete: Boolean(completion.complete ?? separated.currentCompletion?.complete),
+      rawUnique: counting.rawUniqueDiagnosticCandidateCount ?? separated.rawUniqueCount ?? null,
+      decodeIntegritySafeUnique: separated.decodeIntegritySafeUniqueCount ?? null,
+      recognizedSchemaUnique: separated.recognizedSchemaUniqueCount ?? null,
+      unrecognizedSafeUnique: separated.unrecognizedSafeUniqueCount ?? null,
       structuralFailUnique: counting.structuralFailUniqueCount ?? null,
-      counterfactualConfirmed: cf.counterfactualConfirmedCount ?? null,
-      counterfactualComplete: Boolean(cf.counterfactualCompletion?.complete),
+      separatedConfirmed: separated.separatedConfirmedCount ?? separated.counterfactualConfirmedCount ?? null,
+      separatedComplete: Boolean(separated.separatedCompletion?.complete ?? separated.counterfactualCompletion?.complete),
     },
     baselineReproduction: {
       normalDecodeControlChanged: Boolean(counting.normalDecodeControlChanged),
@@ -913,13 +918,20 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       decoderStageMissingSupported: Number(counting.rawUniqueDiagnosticCandidateCount || 0) <= Number(counting.confirmedCanonicalCount || 0),
     },
     comparison: {
-      currentConfirmedCount: cf.currentConfirmedCount ?? full?.confirmedQrCount ?? null,
-      counterfactualConfirmedCount: cf.counterfactualConfirmedCount ?? null,
-      expectedQrCount: cf.counterfactualCompletion?.expectedQrCount ?? completion.expectedQrCount ?? null,
-      currentComplete: Boolean(cf.currentCompletion?.complete ?? completion.complete),
-      counterfactualComplete: Boolean(cf.counterfactualCompletion?.complete),
+      currentConfirmedCount: separated.currentConfirmedCount ?? full?.confirmedQrCount ?? null,
+      separatedConfirmedCount: separated.separatedConfirmedCount ?? separated.counterfactualConfirmedCount ?? null,
+      expectedQrCount: separated.separatedCompletion?.expectedQrCount ?? separated.counterfactualCompletion?.expectedQrCount ?? completion.expectedQrCount ?? null,
+      currentComplete: Boolean(separated.currentCompletion?.complete ?? completion.complete),
+      separatedComplete: Boolean(separated.separatedCompletion?.complete ?? separated.counterfactualCompletion?.complete),
     },
     importantCases: importantCandidates,
+    evaluationPolicy: {
+      currentVariant: "CURRENT",
+      separatedVariant: "PARSER_SEPARATED",
+      gtUsedInRuntimeOrControl: false,
+      locatorUsedForCompletionExpectedOrRescueControl: false,
+      timingComparableToBaseline: false,
+    },
     changes: {
       recognitionLogicChanged: false,
       frozenChanged: false,
@@ -2202,7 +2214,7 @@ export default function CertificateQrLiveScanPoc() {
         evidenceRef.current,
         physicalLocatorUi
       ),
-      parserSeparationCounterfactual: parserSeparationCounterfactualSnapshot(
+      parserSeparatedEvaluation: parserSeparationCounterfactualSnapshot(
         countingIntegrityRef.current,
         evidenceRef.current
       ),
@@ -2297,11 +2309,11 @@ export default function CertificateQrLiveScanPoc() {
     <main style={{ maxWidth: 760, margin: "0 auto", padding: "16px", fontFamily: "system-ui, sans-serif" }}>
       <h1 style={{ margin: "0 0 6px", fontSize: 24 }}>車検証 Guided Live QR Scan PoC v2</h1>
       <p style={{ margin: "0 0 8px", color: "#555", fontSize: 14 }}>
-        decode-integrity / parser-schema分離counterfactual評価専用。通常decode/dedupe/completionは変更していません。
+        decode-integrity / parser-schema分離評価専用。CURRENTのdecode/dedupe/completionは変更していません。
       </p>
       <div style={{ marginBottom: 12, padding: 9, borderRadius: 9, background: "#fff4d6", fontSize: 12, lineHeight: 1.5 }}>
         評価専用です。slash schemaはCurrent側では従来通り必須のままです。
-        Counterfactual側だけdecode integrityとparser schemaを分離します。payload本文・画像はsummaryへ出しません。
+        PARSER_SEPARATED側だけdecode integrityとparser schemaを分離します。payload本文・画像はsummaryへ出しません。
       </div>
       <section style={{
         marginBottom: 12,
@@ -2312,7 +2324,7 @@ export default function CertificateQrLiveScanPoc() {
         fontSize: 13,
         lineHeight: 1.55,
       }}>
-        <div style={{ fontWeight: 900 }}>Current / Counterfactual</div>
+        <div style={{ fontWeight: 900 }}>CURRENT vs PARSER_SEPARATED</div>
         <div>
           Current confirmed：
           <b>{parserSeparationUi.currentConfirmedCount}</b>
@@ -2329,13 +2341,13 @@ export default function CertificateQrLiveScanPoc() {
           <b>{parserSeparationUi.unrecognizedSafeUniqueCount}</b>
         </div>
         <div>
-          Counterfactual confirmed：
-          <b>{parserSeparationUi.counterfactualConfirmedCount}</b>
-          {parserSeparationUi.counterfactualCompletion.expectedQrCount != null
-            ? ` / ${parserSeparationUi.counterfactualCompletion.expectedQrCount}`
+          PARSER_SEPARATED confirmed：
+          <b>{parserSeparationUi.separatedConfirmedCount}</b>
+          {parserSeparationUi.separatedCompletion.expectedQrCount != null
+            ? ` / ${parserSeparationUi.separatedCompletion.expectedQrCount}`
             : ""}
           {" "}
-          {parserSeparationUi.counterfactualCompletion.complete ? "✓ counterfactual complete" : ""}
+          {parserSeparationUi.separatedCompletion.complete ? "✓ separated complete" : ""}
         </div>
       </section>
 
