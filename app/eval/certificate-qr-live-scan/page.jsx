@@ -258,6 +258,16 @@ function qualitySummary(records = []) {
   return Object.fromEntries(keys.map((key) => [key, distribution(records, key)]));
 }
 
+function completionFromEvidenceMap(map) {
+  const confirmed=[...(map?.values?.()||[])].filter((entry)=>entry.confirmed);
+  if(confirmed.some((entry)=>entry.parserSchemaClass==="kei-slash")){
+    return {kind:"kei",expected:6,label:"軽6QR",confirmedCount:confirmed.length,complete:confirmed.length>=6};
+  }
+  if(confirmed.some((entry)=>entry.parserSchemaClass==="registered-slash")){
+    return {kind:"registered",expected:5,label:"登録車5QR",confirmedCount:confirmed.length,complete:confirmed.length>=5};
+  }
+  return {kind:"unknown",expected:null,label:"車種判定待ち",confirmedCount:confirmed.length,complete:false};
+}
 function candidateView(entry) {
   return {
     fingerprint: entry.fingerprint,
@@ -375,7 +385,7 @@ export default function CertificateQrLiveScanPoc() {
       if (a.confirmed !== b.confirmed) return a.confirmed ? -1 : 1;
       return a.firstSeenFrame - b.firstSeenFrame;
     }));
-    return structuralHit;
+    return {structuralHit,completion:completionFromEvidenceMap(evidenceRef.current)};
   };
 
   const drawGuideRoi = (video, canvas) => {
@@ -421,14 +431,15 @@ export default function CertificateQrLiveScanPoc() {
         if (!grouped.has(hit.canonical)) grouped.set(hit.canonical, new Set());
         grouped.get(hit.canonical).add(hit.engine);
       }
-      const structuralHit = updateEvidence(frameId, grouped, q);
+      const evidenceUpdate = updateEvidence(frameId, grouped, q);
+      const structuralHit = Boolean(evidenceUpdate.structuralHit);
       const decodeMs = Math.round(performance.now() - started);
       setFrameStats((prev) => ({
         processed: prev.processed + 1,
         decoded: prev.decoded + (structuralHit ? 1 : 0),
         lastDecodeMs: decodeMs,
       }));
-      if (complete) setStatus("必要QR取得済み");
+      if (evidenceUpdate.completion.complete) setStatus("必要QR取得済み");
       else if (structuralHit) setStatus("QR取得・蓄積中");
       else if (q.label === "soft") setStatus("読取中：もう少しピントを合わせる");
       else if (q.label === "dark") setStatus("読取中：明るい位置へ");
