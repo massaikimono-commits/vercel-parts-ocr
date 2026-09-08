@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-parser-separated-evaluation-2-rescue-accounting";
+const LIVE_SCAN_REVISION = "live-poc-v2-production-shape-state-ui-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -904,6 +904,182 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
   };
 }
 
+function buildPhysicalSlotUi(physicalLocatorUi, expectedQrCount, counting) {
+  const currentTracks = (physicalLocatorUi?.tracks || [])
+    .filter((track) =>
+      track.confidence !== "low" &&
+      physicalLocatorUi.lastFrame != null &&
+      track.lastSeenFrame === physicalLocatorUi.lastFrame &&
+      Number(track.seenCount || 0) >= 3
+    )
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+
+  const sameCanonicalFromLocator = new Map();
+  for (const track of currentTracks) {
+    const id = track.lastMatchedDiagnosticId || track.matchedDiagnosticId || null;
+    if (!id) continue;
+    if (!sameCanonicalFromLocator.has(id)) sameCanonicalFromLocator.set(id, []);
+    sameCanonicalFromLocator.get(id).push(track.trackId);
+  }
+  const sameCanonicalMultiplePhysicalPositionCandidate =
+    Boolean(counting?.duplicatePayloadPhysicalQrCandidateDetected) ||
+    [...sameCanonicalFromLocator.values()].some((ids) => ids.length >= 2);
+
+  const multipleCanonicalSamePhysicalSlotCandidate = currentTracks.some((track) =>
+    Array.isArray(track.matchedDiagnosticIds) && track.matchedDiagnosticIds.length >= 2
+  );
+  const duplicateIdentityWarning =
+    sameCanonicalMultiplePhysicalPositionCandidate ||
+    multipleCanonicalSamePhysicalSlotCandidate;
+
+  const expected = Number.isInteger(expectedQrCount) ? expectedQrCount : null;
+  const extraCandidateCount = expected == null ? 0 : Math.max(0, currentTracks.length - expected);
+  const visible = expected == null ? currentTracks : currentTracks.slice(0, expected);
+  const uncertainCount = expected == null ? 0 : Math.max(0, expected - visible.length);
+  const identityStable =
+    expected != null &&
+    visible.length === expected &&
+    uncertainCount === 0 &&
+    extraCandidateCount === 0 &&
+    !duplicateIdentityWarning;
+
+  const slots = visible.map((track, index) => ({
+    displayOrdinal: identityStable ? index + 1 : null,
+    positionLabel: guide2DLabel(track.x, track.y),
+    status: track.everDecoded ? "読取済" : "未読",
+    confidence: track.confidence,
+    trackId: track.trackId,
+  }));
+  for (let i = 0; i < uncertainCount; i += 1) {
+    slots.push({
+      displayOrdinal: null,
+      positionLabel: "位置不確定",
+      status: "位置不確定",
+      confidence: "unknown",
+      trackId: null,
+    });
+  }
+
+  return {
+    slotCount: expected ?? visible.length,
+    physicalSlotDisplayCount: visible.length,
+    readCount: visible.filter((track) => track.everDecoded).length,
+    unreadCount: visible.filter((track) => !track.everDecoded).length,
+    uncertainCount,
+    extraCandidateCount,
+    identityStable,
+    sameCanonicalMultiplePhysicalPositionCandidate,
+    multipleCanonicalSamePhysicalSlotCandidate,
+    duplicateIdentityWarning,
+    slots,
+  };
+}
+
+function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi) {
+  const separated = parserSeparationCounterfactualSnapshot(state, evidenceMap);
+  const counting = countingIntegritySnapshot(state, evidenceMap, physicalLocatorUi);
+  const recognizedKinds = new Set(
+    [...evidenceMap.values()]
+      .filter((entry) => entry.confirmed)
+      .map((entry) => entry.parserSchemaClass)
+      .filter((schema) => schema === "kei-slash" || schema === "registered-slash")
+  );
+  const kindAmbiguous = recognizedKinds.has("kei-slash") && recognizedKinds.has("registered-slash");
+  const kind = kindAmbiguous
+    ? "ambiguous"
+    : recognizedKinds.has("kei-slash")
+      ? "kei"
+      : recognizedKinds.has("registered-slash")
+        ? "registered"
+        : "unknown";
+  const expectedQrCount = kind === "kei" ? 6 : kind === "registered" ? 5 : null;
+  const confirmedCanonicalCount = Number(separated.separatedConfirmedCount || 0);
+  const accountingIntegrityPass = Boolean(separated.accountingIntegrityPass);
+  const overCount = expectedQrCount != null && confirmedCanonicalCount > expectedQrCount;
+
+  let qrAcquisitionState = "insufficient";
+  if (!accountingIntegrityPass) qrAcquisitionState = "accounting-integrity-fail";
+  else if (kindAmbiguous) qrAcquisitionState = "kind-ambiguous";
+  else if (overCount) qrAcquisitionState = "over-count-review";
+  else if (expectedQrCount != null && confirmedCanonicalCount === expectedQrCount) qrAcquisitionState = "matched";
+
+  const qrAcquisitionComplete = qrAcquisitionState === "matched";
+  const proposedStopCandidate =
+    qrAcquisitionComplete &&
+    kind !== "unknown" &&
+    kind !== "ambiguous" &&
+    accountingIntegrityPass;
+
+  const recognizedCount = Number(separated.recognizedSchemaUniqueCount || 0);
+  const unrecognizedSafeCount = Number(separated.unrecognizedSafeUniqueCount || 0);
+  const interpretedPayloadCount = recognizedCount;
+  const payloadInterpretationComplete =
+    qrAcquisitionComplete &&
+    unrecognizedSafeCount === 0 &&
+    interpretedPayloadCount === confirmedCanonicalCount;
+
+  const vehicleFieldState = {
+    state: "partial",
+    complete: false,
+    fieldCompletenessEvaluated: false,
+    missingFieldCount: null,
+    reason: "live-eval-has-no-formal-required-field-extraction-map",
+    futureEvidenceShape: {
+      source: ["live-qr-recognized", "photo-qr-recognized", "ocr"],
+      schemaClass: true,
+      confidenceOrProvenance: true,
+    },
+  };
+
+  const physicalSlotUi = buildPhysicalSlotUi(
+    physicalLocatorUi,
+    expectedQrCount,
+    counting
+  );
+
+  return {
+    qrAcquisitionState,
+    qrAcquisitionComplete,
+    confirmedCanonicalCount,
+    kind,
+    kindSource: "recognized-schema-confirmed-current-evidence-only",
+    expectedQrCount,
+    accountingIntegrityPass,
+    overCount,
+    proposedStopCandidate,
+    payloadInterpretationState: {
+      state: payloadInterpretationComplete ? "complete" : "partial",
+      complete: payloadInterpretationComplete,
+      recognizedCount,
+      unrecognizedSafeCount,
+      interpretedPayloadCount,
+      unknownSafeUsedForKindOrExpected: false,
+      unknownSafeUsedForFieldInference: false,
+    },
+    vehicleFieldState,
+    fallbackState: {
+      photoQrFallbackCandidate: qrAcquisitionState === "insufficient",
+      photoQrReviewCandidate:
+        qrAcquisitionState === "over-count-review" ||
+        qrAcquisitionState === "kind-ambiguous" ||
+        qrAcquisitionState === "accounting-integrity-fail",
+      ocrMissingFieldsFallbackCandidate:
+        qrAcquisitionComplete && !vehicleFieldState.complete,
+      photoUnionImplemented: false,
+      ocrFallbackImplemented: false,
+    },
+    physicalSlotUi,
+    controlConnections: {
+      currentCameraStopChanged: false,
+      locatorUsedForCompletion: false,
+      locatorUsedForExpected: false,
+      locatorUsedForKind: false,
+      locatorUsedForRescueControl: false,
+      proposedStopCandidateObservationOnly: true,
+    },
+  };
+}
+
 function topHistogramEntry(histogram = {}) {
   return Object.entries(histogram || {}).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))[0] || null;
 }
@@ -992,6 +1168,28 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       h3OneOffPatternGroupCount: h3Groups.length,
       decoderStageMissingSupported: Number(counting.rawUniqueDiagnosticCandidateCount || 0) <= Number(counting.confirmedCanonicalCount || 0),
     },
+    productionShapeCandidate: full?.productionShapeCandidate ? {
+      qrAcquisitionState: full.productionShapeCandidate.qrAcquisitionState,
+      confirmedCanonicalCount: full.productionShapeCandidate.confirmedCanonicalCount,
+      kind: full.productionShapeCandidate.kind,
+      expectedQrCount: full.productionShapeCandidate.expectedQrCount,
+      accountingIntegrityPass: full.productionShapeCandidate.accountingIntegrityPass,
+      overCount: full.productionShapeCandidate.overCount,
+      proposedStopCandidate: full.productionShapeCandidate.proposedStopCandidate,
+      payloadInterpretationState: full.productionShapeCandidate.payloadInterpretationState,
+      vehicleFieldState: {
+        state: full.productionShapeCandidate.vehicleFieldState?.state ?? null,
+        complete: full.productionShapeCandidate.vehicleFieldState?.complete ?? false,
+        missingFieldCount: full.productionShapeCandidate.vehicleFieldState?.missingFieldCount ?? null,
+        fieldCompletenessEvaluated: full.productionShapeCandidate.vehicleFieldState?.fieldCompletenessEvaluated ?? false,
+      },
+      physicalSlotUi: {
+        slotCount: full.productionShapeCandidate.physicalSlotUi?.slotCount ?? null,
+        readCount: full.productionShapeCandidate.physicalSlotUi?.readCount ?? null,
+        uncertainCount: full.productionShapeCandidate.physicalSlotUi?.uncertainCount ?? null,
+        duplicateIdentityWarning: Boolean(full.productionShapeCandidate.physicalSlotUi?.duplicateIdentityWarning),
+      },
+    } : null,
     comparison: {
       currentConfirmedCount: separated.currentConfirmedCount ?? full?.confirmedQrCount ?? null,
       separatedConfirmedCount: separated.separatedConfirmedCount ?? separated.counterfactualConfirmedCount ?? null,
@@ -1714,6 +1912,12 @@ export default function CertificateQrLiveScanPoc() {
     evidenceRef.current
   ), [frameStats.processed, candidates]);
 
+  const productionShapeUi = useMemo(() => productionShapeCandidateSnapshot(
+    countingIntegrityRef.current,
+    evidenceRef.current,
+    physicalLocatorUi
+  ), [frameStats.processed, candidates, physicalLocatorUi]);
+
   const clearTimers = () => {
     for (const id of timersRef.current) clearTimeout(id);
     timersRef.current.clear();
@@ -1883,6 +2087,7 @@ export default function CertificateQrLiveScanPoc() {
           seenCount: 1,
           decodedThroughFrame: -1,
           matchedDiagnosticId: null,
+          matchedDiagnosticIds: new Set(),
         };
         tracks.set(bestTrack.trackId, bestTrack);
       } else {
@@ -1937,6 +2142,8 @@ export default function CertificateQrLiveScanPoc() {
       if (usedTracks.has(pair.track.trackId) || usedDiagnostics.has(pair.point.diagnosticId)) continue;
       pair.track.decodedThroughFrame = frameId + PHYSICAL_LOCATOR_TRACK_TTL_FRAMES;
       pair.track.matchedDiagnosticId = pair.point.diagnosticId;
+      if (!pair.track.matchedDiagnosticIds) pair.track.matchedDiagnosticIds = new Set();
+      pair.track.matchedDiagnosticIds.add(pair.point.diagnosticId);
       usedTracks.add(pair.track.trackId);
       usedDiagnostics.add(pair.point.diagnosticId);
     }
@@ -1958,7 +2165,10 @@ export default function CertificateQrLiveScanPoc() {
         firstSeenFrame: track.firstSeenFrame,
         lastSeenFrame: track.lastSeenFrame,
         decoded: frameId <= Number(track.decodedThroughFrame || -1),
+        everDecoded: Boolean(track.matchedDiagnosticId),
         matchedDiagnosticId: frameId <= Number(track.decodedThroughFrame || -1) ? track.matchedDiagnosticId : null,
+        lastMatchedDiagnosticId: track.matchedDiagnosticId || null,
+        matchedDiagnosticIds: [...(track.matchedDiagnosticIds || new Set())],
       }))
       .sort((a, b) => a.y - b.y || a.x - b.x);
 
@@ -2309,6 +2519,11 @@ export default function CertificateQrLiveScanPoc() {
       parserSeparatedEvaluation: parserSeparationCounterfactualSnapshot(
         countingIntegrityRef.current,
         evidenceRef.current
+      ),
+      productionShapeCandidate: productionShapeCandidateSnapshot(
+        countingIntegrityRef.current,
+        evidenceRef.current,
+        physicalLocatorUi
       ),
       physicalQrLocator: {
         mode: "finder-pattern-triplet-2d",
