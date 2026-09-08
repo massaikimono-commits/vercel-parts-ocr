@@ -208,7 +208,7 @@ export function diagnosePhaseLosses(args: {
         diagnostic: {
           selectedPitch,
           assignmentTolerance,
-          phasePositionsForGt,
+          phasePositionsForGt: positionsForGt,
           correctCandidates: rowLikeCorrect.map((candidate) => ({
             candidateIndex: candidate.candidateIndex,
             center: candidate.center,
