@@ -447,6 +447,7 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = [], sourc
         normalJsqrFrames: new Set(),
         normalZxingFrames: new Set(),
         rescueZxingFrames: new Set(),
+        locatorTrackMatches: [],
         positions: [],
         rawByteLengths: [],
         decodedTextLengths: [],
@@ -904,70 +905,189 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
   };
 }
 
-function buildPhysicalSlotUi(physicalLocatorUi, expectedQrCount, counting) {
+function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separated) {
+  const expected = Number.isInteger(expectedQrCount) ? expectedQrCount : null;
   const currentTracks = (physicalLocatorUi?.tracks || [])
     .filter((track) =>
       track.confidence !== "low" &&
       physicalLocatorUi.lastFrame != null &&
-      track.lastSeenFrame === physicalLocatorUi.lastFrame &&
-      Number(track.seenCount || 0) >= 3
-    )
-    .sort((a, b) => a.y - b.y || a.x - b.x);
+      track.lastSeenFrame === physicalLocatorUi.lastFrame
+    );
 
-  const sameCanonicalFromLocator = new Map();
-  for (const track of currentTracks) {
-    const id = track.lastMatchedDiagnosticId || track.matchedDiagnosticId || null;
-    if (!id) continue;
-    if (!sameCanonicalFromLocator.has(id)) sameCanonicalFromLocator.set(id, []);
-    sameCanonicalFromLocator.get(id).push(track.trackId);
+  const confirmedCandidates = (separated?.allCandidateDiagnostics || [])
+    .filter((candidate) => candidate.genericConfirmationPass);
+  const rawById = state?.rawCandidates || new Map();
+
+  const associations = confirmedCandidates.map((candidate) => {
+    const raw = rawById.get(candidate.diagnosticId) || null;
+    const positions = Array.isArray(raw?.positions) ? raw.positions : [];
+    const frameIds = new Set(positions.map((position) => position.frameId));
+    const recent = positions.slice(-24);
+    const recentX = recent.map((position) => Number(position.x)).filter(Number.isFinite);
+    const recentY = recent.map((position) => Number(position.y)).filter(Number.isFinite);
+    const x = recentX.length ? medianNumber(recentX) : null;
+    const y = recentY.length ? medianNumber(recentY) : null;
+
+    const byFrame = new Map();
+    for (const position of positions) {
+      if (!byFrame.has(position.frameId)) byFrame.set(position.frameId, []);
+      byFrame.get(position.frameId).push({ x: position.x, y: position.y });
+    }
+    let sameFrameSpatialConflict = false;
+    for (const points of byFrame.values()) {
+      if (points.length < 2) continue;
+      if (spatialCluster2d(points).length >= 2 && maxPairDistance(points) >= .18) {
+        sameFrameSpatialConflict = true;
+        break;
+      }
+    }
+
+    const locatorTrackMatches = Array.isArray(raw?.locatorTrackMatches) ? raw.locatorTrackMatches : [];
+    const locatorMatchFrames = new Set(locatorTrackMatches.map((match) => match.frameId));
+    const temporalContinuityPass = frameIds.size >= 2 || locatorMatchFrames.size >= 2;
+    const hasPositionEvidence = Number.isFinite(x) && Number.isFinite(y);
+    const stableBase =
+      hasPositionEvidence &&
+      temporalContinuityPass &&
+      !sameFrameSpatialConflict;
+
+    return {
+      diagnosticId: candidate.diagnosticId,
+      stableBase,
+      sameFrameSpatialConflict,
+      x,
+      y,
+      firstSeenFrame: candidate.firstSeenFrame,
+      lastSeenFrame: candidate.lastSeenFrame,
+      positionFrameCount: frameIds.size,
+      locatorTrackCount: new Set(locatorTrackMatches.map((match) => match.trackId)).size,
+      locatorMatchFrameCount: locatorMatchFrames.size,
+    };
+  });
+
+  const conflictIds = new Set();
+  for (const association of associations) {
+    if (association.sameFrameSpatialConflict) conflictIds.add(association.diagnosticId);
   }
+
+  const prelimStable = associations.filter((association) => association.stableBase);
+  for (let i = 0; i < prelimStable.length; i += 1) {
+    for (let j = i + 1; j < prelimStable.length; j += 1) {
+      const a = prelimStable[i], b = prelimStable[j];
+      if (!Number.isFinite(a.x) || !Number.isFinite(a.y) || !Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
+      const distance = Math.hypot(a.x - b.x, a.y - b.y);
+      if (distance <= .045) {
+        conflictIds.add(a.diagnosticId);
+        conflictIds.add(b.diagnosticId);
+      }
+    }
+  }
+
+  for (const track of physicalLocatorUi?.tracks || []) {
+    const history = Array.isArray(track.matchHistory) ? track.matchHistory : [];
+    for (let i = 0; i < history.length; i += 1) {
+      for (let j = i + 1; j < history.length; j += 1) {
+        if (history[i].diagnosticId === history[j].diagnosticId) continue;
+        if (Math.abs(Number(history[i].frameId) - Number(history[j].frameId)) <= 4) {
+          conflictIds.add(history[i].diagnosticId);
+          conflictIds.add(history[j].diagnosticId);
+        }
+      }
+    }
+  }
+
+  const stableAssociations = associations
+    .filter((association) => association.stableBase && !conflictIds.has(association.diagnosticId))
+    .sort((a, b) => (a.x ?? 999) - (b.x ?? 999) || (a.y ?? 999) - (b.y ?? 999));
+  const unstableConfirmed = associations
+    .filter((association) => !association.stableBase || conflictIds.has(association.diagnosticId));
+
   const sameCanonicalMultiplePhysicalPositionCandidate =
-    Boolean(counting?.duplicatePayloadPhysicalQrCandidateDetected) ||
-    [...sameCanonicalFromLocator.values()].some((ids) => ids.length >= 2);
+    associations.some((association) => association.sameFrameSpatialConflict);
+  const multipleCanonicalSamePhysicalSlotCandidate =
+    conflictIds.size > 0 &&
+    !sameCanonicalMultiplePhysicalPositionCandidate;
+  const duplicateIdentityWarning = conflictIds.size > 0;
 
-  const multipleCanonicalSamePhysicalSlotCandidate = currentTracks.some((track) =>
-    Array.isArray(track.matchedDiagnosticIds) && track.matchedDiagnosticIds.length >= 2
-  );
-  const duplicateIdentityWarning =
-    sameCanonicalMultiplePhysicalPositionCandidate ||
-    multipleCanonicalSamePhysicalSlotCandidate;
-
-  const expected = Number.isInteger(expectedQrCount) ? expectedQrCount : null;
-  const extraCandidateCount = expected == null ? 0 : Math.max(0, currentTracks.length - expected);
-  const visible = expected == null ? currentTracks : currentTracks.slice(0, expected);
-  const uncertainCount = expected == null ? 0 : Math.max(0, expected - visible.length);
+  const confirmedCanonicalCount = confirmedCandidates.length;
+  const canonicalWithStablePhysicalAssociationCount = stableAssociations.length;
+  const canonicalWithoutStablePhysicalAssociationCount =
+    Math.max(0, confirmedCanonicalCount - canonicalWithStablePhysicalAssociationCount);
+  const sessionPersistedSlotCount = associations.filter((association) =>
+    association.positionFrameCount > 0 || association.locatorMatchFrameCount > 0
+  ).length;
+  const unreadCount = expected == null ? 0 : Math.max(0, expected - confirmedCanonicalCount);
+  const uncertainCount = canonicalWithoutStablePhysicalAssociationCount;
   const identityStable =
     expected != null &&
-    visible.length === expected &&
+    confirmedCanonicalCount === expected &&
+    stableAssociations.length === expected &&
+    unreadCount === 0 &&
     uncertainCount === 0 &&
-    extraCandidateCount === 0 &&
     !duplicateIdentityWarning;
 
-  const slots = visible.map((track, index) => ({
+  const slots = stableAssociations.map((association, index) => ({
+    diagnosticId: association.diagnosticId,
     displayOrdinal: identityStable ? index + 1 : null,
-    positionLabel: guide2DLabel(track.x, track.y),
-    status: track.everDecoded ? "読取済" : "未読",
-    confidence: track.confidence,
-    trackId: track.trackId,
+    positionLabel: guide2DLabel(association.x, association.y),
+    status: "読取済",
+    confidence: "session-stable",
+    x: Number(association.x.toFixed(4)),
+    y: Number(association.y.toFixed(4)),
+    firstSeenFrame: association.firstSeenFrame,
+    lastSeenFrame: association.lastSeenFrame,
   }));
-  for (let i = 0; i < uncertainCount; i += 1) {
+
+  for (const association of unstableConfirmed) {
     slots.push({
+      diagnosticId: association.diagnosticId,
       displayOrdinal: null,
       positionLabel: "位置不確定",
       status: "位置不確定",
-      confidence: "unknown",
-      trackId: null,
+      confidence: "uncertain",
+      x: Number.isFinite(association.x) ? Number(association.x.toFixed(4)) : null,
+      y: Number.isFinite(association.y) ? Number(association.y.toFixed(4)) : null,
+      firstSeenFrame: association.firstSeenFrame,
+      lastSeenFrame: association.lastSeenFrame,
+    });
+  }
+
+  const associatedIds = new Set(stableAssociations.map((association) => association.diagnosticId));
+  const unreadTracks = currentTracks
+    .filter((track) => {
+      const id = track.lastMatchedDiagnosticId || track.matchedDiagnosticId || null;
+      return !id || !associatedIds.has(id);
+    })
+    .sort((a, b) => b.confidenceScore - a.confidenceScore);
+
+  for (let i = 0; i < unreadCount; i += 1) {
+    const track = unreadTracks[i] || null;
+    slots.push({
+      diagnosticId: null,
+      displayOrdinal: null,
+      positionLabel: track ? guide2DLabel(track.x, track.y) : "位置不確定",
+      status: "未読",
+      confidence: track?.confidence || "unknown",
+      x: track ? track.x : null,
+      y: track ? track.y : null,
+      firstSeenFrame: track?.firstSeenFrame ?? null,
+      lastSeenFrame: track?.lastSeenFrame ?? null,
     });
   }
 
   return {
-    slotCount: expected ?? visible.length,
-    physicalSlotDisplayCount: visible.length,
-    readCount: visible.filter((track) => track.everDecoded).length,
-    unreadCount: visible.filter((track) => !track.everDecoded).length,
+    slotCount: expected ?? confirmedCanonicalCount,
+    physicalSlotDisplayCount: stableAssociations.length,
+    readCount: stableAssociations.length,
+    unreadCount,
     uncertainCount,
-    extraCandidateCount,
     identityStable,
+    canonicalWithStablePhysicalAssociationCount,
+    canonicalWithoutStablePhysicalAssociationCount,
+    stablePhysicalSlotCount: stableAssociations.length,
+    sessionPersistedSlotCount,
+    currentFrameTrackCount: currentTracks.length,
+    associationConflictCount: conflictIds.size,
     sameCanonicalMultiplePhysicalPositionCandidate,
     multipleCanonicalSamePhysicalSlotCandidate,
     duplicateIdentityWarning,
@@ -1051,9 +1171,10 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi,
   };
 
   const physicalSlotUi = buildPhysicalSlotUi(
+    state,
     physicalLocatorUi,
     expectedQrCount,
-    counting
+    separated
   );
 
   return {
@@ -1226,6 +1347,12 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
         slotCount: full.productionShapeCandidate.physicalSlotUi?.slotCount ?? null,
         readCount: full.productionShapeCandidate.physicalSlotUi?.readCount ?? null,
         uncertainCount: full.productionShapeCandidate.physicalSlotUi?.uncertainCount ?? null,
+        canonicalWithStablePhysicalAssociationCount: full.productionShapeCandidate.physicalSlotUi?.canonicalWithStablePhysicalAssociationCount ?? null,
+        canonicalWithoutStablePhysicalAssociationCount: full.productionShapeCandidate.physicalSlotUi?.canonicalWithoutStablePhysicalAssociationCount ?? null,
+        stablePhysicalSlotCount: full.productionShapeCandidate.physicalSlotUi?.stablePhysicalSlotCount ?? null,
+        sessionPersistedSlotCount: full.productionShapeCandidate.physicalSlotUi?.sessionPersistedSlotCount ?? null,
+        currentFrameTrackCount: full.productionShapeCandidate.physicalSlotUi?.currentFrameTrackCount ?? null,
+        associationConflictCount: full.productionShapeCandidate.physicalSlotUi?.associationConflictCount ?? null,
         duplicateIdentityWarning: Boolean(full.productionShapeCandidate.physicalSlotUi?.duplicateIdentityWarning),
       },
     } : null,
@@ -2132,6 +2259,7 @@ export default function CertificateQrLiveScanPoc() {
           decodedThroughFrame: -1,
           matchedDiagnosticId: null,
           matchedDiagnosticIds: new Set(),
+          matchHistory: [],
         };
         tracks.set(bestTrack.trackId, bestTrack);
       } else {
@@ -2188,6 +2316,25 @@ export default function CertificateQrLiveScanPoc() {
       pair.track.matchedDiagnosticId = pair.point.diagnosticId;
       if (!pair.track.matchedDiagnosticIds) pair.track.matchedDiagnosticIds = new Set();
       pair.track.matchedDiagnosticIds.add(pair.point.diagnosticId);
+      if (!Array.isArray(pair.track.matchHistory)) pair.track.matchHistory = [];
+      pair.track.matchHistory.push({
+        frameId,
+        diagnosticId: pair.point.diagnosticId,
+      });
+      if (pair.track.matchHistory.length > 48) pair.track.matchHistory = pair.track.matchHistory.slice(-48);
+      const rawCandidate = countingIntegrityRef.current.rawCandidates.get(pair.point.diagnosticId);
+      if (rawCandidate) {
+        if (!Array.isArray(rawCandidate.locatorTrackMatches)) rawCandidate.locatorTrackMatches = [];
+        rawCandidate.locatorTrackMatches.push({
+          frameId,
+          trackId: pair.track.trackId,
+          x: pair.track.x,
+          y: pair.track.y,
+        });
+        if (rawCandidate.locatorTrackMatches.length > 96) {
+          rawCandidate.locatorTrackMatches = rawCandidate.locatorTrackMatches.slice(-96);
+        }
+      }
       usedTracks.add(pair.track.trackId);
       usedDiagnostics.add(pair.point.diagnosticId);
     }
@@ -2213,6 +2360,7 @@ export default function CertificateQrLiveScanPoc() {
         matchedDiagnosticId: frameId <= Number(track.decodedThroughFrame || -1) ? track.matchedDiagnosticId : null,
         lastMatchedDiagnosticId: track.matchedDiagnosticId || null,
         matchedDiagnosticIds: [...(track.matchedDiagnosticIds || new Set())],
+        matchHistory: (track.matchHistory || []).slice(-24),
       }))
       .sort((a, b) => a.y - b.y || a.x - b.x);
 
@@ -2427,8 +2575,11 @@ export default function CertificateQrLiveScanPoc() {
         if (!evidence?.confirmed) continue;
         for (const hit of group.hits) {
           if (!hit.guidePosition) continue;
+          const rawDiagnosticId =
+            countingIntegrityRef.current.diagnosticIdByDecoded.get(canonical) ||
+            countingDiagnosticId(countingIntegrityRef.current, canonical);
           recentDecodedPositionsRef.current.push({
-            diagnosticId: evidence.diagnosticId,
+            diagnosticId: rawDiagnosticId,
             x: Number(hit.guidePosition.nx),
             y: Number(hit.guidePosition.ny),
             frameId,
