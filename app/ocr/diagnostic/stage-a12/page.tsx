@@ -691,6 +691,44 @@ function buildManagementShortSummary(source: any) {
         image.variants?.P_SELF_phaseLockedSelfSeed?.altCandidateAccepted,
     }));
 
+  const compactVariant = (variant: any) => {
+    if (!variant) return null;
+    return {
+      candidateCount: variant.candidateCount,
+      gtCoverage: variant.gtCoverage,
+      recall: variant.recall,
+      falseCount: variant.falseCount,
+      duplicateCount: variant.duplicateCount,
+      newRescueVsD: variant.newRescueVsD,
+      retainedA9AltRescue: variant.retainedA9AltRescue,
+      lostA9AltRescue: variant.lostA9AltRescue,
+      newRescueBeyondA9: variant.newRescueBeyondA9,
+      correctRowRegressionVsD: variant.correctRowRegressionVsD,
+      altCandidateGenerated: variant.altCandidateGenerated,
+      altCandidateAccepted: variant.altCandidateAccepted,
+      altCandidateRejected: variant.altCandidateRejected,
+      falseReductionVsA9ALT: variant.falseReductionVsA9ALT,
+      duplicateReductionVsA9ALT: variant.duplicateReductionVsA9ALT,
+      pitchHypothesisCount: variant.pitchHypothesisCount,
+      selectedPitch: variant.selectedPitch,
+      phaseConsensusSupport: variant.phaseConsensusSupport,
+      selfSeededLatticeCount: variant.selfSeededLatticeCount,
+      DAnchoredLatticeCount: variant.DAnchoredLatticeCount,
+      phasePositionCount: variant.phasePositionCount,
+      phaseMatchedPositionCount: variant.phaseMatchedPositionCount,
+      phaseUnmatchedPositionCount: variant.phaseUnmatchedPositionCount,
+      mechanismRescue: variant.mechanismRescue,
+    };
+  };
+
+  const compactReference = (reference: any, matchKey: string) => {
+    if (!reference) return null;
+    return {
+      ...compactVariant(reference),
+      [matchKey]: reference?.[matchKey],
+    };
+  };
+
   const summary = {
     schema: source?.schema,
     revision: source?.revision,
@@ -715,9 +753,92 @@ function buildManagementShortSummary(source: any) {
   const pretty = JSON.stringify(summary, null, 2);
   if (pretty.length <= 6000) return pretty;
 
+  const compactSummary = {
+    schema: source?.schema,
+    revision: source?.revision,
+    evaluationBranch: source?.evaluationBranch,
+    evaluationHead: source?.evaluationHead,
+    frozenSourceHead: source?.sourceHead,
+    baseline: compactReference(source?.baseline, "matchesExpectedA5D"),
+    a9AltReference: compactReference(
+      source?.a9AltReference,
+      "matchesExpectedA9Alt",
+    ),
+    a10GReference: compactReference(
+      source?.a10GReference,
+      "matchesExpectedA10G",
+    ),
+    a11LReference: compactReference(
+      source?.a11LReference,
+      "matchesExpectedA11L",
+    ),
+    variants: {
+      P_phaseLocked: compactVariant(source?.aggregate?.P_phaseLocked),
+      P_SELF_phaseLockedSelfSeed: compactVariant(
+        source?.aggregate?.P_SELF_phaseLockedSelfSeed,
+      ),
+    },
+    mechanismAggregate: source?.mechanismAggregate,
+    importantImages,
+    pathologicalTsvImages: source?.pathologicalTsvImages,
+    productionChanged: false,
+    frozenChanged: false,
+    adoptedHead: null,
+    stageB: "HOLD",
+  };
+
+  const compact = JSON.stringify(compactSummary);
+  if (compact.length <= 6000) return compact;
+
   return JSON.stringify({
-    ...summary,
-    importantImages: importantImages.slice(0, 4),
+    schema: source?.schema,
+    revision: source?.revision,
+    evaluationBranch: source?.evaluationBranch,
+    evaluationHead: source?.evaluationHead,
+    frozenSourceHead: source?.sourceHead,
+    baseline: {
+      candidateCount: source?.baseline?.candidateCount,
+      gtCoverage: source?.baseline?.gtCoverage,
+      falseCount: source?.baseline?.falseCount,
+      duplicateCount: source?.baseline?.duplicateCount,
+      matchesExpectedA5D: source?.baseline?.matchesExpectedA5D,
+    },
+    references: {
+      A9_ALT: {
+        gtCoverage: source?.a9AltReference?.gtCoverage,
+        falseCount: source?.a9AltReference?.falseCount,
+        duplicateCount: source?.a9AltReference?.duplicateCount,
+        newRescueVsD: source?.a9AltReference?.newRescueVsD,
+        matchesExpectedA9Alt:
+          source?.a9AltReference?.matchesExpectedA9Alt,
+      },
+      A10_G: {
+        gtCoverage: source?.a10GReference?.gtCoverage,
+        falseCount: source?.a10GReference?.falseCount,
+        duplicateCount: source?.a10GReference?.duplicateCount,
+        newRescueVsD: source?.a10GReference?.newRescueVsD,
+        matchesExpectedA10G:
+          source?.a10GReference?.matchesExpectedA10G,
+      },
+      A11_L: {
+        gtCoverage: source?.a11LReference?.gtCoverage,
+        falseCount: source?.a11LReference?.falseCount,
+        duplicateCount: source?.a11LReference?.duplicateCount,
+        newRescueVsD: source?.a11LReference?.newRescueVsD,
+        matchesExpectedA11L:
+          source?.a11LReference?.matchesExpectedA11L,
+      },
+    },
+    variants: {
+      P: compactVariant(source?.aggregate?.P_phaseLocked),
+      P_SELF: compactVariant(source?.aggregate?.P_SELF_phaseLockedSelfSeed),
+    },
+    importantImages,
+    pathologicalTsvImages: source?.pathologicalTsvImages,
+    productionChanged: false,
+    frozenChanged: false,
+    adoptedHead: null,
+    stageB: "HOLD",
   });
 }
 
