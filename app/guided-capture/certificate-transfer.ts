@@ -54,10 +54,13 @@ export async function consumeCertificateTransferImage() {
   const dataUrl = sessionStorage.getItem(IMAGE_KEY);
   if (!dataUrl) return null;
   const name = sessionStorage.getItem(NAME_KEY) || "guided-certificate.jpg";
-  sessionStorage.removeItem(IMAGE_KEY);
-  sessionStorage.removeItem(NAME_KEY);
 
   const response = await fetch(dataUrl);
   const blob = await response.blob();
   return new File([blob], name, { type: blob.type || "image/jpeg" });
+}
+
+export function clearCertificateTransferImage() {
+  sessionStorage.removeItem(IMAGE_KEY);
+  sessionStorage.removeItem(NAME_KEY);
 }
