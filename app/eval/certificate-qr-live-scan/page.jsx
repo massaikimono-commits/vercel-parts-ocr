@@ -1040,7 +1040,12 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi)
   return {
     qrAcquisitionState,
     qrAcquisitionComplete,
+    payloadInterpretationComplete,
+    vehicleFieldsComplete: vehicleFieldState.complete,
     confirmedCanonicalCount,
+    physicalSlotDisplayCount: physicalSlotUi.physicalSlotDisplayCount,
+    sameCanonicalMultiplePhysicalPositionCandidate: physicalSlotUi.sameCanonicalMultiplePhysicalPositionCandidate,
+    multipleCanonicalSamePhysicalSlotCandidate: physicalSlotUi.multipleCanonicalSamePhysicalSlotCandidate,
     kind,
     kindSource: "recognized-schema-confirmed-current-evidence-only",
     expectedQrCount,
