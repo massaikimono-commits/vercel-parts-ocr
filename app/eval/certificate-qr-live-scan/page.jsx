@@ -392,6 +392,7 @@ function completionFromEvidenceMap(map) {
 function candidateView(entry) {
   const xs = (entry.guidePositions || []).map((position) => Number(position?.nx)).filter(Number.isFinite);
   return {
+    diagnosticId: entry.diagnosticId,
     fingerprint: entry.fingerprint,
     confirmed: Boolean(entry.confirmed),
     parserSchemaClass: entry.parserSchemaClass,
@@ -495,10 +496,12 @@ export default function CertificateQrLiveScanPoc() {
       const wasConfirmed = Boolean(prior?.confirmed);
       let entry = prior;
       const firstHit = group.hits.find((hit) => hit.guidePosition) || group.hits[0] || null;
+      const firstNewRoiId = !prior ? firstHit?.subRoiId || null : null;
 
       if (!entry) {
         entry = {
           canonical,
+          diagnosticId: `qr-${String(evidenceRef.current.size + 1).padStart(2, "0")}`,
           fingerprint: nonPiiFingerprint(canonical),
           parserSchemaClass: structural.parserSchemaClass,
           payloadLength: structural.payloadLength,
@@ -528,7 +531,7 @@ export default function CertificateQrLiveScanPoc() {
         const outcome = roiOutcomes.get(hit.subRoiId);
         if (outcome) {
           outcome.structural = true;
-          outcome.novel = outcome.novel || !prior;
+          outcome.novel = outcome.novel || Boolean(firstNewRoiId && hit.subRoiId === firstNewRoiId);
           outcome.confirmedExisting = outcome.confirmedExisting || wasConfirmed;
         }
       }
@@ -854,9 +857,9 @@ export default function CertificateQrLiveScanPoc() {
         ) : (
           <div style={{ display: "grid", gap: 8 }}>
             {candidates.map((item) => (
-              <div key={item.fingerprint} style={{ padding: 10, border: "1px solid #ddd", borderRadius: 10 }}>
+              <div key={item.diagnosticId} style={{ padding: 10, border: "1px solid #ddd", borderRadius: 10 }}>
                 <div style={{ fontWeight: 800 }}>
-                  {item.confirmed ? "confirmed" : "candidate"} ／ {item.parserSchemaClass}
+                  {item.diagnosticId} ／ {item.confirmed ? "confirmed" : "candidate"} ／ {item.parserSchemaClass}
                 </div>
                 <div style={{ fontSize: 13, color: "#555", marginTop: 3 }}>
                   {item.fingerprint} ／ length {item.payloadLength} ／ frames {item.frameHitCount} ／
