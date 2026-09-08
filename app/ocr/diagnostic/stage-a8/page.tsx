@@ -536,6 +536,201 @@ function nearestMappedCandidate(
   )[0];
 }
 
+function buildManagementShortSummary(source: any) {
+  const images = Array.isArray(source?.images) ? source.images : [];
+  const allMissRows = images.flatMap((image: any) =>
+    (Array.isArray(image?.missRows) ? image.missRows : []).map((row: any) => ({
+      ...row,
+      fileName: image.fileName,
+    })),
+  );
+
+  const mechanismOf = (row: any) =>
+    row?.nonPathologicalMechanism || row?.classification || "F";
+
+  const bRows = allMissRows.filter((row: any) => mechanismOf(row) === "B");
+  const dRows = allMissRows.filter((row: any) => mechanismOf(row) === "D");
+  const aRows = allMissRows.filter((row: any) => mechanismOf(row) === "A");
+
+  const lostA4RescueRows = (
+    Array.isArray(source?.lostA4RescueRows)
+      ? source.lostA4RescueRows
+      : []
+  ).map((row: any) => {
+    const diagnostic = Array.isArray(row?.bDiagnostic)
+      ? row.bDiagnostic[0]
+      : row?.bDiagnostic;
+
+    return {
+      fileName: row?.fileName ?? null,
+      rowIndex: row?.gtRowIndex ?? row?.rowIndex ?? null,
+      consolidationGroupMemberCount:
+        diagnostic?.consolidationGroup?.memberCount ??
+        diagnostic?.groupMemberCount ??
+        null,
+      preserveAccepted:
+        diagnostic?.preserveAccepted ?? null,
+      preserveRejectedBy:
+        diagnostic?.preserveRejectedBy ?? null,
+    };
+  });
+
+  const preservationRejectionReasonAggregate: Record<string, number> = {};
+
+  for (const image of images) {
+    const rows = image?.bStructureTrace?.preservation?.rows;
+    if (!Array.isArray(rows)) continue;
+
+    for (const row of rows) {
+      if (row?.preserveAccepted) continue;
+      const reason = row?.preserveRejectedBy || "unclassified";
+      preservationRejectionReasonAggregate[reason] =
+        (preservationRejectionReasonAggregate[reason] || 0) + 1;
+    }
+  }
+
+  const broadBandCount = dRows.filter(
+    (row: any) => row?.dDiagnostic?.broadBandByDocumentGeometry === true,
+  ).length;
+
+  const multiGtRowBandCount = dRows.filter(
+    (row: any) => row?.dDiagnostic?.spansMultipleGtRowCenters === true,
+  ).length;
+
+  const slightCenterOffsetCount = dRows.filter((row: any) => {
+    const diagnostic = row?.dDiagnostic;
+    return (
+      diagnostic &&
+      diagnostic.broadBandByDocumentGeometry !== true &&
+      diagnostic.spansMultipleGtRowCenters !== true &&
+      (diagnostic.overlapNorm ?? 0) > 0
+    );
+  }).length;
+
+  const image0677 = images.find((image: any) =>
+    String(image?.fileName || "").includes("0677"),
+  );
+  const fallback0677 = image0677?.fallbackStructureTrace;
+
+  const img0677 = {
+    level5WordCount:
+      fallback0677?.wordCount ??
+      image0677?.pipelineCounts?.level5WordCount ??
+      null,
+    level4LineCount:
+      fallback0677?.level4LineCount ??
+      image0677?.pipelineCounts?.level4LineCount ??
+      null,
+    wordRowClusterCount:
+      fallback0677?.clustering?.rowClusterCount ?? null,
+    clusterGeneratedCount:
+      fallback0677?.clustering?.preFilterClusterCount ?? null,
+    singletonRejectCount:
+      fallback0677?.clustering?.rejectedSingletonClusterCount ?? null,
+    structuralHierarchyDeficitConditions:
+      fallback0677?.fallbackEligibility?.conditions ?? null,
+    structuralHierarchyDeficit:
+      fallback0677?.fallbackEligibility?.structuralHierarchyDeficit ?? null,
+    fallbackEligible:
+      fallback0677?.fallbackEligibility?.fallbackEligible ?? null,
+    eligibilityReason:
+      fallback0677?.fallbackEligibility?.reason ?? null,
+  };
+
+  const pathologicalTsvImages = Array.isArray(source?.pathologicalTsvImages)
+    ? source.pathologicalTsvImages
+    : images
+        .filter((image: any) => image?.pathologicalTsvSegmentation)
+        .map((image: any) => image.fileName);
+
+  const dominantPreservationReject = Object.entries(
+    preservationRejectionReasonAggregate,
+  ).sort((a, b) => b[1] - a[1])[0];
+
+  const majorFindings = [
+    `B系miss ${bRows.length}件。A4→D lost rescueは${lostA4RescueRows.length}件。`,
+    dominantPreservationReject
+      ? `preservation reject最多: ${dominantPreservationReject[0]}=${dominantPreservationReject[1]}件。`
+      : "preservation reject集計なし。",
+    `D系miss ${dRows.length}件: slight center offset ${slightCenterOffsetCount}, broad band ${broadBandCount}, multi-GT-row band ${multiGtRowBandCount}。`,
+    `A系miss ${aRows.length}件。IMG_0677はword ${img0677.level5WordCount ?? "?"} / level4 line ${img0677.level4LineCount ?? "?"} / rowCluster ${img0677.wordRowClusterCount ?? "?"}, fallbackEligible=${String(img0677.fallbackEligible)} (${img0677.eligibilityReason ?? "unknown"})。`,
+    pathologicalTsvImages.length
+      ? `pathological TSV: ${pathologicalTsvImages.join(", ")}。同一TSV hierarchyだけでの復元可能性はcluster/hierarchy実測を基に次Stage判断。`
+      : "pathological TSV画像なし。",
+  ];
+
+  return {
+    schema: source?.schema ?? null,
+    sourceHead: source?.sourceHead ?? null,
+    managementSummarySchema:
+      "icb.parts-ocr.stage-a8-management-short.v1",
+    a5DBaseline: source?.dBaseline ?? null,
+    matchesExpectedA5D:
+      source?.dBaseline?.matchesExpectedA5D ?? null,
+    bMechanismMissCount: bRows.length,
+    lostA4RescueRows,
+    preservationRejectionReasonAggregate,
+    dMechanismMissCount: dRows.length,
+    dGeometrySummary: {
+      slightCenterOffsetCount,
+      broadBandCount,
+      multiGtRowBandCount,
+    },
+    aMechanismMissCount: aRows.length,
+    img0677,
+    pathologicalTsvImages,
+    currentHierarchyMajorFindings: majorFindings,
+  };
+}
+
+function serializeManagementShortSummary(summary: any) {
+  const pretty = JSON.stringify(summary, null, 2);
+  if (pretty.length <= 6000) return pretty;
+
+  const compact = JSON.stringify(summary);
+  if (compact.length <= 6000) return compact;
+
+  const reduced = {
+    ...summary,
+    currentHierarchyMajorFindings: [
+      "主要所見は上記のB/D/A件数・IMG_0677 hierarchy・pathological TSV一覧を参照。",
+    ],
+  };
+
+  return JSON.stringify(reduced);
+}
+
+function parsePastedStageA8Json(text: string) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) {
+    throw new Error("Stage A8 full summaryを貼り付けてください。");
+  }
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+
+  if (firstBrace < 0 || lastBrace <= firstBrace) {
+    throw new Error("JSON本体を見つけられませんでした。");
+  }
+
+  return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+}
+
+async function copyTextToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+}
+
 export default function StageA8Page() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -544,6 +739,9 @@ export default function StageA8Page() {
   );
   const [result, setResult] = useState<any>(null);
   const [copyState, setCopyState] = useState("");
+  const [pastedFullSummary, setPastedFullSummary] = useState("");
+  const [convertedShortText, setConvertedShortText] = useState("");
+  const [convertState, setConvertState] = useState("");
 
   async function run(files: FileList | null) {
     if (!files?.length) return;
@@ -1138,34 +1336,56 @@ export default function StageA8Page() {
     };
   }
 
-  async function copySummary() {
-    const summary = shortSummary();
+  function managementShortSummary() {
+    if (!result) return null;
+    return buildManagementShortSummary(result);
+  }
+
+  async function copyManagementShortSummary() {
+    const summary = managementShortSummary();
     if (!summary) return;
 
-    const text = JSON.stringify(
-      summary,
-      null,
-      2,
-    );
-
-    try {
-      await navigator.clipboard.writeText(
-        text,
-      );
-    } catch {
-      const ta =
-        document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      ta.remove();
-    }
+    const text = serializeManagementShortSummary(summary);
+    await copyTextToClipboard(text);
 
     setCopyState(
-      "コピーしました。総合管理チャットへそのまま貼り付けてください。",
+      `短縮summaryをコピーしました（${text.length}文字）。総合管理チャットへそのまま貼り付けてください。`,
+    );
+  }
+
+  async function copyFullDiagnosticJson() {
+    if (!result) return;
+
+    const text = JSON.stringify(result, null, 2);
+    await copyTextToClipboard(text);
+
+    setCopyState(
+      "full diagnostic JSONをコピーしました。保存・詳細監査用です。",
+    );
+  }
+
+  function convertPastedFullSummary() {
+    try {
+      const parsed = parsePastedStageA8Json(pastedFullSummary);
+      const summary = buildManagementShortSummary(parsed);
+      const text = serializeManagementShortSummary(summary);
+      setConvertedShortText(text);
+      setConvertState(
+        `変換完了：${text.length}文字。画像12枚の再OCRは不要です。`,
+      );
+    } catch (error) {
+      setConvertedShortText("");
+      setConvertState(
+        `ERROR: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  async function copyConvertedShortSummary() {
+    if (!convertedShortText) return;
+    await copyTextToClipboard(convertedShortText);
+    setConvertState(
+      `短縮summaryをコピーしました（${convertedShortText.length}文字）。`,
     );
   }
 
@@ -1220,14 +1440,82 @@ export default function StageA8Page() {
         </div>
       </section>
 
+      <section style={styles.card}>
+        <h2 style={{ marginTop: 0, fontSize: 18 }}>
+          既存Stage A8 full summaryを短縮
+        </h2>
+        <p style={styles.text}>
+          すでに取得済みのfull summaryをそのまま貼り付けてください。
+          JSON分割・手編集・画像12枚の再OCRは不要です。
+        </p>
+        <textarea
+          value={pastedFullSummary}
+          onChange={(event) => setPastedFullSummary(event.target.value)}
+          placeholder="既存Stage A8 full summaryをここへ貼り付け"
+          style={{
+            width: "100%",
+            minHeight: 180,
+            boxSizing: "border-box",
+            border: "1px solid #cfd8e6",
+            borderRadius: 10,
+            padding: 10,
+            fontFamily: "monospace",
+            fontSize: 12,
+          }}
+        />
+        <button
+          style={{ ...styles.primary, marginTop: 10 }}
+          onClick={convertPastedFullSummary}
+        >
+          貼り付けたfull summaryを短縮
+        </button>
+
+        {convertState && (
+          <div
+            style={{
+              marginTop: 8,
+              fontWeight: 800,
+              color: convertState.startsWith("ERROR")
+                ? "#a72a2a"
+                : "#1d6b32",
+            }}
+          >
+            {convertState}
+          </div>
+        )}
+
+        {convertedShortText && (
+          <>
+            <button
+              style={{ ...styles.primary, marginTop: 10 }}
+              onClick={copyConvertedShortSummary}
+            >
+              変換済み・総合管理用短縮summaryをコピー
+            </button>
+            <pre style={styles.pre}>{convertedShortText}</pre>
+          </>
+        )}
+      </section>
+
       {result && (
         <>
           <section style={styles.card}>
             <button
               style={styles.primary}
-              onClick={copySummary}
+              onClick={copyManagementShortSummary}
             >
-              総合管理用Stage A8 summaryをコピー
+              総合管理用・短縮summaryをコピー
+            </button>
+
+            <button
+              style={{
+                ...styles.primary,
+                marginTop: 8,
+                background: "#5d6878",
+              }}
+              onClick={copyFullDiagnosticJson}
+            >
+              full diagnostic JSONをコピー
             </button>
 
             {copyState && (
@@ -1244,16 +1532,18 @@ export default function StageA8Page() {
           </section>
 
           <section style={styles.card}>
+            <h2 style={{ marginTop: 0, fontSize: 18 }}>
+              managementShortSummary
+            </h2>
             <pre style={styles.pre}>
-              {JSON.stringify(
-                shortSummary(),
-                null,
-                2,
+              {serializeManagementShortSummary(
+                managementShortSummary(),
               )}
             </pre>
           </section>
         </>
       )}
+
     </main>
   );
 }
