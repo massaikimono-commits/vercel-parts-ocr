@@ -1485,7 +1485,7 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi,
   };
 }
 
-function compactFrameList(values, maxItems = 48) {
+function compactFrameList(values, maxItems = 24) {
   const frames = [...new Set((values || []).map(Number).filter(Number.isFinite))].sort((a, b) => a - b);
   return {
     count: frames.length,
@@ -1742,7 +1742,23 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
         conflictCategoryCounts: full.productionShapeCandidate.physicalSlotUi?.conflictCategoryCounts || null,
         associationVariants: full.productionShapeCandidate.physicalSlotUi?.associationVariants || null,
         nearbyConflictSubtypeCounts: full.productionShapeCandidate.physicalSlotUi?.nearbyConflictSubtypeCounts || null,
-        nearbyConflictPairDiagnostics: (full.productionShapeCandidate.physicalSlotUi?.nearbyConflictPairDiagnostics || []).slice(0, 6),
+        nearbyConflictPairDiagnostics: (full.productionShapeCandidate.physicalSlotUi?.nearbyConflictPairDiagnostics || [])
+          .slice(0, 4)
+          .map((item) => ({
+            diagnosticIdA: item.diagnosticIdA,
+            diagnosticIdB: item.diagnosticIdB,
+            medianPairDistance: item.medianPairDistance,
+            bSubtype: item.bSubtype,
+            sameFrameCoexistenceCount: item.sameFrameCoexistenceCount,
+            sameFrameNearbyCount: item.sameFrameNearbyCount,
+            sameFrameMinimumDistance: item.sameFrameMinimumDistance,
+            sameFrameMedianDistance: item.sameFrameMedianDistance,
+            temporalOverlapFrameCount: item.temporalOverlapFrameCount,
+            trajectoryNearestDistanceMedian: item.trajectoryNearestDistanceMedian,
+            medianOnlyNearby: item.medianOnlyNearby,
+            actualSimultaneousNearby: item.actualSimultaneousNearby,
+            pairwisePositionSamples: (item.pairwisePositionSamples || []).slice(0, 4),
+          })),
         conflictDiagnostics: (full.productionShapeCandidate.physicalSlotUi?.conflictDiagnostics || []).slice(0, 8).map((item) => ({
           diagnosticId: item.diagnosticId,
           stableBase: item.stableBase,
