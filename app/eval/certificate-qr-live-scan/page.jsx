@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-physical-slot-guided-remaining-one-rescue";
+const LIVE_SCAN_REVISION = "live-poc-v2-2d-physical-qr-locator";
 const FRAME_INTERVAL_MS = 250;
 const MAX_DECODE_DIMENSION = 1280;
+const PHYSICAL_LOCATOR_EVERY_FRAMES = 4;
+const PHYSICAL_LOCATOR_MAX_WIDTH = 520;
+const PHYSICAL_LOCATOR_TRACK_TTL_FRAMES = 16;
+const PHYSICAL_LOCATOR_DECODE_MATCH_WINDOW_FRAMES = 12;
 const LOCAL_RESCUE_STALL_FRAMES = 16;
 const LOCAL_RESCUE_VARIANTS_PER_FRAME = 2;
 const LOCAL_RESCUE_RETARGET_EVERY_FRAMES = 6;
@@ -535,6 +539,266 @@ function nearestSubRoiForGuideX(x) {
   })[0] || null;
 }
 
+function locatorOtsuThreshold(gray) {
+  const hist = new Uint32Array(256);
+  for (const value of gray) hist[value] += 1;
+  const total = gray.length;
+  let sum = 0;
+  for (let i = 0; i < 256; i += 1) sum += i * hist[i];
+  let sumB = 0, weightB = 0, bestVariance = -1, threshold = 128;
+  for (let t = 0; t < 256; t += 1) {
+    weightB += hist[t];
+    if (!weightB) continue;
+    const weightF = total - weightB;
+    if (!weightF) break;
+    sumB += t * hist[t];
+    const meanB = sumB / weightB;
+    const meanF = (sum - sumB) / weightF;
+    const between = weightB * weightF * (meanB - meanF) * (meanB - meanF);
+    if (between > bestVariance) {
+      bestVariance = between;
+      threshold = t;
+    }
+  }
+  return threshold;
+}
+
+function locatorFinderRatioMatch(runs) {
+  if (!Array.isArray(runs) || runs.length !== 5) return null;
+  const total = runs.reduce((sum, value) => sum + value, 0);
+  if (total < 7) return null;
+  const module = total / 7;
+  const expected = [1, 1, 3, 1, 1];
+  let error = 0;
+  for (let i = 0; i < 5; i += 1) error += Math.abs(runs[i] - expected[i] * module);
+  const normalizedError = error / total;
+  if (normalizedError > .36) return null;
+  return { module, normalizedError };
+}
+
+function locatorScanFinderRuns(binary, width, height, horizontal = true) {
+  const detections = [];
+  const outer = horizontal ? height : width;
+  const inner = horizontal ? width : height;
+  for (let o = 0; o < outer; o += 2) {
+    const runs = [];
+    let last = null, length = 0, start = 0;
+    for (let i = 0; i <= inner; i += 1) {
+      const value = i < inner ? binary[horizontal ? o * width + i : i * width + o] : -1;
+      if (i === 0) {
+        last = value; length = 1; start = 0; continue;
+      }
+      if (value === last && i < inner) {
+        length += 1; continue;
+      }
+      runs.push({ color: last, length, start, end: i - 1 });
+      last = value; length = 1; start = i;
+    }
+    for (let index = 0; index <= runs.length - 5; index += 1) {
+      const seq = runs.slice(index, index + 5);
+      if (seq[0].color !== 1 || seq[1].color !== 0 || seq[2].color !== 1 || seq[3].color !== 0 || seq[4].color !== 1) continue;
+      const match = locatorFinderRatioMatch(seq.map((part) => part.length));
+      if (!match) continue;
+      const center = (seq[2].start + seq[2].end) / 2;
+      detections.push(horizontal
+        ? { x: center, y: o, module: match.module, error: match.normalizedError }
+        : { x: o, y: center, module: match.module, error: match.normalizedError });
+    }
+  }
+  return detections;
+}
+
+function locatorClusterFinderIntersections(horizontal, vertical) {
+  const intersections = [];
+  for (const h of horizontal) {
+    for (const v of vertical) {
+      const module = (h.module + v.module) / 2;
+      if (module < 1.05) continue;
+      if (Math.abs(h.x - v.x) > module * 3 || Math.abs(h.y - v.y) > module * 3) continue;
+      const moduleRatio = Math.max(h.module, v.module) / Math.max(.1, Math.min(h.module, v.module));
+      if (moduleRatio > 2.3) continue;
+      intersections.push({
+        x: (h.x + v.x) / 2,
+        y: (h.y + v.y) / 2,
+        module,
+        score: 1 / (1 + h.error + v.error),
+      });
+    }
+  }
+  const clusters = [];
+  for (const point of intersections.sort((a, b) => b.score - a.score)) {
+    const radius = Math.max(4, point.module * 3.2);
+    const cluster = clusters.find((item) => Math.hypot(item.x - point.x, item.y - point.y) <= radius);
+    if (!cluster) {
+      clusters.push({ x: point.x, y: point.y, module: point.module, score: point.score, count: 1 });
+    } else {
+      const weight = cluster.count;
+      cluster.x = (cluster.x * weight + point.x) / (weight + 1);
+      cluster.y = (cluster.y * weight + point.y) / (weight + 1);
+      cluster.module = (cluster.module * weight + point.module) / (weight + 1);
+      cluster.score += point.score;
+      cluster.count += 1;
+    }
+  }
+  return clusters
+    .filter((item) => item.count >= 2)
+    .map((item) => ({ ...item, score: item.score / item.count }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 28);
+}
+
+function locatorNearestQrDimension(estimate) {
+  const clamped = Math.max(21, Math.min(177, Number(estimate) || 21));
+  const version = Math.max(1, Math.min(40, Math.round((clamped - 17) / 4)));
+  return 17 + 4 * version;
+}
+
+function locatePhysicalQrCandidates(sourceCanvas) {
+  const scale = Math.min(1, PHYSICAL_LOCATOR_MAX_WIDTH / Math.max(1, sourceCanvas.width));
+  const width = Math.max(120, Math.round(sourceCanvas.width * scale));
+  const height = Math.max(80, Math.round(sourceCanvas.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(sourceCanvas, 0, 0, width, height);
+  try {
+    const image = ctx.getImageData(0, 0, width, height);
+    const gray = new Uint8Array(width * height);
+    for (let i = 0, p = 0; i < gray.length; i += 1, p += 4) {
+      gray[i] = Math.round(image.data[p] * .22 + image.data[p + 1] * .70 + image.data[p + 2] * .08);
+    }
+    const threshold = locatorOtsuThreshold(gray);
+    const binary = new Uint8Array(gray.length);
+    for (let i = 0; i < gray.length; i += 1) binary[i] = gray[i] <= threshold ? 1 : 0;
+
+    const horizontal = locatorScanFinderRuns(binary, width, height, true);
+    const vertical = locatorScanFinderRuns(binary, width, height, false);
+    const finders = locatorClusterFinderIntersections(horizontal, vertical);
+    const raw = [];
+
+    const points = finders.slice(0, 28);
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = 0; j < points.length; j += 1) {
+        if (j === i) continue;
+        for (let k = j + 1; k < points.length; k += 1) {
+          if (k === i) continue;
+          const tl = points[i], a = points[j], b = points[k];
+          const ux = a.x - tl.x, uy = a.y - tl.y;
+          const vx = b.x - tl.x, vy = b.y - tl.y;
+          const du = Math.hypot(ux, uy), dv = Math.hypot(vx, vy);
+          if (du < 12 || dv < 12) continue;
+          const cos = Math.abs((ux * vx + uy * vy) / Math.max(1, du * dv));
+          if (cos > .50) continue;
+          const legRatio = Math.max(du, dv) / Math.max(1, Math.min(du, dv));
+          if (legRatio > 2.35) continue;
+          const modules = [tl.module, a.module, b.module];
+          const moduleRatio = Math.max(...modules) / Math.max(.1, Math.min(...modules));
+          if (moduleRatio > 2.25) continue;
+
+          const cross = ux * vy - uy * vx;
+          const tr = cross >= 0 ? a : b;
+          const bl = cross >= 0 ? b : a;
+          const avgModule = (tl.module + tr.module + bl.module) / 3;
+          const estimatedDimension = ((du + dv) / 2) / Math.max(.1, avgModule) + 7;
+          const dimension = locatorNearestQrDimension(estimatedDimension);
+          const dimensionResidual = Math.abs(estimatedDimension - dimension);
+          if (dimensionResidual > 6) continue;
+
+          const uModule = { x: (tr.x - tl.x) / Math.max(1, dimension - 7), y: (tr.y - tl.y) / Math.max(1, dimension - 7) };
+          const vModule = { x: (bl.x - tl.x) / Math.max(1, dimension - 7), y: (bl.y - tl.y) / Math.max(1, dimension - 7) };
+          const point = (u, v) => ({
+            x: tl.x + uModule.x * u + vModule.x * v,
+            y: tl.y + uModule.y * u + vModule.y * v,
+          });
+          const quad = [
+            point(-3.5, -3.5),
+            point(dimension - 3.5, -3.5),
+            point(dimension - 3.5, dimension - 3.5),
+            point(-3.5, dimension - 3.5),
+          ];
+          const xs = quad.map((p) => p.x), ys = quad.map((p) => p.y);
+          const x0 = Math.min(...xs), x1 = Math.max(...xs);
+          const y0 = Math.min(...ys), y1 = Math.max(...ys);
+          const boxW = x1 - x0, boxH = y1 - y0;
+          if (boxW < 14 || boxH < 14) continue;
+          if (x1 < -4 || y1 < -4 || x0 > width + 4 || y0 > height + 4) continue;
+          const spread = Math.max(boxW, boxH) / Math.max(1, Math.min(boxW, boxH));
+          if (spread > 2.7) continue;
+
+          const finderScore = (tl.score + tr.score + bl.score) / 3;
+          const orthogonality = Math.max(0, 1 - cos / .50);
+          const legSupport = Math.max(0, 1 - (legRatio - 1) / 1.35);
+          const moduleSupport = Math.max(0, 1 - (moduleRatio - 1) / 1.25);
+          const dimensionSupport = 1 / (1 + dimensionResidual / 3);
+          const confidenceScore = finderScore * orthogonality * legSupport * moduleSupport * dimensionSupport;
+          const confidence = confidenceScore >= .42 ? "high" : confidenceScore >= .24 ? "medium" : "low";
+          const centerX = (x0 + x1) / 2;
+          const centerY = (y0 + y1) / 2;
+          raw.push({
+            x: centerX / width,
+            y: centerY / height,
+            w: boxW / width,
+            h: boxH / height,
+            confidence,
+            confidenceScore,
+            finderScore,
+            dimensionResidual,
+          });
+        }
+      }
+    }
+
+    raw.sort((a, b) => b.confidenceScore - a.confidenceScore);
+    const kept = [];
+    for (const candidate of raw) {
+      const duplicate = kept.find((item) => {
+        const distance = Math.hypot(candidate.x - item.x, candidate.y - item.y);
+        const radius = Math.max(.035, Math.min(.14, Math.min(candidate.w + item.w, candidate.h + item.h) * .38));
+        return distance <= radius;
+      });
+      if (!duplicate) kept.push(candidate);
+      if (kept.length >= 12) break;
+    }
+    return {
+      finderCount: finders.length,
+      rawCandidateCount: raw.length,
+      candidates: kept.map((item, index) => ({
+        detectorId: `locator-${index + 1}`,
+        x: Number(item.x.toFixed(4)),
+        y: Number(item.y.toFixed(4)),
+        w: Number(item.w.toFixed(4)),
+        h: Number(item.h.toFixed(4)),
+        confidence: item.confidence,
+        confidenceScore: Number(item.confidenceScore.toFixed(4)),
+      })),
+    };
+  } finally {
+    canvas.width = 1;
+    canvas.height = 1;
+  }
+}
+
+function createPhysicalLocatorUi() {
+  return {
+    runs: 0,
+    lastFrame: null,
+    lastLatencyMs: null,
+    finderCount: 0,
+    rawCandidateCount: 0,
+    tracks: [],
+  };
+}
+
+function guide2DLabel(x, y) {
+  const horizontal = x < .34 ? "左" : x > .66 ? "右" : "中央";
+  const vertical = y < .42 ? "上" : y > .58 ? "下" : "中央";
+  if (horizontal === "中央" && vertical === "中央") return "中央付近";
+  if (vertical === "中央") return `${horizontal}側付近`;
+  if (horizontal === "中央") return `中央${vertical}付近`;
+  return `${horizontal}${vertical}付近`;
+}
+
 function subRoiStatsSnapshot(statsMap) {
   return SUB_ROIS.map((roi) => {
     const stats = statsMap.get(roi.id) || {};
@@ -635,6 +899,10 @@ export default function CertificateQrLiveScanPoc() {
   const successQualityFramesRef = useRef([]);
   const subRoiStatsRef = useRef(createSubRoiStats());
   const localRescueRef = useRef(createLocalRescueState());
+  const physicalLocatorTracksRef = useRef(new Map());
+  const physicalLocatorSeqRef = useRef(0);
+  const recentDecodedPositionsRef = useRef([]);
+  const physicalLocatorStatsRef = useRef({ runs: 0, totalLatencyMs: 0 });
   const completionStoppedRef = useRef(false);
   const timersRef = useRef(new Set());
 
@@ -645,6 +913,7 @@ export default function CertificateQrLiveScanPoc() {
   const [frameStats, setFrameStats] = useState({ processed: 0, decoded: 0, lastDecodeMs: null, subRoiFrameAttempts: 0 });
   const [subRoiStats, setSubRoiStats] = useState(subRoiStatsSnapshot(subRoiStatsRef.current));
   const [localRescueUi, setLocalRescueUi] = useState(localRescueSnapshot(localRescueRef.current));
+  const [physicalLocatorUi, setPhysicalLocatorUi] = useState(createPhysicalLocatorUi());
   const [cameraInfo, setCameraInfo] = useState({ width: 0, height: 0 });
 
   const confirmedCount = useMemo(() => candidates.filter((item) => item.confirmed).length, [candidates]);
@@ -659,13 +928,6 @@ export default function CertificateQrLiveScanPoc() {
   }, [candidates]);
   const complete = kindEvidence.expected != null && confirmedCount >= kindEvidence.expected;
 
-  const confirmedGuideMarkers = useMemo(() => candidates
-    .filter((item) => item.confirmed && Number.isFinite(Number(item.recentMedianGuideX)))
-    .map((item) => ({
-      id: item.diagnosticId,
-      x: Math.max(0, Math.min(1, Number(item.recentMedianGuideX))),
-    })), [candidates]);
-
   const physicalSlotGuide = useMemo(() => {
     if (kindEvidence.expected == null) return null;
     return inferMissingPhysicalSlot(evidenceRef.current, kindEvidence.expected);
@@ -674,6 +936,18 @@ export default function CertificateQrLiveScanPoc() {
   const provisionalRemaining = kindEvidence.expected == null
     ? null
     : Math.max(0, kindEvidence.expected - confirmedCount);
+
+  const locatorVisibleTracks = useMemo(() => physicalLocatorUi.tracks
+    .filter((track) => track.confidence !== "low"), [physicalLocatorUi]);
+
+  const locatorUndecodedTracks = useMemo(() => locatorVisibleTracks
+    .filter((track) => !track.decoded)
+    .sort((a, b) => {
+      const rank = { high: 2, medium: 1, low: 0 };
+      return (rank[b.confidence] - rank[a.confidence]) || (b.confidenceScore - a.confidenceScore);
+    }), [locatorVisibleTracks]);
+
+  const locatorPrimaryTarget = locatorUndecodedTracks[0] || null;
 
   const clearTimers = () => {
     for (const id of timersRef.current) clearTimeout(id);
@@ -707,12 +981,17 @@ export default function CertificateQrLiveScanPoc() {
     successQualityFramesRef.current = [];
     subRoiStatsRef.current = createSubRoiStats();
     localRescueRef.current = createLocalRescueState();
+    physicalLocatorTracksRef.current = new Map();
+    physicalLocatorSeqRef.current = 0;
+    recentDecodedPositionsRef.current = [];
+    physicalLocatorStatsRef.current = { runs: 0, totalLatencyMs: 0 };
     completionStoppedRef.current = false;
     frameSeqRef.current = 0;
     setCandidates([]);
     setQuality(null);
     setSubRoiStats(subRoiStatsSnapshot(subRoiStatsRef.current));
     setLocalRescueUi(localRescueSnapshot(localRescueRef.current));
+    setPhysicalLocatorUi(createPhysicalLocatorUi());
     setFrameStats({ processed: 0, decoded: 0, lastDecodeMs: null, subRoiFrameAttempts: 0 });
     setStatus(runningRef.current ? "読取中" : "停止中");
   };
@@ -804,6 +1083,129 @@ export default function CertificateQrLiveScanPoc() {
     return {structuralHit,completion:completionFromEvidenceMap(evidenceRef.current)};
   };
 
+  const runPhysicalLocator = (frameId, canvas) => {
+    const started = performance.now();
+    const detected = locatePhysicalQrCandidates(canvas);
+    const tracks = physicalLocatorTracksRef.current;
+    const matchedTrackIds = new Set();
+
+    for (const candidate of detected.candidates.sort((a, b) => b.confidenceScore - a.confidenceScore)) {
+      let bestTrack = null;
+      let bestDistance = Infinity;
+      for (const track of tracks.values()) {
+        if (matchedTrackIds.has(track.trackId)) continue;
+        if (frameId - track.lastSeenFrame > PHYSICAL_LOCATOR_TRACK_TTL_FRAMES) continue;
+        const distance = Math.hypot(candidate.x - track.x, candidate.y - track.y);
+        const gate = Math.max(.055, Math.min(.16, Math.max(candidate.w, candidate.h, track.w, track.h) * .95));
+        if (distance <= gate && distance < bestDistance) {
+          bestTrack = track;
+          bestDistance = distance;
+        }
+      }
+      if (!bestTrack) {
+        physicalLocatorSeqRef.current += 1;
+        bestTrack = {
+          trackId: `physical-${String(physicalLocatorSeqRef.current).padStart(2, "0")}`,
+          x: candidate.x,
+          y: candidate.y,
+          w: candidate.w,
+          h: candidate.h,
+          confidence: candidate.confidence,
+          confidenceScore: candidate.confidenceScore,
+          firstSeenFrame: frameId,
+          lastSeenFrame: frameId,
+          seenCount: 1,
+          decodedThroughFrame: -1,
+          matchedDiagnosticId: null,
+        };
+        tracks.set(bestTrack.trackId, bestTrack);
+      } else {
+        const alpha = .65;
+        bestTrack.x = bestTrack.x * (1 - alpha) + candidate.x * alpha;
+        bestTrack.y = bestTrack.y * (1 - alpha) + candidate.y * alpha;
+        bestTrack.w = bestTrack.w * (1 - alpha) + candidate.w * alpha;
+        bestTrack.h = bestTrack.h * (1 - alpha) + candidate.h * alpha;
+        bestTrack.confidence = candidate.confidence;
+        bestTrack.confidenceScore = candidate.confidenceScore;
+        bestTrack.lastSeenFrame = frameId;
+        bestTrack.seenCount += 1;
+      }
+      matchedTrackIds.add(bestTrack.trackId);
+    }
+
+    for (const [trackId, track] of tracks.entries()) {
+      if (frameId - track.lastSeenFrame > PHYSICAL_LOCATOR_TRACK_TTL_FRAMES) tracks.delete(trackId);
+    }
+
+    const recent = recentDecodedPositionsRef.current
+      .filter((item) => frameId - item.frameId <= PHYSICAL_LOCATOR_DECODE_MATCH_WINDOW_FRAMES);
+    recentDecodedPositionsRef.current = recent;
+
+    const latestByDiagnostic = new Map();
+    for (const item of recent) {
+      const existing = latestByDiagnostic.get(item.diagnosticId);
+      if (!existing || item.frameId > existing.frameId) {
+        latestByDiagnostic.set(item.diagnosticId, { frameId: item.frameId, positions: [item] });
+      } else if (item.frameId === existing.frameId) {
+        existing.positions.push(item);
+      }
+    }
+    const decodedPoints = [...latestByDiagnostic.entries()].map(([diagnosticId, group]) => ({
+      diagnosticId,
+      x: medianNumber(group.positions.map((item) => item.x)),
+      y: medianNumber(group.positions.map((item) => item.y)),
+      frameId: group.frameId,
+    })).filter((item) => Number.isFinite(item.x) && Number.isFinite(item.y));
+
+    const pairs = [];
+    for (const track of tracks.values()) {
+      if (frameId - track.lastSeenFrame > PHYSICAL_LOCATOR_EVERY_FRAMES) continue;
+      for (const point of decodedPoints) {
+        const distance = Math.hypot(track.x - point.x, track.y - point.y);
+        const gate = Math.max(.05, Math.min(.14, Math.max(track.w, track.h) * .8));
+        if (distance <= gate) pairs.push({ track, point, distance });
+      }
+    }
+    const usedTracks = new Set(), usedDiagnostics = new Set();
+    for (const pair of pairs.sort((a, b) => a.distance - b.distance)) {
+      if (usedTracks.has(pair.track.trackId) || usedDiagnostics.has(pair.point.diagnosticId)) continue;
+      pair.track.decodedThroughFrame = frameId + PHYSICAL_LOCATOR_TRACK_TTL_FRAMES;
+      pair.track.matchedDiagnosticId = pair.point.diagnosticId;
+      usedTracks.add(pair.track.trackId);
+      usedDiagnostics.add(pair.point.diagnosticId);
+    }
+
+    const latencyMs = Math.round(performance.now() - started);
+    physicalLocatorStatsRef.current.runs += 1;
+    physicalLocatorStatsRef.current.totalLatencyMs += latencyMs;
+    const trackViews = [...tracks.values()]
+      .filter((track) => frameId - track.lastSeenFrame <= PHYSICAL_LOCATOR_TRACK_TTL_FRAMES)
+      .map((track) => ({
+        trackId: track.trackId,
+        x: Number(track.x.toFixed(4)),
+        y: Number(track.y.toFixed(4)),
+        w: Number(track.w.toFixed(4)),
+        h: Number(track.h.toFixed(4)),
+        confidence: track.confidence,
+        confidenceScore: Number(track.confidenceScore.toFixed(4)),
+        seenCount: track.seenCount,
+        firstSeenFrame: track.firstSeenFrame,
+        lastSeenFrame: track.lastSeenFrame,
+        decoded: frameId <= Number(track.decodedThroughFrame || -1),
+        matchedDiagnosticId: frameId <= Number(track.decodedThroughFrame || -1) ? track.matchedDiagnosticId : null,
+      }))
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+
+    setPhysicalLocatorUi({
+      runs: physicalLocatorStatsRef.current.runs,
+      lastFrame: frameId,
+      lastLatencyMs: latencyMs,
+      finderCount: detected.finderCount,
+      rawCandidateCount: detected.rawCandidateCount,
+      tracks: trackViews,
+    });
+  };
+
   const drawGuideRoi = (video, canvas) => {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -891,13 +1293,7 @@ export default function CertificateQrLiveScanPoc() {
         !normalNovelStructural &&
         stalledFrames >= LOCAL_RESCUE_STALL_FRAMES
       ) {
-        const inferredSlot = inferMissingPhysicalSlot(
-          evidenceRef.current,
-          completionBeforeRescue.expected
-        );
-        const target = inferredSlot && inferredSlot.confidence !== "low"
-          ? nearestSubRoiForGuideX(inferredSlot.missingX)
-          : selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
+        const target = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
         if (target) {
           rescueState.active = true;
           rescueState.activatedFrame = frameId;
@@ -912,13 +1308,7 @@ export default function CertificateQrLiveScanPoc() {
           rescueState.rescueFrameCount > 0 &&
           rescueState.rescueFrameCount % LOCAL_RESCUE_RETARGET_EVERY_FRAMES === 0
         ) {
-          const inferredSlot = inferMissingPhysicalSlot(
-            evidenceRef.current,
-            completionBeforeRescue.expected
-          );
-          const retarget = inferredSlot && inferredSlot.confidence !== "low"
-            ? nearestSubRoiForGuideX(inferredSlot.missingX)
-            : selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
+          const retarget = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
           if (retarget) rescueState.targetRoiId = retarget.id;
         }
 
@@ -984,6 +1374,28 @@ export default function CertificateQrLiveScanPoc() {
       setLocalRescueUi(localRescueSnapshot(rescueState));
 
       const evidenceUpdate = updateEvidence(frameId, grouped, q, selectedRois);
+
+      for (const [canonical, group] of grouped.entries()) {
+        const evidence = evidenceRef.current.get(canonical);
+        if (!evidence?.confirmed) continue;
+        for (const hit of group.hits) {
+          if (!hit.guidePosition) continue;
+          recentDecodedPositionsRef.current.push({
+            diagnosticId: evidence.diagnosticId,
+            x: Number(hit.guidePosition.nx),
+            y: Number(hit.guidePosition.ny),
+            frameId,
+          });
+        }
+      }
+      if (recentDecodedPositionsRef.current.length > 240) {
+        recentDecodedPositionsRef.current = recentDecodedPositionsRef.current.slice(-240);
+      }
+
+      if (!evidenceUpdate.completion.complete && frameId % PHYSICAL_LOCATOR_EVERY_FRAMES === 0) {
+        runPhysicalLocator(frameId, canvas);
+      }
+
       const structuralHit = Boolean(evidenceUpdate.structuralHit);
       const decodeMs = Math.round(performance.now() - started);
       setFrameStats((prev) => ({
@@ -1086,7 +1498,21 @@ export default function CertificateQrLiveScanPoc() {
         confirmedRegionPolicy: "deprioritize-not-exclude",
         starvationProtection: true,
       },
-      physicalSlotGuidance: physicalSlotGuide,
+      physicalSlotGuidanceDiagnosticOnly: physicalSlotGuide,
+      physicalQrLocator: {
+        mode: "finder-pattern-triplet-2d",
+        decodeIndependent: true,
+        guideRoiOnly: true,
+        everyProcessedFrames: PHYSICAL_LOCATOR_EVERY_FRAMES,
+        analysisMaxWidth: PHYSICAL_LOCATOR_MAX_WIDTH,
+        trackTtlFrames: PHYSICAL_LOCATOR_TRACK_TTL_FRAMES,
+        decodeMatchWindowFrames: PHYSICAL_LOCATOR_DECODE_MATCH_WINDOW_FRAMES,
+        current: physicalLocatorUi,
+        averageLatencyMs: physicalLocatorStatsRef.current.runs
+          ? Number((physicalLocatorStatsRef.current.totalLatencyMs / physicalLocatorStatsRef.current.runs).toFixed(2))
+          : null,
+        payloadUsedForLocator: false,
+      },
       remainingOneLocalRescue: {
         provisionalTrigger: true,
         triggerRule: "expected known AND confirmedCount = expected-1 AND no new structural canonical for >=16 processed frames",
@@ -1155,44 +1581,49 @@ export default function CertificateQrLiveScanPoc() {
             pointerEvents: "none",
           }}
         >
-          {running && !complete && physicalSlotGuide && (
-            <div
-              style={{
-                position: "absolute",
-                left: `${Math.max(0, Math.min(.88, physicalSlotGuide.missingX - .06)) * 100}%`,
-                top: 0,
-                width: "12%",
-                height: "100%",
-                boxSizing: "border-box",
-                border: "2px dashed rgba(255,193,7,.95)",
-                background: "rgba(255,193,7,.12)",
-                borderRadius: 8,
-              }}
-            />
-          )}
-          {confirmedGuideMarkers.map((marker) => (
-            <div
-              key={marker.id}
-              style={{
-                position: "absolute",
-                left: `${marker.x * 100}%`,
-                top: "50%",
-                transform: "translate(-50%, -50%)",
-                width: 26,
-                height: 26,
-                borderRadius: "50%",
-                display: "grid",
-                placeItems: "center",
-                background: "rgba(52,199,89,.96)",
-                color: "#fff",
-                fontSize: 17,
-                fontWeight: 950,
-                boxShadow: "0 1px 5px rgba(0,0,0,.35)",
-              }}
-            >
-              ✓
-            </div>
-          ))}
+          {locatorVisibleTracks.map((track) => {
+            const undecoded = !track.decoded;
+            const border = track.decoded
+              ? "3px solid rgba(52,199,89,.98)"
+              : track.confidence === "high"
+                ? "3px solid rgba(255,193,7,.98)"
+                : "2px dashed rgba(255,193,7,.92)";
+            return (
+              <div
+                key={track.trackId}
+                style={{
+                  position: "absolute",
+                  left: `${Math.max(0, (track.x - track.w / 2) * 100)}%`,
+                  top: `${Math.max(0, (track.y - track.h / 2) * 100)}%`,
+                  width: `${Math.min(100, track.w * 100)}%`,
+                  height: `${Math.min(100, track.h * 100)}%`,
+                  boxSizing: "border-box",
+                  border,
+                  borderRadius: 7,
+                  background: track.decoded ? "rgba(52,199,89,.08)" : "rgba(255,193,7,.10)",
+                }}
+              >
+                <div style={{
+                  position: "absolute",
+                  right: -9,
+                  top: -13,
+                  minWidth: 24,
+                  height: 24,
+                  padding: "0 5px",
+                  borderRadius: 12,
+                  display: "grid",
+                  placeItems: "center",
+                  background: track.decoded ? "rgba(52,199,89,.98)" : "rgba(255,193,7,.98)",
+                  color: track.decoded ? "#fff" : "#3b2a00",
+                  fontSize: track.decoded ? 16 : 10,
+                  fontWeight: 950,
+                  boxShadow: "0 1px 4px rgba(0,0,0,.35)",
+                }}>
+                  {track.decoded ? "✓" : undecoded ? "候補" : ""}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div style={{
           position: "absolute",
@@ -1230,24 +1661,20 @@ export default function CertificateQrLiveScanPoc() {
                 ? ` ／ PoC上あと${provisionalRemaining}件`
                 : ""}
             </div>
-            {physicalSlotGuide ? (
+            {locatorPrimaryTarget ? (
               <>
                 <div style={{ marginTop: 2, color: "#ffd54f" }}>
-                  {physicalSlotGuide.missingLabel}が未取得候補です。
-                  ゆっくりその付近をガイドへ合わせてください
+                  {guide2DLabel(locatorPrimaryTarget.x, locatorPrimaryTarget.y)}に
+                  未decodeのQR候補があります。そこをガイドへ合わせてください
                 </div>
                 <div style={{ marginTop: 1, fontSize: 11, fontWeight: 600, color: "#ddd" }}>
-                  左右順と最近の位置からの推定
-                  {physicalSlotGuide.confidence === "high"
-                    ? "（確信度 高）"
-                    : physicalSlotGuide.confidence === "medium"
-                      ? "（確信度 中）"
-                      : "（候補推定・断定ではありません）"}
+                  黄色枠は現在frame上のphysical QR候補です。
+                  {locatorPrimaryTarget.confidence === "high" ? "確信度 高" : "確信度 中"}
                 </div>
               </>
             ) : (
               <div style={{ marginTop: 2, fontSize: 12, color: "#ddd" }}>
-                QR位置を取得中です。緑の✓が取得済み位置です。
+                2D QR候補を検出中です。緑枠＋✓は取得済みcandidateです。
               </div>
             )}
           </div>
@@ -1256,7 +1683,7 @@ export default function CertificateQrLiveScanPoc() {
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
-      {!complete && kindEvidence.expected != null && (
+      {!complete && (
         <section style={{
           marginTop: 12,
           padding: "11px 12px",
@@ -1265,55 +1692,23 @@ export default function CertificateQrLiveScanPoc() {
           background: "#fafafa",
         }}>
           <div style={{ fontWeight: 900, fontSize: 15 }}>
-            QR取得状況：{confirmedCount} / {kindEvidence.expected}
+            2D QR位置：{confirmedCount}{kindEvidence.expected != null ? ` / ${kindEvidence.expected}` : "件"} 読み取り済み
           </div>
-          <div style={{ display: "flex", gap: 7, marginTop: 9, alignItems: "center" }}>
-            {Array.from({ length: kindEvidence.expected }, (_, index) => {
-              const missingCandidate = physicalSlotGuide?.missingIndex === index;
-              const stateKnown = Boolean(physicalSlotGuide);
-              return (
-                <div
-                  key={index}
-                  title={missingCandidate ? "未取得候補" : stateKnown ? "取得済み順序候補" : "位置推定中"}
-                  style={{
-                    flex: "1 1 0",
-                    minWidth: 34,
-                    height: 40,
-                    borderRadius: 9,
-                    display: "grid",
-                    placeItems: "center",
-                    border: missingCandidate
-                      ? "2px solid #f0a000"
-                      : stateKnown
-                        ? "2px solid #34a853"
-                        : "2px solid #bbb",
-                    background: missingCandidate
-                      ? "#fff7d6"
-                      : stateKnown
-                        ? "#eef9f0"
-                        : "#f3f3f3",
-                    color: missingCandidate ? "#9a6500" : stateKnown ? "#1f7a37" : "#777",
-                    fontSize: 20,
-                    fontWeight: 950,
-                  }}
-                >
-                  {missingCandidate ? "□" : stateKnown ? "✓" : "·"}
-                </div>
-              );
-            })}
+          <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.55, color: "#555" }}>
+            緑枠＋✓＝decode済み候補 ／ 黄色枠＝physical QR候補だが未decode
           </div>
-          {physicalSlotGuide && (
-            <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+          <div style={{ marginTop: 5, fontSize: 12, color: "#666" }}>
+            locator candidate {locatorVisibleTracks.length}件
+            ／ 未decode候補 {locatorUndecodedTracks.length}件
+            {physicalLocatorUi.lastLatencyMs != null ? ` ／ locator ${physicalLocatorUi.lastLatencyMs}ms` : ""}
+          </div>
+          {locatorPrimaryTarget && (
+            <div style={{ marginTop: 7, fontSize: 13 }}>
               <b style={{ color: "#9a6500" }}>
-                未取得候補：{physicalSlotGuide.missingLabel}
+                狙う候補：{guide2DLabel(locatorPrimaryTarget.x, locatorPrimaryTarget.y)}
               </b>
               <span style={{ color: "#666" }}>
-                {" "}／ 左→右の相対順から推定
-                {physicalSlotGuide.confidence === "high"
-                  ? "（確信度 高）"
-                  : physicalSlotGuide.confidence === "medium"
-                    ? "（確信度 中）"
-                    : "（確信度 低・候補表示）"}
+                {" "}／ {locatorPrimaryTarget.confidence === "high" ? "確信度 高" : "確信度 中"}
               </span>
             </div>
           )}
