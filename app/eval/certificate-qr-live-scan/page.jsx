@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v3-physical-slot-conflict-decomposition-1";
+const LIVE_SCAN_REVISION = "live-poc-v3-d-exempt-counterfactual-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -749,6 +749,14 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
     const genericConfirmationPass =
       Boolean(candidate.decodeIntegrityPass) &&
       (repeatedFrameSupport || bothEngineSameFrameSupport);
+    const sortedFrames = [...candidate.frameIds].map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    const secondDistinctFrame = sortedFrames.length >= 2 ? sortedFrames[1] : null;
+    const earliestBothEngineFrame = candidate.bothEngineFrames?.size
+      ? Math.min(...[...candidate.bothEngineFrames].map(Number).filter(Number.isFinite))
+      : null;
+    const genericConfirmationFrame = genericConfirmationPass
+      ? [secondDistinctFrame, earliestBothEngineFrame].filter(Number.isFinite).sort((a, b) => a - b)[0] ?? null
+      : null;
     return {
       diagnosticId: candidate.diagnosticId,
       firstSeenFrame: candidate.firstSeenFrame,
@@ -772,6 +780,7 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
       parserSchemaRecognized: recognizedSchema,
       parserSchemaClass,
       genericConfirmationPass,
+      genericConfirmationFrame,
       confirmationSupport: {
         repeatedFrameSupport,
         bothEngineSameFrameSupport,
@@ -814,6 +823,20 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
     currentConfirmedMissingFromSeparated.length === 0;
   const expected = currentCompletion.expected;
   const separatedComplete = expected != null && separatedConfirmed.length >= expected;
+  const confirmationFrames = separatedConfirmed
+    .map((candidate) => candidate.genericConfirmationFrame)
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  const frameAtFinalConfirmed = confirmationFrames.length
+    ? confirmationFrames[confirmationFrames.length - 1]
+    : null;
+  const frameAtPenultimateConfirmed = confirmationFrames.length >= 2
+    ? confirmationFrames[confirmationFrames.length - 2]
+    : null;
+  const finalQrWaitFrames =
+    Number.isFinite(frameAtFinalConfirmed) && Number.isFinite(frameAtPenultimateConfirmed)
+      ? Math.max(0, frameAtFinalConfirmed - frameAtPenultimateConfirmed)
+      : null;
 
   return {
     schema: PARSER_SEPARATION_SCHEMA,
@@ -859,6 +882,14 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
     currentConfirmedMissingFromSeparatedCount: currentConfirmedMissingFromSeparated.length,
     currentConfirmedMissingFromSeparatedDiagnosticIds: currentConfirmedMissingFromSeparated,
     accountingIntegrityPass,
+    acquisitionLatencyDiagnostic: {
+      confirmationBasis: "strict-generic-confirmation-frame",
+      frameAtPenultimateConfirmed,
+      frameAtFinalConfirmed,
+      finalQrWaitFrames,
+      confirmationFrames,
+      diagnosticOnly: true,
+    },
     diagnosticAccountingSources: {
       normalSubRoiIncluded: true,
       remainingOneRescueIncluded: true,
@@ -1039,6 +1070,16 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
     if (association.insufficientPositionSupport) categories.push("E_INSUFFICIENT_POSITION_SUPPORT");
     if (!categories.length && (!association.stableBase || association.finalConflict)) categories.push("F_OTHER");
     association.conflictCategories = categories;
+
+    const dExemptionEligible =
+      association.temporalCameraMotionFalseConflict &&
+      !association.sameFrameSpatialConflict &&
+      association.stableBase &&
+      !association.insufficientPositionSupport;
+    association.v2FinalConflict = association.finalConflict;
+    association.rescuedByDExemption = Boolean(association.v2FinalConflict && dExemptionEligible);
+    association.v3FinalConflict =
+      association.v2FinalConflict && !association.rescuedByDExemption;
   }
 
   const stableAssociations = associations
@@ -1120,6 +1161,14 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
     });
   }
 
+  const v3StableAssociations = associations
+    .filter((association) => association.stableBase && !association.v3FinalConflict);
+  const v3RemainingConflictCount = associations.filter((association) => association.v3FinalConflict).length;
+  const v3RescuedByTemporalMotionExemptionCount =
+    associations.filter((association) => association.rescuedByDExemption).length;
+  const v3UncertainCount =
+    Math.max(0, confirmedCanonicalCount - v3StableAssociations.length);
+
   const conflictCategoryCounts = {
     A_SAME_FRAME_SPATIAL_CONFLICT: associations.filter((item) => item.sameFrameSpatialConflict).length,
     B_NEARBY_CANONICAL_CLUSTER_CONFLICT: associations.filter((item) => item.nearbyCanonicalConflict).length,
@@ -1144,6 +1193,10 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
     temporalCameraMotionFalseConflict: association.temporalCameraMotionFalseConflict,
     insufficientPositionSupport: association.insufficientPositionSupport,
     finalConflict: association.finalConflict,
+    v2FinalConflict: association.v2FinalConflict,
+    dFlag: association.temporalCameraMotionFalseConflict,
+    v3FinalConflict: association.v3FinalConflict,
+    rescuedByDExemption: association.rescuedByDExemption,
     conflictCategories: association.conflictCategories,
   }));
 
@@ -1162,6 +1215,23 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
     associationConflictCount: conflictIds.size,
     conflictCategoryCounts,
     conflictDiagnostics,
+    associationVariants: {
+      V2_CURRENT_CONFLICT: {
+        stablePhysicalSlotCount: stableAssociations.length,
+        associationConflictCount: conflictIds.size,
+        uncertainCount,
+      },
+      V3_D_EXEMPT_COUNTERFACTUAL: {
+        stablePhysicalSlotCount: v3StableAssociations.length,
+        remainingConflictCount: v3RemainingConflictCount,
+        uncertainCount: v3UncertainCount,
+        rescuedByTemporalMotionExemptionCount: v3RescuedByTemporalMotionExemptionCount,
+        sameFrameConflictAlwaysHard: true,
+        insufficientSupportNeverRescued: true,
+        displayOnlyCounterfactual: true,
+        currentV2UiChanged: false,
+      },
+    },
     conflictDecompositionDiagnosticOnly: true,
     conflictThresholdsChanged: false,
     finalConflictRuleChanged: false,
@@ -1383,6 +1453,9 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       rescueInvolvedCandidateCount: separated.rescueInvolvedCandidateCount ?? null,
       currentConfirmedMissingFromSeparatedCount: separated.currentConfirmedMissingFromSeparatedCount ?? null,
       accountingIntegrityPass: separated.accountingIntegrityPass ?? null,
+      frameAtPenultimateConfirmed: separated.acquisitionLatencyDiagnostic?.frameAtPenultimateConfirmed ?? null,
+      frameAtFinalConfirmed: separated.acquisitionLatencyDiagnostic?.frameAtFinalConfirmed ?? null,
+      finalQrWaitFrames: separated.acquisitionLatencyDiagnostic?.finalQrWaitFrames ?? null,
     },
     baselineReproduction: {
       normalDecodeControlChanged: Boolean(counting.normalDecodeControlChanged),
@@ -1431,6 +1504,7 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
         currentFrameTrackCount: full.productionShapeCandidate.physicalSlotUi?.currentFrameTrackCount ?? null,
         associationConflictCount: full.productionShapeCandidate.physicalSlotUi?.associationConflictCount ?? null,
         conflictCategoryCounts: full.productionShapeCandidate.physicalSlotUi?.conflictCategoryCounts || null,
+        associationVariants: full.productionShapeCandidate.physicalSlotUi?.associationVariants || null,
         conflictDiagnostics: (full.productionShapeCandidate.physicalSlotUi?.conflictDiagnostics || []).slice(0, 8).map((item) => ({
           diagnosticId: item.diagnosticId,
           stableBase: item.stableBase,
@@ -1444,6 +1518,10 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
           temporalCameraMotionFalseConflict: item.temporalCameraMotionFalseConflict,
           insufficientPositionSupport: item.insufficientPositionSupport,
           finalConflict: item.finalConflict,
+          v2FinalConflict: item.v2FinalConflict,
+          Dflag: item.dFlag,
+          v3FinalConflict: item.v3FinalConflict,
+          rescuedByDExemption: item.rescuedByDExemption,
           conflictCategories: item.conflictCategories,
         })),
         duplicateIdentityWarning: Boolean(full.productionShapeCandidate.physicalSlotUi?.duplicateIdentityWarning),
