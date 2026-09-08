@@ -7,6 +7,9 @@ import { detectCertificateQrDensityCandidates2D, clusterCertificateQrCandidates2
 const REQUIRED_NAMES = Array.from({ length: 8 }, (_, i) => `IMG_${String(940 + i).padStart(4, "0")}.jpeg`);
 const PATHNAME = "/vehicle-workflow-v2";
 const EXPERIMENT_ROUTE = "/eval/certificate-qr-decode-experiment";
+const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
+const EVALUATION_BRANCH = "exp/certificate-qr-decode-audit";
+const PHOTO_FORMAL_BASELINE_HEAD = "339cbf5d832fd2bc9ab5eadfa260cb16adda02f9";
 const OVERLAY_PRIORITY_CANDIDATES = Object.freeze({
   "IMG_0942.jpeg": [4, 7, 8, 9],
   "IMG_0944.jpeg": [1, 2, 3, 5, 8],
@@ -4340,6 +4343,69 @@ function publicResult(result) {
   };
 }
 
+function photoManagementShortFromFull(full, runtimeHead = null) {
+  const base = full?.baselineTotals || {};
+  const a = full?.aCurrentEnsembleTotals || {};
+  const e = full?.eGeometryRectifyTotals || {};
+  const quality = full?.qualityDiagnosticTotals || {};
+  const rescue = full?.limitedQualityRescueTotals || {};
+  const regressions = (e.regressionImages || []).slice(0, 3);
+  const important = [];
+  if (full?.coordinateAudit0942Candidate1) important.push({ case: "IMG_0942-c1-coordinate-audit", status: "diagnostic-present" });
+  if (Number(rescue.rescueNetNewPhysicalQrCount || 0) > 0) important.push({ case: "limited-quality-rescue", netNew: rescue.rescueNetNewPhysicalQrCount });
+  for (const fileName of regressions) important.push({ case: fileName, status: "regression" });
+  return {
+    schema: MANAGEMENT_SHORT_SCHEMA,
+    summaryVariant: "management-short",
+    sourceSchema: full?.schema || null,
+    revision: full?.diagnosticRevision || null,
+    evaluationBranch: EVALUATION_BRANCH,
+    evaluationHead: full?.experimentalHead || runtimeHead || null,
+    baseline: PHOTO_FORMAL_BASELINE_HEAD,
+    majorResult: {
+      expectedQrCount: e.expectedQrCount ?? base.expectedQrCount ?? 47,
+      baselinePhysicalUnique: base.physicalUniqueQrCount ?? null,
+      aLegacyCompatible: a.legacyCompatiblePhysicalUniqueQrCount ?? null,
+      aStructuralAdopted: a.structuralAdoptedPhysicalUniqueQrCount ?? null,
+      aPhysicalSafe: a.physicalSafeQrCount ?? null,
+      eNetNewCanonicalVsA: e.eNetNewCanonicalVsA ?? null,
+      finalSafeUnion: e.finalUnionCanonicalCount ?? null,
+      parserEligibleUnion: e.parserEligibleUnionCanonicalCount ?? null,
+      completeImageCount: e.finalCompleteImageCount ?? null,
+    },
+    baselineReproduction: {
+      formalReferenceFinalSafeUnion: 28,
+      currentFinalSafeUnion: e.finalUnionCanonicalCount ?? null,
+      maintained: Number(e.finalUnionCanonicalCount ?? -1) >= 28,
+    },
+    comparison: {
+      regressionImageCount: e.regressionImageCount ?? 0,
+      regressionImages: regressions,
+      countingIntegrityFail: Boolean(full?.countingIntegrityFail),
+      qualityDiagnosticOnly: Boolean(quality.diagnosticOnly),
+      rescueNetNewPhysicalQrCount: rescue.rescueNetNewPhysicalQrCount ?? 0,
+    },
+    causeAggregate: {
+      finderAtLeast3ButNoValidQuadCount: e.finderAtLeast3ButNoValidQuadCount ?? null,
+      tripletCandidateCount: e.tripletCandidateCount ?? null,
+      alternateTripletRecoveredCount: e.alternateTripletRecoveredCount ?? null,
+      nativeRectifyNetNewCanonicalCount: e.nativeRectifyNetNewCanonicalCount ?? null,
+    },
+    importantCases: important.slice(0, 3),
+    adoption: {
+      adoptedHead: null,
+      formalReferencePreserved: true,
+    },
+    changes: {
+      recognitionLogicChanged: false,
+      frozenChanged: false,
+      productionChanged: false,
+      mainChanged: false,
+      supabaseChanged: false,
+    },
+  };
+}
+
 export default function CertificateQrDecodeExperimentPage() {
   const [files, setFiles] = useState([]);
   const [groundTruth, setGroundTruth] = useState(DEFAULT_GROUND_TRUTH);
@@ -4351,6 +4417,8 @@ export default function CertificateQrDecodeExperimentPage() {
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("固定8枚を選択してください。");
   const [experimentalHead, setExperimentalHead] = useState(null);
+  const [fullJsonInput, setFullJsonInput] = useState("");
+  const [convertedShort, setConvertedShort] = useState("");
   const frameRef = useRef(null);
   const visualDiagnosticsRef = useRef({});
 
@@ -4789,13 +4857,33 @@ export default function CertificateQrDecodeExperimentPage() {
     results:results.map(publicResult),
   },null,2);
 
+  const managementShortSummary=JSON.stringify(photoManagementShortFromFull(JSON.parse(summary),experimentalHead),null,2);
+  const copyManagementShortSummary = async () => {
+    await navigator.clipboard.writeText(managementShortSummary);
+    setStatus("総合管理用短縮summaryをコピーしました。");
+  };
   const copySummary = async () => {
     await navigator.clipboard.writeText(summary);
-    setStatus("非PII decode A/E summaryをコピーしました。");
+    setStatus("詳細診断JSONをコピーしました。");
   };
   const copyManagementAuditSummary = async () => {
     await navigator.clipboard.writeText(managementAuditSummary);
-    setStatus("総合管理監査用の短縮summaryをコピーしました。");
+    setStatus("旧監査summaryをコピーしました。");
+  };
+  const convertExistingFullJson = () => {
+    try {
+      const parsed=JSON.parse(fullJsonInput);
+      setConvertedShort(JSON.stringify(photoManagementShortFromFull(parsed,experimentalHead),null,2));
+      setStatus("既存Full JSONから短縮summaryを生成しました。");
+    } catch (error) {
+      setConvertedShort("");
+      setStatus(`JSON変換失敗: ${error?.message||error}`);
+    }
+  };
+  const copyConvertedShort = async () => {
+    if(!convertedShort)return;
+    await navigator.clipboard.writeText(convertedShort);
+    setStatus("変換済み短縮summaryをコピーしました。");
   };
   const downloadSummary = () => {
     const blob = new Blob([summary], { type: "application/json" });
@@ -5029,9 +5117,19 @@ export default function CertificateQrDecodeExperimentPage() {
           {img0942OwnershipComplete ? "（全candidate分類完了）" : "（未分類candidateをA/B/C/D選択）"}
           {" / "}既存0944分類は引き継ぎ済み
         </div>
-        <button disabled={!results.length} onClick={copySummary} style={{ marginRight: 8, marginBottom: 8, padding: "9px 14px" }}>非PII summaryをコピー</button>
-        <button disabled={!totals} onClick={copyManagementAuditSummary} style={{ marginRight: 8, marginBottom: 8, padding: "9px 14px", fontWeight: 800 }}>総合管理監査用summaryをコピー</button>
-        <button disabled={!results.length} onClick={downloadSummary} style={{ marginBottom: 8, padding: "9px 14px" }}>summaryを端末保存</button>
+        <button disabled={!totals} onClick={copyManagementShortSummary} style={{ marginRight: 8, marginBottom: 8, padding: "10px 15px", fontWeight: 900 }}>総合管理用短縮summaryをコピー</button>
+        <button disabled={!results.length} onClick={copySummary} style={{ marginRight: 8, marginBottom: 8, padding: "9px 14px" }}>詳細診断JSONをコピー</button>
+        <button disabled={!results.length} onClick={downloadSummary} style={{ marginBottom: 8, padding: "9px 14px" }}>詳細JSONを端末保存</button>
+        <details style={{marginTop:8}}>
+          <summary style={{cursor:"pointer",fontWeight:700}}>既存Full JSONから短縮summary生成 / 旧監査summary</summary>
+          <textarea value={fullJsonInput} onChange={(e)=>setFullJsonInput(e.target.value)} placeholder="既存Full Diagnostic JSONを貼り付け" style={{width:"100%",minHeight:110,boxSizing:"border-box",fontFamily:"monospace",fontSize:11,marginTop:8}} />
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:7}}>
+            <button onClick={convertExistingFullJson} disabled={!fullJsonInput.trim()} style={{padding:"8px 12px"}}>短縮summary生成</button>
+            <button onClick={copyConvertedShort} disabled={!convertedShort} style={{padding:"8px 12px"}}>生成した短縮summaryをコピー</button>
+            <button disabled={!totals} onClick={copyManagementAuditSummary} style={{padding:"8px 12px"}}>旧監査summaryをコピー</button>
+          </div>
+          {convertedShort&&<pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",fontSize:10,maxHeight:240,overflow:"auto",background:"#f7f7f7",padding:8}}>{convertedShort}</pre>}
+        </details>
       </section>
 
       {expandedName && thumbnailUrls[expandedName] && (
