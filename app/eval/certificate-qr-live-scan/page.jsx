@@ -329,6 +329,16 @@ function selectSubRois(frameId, evidenceMap, statsMap) {
   }).sort((a, b) => b.score - a.score).slice(0, SUB_ROIS_PER_FRAME).map((item) => item.roi);
 }
 
+function subRoiGuideLabel(id) {
+  return ({
+    left: "左側",
+    "left-mid": "左寄り",
+    center: "中央",
+    "right-mid": "右寄り",
+    right: "右側",
+  })[id] || "ガイド内";
+}
+
 function subRoiStatsSnapshot(statsMap) {
   return SUB_ROIS.map((roi) => {
     const stats = statsMap.get(roi.id) || {};
@@ -447,6 +457,34 @@ export default function CertificateQrLiveScanPoc() {
     return { kind: "unknown", expected: null, label: "車種判定待ち" };
   }, [candidates]);
   const complete = kindEvidence.expected != null && confirmedCount >= kindEvidence.expected;
+
+  const confirmedGuideMarkers = useMemo(() => candidates
+    .filter((item) => item.confirmed && Number.isFinite(Number(item.medianGuideX)))
+    .map((item) => ({
+      id: item.diagnosticId,
+      x: Math.max(0, Math.min(1, Number(item.medianGuideX))),
+    })), [candidates]);
+
+  const guidedTarget = useMemo(() => {
+    if (!running || complete) return null;
+    const selected = selectSubRois(
+      Number(frameStats.processed || 0) + 1,
+      evidenceRef.current,
+      subRoiStatsRef.current
+    );
+    const roi = selected[0] || null;
+    if (!roi) return null;
+    return {
+      id: roi.id,
+      label: subRoiGuideLabel(roi.id),
+      x: roi.x,
+      w: roi.w,
+    };
+  }, [running, complete, frameStats.processed, candidates, subRoiStats]);
+
+  const provisionalRemaining = kindEvidence.expected == null
+    ? null
+    : Math.max(0, kindEvidence.expected - confirmedCount);
 
   const clearTimers = () => {
     for (const id of timersRef.current) clearTimeout(id);
@@ -802,7 +840,46 @@ export default function CertificateQrLiveScanPoc() {
             boxSizing: "border-box",
             pointerEvents: "none",
           }}
-        />
+        >
+          {running && !complete && guidedTarget && (
+            <div
+              style={{
+                position: "absolute",
+                left: `${guidedTarget.x * 100}%`,
+                top: 0,
+                width: `${guidedTarget.w * 100}%`,
+                height: "100%",
+                boxSizing: "border-box",
+                border: "2px dashed rgba(255,193,7,.95)",
+                background: "rgba(255,193,7,.12)",
+                borderRadius: 8,
+              }}
+            />
+          )}
+          {confirmedGuideMarkers.map((marker) => (
+            <div
+              key={marker.id}
+              style={{
+                position: "absolute",
+                left: `${marker.x * 100}%`,
+                top: "50%",
+                transform: "translate(-50%, -50%)",
+                width: 26,
+                height: 26,
+                borderRadius: "50%",
+                display: "grid",
+                placeItems: "center",
+                background: "rgba(52,199,89,.96)",
+                color: "#fff",
+                fontSize: 17,
+                fontWeight: 950,
+                boxShadow: "0 1px 5px rgba(0,0,0,.35)",
+              }}
+            >
+              ✓
+            </div>
+          ))}
+        </div>
         <div style={{
           position: "absolute",
           left: 10,
@@ -816,6 +893,37 @@ export default function CertificateQrLiveScanPoc() {
         }}>
           {status}
         </div>
+        {running && !complete && guidedTarget && (
+          <div style={{
+            position: "absolute",
+            left: 10,
+            right: 10,
+            bottom: 10,
+            padding: "9px 11px",
+            borderRadius: 10,
+            background: "rgba(0,0,0,.74)",
+            color: "#fff",
+            textAlign: "center",
+            fontSize: 14,
+            fontWeight: 800,
+            lineHeight: 1.45,
+          }}>
+            <div>
+              {kindEvidence.expected != null
+                ? `${confirmedCount} / ${kindEvidence.expected} 読み取り済み`
+                : `${confirmedCount}件 読み取り済み`}
+              {provisionalRemaining != null && provisionalRemaining > 0
+                ? ` ／ PoC上あと${provisionalRemaining}件`
+                : ""}
+            </div>
+            <div style={{ marginTop: 2, color: "#ffd54f" }}>
+              次は{guidedTarget.label}をガイドへ合わせてください
+            </div>
+            <div style={{ marginTop: 1, fontSize: 11, fontWeight: 600, color: "#ddd" }}>
+              黄色は現在の探索優先エリアです。未読QR位置を断定する表示ではありません。
+            </div>
+          </div>
+        )}
       </section>
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
