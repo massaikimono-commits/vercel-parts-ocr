@@ -626,6 +626,7 @@ function countingIntegritySnapshot(state, evidenceMap, physicalLocatorUi) {
     schema: COUNTING_INTEGRITY_SCHEMA,
     diagnosticOnly: true,
     evaluationOverheadPresent: true,
+    previewEvaluationOnly: true,
     timingComparableToBaseline: false,
     normalDecodeControlChanged: false,
     dedupeChanged: false,
