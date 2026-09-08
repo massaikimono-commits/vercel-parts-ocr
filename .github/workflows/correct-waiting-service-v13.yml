@@ -1,0 +1,59 @@
+name: Correct waiting service v13 duplicate warning
+
+on:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
+
+permissions:
+  contents: write
+
+jobs:
+  correct-and-validate:
+    if: contains(github.event.head_commit.message, '[correct waiting-service-v13]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview/schedule-ux-20260903
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Correct schedule edit wording
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/schedule/edit/page.tsx')
+          s = p.read_text()
+          old = '作業待ち（来社したお客様が点検完了まで待つ）'
+          new = '作業待ち（来社したお客様が作業完了まで待つ）'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one old waiting-service label, found {s.count(old)}')
+          p.write_text(s.replace(old, new))
+          PY
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Waiting-service corrected regression
+        run: npm run test:waiting-service-v13
+
+      - name: Full build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build
+
+      - name: Commit tested UI correction
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/schedule/edit/page.tsx
+          git commit -m 'fix: restore waiting service duplicate warning contract'
+          git push origin HEAD:preview/schedule-ux-20260903
