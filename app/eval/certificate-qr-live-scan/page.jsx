@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v3-d-exempt-counterfactual-1";
+const LIVE_SCAN_REVISION = "live-poc-v3-two-track-diagnostics-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -448,6 +448,7 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = [], sourc
         normalZxingFrames: new Set(),
         rescueZxingFrames: new Set(),
         locatorTrackMatches: [],
+        hitTimeline: [],
         positions: [],
         rawByteLengths: [],
         decodedTextLengths: [],
@@ -503,6 +504,20 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = [], sourc
       hit.structuralFailReason,
       Number(candidate.structuralFailReasons.get(hit.structuralFailReason) || 0) + 1
     );
+    if (!Array.isArray(candidate.hitTimeline)) candidate.hitTimeline = [];
+    candidate.hitTimeline.push({
+      frameId,
+      source,
+      engine: hit.engine || "unknown",
+      decodeIntegrityPass: Boolean(hit.decodeIntegrityPass),
+      decodeIntegrityFailReason: hit.decodeIntegrityFailReason || null,
+      parserSchemaClass: hit.parserSchemaClass || null,
+      parserSchemaRecognized: Boolean(hit.parserSchemaRecognized),
+      structuralPass: Boolean(hit.structuralPass),
+      structuralFailReason: hit.structuralFailReason || null,
+      subRoiId,
+    });
+    if (candidate.hitTimeline.length > 800) candidate.hitTimeline = candidate.hitTimeline.slice(-800);
     const position = guidePositionFromHit(hit, roi);
     if (position) candidate.positions.push({
       frameId,
@@ -1013,6 +1028,7 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
   const conflictIds = new Set();
   const nearbyConflictIds = new Set();
   const locatorMultiDiagnosticConflictIds = new Set();
+  const nearbyPairDiagnostics = [];
 
   for (const association of associations) {
     if (association.sameFrameSpatialConflict) conflictIds.add(association.diagnosticId);
@@ -1025,6 +1041,85 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
       if (!Number.isFinite(a.x) || !Number.isFinite(a.y) || !Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
       const distance = Math.hypot(a.x - b.x, a.y - b.y);
       if (distance <= .045) {
+        const rawA = rawById.get(a.diagnosticId) || null;
+        const rawB = rawById.get(b.diagnosticId) || null;
+        const positionsA = Array.isArray(rawA?.positions) ? rawA.positions : [];
+        const positionsB = Array.isArray(rawB?.positions) ? rawB.positions : [];
+        const byFrameA = new Map();
+        const byFrameB = new Map();
+        for (const position of positionsA) {
+          if (!byFrameA.has(position.frameId)) byFrameA.set(position.frameId, []);
+          byFrameA.get(position.frameId).push(position);
+        }
+        for (const position of positionsB) {
+          if (!byFrameB.has(position.frameId)) byFrameB.set(position.frameId, []);
+          byFrameB.get(position.frameId).push(position);
+        }
+        const sharedFrames = [...byFrameA.keys()]
+          .filter((frameId) => byFrameB.has(frameId))
+          .map(Number)
+          .filter(Number.isFinite)
+          .sort((x, y) => x - y);
+        const sameFrameSamples = sharedFrames.map((frameId) => {
+          const ax = medianNumber(byFrameA.get(frameId).map((item) => Number(item.x)).filter(Number.isFinite));
+          const ay = medianNumber(byFrameA.get(frameId).map((item) => Number(item.y)).filter(Number.isFinite));
+          const bx = medianNumber(byFrameB.get(frameId).map((item) => Number(item.x)).filter(Number.isFinite));
+          const by = medianNumber(byFrameB.get(frameId).map((item) => Number(item.y)).filter(Number.isFinite));
+          const sampleDistance = [ax, ay, bx, by].every(Number.isFinite)
+            ? Math.hypot(ax - bx, ay - by)
+            : null;
+          return {
+            frameId,
+            distance: Number.isFinite(sampleDistance) ? Number(sampleDistance.toFixed(4)) : null,
+          };
+        }).filter((item) => Number.isFinite(item.distance));
+        const sameFrameDistances = sameFrameSamples.map((item) => item.distance);
+        const sameFrameNearbyCount = sameFrameDistances.filter((value) => value <= .045).length;
+        const overlapStart = Math.max(Number(a.firstSeenFrame || 0), Number(b.firstSeenFrame || 0));
+        const overlapEnd = Math.min(Number(a.lastSeenFrame || 0), Number(b.lastSeenFrame || 0));
+        const temporalOverlapFrameCount = overlapEnd >= overlapStart
+          ? overlapEnd - overlapStart + 1
+          : 0;
+        const nearestDistances = positionsA.map((pa) => {
+          let nearest = Infinity;
+          for (const pb of positionsB) {
+            const d = Math.hypot(Number(pa.x) - Number(pb.x), Number(pa.y) - Number(pb.y));
+            if (Number.isFinite(d)) nearest = Math.min(nearest, d);
+          }
+          return nearest;
+        }).filter(Number.isFinite);
+        const bSubtype = sameFrameNearbyCount > 0
+          ? "B1_SIMULTANEOUS_NEARBY"
+          : distance <= .045
+            ? "B2_TEMPORAL_MEDIAN_ONLY_NEARBY"
+            : "B3_OTHER_NEARBY";
+        nearbyPairDiagnostics.push({
+          diagnosticIdA: a.diagnosticId,
+          diagnosticIdB: b.diagnosticId,
+          medianPairDistance: Number(distance.toFixed(4)),
+          bSubtype,
+          sameFrameCoexistenceCount: sharedFrames.length,
+          sameFrameNearbyCount,
+          sameFrameMinimumDistance: sameFrameDistances.length
+            ? Number(Math.min(...sameFrameDistances).toFixed(4))
+            : null,
+          sameFrameMedianDistance: sameFrameDistances.length
+            ? Number(medianNumber(sameFrameDistances).toFixed(4))
+            : null,
+          temporalOverlapFrameCount,
+          firstSeenFrameA: a.firstSeenFrame,
+          lastSeenFrameA: a.lastSeenFrame,
+          firstSeenFrameB: b.firstSeenFrame,
+          lastSeenFrameB: b.lastSeenFrame,
+          positionSampleCountA: positionsA.length,
+          positionSampleCountB: positionsB.length,
+          trajectoryNearestDistanceMedian: nearestDistances.length
+            ? Number(medianNumber(nearestDistances).toFixed(4))
+            : null,
+          pairwisePositionSamples: sameFrameSamples.slice(0, 8),
+          medianOnlyNearby: sameFrameNearbyCount === 0,
+          actualSimultaneousNearby: sameFrameNearbyCount > 0,
+        });
         nearbyConflictIds.add(a.diagnosticId);
         nearbyConflictIds.add(b.diagnosticId);
         conflictIds.add(a.diagnosticId);
@@ -1215,6 +1310,14 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
     associationConflictCount: conflictIds.size,
     conflictCategoryCounts,
     conflictDiagnostics,
+    nearbyConflictPairDiagnostics: nearbyPairDiagnostics,
+    nearbyConflictSubtypeCounts: {
+      B1_SIMULTANEOUS_NEARBY: nearbyPairDiagnostics.filter((item) => item.bSubtype === "B1_SIMULTANEOUS_NEARBY").length,
+      B2_TEMPORAL_MEDIAN_ONLY_NEARBY: nearbyPairDiagnostics.filter((item) => item.bSubtype === "B2_TEMPORAL_MEDIAN_ONLY_NEARBY").length,
+      B3_OTHER_NEARBY: nearbyPairDiagnostics.filter((item) => item.bSubtype === "B3_OTHER_NEARBY").length,
+    },
+    trackADiagnosticOnly: true,
+    nearbyThresholdChanged: false,
     associationVariants: {
       V2_CURRENT_CONFLICT: {
         stablePhysicalSlotCount: stableAssociations.length,
@@ -1382,6 +1485,138 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi,
   };
 }
 
+function compactFrameList(values, maxItems = 48) {
+  const frames = [...new Set((values || []).map(Number).filter(Number.isFinite))].sort((a, b) => a - b);
+  return {
+    count: frames.length,
+    frames: frames.length <= maxItems
+      ? frames
+      : [...frames.slice(0, Math.floor(maxItems / 2)), ...frames.slice(-Math.ceil(maxItems / 2))],
+    truncated: frames.length > maxItems,
+  };
+}
+
+function remainingOneLatencyDiagnostic(state, separated, rescueState) {
+  const confirmed = (separated?.allCandidateDiagnostics || [])
+    .filter((candidate) => candidate.genericConfirmationPass && Number.isFinite(candidate.genericConfirmationFrame))
+    .sort((a, b) =>
+      Number(a.genericConfirmationFrame) - Number(b.genericConfirmationFrame) ||
+      Number(a.firstSeenFrame) - Number(b.firstSeenFrame)
+    );
+  const last = confirmed[confirmed.length - 1] || null;
+  if (!last) {
+    return {
+      diagnosticOnly: true,
+      lastConfirmedDiagnosticId: null,
+      reason: "no-strict-confirmed-candidate",
+    };
+  }
+
+  const raw = state?.rawCandidates?.get?.(last.diagnosticId) || null;
+  const timeline = Array.isArray(raw?.hitTimeline) ? raw.hitTimeline : [];
+  const confirmationFrame = Number(last.genericConfirmationFrame);
+  const preConfirmation = timeline.filter((item) =>
+    Number.isFinite(Number(item.frameId)) && Number(item.frameId) <= confirmationFrame
+  );
+
+  const firstDecodeIntegrityPassFrame = preConfirmation
+    .filter((item) => item.decodeIntegrityPass)
+    .map((item) => Number(item.frameId))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b)[0] ?? null;
+
+  const firstRecognizedOrSafeFrame = preConfirmation
+    .filter((item) =>
+      item.decodeIntegrityPass &&
+      ["kei-slash", "registered-slash", "unrecognized-safe"].includes(item.parserSchemaClass)
+    )
+    .map((item) => Number(item.frameId))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b)[0] ?? null;
+
+  const decodeRejectHistogram = {};
+  const structuralRejectHistogram = {};
+  const combinedRejectHistogram = {};
+  for (const item of preConfirmation) {
+    if (!item.decodeIntegrityPass) {
+      const reason = item.decodeIntegrityFailReason || "decode-integrity-unknown";
+      decodeRejectHistogram[reason] = Number(decodeRejectHistogram[reason] || 0) + 1;
+      const key = `decode-integrity:${reason}`;
+      combinedRejectHistogram[key] = Number(combinedRejectHistogram[key] || 0) + 1;
+    }
+    if (!item.structuralPass) {
+      const reason = item.structuralFailReason || "structural-unknown";
+      structuralRejectHistogram[reason] = Number(structuralRejectHistogram[reason] || 0) + 1;
+      const key = `current-structural:${reason}`;
+      combinedRejectHistogram[key] = Number(combinedRejectHistogram[key] || 0) + 1;
+    }
+  }
+
+  const positions = Array.isArray(raw?.positions) ? raw.positions : [];
+  const px = positions.map((item) => Number(item.x)).filter(Number.isFinite);
+  const py = positions.map((item) => Number(item.y)).filter(Number.isFinite);
+  const medianX = px.length ? medianNumber(px) : null;
+  const medianY = py.length ? medianNumber(py) : null;
+  const guideRegion = Number.isFinite(medianX) && Number.isFinite(medianY)
+    ? guide2DLabel(medianX, medianY)
+    : null;
+
+  const normalFrames = compactFrameList([...(raw?.normalFrames || [])]);
+  const rescueFrames = compactFrameList([...(raw?.rescueFrames || [])]);
+  const jsqrFrames = compactFrameList([...(raw?.jsqrFrames || [])]);
+  const zxingFrames = compactFrameList([...(raw?.zxingFrames || [])]);
+  const bothEngineFrames = compactFrameList([...(raw?.bothEngineFrames || [])]);
+
+  const firstSeenFrame = Number.isFinite(Number(last.firstSeenFrame)) ? Number(last.firstSeenFrame) : null;
+  const rescueActivatedFrame = Number.isFinite(Number(rescueState?.activatedFrame))
+    ? Number(rescueState.activatedFrame)
+    : null;
+
+  return {
+    diagnosticOnly: true,
+    lastConfirmedDiagnosticId: last.diagnosticId,
+    firstSeenFrame,
+    firstDecodeIntegrityPassFrame,
+    firstRecognizedOrSafeFrame,
+    genericConfirmationFrame: confirmationFrame,
+    firstSeenToConfirmationFrames:
+      Number.isFinite(firstSeenFrame) ? Math.max(0, confirmationFrame - firstSeenFrame) : null,
+    decodeIntegrityPassToConfirmationFrames:
+      Number.isFinite(firstDecodeIntegrityPassFrame)
+        ? Math.max(0, confirmationFrame - firstDecodeIntegrityPassFrame)
+        : null,
+    normalDecodeHitFrames: normalFrames,
+    rescueHitFrames: rescueFrames,
+    jsQRHitFrames: jsqrFrames,
+    zxingHitFrames: zxingFrames,
+    sameFrameBothEngineFrames: bothEngineFrames,
+    medianGuidePosition: {
+      x: Number.isFinite(medianX) ? Number(medianX.toFixed(4)) : null,
+      y: Number.isFinite(medianY) ? Number(medianY.toFixed(4)) : null,
+      region: guideRegion,
+    },
+    remainingOneRescueActivatedFrame: rescueActivatedFrame,
+    remainingOneRescueAttemptCount: Number(rescueState?.zxingAttemptCount || 0),
+    remainingOneRescueFrameCount: Number(rescueState?.rescueFrameCount || 0),
+    candidateRescueHitFrameCount: rescueFrames.count,
+    candidateNormalHitFrameCount: normalFrames.count,
+    rescueStartToFinalConfirmationFrames:
+      Number.isFinite(rescueActivatedFrame)
+        ? Math.max(0, confirmationFrame - rescueActivatedFrame)
+        : null,
+    decodeIntegrityRejectReasonHistogramBeforeConfirmation: decodeRejectHistogram,
+    currentStructuralRejectReasonHistogramBeforeConfirmation: structuralRejectHistogram,
+    preConfirmationRejectionReasonHistogram: combinedRejectHistogram,
+    decoderAcquisitionDelayCandidate:
+      Number.isFinite(firstSeenFrame) &&
+      Number.isFinite(separated?.acquisitionLatencyDiagnostic?.frameAtPenultimateConfirmed)
+        ? Math.max(0, firstSeenFrame - separated.acquisitionLatencyDiagnostic.frameAtPenultimateConfirmed)
+        : null,
+    confirmationDelayAfterFirstSeen:
+      Number.isFinite(firstSeenFrame) ? Math.max(0, confirmationFrame - firstSeenFrame) : null,
+  };
+}
+
 function topHistogramEntry(histogram = {}) {
   return Object.entries(histogram || {}).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))[0] || null;
 }
@@ -1457,6 +1692,7 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       frameAtFinalConfirmed: separated.acquisitionLatencyDiagnostic?.frameAtFinalConfirmed ?? null,
       finalQrWaitFrames: separated.acquisitionLatencyDiagnostic?.finalQrWaitFrames ?? null,
     },
+    remainingOneLatencyDiagnostic: full?.remainingOneLatencyDiagnostic || null,
     baselineReproduction: {
       normalDecodeControlChanged: Boolean(counting.normalDecodeControlChanged),
       dedupeChanged: Boolean(counting.dedupeChanged),
@@ -1505,6 +1741,8 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
         associationConflictCount: full.productionShapeCandidate.physicalSlotUi?.associationConflictCount ?? null,
         conflictCategoryCounts: full.productionShapeCandidate.physicalSlotUi?.conflictCategoryCounts || null,
         associationVariants: full.productionShapeCandidate.physicalSlotUi?.associationVariants || null,
+        nearbyConflictSubtypeCounts: full.productionShapeCandidate.physicalSlotUi?.nearbyConflictSubtypeCounts || null,
+        nearbyConflictPairDiagnostics: (full.productionShapeCandidate.physicalSlotUi?.nearbyConflictPairDiagnostics || []).slice(0, 6),
         conflictDiagnostics: (full.productionShapeCandidate.physicalSlotUi?.conflictDiagnostics || []).slice(0, 8).map((item) => ({
           diagnosticId: item.diagnosticId,
           stableBase: item.stableBase,
@@ -2928,6 +3166,14 @@ export default function CertificateQrLiveScanPoc() {
           : null,
         payloadUsedForLocator: false,
       },
+      remainingOneLatencyDiagnostic: remainingOneLatencyDiagnostic(
+        countingIntegrityRef.current,
+        parserSeparationCounterfactualSnapshot(
+          countingIntegrityRef.current,
+          evidenceRef.current
+        ),
+        localRescueRef.current
+      ),
       remainingOneLocalRescue: {
         provisionalTrigger: true,
         triggerRule: "expected known AND confirmedCount = expected-1 AND no new structural canonical for >=16 processed frames",
