@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-production-shape-state-ui-2-confirmed-interpretation";
+const LIVE_SCAN_REVISION = "live-poc-v2-production-shape-camera-stop-slot-association-v2";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -975,7 +975,7 @@ function buildPhysicalSlotUi(physicalLocatorUi, expectedQrCount, counting) {
   };
 }
 
-function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi) {
+function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi, cameraStopSource = "none") {
   const separated = parserSeparationCounterfactualSnapshot(state, evidenceMap);
   const counting = countingIntegritySnapshot(state, evidenceMap, physicalLocatorUi);
   const recognizedKinds = new Set(
@@ -1004,11 +1004,6 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi)
   else if (expectedQrCount != null && confirmedCanonicalCount === expectedQrCount) qrAcquisitionState = "matched";
 
   const qrAcquisitionComplete = qrAcquisitionState === "matched";
-  const proposedStopCandidate =
-    qrAcquisitionComplete &&
-    kind !== "unknown" &&
-    kind !== "ambiguous" &&
-    accountingIntegrityPass;
 
   const separatedCandidates = Array.isArray(separated.allCandidateDiagnostics)
     ? separated.allCandidateDiagnostics
@@ -1021,6 +1016,18 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi)
   ).length;
   const completionEvidencePartitionIntegrityPass =
     confirmedRecognizedCount + confirmedUnrecognizedSafeCount === confirmedCanonicalCount;
+
+  const productionShapeStopConditionPass =
+    qrAcquisitionState === "matched" &&
+    kind !== "unknown" &&
+    kind !== "ambiguous" &&
+    expectedQrCount != null &&
+    confirmedCanonicalCount === expectedQrCount &&
+    accountingIntegrityPass &&
+    completionEvidencePartitionIntegrityPass &&
+    !overCount &&
+    !kindAmbiguous;
+  const proposedStopCandidate = productionShapeStopConditionPass;
 
   const recognizedCount = confirmedRecognizedCount;
   const unrecognizedSafeCount = confirmedUnrecognizedSafeCount;
@@ -1064,6 +1071,8 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi)
     accountingIntegrityPass,
     overCount,
     proposedStopCandidate,
+    productionShapeStopConditionPass,
+    cameraStopSource,
     confirmedRecognizedCount,
     confirmedUnrecognizedSafeCount,
     completionEvidencePartitionIntegrityPass,
@@ -1098,7 +1107,9 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi)
       locatorUsedForExpected: false,
       locatorUsedForKind: false,
       locatorUsedForRescueControl: false,
-      proposedStopCandidateObservationOnly: true,
+      proposedStopCandidateObservationOnly: false,
+      evaluationBranchProductionShapeStopEnabled: true,
+      currentCompletionFunctionChanged: false,
     },
   };
 }
@@ -1199,6 +1210,8 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       accountingIntegrityPass: full.productionShapeCandidate.accountingIntegrityPass,
       overCount: full.productionShapeCandidate.overCount,
       proposedStopCandidate: full.productionShapeCandidate.proposedStopCandidate,
+      productionShapeStopConditionPass: full.productionShapeCandidate.productionShapeStopConditionPass ?? false,
+      cameraStopSource: full.productionShapeCandidate.cameraStopSource ?? "none",
       confirmedRecognizedCount: full.productionShapeCandidate.confirmedRecognizedCount ?? null,
       confirmedUnrecognizedSafeCount: full.productionShapeCandidate.confirmedUnrecognizedSafeCount ?? null,
       completionEvidencePartitionIntegrityPass: full.productionShapeCandidate.completionEvidencePartitionIntegrityPass ?? null,
@@ -1882,6 +1895,7 @@ export default function CertificateQrLiveScanPoc() {
   const physicalLocatorStatsRef = useRef({ runs: 0, totalLatencyMs: 0 });
   const countingIntegrityRef = useRef(createCountingIntegrityState());
   const completionStoppedRef = useRef(false);
+  const cameraStopSourceRef = useRef("none");
   const timersRef = useRef(new Set());
 
   const [running, setRunning] = useState(false);
@@ -1895,6 +1909,7 @@ export default function CertificateQrLiveScanPoc() {
   const [cameraInfo, setCameraInfo] = useState({ width: 0, height: 0 });
   const [fullJsonInput, setFullJsonInput] = useState("");
   const [convertedShort, setConvertedShort] = useState("");
+  const [cameraStopSource, setCameraStopSource] = useState("none");
 
   const confirmedCount = useMemo(() => candidates.filter((item) => item.confirmed).length, [candidates]);
   const kindEvidence = useMemo(() => {
@@ -1941,8 +1956,9 @@ export default function CertificateQrLiveScanPoc() {
   const productionShapeUi = useMemo(() => productionShapeCandidateSnapshot(
     countingIntegrityRef.current,
     evidenceRef.current,
-    physicalLocatorUi
-  ), [frameStats.processed, candidates, physicalLocatorUi]);
+    physicalLocatorUi,
+    cameraStopSource
+  ), [frameStats.processed, candidates, physicalLocatorUi, cameraStopSource]);
 
   const clearTimers = () => {
     for (const id of timersRef.current) clearTimeout(id);
@@ -1982,6 +1998,8 @@ export default function CertificateQrLiveScanPoc() {
     physicalLocatorStatsRef.current = { runs: 0, totalLatencyMs: 0 };
     countingIntegrityRef.current = createCountingIntegrityState();
     completionStoppedRef.current = false;
+    cameraStopSourceRef.current = "none";
+    setCameraStopSource("none");
     frameSeqRef.current = 0;
     setCandidates([]);
     setQuality(null);
@@ -2433,10 +2451,25 @@ export default function CertificateQrLiveScanPoc() {
         lastDecodeMs: decodeMs,
         subRoiFrameAttempts: prev.subRoiFrameAttempts + selectedRois.length,
       }));
+      const productionShapeAfterFrame = productionShapeCandidateSnapshot(
+        countingIntegrityRef.current,
+        evidenceRef.current,
+        physicalLocatorUi,
+        cameraStopSourceRef.current
+      );
       if (evidenceUpdate.completion.complete) {
         if (!completionStoppedRef.current) {
           completionStoppedRef.current = true;
-          stopStreamAndDecodeLoop("読み取り完了");
+          cameraStopSourceRef.current = "current-completion";
+          setCameraStopSource("current-completion");
+          stopStreamAndDecodeLoop("QR取得完了");
+        }
+      } else if (productionShapeAfterFrame.productionShapeStopConditionPass) {
+        if (!completionStoppedRef.current) {
+          completionStoppedRef.current = true;
+          cameraStopSourceRef.current = "production-shape-matched";
+          setCameraStopSource("production-shape-matched");
+          stopStreamAndDecodeLoop("QR取得完了");
         }
       } else if (localRescueRef.current.active) setStatus("残り1件：局所探索中");
       else if (structuralHit) setStatus("QR取得・蓄積中");
@@ -2549,7 +2582,8 @@ export default function CertificateQrLiveScanPoc() {
       productionShapeCandidate: productionShapeCandidateSnapshot(
         countingIntegrityRef.current,
         evidenceRef.current,
-        physicalLocatorUi
+        physicalLocatorUi,
+        cameraStopSourceRef.current
       ),
       physicalQrLocator: {
         mode: "finder-pattern-triplet-2d",
