@@ -69,6 +69,16 @@ This PoC does not change:
 
 No OCR specialist branch is merged into this PoC branch.
 
+## Certificate transfer retention rule
+
+The guided certificate image remains in `sessionStorage` while the app waits for the existing certificate file input. The transfer is cleared only after the `File` is attached and the existing `change` event is dispatched successfully. DataTransfer failure or file-input timeout keeps the captured image available and shows a visible error message instead of silently discarding it.
+
+Auto capture remains OFF by default until OCR-side `captureAllowed` quality criteria are connected.
+
+## Preview approval
+
+Management approved a PoC-only Vercel Preview on 2026-09-08 after the certificate transfer retention fix. Production deployment remains prohibited. The first iPhone Safari pass evaluates camera/guide/capture/transfer behavior only, not OCR recognition accuracy or auto-capture quality.
+
 ## Integration rule
 
 Do not merge this PoC branch wholesale into the app branch. After iPhone Safari validation and management review, take only the approved camera/flow integration diff needed by the app branch.
