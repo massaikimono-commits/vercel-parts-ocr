@@ -156,3 +156,11 @@ Always identify three states separately:
 - Shared Supabase also has `harden_schedule_rpcs_active_app_user` applied; the six schedule mutation SECURITY DEFINER signatures require app secret or an active ICB app user.
 - Pending ledger #002 and #003 are implemented history. #001 `legal_3m` remains pending.
 - Source batch started from `6885320e1995fe3c18d7b80ddc1009e2c233e4f5` adds only the one-day outsourced-general-repair white color rule, parts formal-review manual row support, regressions, and ledger updates. It does not change Supabase schema/RLS/RPC, OCR recognition logic, main, Netlify, or create a Vercel Preview.
+
+### 2026-09-08 — Waiting-service v1.3 formal override
+- This section supersedes the v1.2 reason-limited waiting-service rule.
+- `is_waiting_service=true` is valid for every `customer_visit` regardless of reason: 点検 / 車検 / 一般整備 / 板金塗装.
+- Pickup, onsite repair, and delivery cannot use waiting-service. Leaving customer_visit clears the UI flag.
+- Waiting-service has no delivery plan/entry, is excluded from staying vehicles, body-shop vehicles, and planned deliveries, and remains labeled `来社待ち` in the daily report.
+- Exact-time duplicate warning is reason-independent: both entries must be customer_visit + waiting-service + exact + identical start time. Warning text: `来社・作業待ちが同じ時刻に重複しています`.
+- No new column and no backfill. Migration source: `database/waiting-service-customer-visit-v13.sql`.

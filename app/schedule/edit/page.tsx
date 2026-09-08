@@ -701,7 +701,7 @@ export default function ScheduleEditPage(){
         </section>}
         {entry.work_order_id && <section className="stayBox">
           <b>滞留・納車情報</b>
-          {(reason==="点検" && (entry.entry_type==="customer_visit" || relatedInboundEntry?.entry_type==="customer_visit")) && (
+          {(entry.entry_type==="customer_visit" || relatedInboundEntry?.entry_type==="customer_visit") && (
             <label className="deliveryToggle waitingServiceToggle">
               <input type="checkbox" checked={isWaitingService} onChange={(ev)=>{
                 const next=ev.target.checked;

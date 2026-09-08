@@ -258,10 +258,10 @@ export default function ScheduleNewPage() {
   }, [day, entryType, reason, isWaitingService]);
 
   useEffect(() => {
-    const eligible = reason === "点検" && entryType === "customer_visit";
+    const eligible = entryType === "customer_visit";
     if (!eligible && isWaitingService) setIsWaitingService(false);
     if (isWaitingService && addDelivery) setAddDelivery(false);
-  }, [reason, entryType, isWaitingService, addDelivery]);
+  }, [entryType, isWaitingService, addDelivery]);
 
   useEffect(() => {
     setShowAfternoonOptions(false);
@@ -1152,7 +1152,7 @@ export default function ScheduleNewPage() {
           <div className="flagBox">
             <label className="switch"><input type="checkbox" checked={isUrgent} onChange={(e) => setIsUrgent(e.target.checked)} />急ぎ</label>
             <label className="switch"><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} />代車あり</label>
-            {reason === "点検" && entryType === "customer_visit" && (
+            {entryType === "customer_visit" && (
               <label className="switch waitingSwitch">
                 <input type="checkbox" checked={isWaitingService} onChange={(e) => {
                   const next = e.target.checked;
@@ -1255,7 +1255,7 @@ export default function ScheduleNewPage() {
       {entryType !== "delivery" && isWaitingService && (
         <section className="card waitingDeliveryNotice">
           <h2>④ 納車予定</h2>
-          <div className="notice">来社・作業待ちは、その場で点検完了まで待つ運用のため納車予定は登録しません。</div>
+          <div className="notice">来社・作業待ちは、その場で作業完了まで待つ運用のため納車予定は登録しません。</div>
         </section>
       )}
 

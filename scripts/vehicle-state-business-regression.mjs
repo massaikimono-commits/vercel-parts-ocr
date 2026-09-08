@@ -84,18 +84,19 @@ const entry = (id, workId, type, day, mode = "unspecified") => ({
   assert.equal(mod.classifyVehicleBusinessStates(works, rows, "2026-08-31").stayingVehicles.length, 1);
 }
 
-// 点検・来社・作業待ちは納車予定なしでも滞留車両へ入れない。
-{
-  const works = [work("WAIT", "点検", "scheduled", true)];
-  const rows = [entry("WAIT-in", "WAIT", "customer_visit", "2026-08-31", "exact")];
+// 来社・作業待ちは入庫要因に関係なく、滞留・板金滞留・納車予定へ入れない。
+for (const [id, reason] of [["WAIT-I", "点検"], ["WAIT-S", "車検"], ["WAIT-R", "一般整備"], ["WAIT-B", "板金塗装"]]) {
+  const works = [work(id, reason, "scheduled", true)];
+  const rows = [entry(id + "-in", id, "customer_visit", "2026-08-31", "exact")];
   const state = mod.classifyVehicleBusinessStates(works, rows, "2026-08-31");
-  assert.equal(state.stayingVehicles.length, 0);
-  assert.equal(state.plannedDeliveries.length, 0);
+  assert.equal(state.stayingVehicles.length, 0, reason + " waiting visit must not stay");
+  assert.equal(state.bodyShopVehicles.length, 0, reason + " waiting visit must not enter body shop staying");
+  assert.equal(state.plannedDeliveries.length, 0, reason + " waiting visit must not become planned delivery");
 }
 
-// 通常の点検・来社は、作業待ちでなければ従来どおり滞留対象。
+// 通常の来社・納車未定は、作業待ちでなければ従来どおり滞留対象。
 {
-  const works = [work("VISIT", "点検", "scheduled", false)];
+  const works = [work("VISIT", "一般整備", "scheduled", false)];
   const rows = [entry("VISIT-in", "VISIT", "customer_visit", "2026-08-31", "exact")];
   assert.equal(mod.classifyVehicleBusinessStates(works, rows, "2026-08-31").stayingVehicles.length, 1);
 }

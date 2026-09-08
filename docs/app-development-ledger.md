@@ -422,3 +422,11 @@ Before an app-development chat finishes a batch:
 - The schedule mutation SECURITY DEFINER RPC active-app-user hardening remains live via `harden_schedule_rpcs_active_app_user`; this batch does not change DB/RLS/RPC.
 - Pending ledger #002 and #003 are reclassified as implemented history; #001 `legal_3m` remains pending and untouched.
 - OCR recognition/preprocessing/engine code, shared Supabase schema/RLS/RPC, main, Netlify, and Vercel Preview are not changed by this batch.
+
+### 2026-09-08 — Waiting-service v1.3 formal override
+- This section supersedes the v1.2 reason-limited waiting-service rule.
+- `is_waiting_service=true` is valid for every `customer_visit` regardless of reason: 点検 / 車検 / 一般整備 / 板金塗装.
+- Pickup, onsite repair, and delivery cannot use waiting-service. Leaving customer_visit clears the UI flag.
+- Waiting-service has no delivery plan/entry, is excluded from staying vehicles, body-shop vehicles, and planned deliveries, and remains labeled `来社待ち` in the daily report.
+- Exact-time duplicate warning is reason-independent: both entries must be customer_visit + waiting-service + exact + identical start time. Warning text: `来社・作業待ちが同じ時刻に重複しています`.
+- No new column and no backfill. Migration source: `database/waiting-service-customer-visit-v13.sql`.

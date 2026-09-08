@@ -44,3 +44,11 @@
 - **警告しない例:** 点検作業待ち × 車検来社、点検作業待ち × 点検通常来社、車検来社 × 車検来社、引取、納車、出張、A中 / 中 / 午前中 / 午後中などのbroad-time。
 - **旧仕様の扱い:** 以前の「同じentry_typeのexact重複」および途中段階の「exact来社×来社」案はv1.2で廃止。現在の作業待ち専用条件を正とする。
 - **来社集計との分離:** トップ/週間/月間の来社件数・時間は `reason=点検 AND entry_type=customer_visit` を集計し、作業待ちtrue/falseは集計条件にしない。重複警告条件とは別仕様。
+
+### 2026-09-08 — Waiting-service v1.3 formal override
+- This section supersedes the v1.2 reason-limited waiting-service rule.
+- `is_waiting_service=true` is valid for every `customer_visit` regardless of reason: 点検 / 車検 / 一般整備 / 板金塗装.
+- Pickup, onsite repair, and delivery cannot use waiting-service. Leaving customer_visit clears the UI flag.
+- Waiting-service has no delivery plan/entry, is excluded from staying vehicles, body-shop vehicles, and planned deliveries, and remains labeled `来社待ち` in the daily report.
+- Exact-time duplicate warning is reason-independent: both entries must be customer_visit + waiting-service + exact + identical start time. Warning text: `来社・作業待ちが同じ時刻に重複しています`.
+- No new column and no backfill. Migration source: `database/waiting-service-customer-visit-v13.sql`.

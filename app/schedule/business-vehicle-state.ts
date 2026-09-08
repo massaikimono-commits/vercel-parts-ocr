@@ -95,7 +95,6 @@ export function classifyVehicleBusinessStates<TWork extends BusinessWorkOrder>(
 
     const isWaitingVisit =
       work.is_waiting_service === true &&
-      work.reason === "点検" &&
       inboundEntry.entry_type === "customer_visit";
     if (isWaitingVisit) continue;
 
