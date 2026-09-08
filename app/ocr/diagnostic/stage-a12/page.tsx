@@ -790,7 +790,7 @@ function buildManagementShortSummary(source: any) {
   const compact = JSON.stringify(compactSummary);
   if (compact.length <= 6000) return compact;
 
-  return JSON.stringify({
+  const minimalSummary = {
     schema: source?.schema,
     revision: source?.revision,
     evaluationBranch: source?.evaluationBranch,
@@ -832,6 +832,54 @@ function buildManagementShortSummary(source: any) {
     variants: {
       P: compactVariant(source?.aggregate?.P_phaseLocked),
       P_SELF: compactVariant(source?.aggregate?.P_SELF_phaseLockedSelfSeed),
+    },
+    importantImages,
+    pathologicalTsvImages: source?.pathologicalTsvImages,
+    productionChanged: false,
+    frozenChanged: false,
+    adoptedHead: null,
+    stageB: "HOLD",
+  };
+
+  const minimal = JSON.stringify(minimalSummary);
+  if (minimal.length <= 6000) return minimal;
+
+  const ultraCompactVariant = (variant: any) => {
+    if (!variant) return null;
+    return {
+      candidateCount: variant.candidateCount,
+      gtCoverage: variant.gtCoverage,
+      falseCount: variant.falseCount,
+      duplicateCount: variant.duplicateCount,
+      newRescueVsD: variant.newRescueVsD,
+      correctRowRegressionVsD: variant.correctRowRegressionVsD,
+      retainedA9AltRescue: variant.retainedA9AltRescue,
+      lostA9AltRescue: variant.lostA9AltRescue,
+      pitchHypothesisCount: variant.pitchHypothesisCount,
+      selectedPitch: variant.selectedPitch,
+      phaseConsensusSupport: variant.phaseConsensusSupport,
+      selfSeededLatticeCount: variant.selfSeededLatticeCount,
+      DAnchoredLatticeCount: variant.DAnchoredLatticeCount,
+      phasePositionCount: variant.phasePositionCount,
+      phaseMatchedPositionCount: variant.phaseMatchedPositionCount,
+      phaseUnmatchedPositionCount: variant.phaseUnmatchedPositionCount,
+      mechanismRescue: variant.mechanismRescue,
+    };
+  };
+
+  return JSON.stringify({
+    schema: source?.schema,
+    revision: source?.revision,
+    evaluationBranch: source?.evaluationBranch,
+    evaluationHead: source?.evaluationHead,
+    frozenSourceHead: source?.sourceHead,
+    baseline: minimalSummary.baseline,
+    references: minimalSummary.references,
+    variants: {
+      P: ultraCompactVariant(source?.aggregate?.P_phaseLocked),
+      P_SELF: ultraCompactVariant(
+        source?.aggregate?.P_SELF_phaseLockedSelfSeed,
+      ),
     },
     importantImages,
     pathologicalTsvImages: source?.pathologicalTsvImages,
