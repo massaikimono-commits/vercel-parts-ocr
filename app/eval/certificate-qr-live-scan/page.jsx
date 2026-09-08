@@ -481,7 +481,9 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = [], sourc
     if (candidate.enginesByFrame.get(frameId).has("jsqr") && candidate.enginesByFrame.get(frameId).has("zxing")) {
       candidate.bothEngineFrames.add(frameId);
     }
-    candidate.rawByteLengths.push(hit.rawByteLength);
+    if (source !== "rescue" && Number.isFinite(hit.rawByteLength)) {
+      candidate.rawByteLengths.push(hit.rawByteLength);
+    }
     candidate.decodedTextLengths.push(hit.decodedTextLength);
     candidate.slashCounts.push(hit.slashCount);
     candidate.slashFieldCounts.push(hit.slashFieldCount);
@@ -856,6 +858,12 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
     currentConfirmedMissingFromSeparatedCount: currentConfirmedMissingFromSeparated.length,
     currentConfirmedMissingFromSeparatedDiagnosticIds: currentConfirmedMissingFromSeparated,
     accountingIntegrityPass,
+    diagnosticAccountingSources: {
+      normalSubRoiIncluded: true,
+      remainingOneRescueIncluded: true,
+      rescueDecoderAccountedAs: "zxing",
+      exactCanonicalKeySharedAcrossSources: true,
+    },
     currentCompletion: {
       variant: "CURRENT",
       kind: currentCompletion.kind,
