@@ -25,6 +25,18 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Align v13 guard count with redefined functions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/apply-waiting-service-v13-patch.mjs')
+          s = p.read_text()
+          s = s.replace('oldAuthCount !== 6', 'oldAuthCount !== 4')
+          s = s.replace('expected 6 historical mutation auth guards', 'expected 4 historical mutation auth guards')
+          s = s.replace('.length, 6, "all six schedule mutation signatures must retain active-user hardening"', '.length, 4, "all four mutation signatures redefined by v1.3 must retain active-user hardening"')
+          p.write_text(s)
+          PY
+
       - name: Apply exact source patch
         run: node scripts/apply-waiting-service-v13-patch.mjs
 
