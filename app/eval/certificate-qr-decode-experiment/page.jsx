@@ -4343,6 +4343,9 @@ function publicResult(result) {
 export default function CertificateQrDecodeExperimentPage() {
   const [files, setFiles] = useState([]);
   const [groundTruth, setGroundTruth] = useState(DEFAULT_GROUND_TRUTH);
+  const [additionalFiles, setAdditionalFiles] = useState([]);
+  const [additionalResults, setAdditionalResults] = useState([]);
+  const [additionalScoring, setAdditionalScoring] = useState({});
   const [thumbnailUrls, setThumbnailUrls] = useState({});
   const [expandedName, setExpandedName] = useState("");
   const [results, setResults] = useState([]);
@@ -4420,6 +4423,128 @@ export default function CertificateQrDecodeExperimentPage() {
     frame.onload = () => { clearTimeout(timeout); resolve(); };
     frame.src = `${PATHNAME}?certificateQrAudit=1&nonce=${Date.now()}`;
   });
+
+  const startAdditional = async () => {
+    if (!additionalFiles.length || running) return;
+    setRunning(true);
+    setAdditionalResults([]);
+    setAdditionalScoring({});
+    const out=[];
+    try {
+      for(let i=0;i<additionalFiles.length;i+=1){
+        const file=additionalFiles[i];
+        const slotId=`additional-${String(i+1).padStart(2,"0")}`;
+        setStatus(`${i+1}/${additionalFiles.length} ${slotId}: Baseline Fast → Photo Decode を実行中…`);
+        await reloadFrame();
+        const baseline=await runBaseline(frameRef.current,file);
+        if(baseline.privacyFail) throw new Error(`${slotId}: privacy FAIL`);
+        if(frameRef.current){
+          frameRef.current.src="about:blank";
+          await wait(80);
+        }
+        // Additional real-photo evaluation uses the exact same decode path.
+        // No Ground Truth / expected count is available until AFTER all decode for that image completes.
+        const matrix=await runMatrix(file);
+        out.push({
+          slotId,
+          baseline,
+          matrix,
+        });
+        setAdditionalResults([...out]);
+      }
+      setStatus("追加実車写真のdecode完了。ここから下の採点欄はdecode後scoring-onlyです。");
+    } catch(e) {
+      setStatus(`停止: ${e?.message||e}`);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const setAdditionalScore = (slotId,kind) => {
+    const opt=GT_OPTIONS.find((x)=>x.value===kind)||GT_OPTIONS[0];
+    setAdditionalScoring((prev)=>({
+      ...prev,
+      [slotId]:{vehicleKind:kind||null,expectedQrCount:opt.expected},
+    }));
+  };
+
+  const additionalScoredRows=additionalResults.map((result)=>{
+    const scoring=additionalScoring[result.slotId]||{};
+    const expected=Number.isFinite(scoring.expectedQrCount)?scoring.expectedQrCount:null;
+    const scoredMatrix=expected==null?result.matrix:applyCountingIntegrity(result.matrix,expected);
+    return {
+      slotId:result.slotId,
+      expectedQrCount:expected,
+      vehicleKind:scoring.vehicleKind||null,
+      baselineQrCount:Number(result.baseline?.qrCount||0),
+      aLegacyCompatiblePhysicalUniqueQrCount:Number(scoredMatrix?.currentEnsemble?.legacyCompatiblePhysicalUniqueQrCount||0),
+      aStructuralAdoptedPhysicalUniqueQrCount:Number(scoredMatrix?.currentEnsemble?.structuralAdoptedPhysicalUniqueQrCount||0),
+      aPhysicalSafeQrCount:Number(scoredMatrix?.currentEnsemble?.physicalSafeQrCount||0),
+      eNetNewCanonicalVsA:Number(scoredMatrix?.geometryStage?.eNetNewCanonicalVsA||0),
+      finalSafeUnionQrCount:Number(scoredMatrix?.geometryStage?.finalUnionCanonicalCount||0),
+      parserEligibleUnionQrCount:Number(scoredMatrix?.geometryStage?.parserEligibleUnionCanonicalCount||0),
+      runtimeVehicleKind:scoredMatrix?.decodedRuntimeVehicleKind||null,
+      countingIntegrityFail:expected==null?null:Boolean(
+        scoredMatrix?.currentEnsemble?.countingIntegrityFail||scoredMatrix?.geometryStage?.countingIntegrityFail
+      ),
+      complete:expected==null?null:Number(scoredMatrix?.geometryStage?.finalUnionCanonicalCount||0)===expected,
+      regressionVsA:Number(scoredMatrix?.geometryStage?.finalUnionCanonicalCount||0)<Number(scoredMatrix?.currentEnsemble?.physicalSafeQrCount||0),
+    };
+  });
+  const additionalAllScored=additionalScoredRows.length>0&&additionalScoredRows.every((row)=>Number.isFinite(row.expectedQrCount));
+  const additionalTotals=additionalAllScored?additionalScoredRows.reduce((acc,row)=>{
+    acc.expectedQrCount+=row.expectedQrCount;
+    acc.baselineQrCount+=row.baselineQrCount;
+    acc.aPhysicalSafeQrCount+=row.aPhysicalSafeQrCount;
+    acc.eNetNewCanonicalVsA+=row.eNetNewCanonicalVsA;
+    acc.finalSafeUnionQrCount+=row.finalSafeUnionQrCount;
+    acc.completeImageCount+=row.complete?1:0;
+    acc.regressionImageCount+=row.regressionVsA?1:0;
+    acc.countingIntegrityFail=acc.countingIntegrityFail||Boolean(row.countingIntegrityFail);
+    return acc;
+  },{
+    expectedQrCount:0,baselineQrCount:0,aPhysicalSafeQrCount:0,eNetNewCanonicalVsA:0,
+    finalSafeUnionQrCount:0,completeImageCount:0,regressionImageCount:0,countingIntegrityFail:false,
+  }):null;
+  const additionalSummary=JSON.stringify({
+    schema:"icb-certificate-qr-additional-real-eval-v1",
+    experimentalHead,
+    evaluationRole:"photo-decode-additional-real-generalization-set",
+    sourceDecodeRoute:EXPERIMENT_ROUTE,
+    sourceDecodeDiagnosticRevision:"v7-postformal-geometry-scale-consistency-9",
+    formalFixed8Reference:{
+      immutableFormalHead:"339cbf5d832fd2bc9ab5eadfa260cb16adda02f9",
+      finalSafeUnionQrCount:28,
+      expectedQrCount:47,
+      preserved:true,
+    },
+    privacy:{
+      browserMemoryOnly:true,
+      imageUpload:false,
+      imageIncluded:false,
+      originalFileNameIncluded:false,
+      qrPayloadIncluded:false,
+      canonicalPayloadIncluded:false,
+    },
+    recognitionIsolation:{
+      groundTruthUsedDuringDecode:false,
+      expectedQrCountUsedDuringDecode:false,
+      vehicleKindUsedDuringDecode:false,
+      scoringAppliedOnlyAfterPerImageDecode:true,
+    },
+    setIdentityPolicy:"selection-order slot IDs only; keep the same photo set and same selection order for before/after comparison",
+    selectedImageCount:additionalFiles.length,
+    decodedImageCount:additionalResults.length,
+    scoredImageCount:additionalScoredRows.filter((row)=>Number.isFinite(row.expectedQrCount)).length,
+    allScored:additionalAllScored,
+    totals:additionalTotals,
+    results:additionalScoredRows,
+  },null,2);
+
+  const copyAdditionalSummary=async()=>{
+    await navigator.clipboard.writeText(additionalSummary);
+    setStatus("追加実車評価summaryをコピーしました。画像名・payloadは含みません。");
+  };
 
   const start = async () => {
     if (!valid || running) return;
@@ -4873,6 +4998,82 @@ export default function CertificateQrDecodeExperimentPage() {
           {running ? "実験中…" : "固定8枚 A/E開始"}
         </button>
         <div style={{ marginTop: 10, fontWeight: 700 }}>{status}</div>
+      </section>
+
+      <section style={{ marginTop: 18, border: "1px solid #8ab4f8", borderRadius: 12, padding: 14 }}>
+        <h2 style={{marginTop:0}}>追加実車写真 Photo Decode評価</h2>
+        <p style={{marginTop:0,fontSize:13}}>
+          固定8枚とは別の汎用性評価セットです。画像はbrowser-memory内だけで処理し、ファイル名・画像・QR payloadをsummaryへ出しません。
+        </p>
+        <p style={{fontSize:12,fontWeight:700}}>
+          Ground Truth / expected QR数はdecode完了後にだけ設定できます。decode/control flowには入りません。
+        </p>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          disabled={running}
+          onChange={(e)=>{
+            setAdditionalFiles([...e.target.files].slice(0,32));
+            setAdditionalResults([]);
+            setAdditionalScoring({});
+          }}
+        />
+        <div style={{marginTop:8}}>{additionalFiles.length}枚 選択（最大32枚）</div>
+        <div style={{marginTop:6,fontSize:12}}>
+          比較時は同じ写真セットを同じ選択順で使用してください。summaryでは additional-01, 02… のslot IDだけを使用します。
+        </div>
+        <button
+          disabled={!additionalFiles.length||running}
+          onClick={startAdditional}
+          style={{marginTop:12,padding:"10px 18px",fontWeight:700}}
+        >
+          {running?"実行中…":"追加実車 Photo Decode開始"}
+        </button>
+
+        {additionalResults.length>0&&(
+          <div style={{marginTop:16}}>
+            <b>decode後 scoring-only</b>
+            <div style={{display:"grid",gap:10,marginTop:8}}>
+              {additionalResults.map((r)=>(
+                <div key={r.slotId} style={{border:"1px solid #ddd",borderRadius:10,padding:10}}>
+                  <div style={{fontWeight:800}}>{r.slotId}</div>
+                  <div style={{fontSize:13,marginTop:4}}>
+                    Baseline {r.baseline?.qrCount||0} ／
+                    A physical-safe {r.matrix?.currentEnsemble?.physicalSafeQrCount||0} ／
+                    E純増 +{r.matrix?.geometryStage?.eNetNewCanonicalVsA||0} ／
+                    final {r.matrix?.geometryStage?.finalUnionCanonicalCount||0}
+                  </div>
+                  <label style={{display:"block",marginTop:8}}>
+                    <span style={{fontWeight:700}}>採点用 車種 / expected QR数：</span>
+                    <select
+                      value={additionalScoring[r.slotId]?.vehicleKind||""}
+                      disabled={running}
+                      onChange={(e)=>setAdditionalScore(r.slotId,e.target.value)}
+                      style={{marginLeft:8,padding:"6px 8px"}}
+                    >
+                      {GT_OPTIONS.map((o)=><option key={o.value||"unset"} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </label>
+                </div>
+              ))}
+            </div>
+            <div style={{marginTop:12,fontSize:13}}>
+              scoring済み {additionalScoredRows.filter((row)=>Number.isFinite(row.expectedQrCount)).length}/{additionalResults.length}
+              {additionalTotals&&(
+                <> ／ total final {additionalTotals.finalSafeUnionQrCount}/{additionalTotals.expectedQrCount}
+                ／ complete {additionalTotals.completeImageCount}/{additionalResults.length}
+                ／ regression {additionalTotals.regressionImageCount}</>
+              )}
+            </div>
+            <button
+              onClick={copyAdditionalSummary}
+              style={{marginTop:10,padding:"9px 14px",fontWeight:700}}
+            >
+              追加実車評価summaryをコピー
+            </button>
+          </div>
+        )}
       </section>
 
       <section style={{ marginTop: 18 }}>
