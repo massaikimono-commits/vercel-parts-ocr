@@ -49,6 +49,6 @@ jobs:
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add app database package.json scripts
+          git add app database docs package.json scripts
           git commit -m 'feat: expand waiting service to all customer visits'
           git push origin HEAD:preview/schedule-ux-20260903
