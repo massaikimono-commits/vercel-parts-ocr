@@ -1,7 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
-    "deploymentEnabled": false
+    "deploymentEnabled": {
+      "*": false,
+      "poc/guided-live-capture-20260908": true
+    }
   },
   "ignoreCommand": "git log -1 --pretty=%B | grep -q '\\[deploy\\]' && exit 1 || exit 0"
 }
