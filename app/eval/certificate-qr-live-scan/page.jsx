@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-parser-separated-evaluation-1";
+const LIVE_SCAN_REVISION = "live-poc-v2-parser-separated-evaluation-2-rescue-accounting";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -427,7 +427,7 @@ function countingDiagnosticId(state, decoded) {
   return state.diagnosticIdByDecoded.get(key);
 }
 
-function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = []) {
+function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = [], source = "normal") {
   for (const hit of hits) {
     const diagnosticId = countingDiagnosticId(state, hit.decoded);
     state.rawDecodeCount += 1;
@@ -442,6 +442,11 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = []) {
         zxingFrames: new Set(),
         bothEngineFrames: new Set(),
         enginesByFrame: new Map(),
+        normalFrames: new Set(),
+        rescueFrames: new Set(),
+        normalJsqrFrames: new Set(),
+        normalZxingFrames: new Set(),
+        rescueZxingFrames: new Set(),
         positions: [],
         rawByteLengths: [],
         decodedTextLengths: [],
@@ -461,6 +466,14 @@ function recordRawDiagnosticHits(state, frameId, subRoiId, roi, hits = []) {
     }
     candidate.lastSeenFrame = frameId;
     candidate.frameIds.add(frameId);
+    if (source === "rescue") {
+      candidate.rescueFrames.add(frameId);
+      if (hit.engine === "zxing") candidate.rescueZxingFrames.add(frameId);
+    } else {
+      candidate.normalFrames.add(frameId);
+      if (hit.engine === "jsqr") candidate.normalJsqrFrames.add(frameId);
+      if (hit.engine === "zxing") candidate.normalZxingFrames.add(frameId);
+    }
     if (hit.engine === "jsqr") candidate.jsqrFrames.add(frameId);
     if (hit.engine === "zxing") candidate.zxingFrames.add(frameId);
     if (!candidate.enginesByFrame.has(frameId)) candidate.enginesByFrame.set(frameId, new Set());
@@ -582,6 +595,14 @@ function countingIntegritySnapshot(state, evidenceMap, physicalLocatorUi) {
       jsqrFrameCount: candidate.jsqrFrames.size,
       zxingFrameCount: candidate.zxingFrames.size,
       bothEngineFrameCount: candidate.bothEngineFrames?.size || 0,
+      normalFrameCount: candidate.normalFrames?.size || 0,
+      rescueFrameCount: candidate.rescueFrames?.size || 0,
+      normalJsqrFrameCount: candidate.normalJsqrFrames?.size || 0,
+      normalZxingFrameCount: candidate.normalZxingFrames?.size || 0,
+      rescueZxingFrameCount: candidate.rescueZxingFrames?.size || 0,
+      candidateSource: candidate.rescueFrames?.size
+        ? (candidate.normalFrames?.size ? "both" : "rescue")
+        : "normal",
       rawByteLengthMedian: medianNumber(candidate.rawByteLengths),
       decodedTextLengthMedian: medianNumber(candidate.decodedTextLengths),
       slashCountMedian: medianNumber(candidate.slashCounts),
@@ -733,6 +754,14 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
       jsqrFrameCount: candidate.jsqrFrames.size,
       zxingFrameCount: candidate.zxingFrames.size,
       bothEngineFrameCount: candidate.bothEngineFrames?.size || 0,
+      normalFrameCount: candidate.normalFrames?.size || 0,
+      rescueFrameCount: candidate.rescueFrames?.size || 0,
+      normalJsqrFrameCount: candidate.normalJsqrFrames?.size || 0,
+      normalZxingFrameCount: candidate.normalZxingFrames?.size || 0,
+      rescueZxingFrameCount: candidate.rescueZxingFrames?.size || 0,
+      candidateSource: candidate.rescueFrames?.size
+        ? (candidate.normalFrames?.size ? "both" : "rescue")
+        : "normal",
       payloadLength: medianNumber(candidate.decodedTextLengths),
       rawByteLengthMedian: medianNumber(candidate.rawByteLengths),
       decodeIntegrityPass: Boolean(candidate.decodeIntegrityPass),
@@ -759,6 +788,27 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
     !candidate.parserSchemaRecognized && candidate.genericConfirmationPass
   );
   const separatedConfirmed = decodeIntegritySafe.filter((candidate) => candidate.genericConfirmationPass);
+  const separatedConfirmedIds = new Set(separatedConfirmed.map((candidate) => candidate.diagnosticId));
+  const decodeIntegritySafeIds = new Set(decodeIntegritySafe.map((candidate) => candidate.diagnosticId));
+  const currentConfirmedEntries = [...evidenceMap.values()].filter((entry) => entry.confirmed);
+  const currentConfirmedMissingFromSeparated = [];
+  const currentConfirmedMissingFromDecodeIntegritySafe = [];
+  for (const entry of currentConfirmedEntries) {
+    const rawDiagnosticId = state.diagnosticIdByDecoded.get(entry.canonical) || null;
+    if (!rawDiagnosticId || !decodeIntegritySafeIds.has(rawDiagnosticId)) {
+      currentConfirmedMissingFromDecodeIntegritySafe.push(entry.diagnosticId);
+    }
+    if (!rawDiagnosticId || !separatedConfirmedIds.has(rawDiagnosticId)) {
+      currentConfirmedMissingFromSeparated.push(entry.diagnosticId);
+    }
+  }
+  const normalOnlyCandidateCount = candidates.filter((candidate) => candidate.candidateSource === "normal").length;
+  const rescueInvolvedCandidateCount = candidates.filter((candidate) =>
+    candidate.candidateSource === "rescue" || candidate.candidateSource === "both"
+  ).length;
+  const accountingIntegrityPass =
+    currentConfirmedMissingFromDecodeIntegritySafe.length === 0 &&
+    currentConfirmedMissingFromSeparated.length === 0;
   const expected = currentCompletion.expected;
   const separatedComplete = expected != null && separatedConfirmed.length >= expected;
 
@@ -797,8 +847,15 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
     decodeIntegritySafeUniqueCount: decodeIntegritySafe.length,
     recognizedSchemaUniqueCount: recognizedSchema.length,
     unrecognizedSafeUniqueCount: unrecognizedSafe.length,
+    normalOnlyCandidateCount,
+    rescueInvolvedCandidateCount,
     currentConfirmedCount: currentCompletion.confirmedCount,
     separatedConfirmedCount: separatedConfirmed.length,
+    currentConfirmedMissingFromDecodeIntegritySafeCount: currentConfirmedMissingFromDecodeIntegritySafe.length,
+    currentConfirmedMissingFromDecodeIntegritySafeDiagnosticIds: currentConfirmedMissingFromDecodeIntegritySafe,
+    currentConfirmedMissingFromSeparatedCount: currentConfirmedMissingFromSeparated.length,
+    currentConfirmedMissingFromSeparatedDiagnosticIds: currentConfirmedMissingFromSeparated,
+    accountingIntegrityPass,
     currentCompletion: {
       variant: "CURRENT",
       kind: currentCompletion.kind,
@@ -821,6 +878,12 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
       jsqrFrameCount: candidate.jsqrFrameCount,
       zxingFrameCount: candidate.zxingFrameCount,
       bothEngineFrameCount: candidate.bothEngineFrameCount,
+      normalFrameCount: candidate.normalFrameCount,
+      rescueFrameCount: candidate.rescueFrameCount,
+      normalJsqrFrameCount: candidate.normalJsqrFrameCount,
+      normalZxingFrameCount: candidate.normalZxingFrameCount,
+      rescueZxingFrameCount: candidate.rescueZxingFrameCount,
+      candidateSource: candidate.candidateSource,
       payloadLength: candidate.payloadLength,
       rawByteLengthMedian: candidate.rawByteLengthMedian,
       parserSchemaClass: candidate.parserSchemaClass,
@@ -900,6 +963,10 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       structuralFailUnique: counting.structuralFailUniqueCount ?? null,
       separatedConfirmed: separated.separatedConfirmedCount ?? separated.counterfactualConfirmedCount ?? null,
       separatedComplete: Boolean(separated.separatedCompletion?.complete ?? separated.counterfactualCompletion?.complete),
+      normalOnlyCandidateCount: separated.normalOnlyCandidateCount ?? null,
+      rescueInvolvedCandidateCount: separated.rescueInvolvedCandidateCount ?? null,
+      currentConfirmedMissingFromSeparatedCount: separated.currentConfirmedMissingFromSeparatedCount ?? null,
+      accountingIntegrityPass: separated.accountingIntegrityPass ?? null,
     },
     baselineReproduction: {
       normalDecodeControlChanged: Boolean(counting.normalDecodeControlChanged),
@@ -923,6 +990,9 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       expectedQrCount: separated.separatedCompletion?.expectedQrCount ?? separated.counterfactualCompletion?.expectedQrCount ?? completion.expectedQrCount ?? null,
       currentComplete: Boolean(separated.currentCompletion?.complete ?? completion.complete),
       separatedComplete: Boolean(separated.separatedCompletion?.complete ?? separated.counterfactualCompletion?.complete),
+      currentConfirmedMissingFromSeparatedCount: separated.currentConfirmedMissingFromSeparatedCount ?? null,
+      currentConfirmedMissingFromSeparatedDiagnosticIds: separated.currentConfirmedMissingFromSeparatedDiagnosticIds || [],
+      accountingIntegrityPass: separated.accountingIntegrityPass ?? null,
     },
     importantCases: importantCandidates,
     evaluationPolicy: {
@@ -2039,6 +2109,20 @@ export default function CertificateQrLiveScanPoc() {
               variantStats.rawSuccesses += zxHits.length;
               for (const hit of zxHits) {
                 if (!hit.canonical) continue;
+                const rescueSubRoiId = `rescue-${target.id}-${variant.id}`;
+                const rescueDiagnosticMetrics = rawDiagnosticMetrics(hit.canonical, []);
+                recordRawDiagnosticHits(
+                  countingIntegrityRef.current,
+                  frameId,
+                  rescueSubRoiId,
+                  cropRoi,
+                  [{
+                    engine: "zxing",
+                    localPosition: hit.localPosition,
+                    ...rescueDiagnosticMetrics,
+                  }],
+                  "rescue"
+                );
                 const structural = structuralValidation(hit.canonical);
                 if (structural.pass) {
                   rescueState.structuralSuccessCount += 1;
@@ -2057,7 +2141,7 @@ export default function CertificateQrLiveScanPoc() {
                 grouped.get(hit.canonical).engines.add(hit.engine);
                 grouped.get(hit.canonical).hits.push({
                   ...hit,
-                  subRoiId: `rescue-${target.id}-${variant.id}`,
+                  subRoiId: rescueSubRoiId,
                   guidePosition: guidePositionFromHit(hit, cropRoi),
                 });
               }
