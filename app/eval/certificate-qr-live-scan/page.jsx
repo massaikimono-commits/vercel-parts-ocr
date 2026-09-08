@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v3-two-track-diagnostics-1";
+const LIVE_SCAN_REVISION = "live-poc-v3-remaining-one-rescue-attempt-diagnostic-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -1496,6 +1496,17 @@ function compactFrameList(values, maxItems = 24) {
   };
 }
 
+function pointToNormalizedRoiDistance(x, y, roi) {
+  if (![x, y, roi?.x, roi?.y, roi?.w, roi?.h].every(Number.isFinite)) return null;
+  const left = roi.x;
+  const right = roi.x + roi.w;
+  const top = roi.y;
+  const bottom = roi.y + roi.h;
+  const dx = x < left ? left - x : x > right ? x - right : 0;
+  const dy = y < top ? top - y : y > bottom ? y - bottom : 0;
+  return Math.hypot(dx, dy);
+}
+
 function remainingOneLatencyDiagnostic(state, separated, rescueState) {
   const confirmed = (separated?.allCandidateDiagnostics || [])
     .filter((candidate) => candidate.genericConfirmationPass && Number.isFinite(candidate.genericConfirmationFrame))
@@ -1572,6 +1583,86 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     ? Number(rescueState.activatedFrame)
     : null;
 
+  const rescueAttempts = Array.isArray(rescueState?.attemptLog) ? rescueState.attemptLog : [];
+  const candidateAttempts = rescueAttempts.map((attempt) => {
+    const distance = pointToNormalizedRoiDistance(medianX, medianY, attempt.cropRoi);
+    const containsCandidatePosition = Number.isFinite(distance) ? distance === 0 : null;
+    const candidateHit = Array.isArray(attempt.hitDiagnosticIds) &&
+      attempt.hitDiagnosticIds.includes(last.diagnosticId);
+    return {
+      attemptIndex: attempt.attemptIndex,
+      frameId: attempt.frameId,
+      targetRoiId: attempt.targetRoiId,
+      variantId: attempt.variantId,
+      engine: attempt.engine,
+      guideRegion: attempt.guideRegion,
+      containsCandidatePosition,
+      candidatePositionToRoiDistance: Number.isFinite(distance) ? Number(distance.toFixed(4)) : null,
+      candidateHit,
+      rawHitCount: Number(attempt.rawHitCount || 0),
+    };
+  });
+
+  const attemptsContainingCandidate = candidateAttempts.filter((item) => item.containsCandidatePosition === true);
+  const attemptsMissingCandidate = candidateAttempts.filter((item) => item.containsCandidatePosition === false);
+  const candidateHitAttempts = candidateAttempts.filter((item) => item.candidateHit);
+  const targetCounts = {};
+  const variantCounts = {};
+  const candidateHitsByVariant = {};
+  for (const attempt of candidateAttempts) {
+    targetCounts[attempt.targetRoiId || "unknown"] = Number(targetCounts[attempt.targetRoiId || "unknown"] || 0) + 1;
+    variantCounts[attempt.variantId || "unknown"] = Number(variantCounts[attempt.variantId || "unknown"] || 0) + 1;
+    if (attempt.candidateHit) {
+      candidateHitsByVariant[attempt.variantId || "unknown"] =
+        Number(candidateHitsByVariant[attempt.variantId || "unknown"] || 0) + 1;
+    }
+  }
+  const targetCountValues = Object.values(targetCounts).map(Number).filter(Number.isFinite);
+  const sameRegionRetryCount = Object.values(targetCounts)
+    .map((count) => Math.max(0, Number(count || 0) - 1))
+    .reduce((sum, count) => sum + count, 0);
+  const candidateAttemptHitRate = candidateAttempts.length
+    ? candidateHitAttempts.length / candidateAttempts.length
+    : null;
+  const candidateHitRateWhenCovered = attemptsContainingCandidate.length
+    ? candidateHitAttempts.filter((item) => item.containsCandidatePosition === true).length /
+      attemptsContainingCandidate.length
+    : null;
+
+  const targetHistory = Array.isArray(rescueState?.targetHistory) ? rescueState.targetHistory : [];
+  const targetSwitchDiagnostics = targetHistory.map((entry) => {
+    const targetAttempts = candidateAttempts.filter((attempt) =>
+      attempt.targetRoiId === entry.targetRoiId &&
+      Number(attempt.frameId) >= Number(entry.frameId)
+    );
+    const firstAttempt = targetAttempts[0] || null;
+    return {
+      frameId: entry.frameId,
+      targetRoiId: entry.targetRoiId,
+      previousTargetRoiId: entry.previousTargetRoiId || null,
+      reason: entry.reason,
+      firstAttemptContainsCandidatePosition: firstAttempt?.containsCandidatePosition ?? null,
+      firstAttemptDistance: firstAttempt?.candidatePositionToRoiDistance ?? null,
+    };
+  });
+
+  const coverageRatio = candidateAttempts.length
+    ? attemptsContainingCandidate.length / candidateAttempts.length
+    : null;
+  let rescueAttemptPrimaryHypothesis = "UNDETERMINED";
+  if (candidateAttempts.length) {
+    if (Number(coverageRatio) < .35) rescueAttemptPrimaryHypothesis = "A_TARGET_COVERAGE_INSUFFICIENT";
+    else if (Number(candidateHitRateWhenCovered) < .08) rescueAttemptPrimaryHypothesis = "B_COVERED_BUT_ZXING_REDECODE_LOW";
+    else if (Object.keys(variantCounts).length > 1 &&
+      Object.keys(candidateHitsByVariant).length <= 1) {
+      rescueAttemptPrimaryHypothesis = "C_VARIANT_OR_ROI_SELECTION_INEFFICIENT";
+    } else if (targetSwitchDiagnostics.some((item) =>
+      item.previousTargetRoiId && item.firstAttemptContainsCandidatePosition === false
+    )) {
+      rescueAttemptPrimaryHypothesis = "D_RETARGET_MOVED_OFF_CANDIDATE";
+    }
+  }
+
   return {
     diagnosticOnly: true,
     lastConfirmedDiagnosticId: last.diagnosticId,
@@ -1598,6 +1689,35 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     remainingOneRescueActivatedFrame: rescueActivatedFrame,
     remainingOneRescueAttemptCount: Number(rescueState?.zxingAttemptCount || 0),
     remainingOneRescueFrameCount: Number(rescueState?.rescueFrameCount || 0),
+    rescueAttemptDiagnostic: {
+      diagnosticOnly: true,
+      decoderChanged: false,
+      rescueLogicChanged: false,
+      totalAttemptCount: candidateAttempts.length,
+      zxingAttemptCount: candidateAttempts.filter((item) => item.engine === "zxing").length,
+      jsQRAttemptCount: candidateAttempts.filter((item) => item.engine === "jsqr").length,
+      attemptContainingCandidatePositionCount: attemptsContainingCandidate.length,
+      attemptMissingCandidatePositionCount: attemptsMissingCandidate.length,
+      candidateHitAttemptCount: candidateHitAttempts.length,
+      candidateAttemptHitRate: Number.isFinite(candidateAttemptHitRate)
+        ? Number(candidateAttemptHitRate.toFixed(4))
+        : null,
+      candidateHitRateWhenCovered: Number.isFinite(candidateHitRateWhenCovered)
+        ? Number(candidateHitRateWhenCovered.toFixed(4))
+        : null,
+      targetRoiAttemptCounts: targetCounts,
+      variantAttemptCounts: variantCounts,
+      candidateHitsByVariant,
+      retargetCount: Number(rescueState?.retargetCount || 0),
+      sameRegionRetryCount,
+      maxSameTargetRoiAttempts: targetCountValues.length ? Math.max(...targetCountValues) : 0,
+      targetSwitchDiagnostics: targetSwitchDiagnostics.slice(0, 16),
+      primaryHypothesis: rescueAttemptPrimaryHypothesis,
+      attempts: candidateAttempts.length <= 40
+        ? candidateAttempts
+        : [...candidateAttempts.slice(0, 20), ...candidateAttempts.slice(-20)],
+      attemptsTruncated: candidateAttempts.length > 40,
+    },
     candidateRescueHitFrameCount: rescueFrames.count,
     candidateNormalHitFrameCount: normalFrames.count,
     rescueStartToFinalConfirmationFrames:
@@ -1876,6 +1996,9 @@ function createLocalRescueState() {
     novelCanonicalCount: 0,
     lastRescueFrame: null,
     lastNovelRescueFrame: null,
+    attemptLog: [],
+    targetHistory: [],
+    retargetCount: 0,
     variantStats: Object.fromEntries(LOCAL_RESCUE_VARIANTS.map((variant) => [
       variant.id,
       { attempts: 0, rawSuccesses: 0, structuralSuccesses: 0, novelCanonicalCount: 0 },
@@ -1896,6 +2019,9 @@ function localRescueSnapshot(state) {
     novelCanonicalCount: Number(state?.novelCanonicalCount || 0),
     lastRescueFrame: Number.isFinite(state?.lastRescueFrame) ? state.lastRescueFrame : null,
     lastNovelRescueFrame: Number.isFinite(state?.lastNovelRescueFrame) ? state.lastNovelRescueFrame : null,
+    attemptLogCount: Array.isArray(state?.attemptLog) ? state.attemptLog.length : 0,
+    targetHistory: Array.isArray(state?.targetHistory) ? state.targetHistory.slice(-24) : [],
+    retargetCount: Number(state?.retargetCount || 0),
     variantStats: state?.variantStats || {},
   };
 }
@@ -2913,6 +3039,12 @@ export default function CertificateQrLiveScanPoc() {
           rescueState.targetRoiId = target.id;
           rescueState.triggerCount += 1;
           rescueState.variantCursor = 0;
+          if (!Array.isArray(rescueState.targetHistory)) rescueState.targetHistory = [];
+          rescueState.targetHistory.push({
+            frameId,
+            targetRoiId: target.id,
+            reason: "activation",
+          });
         }
       }
 
@@ -2922,7 +3054,21 @@ export default function CertificateQrLiveScanPoc() {
           rescueState.rescueFrameCount % LOCAL_RESCUE_RETARGET_EVERY_FRAMES === 0
         ) {
           const retarget = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
-          if (retarget) rescueState.targetRoiId = retarget.id;
+          if (retarget) {
+            const previousTargetRoiId = rescueState.targetRoiId;
+            rescueState.targetRoiId = retarget.id;
+            if (previousTargetRoiId !== retarget.id) {
+              rescueState.retargetCount = Number(rescueState.retargetCount || 0) + 1;
+              if (!Array.isArray(rescueState.targetHistory)) rescueState.targetHistory = [];
+              rescueState.targetHistory.push({
+                frameId,
+                targetRoiId: retarget.id,
+                previousTargetRoiId,
+                reason: "scheduled-retarget",
+              });
+              if (rescueState.targetHistory.length > 96) rescueState.targetHistory = rescueState.targetHistory.slice(-96);
+            }
+          }
         }
 
         const target = SUB_ROIS.find((roi) => roi.id === rescueState.targetRoiId) || null;
@@ -2945,11 +3091,36 @@ export default function CertificateQrLiveScanPoc() {
             const variantStats = rescueState.variantStats[variant.id];
             rescueState.zxingAttemptCount += 1;
             variantStats.attempts += 1;
+            const rescueAttempt = {
+              attemptIndex: rescueState.zxingAttemptCount,
+              frameId,
+              targetRoiId: target.id,
+              variantId: variant.id,
+              engine: "zxing",
+              cropRoi: {
+                x: Number(cropRoi.x.toFixed(4)),
+                y: Number(cropRoi.y.toFixed(4)),
+                w: Number(cropRoi.w.toFixed(4)),
+                h: Number(cropRoi.h.toFixed(4)),
+              },
+              guideRegion: guide2DLabel(
+                cropRoi.x + cropRoi.w / 2,
+                cropRoi.y + cropRoi.h / 2
+              ),
+              rawHitCount: 0,
+              hitDiagnosticIds: [],
+            };
             try {
               const zxHits = await decodeZxing(readerRef.current, rescueCanvas);
+              rescueAttempt.rawHitCount = zxHits.length;
               rescueState.rawSuccessCount += zxHits.length;
               variantStats.rawSuccesses += zxHits.length;
               for (const hit of zxHits) {
+                if (hit.canonical) {
+                  rescueAttempt.hitDiagnosticIds.push(
+                    countingDiagnosticId(countingIntegrityRef.current, hit.canonical)
+                  );
+                }
                 if (!hit.canonical) continue;
                 const rescueSubRoiId = `rescue-${target.id}-${variant.id}`;
                 const rescueDiagnosticMetrics = rawDiagnosticMetrics(hit.canonical, []);
@@ -2988,6 +3159,10 @@ export default function CertificateQrLiveScanPoc() {
                 });
               }
             } finally {
+              if (!Array.isArray(rescueState.attemptLog)) rescueState.attemptLog = [];
+              rescueAttempt.hitDiagnosticIds = [...new Set(rescueAttempt.hitDiagnosticIds)];
+              rescueState.attemptLog.push(rescueAttempt);
+              if (rescueState.attemptLog.length > 600) rescueState.attemptLog = rescueState.attemptLog.slice(-600);
               rescueCanvas.width = 1;
               rescueCanvas.height = 1;
             }
