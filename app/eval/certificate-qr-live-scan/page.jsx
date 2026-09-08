@@ -2067,13 +2067,20 @@ export default function CertificateQrLiveScanPoc() {
     ), [physicalLocatorUi]);
 
   const locatorUndecodedTracks = useMemo(() => locatorVisibleTracks
-    .filter((track) => !track.decoded)
+    .filter((track) => !track.everDecoded && !track.decoded)
     .sort((a, b) => {
       const rank = { high: 2, medium: 1, low: 0 };
       return (rank[b.confidence] - rank[a.confidence]) || (b.confidenceScore - a.confidenceScore);
     }), [locatorVisibleTracks]);
 
   const locatorPrimaryTarget = locatorUndecodedTracks[0] || null;
+  const locatorOverlayTracks = useMemo(() => locatorVisibleTracks.filter((track, index, tracks) => {
+    const diagnosticId = track.lastMatchedDiagnosticId || track.matchedDiagnosticId || null;
+    if (!diagnosticId) return true;
+    return index === tracks.findIndex((candidate) =>
+      (candidate.lastMatchedDiagnosticId || candidate.matchedDiagnosticId || null) === diagnosticId
+    );
+  }), [locatorVisibleTracks]);
 
   const parserSeparationUi = useMemo(() => parserSeparationCounterfactualSnapshot(
     countingIntegrityRef.current,
@@ -2847,7 +2854,7 @@ export default function CertificateQrLiveScanPoc() {
         </div>
         <div style={{ marginTop: 5, fontSize: 15, fontWeight: 800 }}>
           {productionShapeUi.qrAcquisitionState === "matched"
-            ? "QR取得完了候補"
+            ? "QR取得完了"
             : productionShapeUi.qrAcquisitionState === "over-count-review"
               ? "QR数を確認してください"
               : productionShapeUi.qrAcquisitionState === "kind-ambiguous"
@@ -2886,8 +2893,13 @@ export default function CertificateQrLiveScanPoc() {
             pointerEvents: "none",
           }}
         >
-          {locatorVisibleTracks.map((track) => {
+          {locatorOverlayTracks.map((track) => {
             const displayRead = Boolean(track.everDecoded || track.decoded);
+            const matchedDiagnosticId = track.lastMatchedDiagnosticId || track.matchedDiagnosticId || null;
+            const matchedSlot = productionShapeUi.physicalSlotUi.slots.find((slot) =>
+              slot.diagnosticId && slot.diagnosticId === matchedDiagnosticId
+            );
+            const slotOrdinal = matchedSlot?.displayOrdinal ?? null;
             const undecoded = !displayRead;
             const border = displayRead
               ? "3px solid rgba(52,199,89,.98)"
@@ -2925,7 +2937,9 @@ export default function CertificateQrLiveScanPoc() {
                   fontWeight: 950,
                   boxShadow: "0 1px 4px rgba(0,0,0,.35)",
                 }}>
-                  {displayRead ? "✓" : undecoded ? "読取中" : ""}
+                  {displayRead
+                    ? `${slotOrdinal != null ? ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩"][slotOrdinal - 1] || "" : ""}✓`
+                    : undecoded ? "読取中" : ""}
                 </div>
               </div>
             );
@@ -3030,7 +3044,7 @@ export default function CertificateQrLiveScanPoc() {
         )}
       </section>
 
-      {complete ? (
+      {(complete || productionShapeUi.qrAcquisitionComplete) ? (
         <section style={{
           marginTop: 14,
           padding: "22px 16px",
