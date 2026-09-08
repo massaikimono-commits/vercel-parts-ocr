@@ -1,4 +1,4 @@
-"use client";
+"use client";\n\n// Evaluation-only Guided Parts Capture PoC. OCR recognition logic is unchanged.
 
 import { useEffect, useRef, useState } from "react";
 import { saveOCRTransferImage } from "../transfer";
