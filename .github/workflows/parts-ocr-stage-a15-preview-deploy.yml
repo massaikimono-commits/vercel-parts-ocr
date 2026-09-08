@@ -1,0 +1,49 @@
+name: Parts OCR Stage A15 exact-head preview deploy
+
+on:
+  push:
+    branches:
+      - ops/parts-ocr-stage-a15-preview
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL_ORG_ID: team_GHd3ONZSRilQtxTq1q6NS1jT
+      VERCEL_PROJECT_ID: prj_GUedEKT5z3vrL7NMLGhx04jgPeMK
+      TARGET_SHA: 9d42033c7a992832601651805f741346b1d67cba
+    steps:
+      - name: Checkout helper branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout exact Stage A15 target HEAD
+        run: git checkout "$TARGET_SHA"
+
+      - name: Verify exact HEAD
+        run: test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+
+      - name: Prepare Vercel project link
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Preview environment
+        run: vercel pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Build exact target HEAD
+        env:
+          NEXT_PUBLIC_EVAL_HEAD: 9d42033c7a992832601651805f741346b1d67cba
+        run: vercel build --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Deploy Preview
+        run: vercel deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}" > stage-a15-preview-url.txt
+
+      - name: Show Preview URL
+        run: cat stage-a15-preview-url.txt
