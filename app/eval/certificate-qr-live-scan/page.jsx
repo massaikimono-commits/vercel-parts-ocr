@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-production-shape-camera-stop-slot-association-v2";
+const LIVE_SCAN_REVISION = "live-poc-v3-physical-slot-conflict-decomposition-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -950,13 +950,27 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
       hasPositionEvidence &&
       temporalContinuityPass &&
       !sameFrameSpatialConflict;
+    const positionPoints = positions
+      .map((position) => ({ x: Number(position.x), y: Number(position.y) }))
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+    const sessionPositionSpan = positionPoints.length >= 2 ? maxPairDistance(positionPoints) : 0;
+    const insufficientPositionSupport =
+      !hasPositionEvidence ||
+      (!temporalContinuityPass && !sameFrameSpatialConflict);
 
     return {
       diagnosticId: candidate.diagnosticId,
       stableBase,
       sameFrameSpatialConflict,
+      nearbyCanonicalConflict: false,
+      locatorTrackMultiDiagnosticConflict: false,
+      temporalCameraMotionFalseConflict: false,
+      insufficientPositionSupport,
+      finalConflict: false,
+      conflictCategories: [],
       x,
       y,
+      sessionPositionSpan,
       firstSeenFrame: candidate.firstSeenFrame,
       lastSeenFrame: candidate.lastSeenFrame,
       positionFrameCount: frameIds.size,
@@ -966,6 +980,9 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
   });
 
   const conflictIds = new Set();
+  const nearbyConflictIds = new Set();
+  const locatorMultiDiagnosticConflictIds = new Set();
+
   for (const association of associations) {
     if (association.sameFrameSpatialConflict) conflictIds.add(association.diagnosticId);
   }
@@ -977,6 +994,8 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
       if (!Number.isFinite(a.x) || !Number.isFinite(a.y) || !Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
       const distance = Math.hypot(a.x - b.x, a.y - b.y);
       if (distance <= .045) {
+        nearbyConflictIds.add(a.diagnosticId);
+        nearbyConflictIds.add(b.diagnosticId);
         conflictIds.add(a.diagnosticId);
         conflictIds.add(b.diagnosticId);
       }
@@ -989,11 +1008,37 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
       for (let j = i + 1; j < history.length; j += 1) {
         if (history[i].diagnosticId === history[j].diagnosticId) continue;
         if (Math.abs(Number(history[i].frameId) - Number(history[j].frameId)) <= 4) {
+          locatorMultiDiagnosticConflictIds.add(history[i].diagnosticId);
+          locatorMultiDiagnosticConflictIds.add(history[j].diagnosticId);
           conflictIds.add(history[i].diagnosticId);
           conflictIds.add(history[j].diagnosticId);
         }
       }
     }
+  }
+
+  for (const association of associations) {
+    association.nearbyCanonicalConflict = nearbyConflictIds.has(association.diagnosticId);
+    association.locatorTrackMultiDiagnosticConflict =
+      locatorMultiDiagnosticConflictIds.has(association.diagnosticId);
+    association.finalConflict = conflictIds.has(association.diagnosticId);
+
+    const likelyTemporalMotion =
+      association.finalConflict &&
+      !association.sameFrameSpatialConflict &&
+      (association.nearbyCanonicalConflict || association.locatorTrackMultiDiagnosticConflict) &&
+      association.positionFrameCount >= 2 &&
+      association.sessionPositionSpan >= .06;
+    association.temporalCameraMotionFalseConflict = likelyTemporalMotion;
+
+    const categories = [];
+    if (association.sameFrameSpatialConflict) categories.push("A_SAME_FRAME_SPATIAL_CONFLICT");
+    if (association.nearbyCanonicalConflict) categories.push("B_NEARBY_CANONICAL_CLUSTER_CONFLICT");
+    if (association.locatorTrackMultiDiagnosticConflict) categories.push("C_LOCATOR_TRACK_MULTI_DIAGNOSTIC_CONFLICT");
+    if (association.temporalCameraMotionFalseConflict) categories.push("D_TEMPORAL_CAMERA_MOTION_FALSE_CONFLICT");
+    if (association.insufficientPositionSupport) categories.push("E_INSUFFICIENT_POSITION_SUPPORT");
+    if (!categories.length && (!association.stableBase || association.finalConflict)) categories.push("F_OTHER");
+    association.conflictCategories = categories;
   }
 
   const stableAssociations = associations
@@ -1075,6 +1120,33 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
     });
   }
 
+  const conflictCategoryCounts = {
+    A_SAME_FRAME_SPATIAL_CONFLICT: associations.filter((item) => item.sameFrameSpatialConflict).length,
+    B_NEARBY_CANONICAL_CLUSTER_CONFLICT: associations.filter((item) => item.nearbyCanonicalConflict).length,
+    C_LOCATOR_TRACK_MULTI_DIAGNOSTIC_CONFLICT: associations.filter((item) => item.locatorTrackMultiDiagnosticConflict).length,
+    D_TEMPORAL_CAMERA_MOTION_FALSE_CONFLICT: associations.filter((item) => item.temporalCameraMotionFalseConflict).length,
+    E_INSUFFICIENT_POSITION_SUPPORT: associations.filter((item) => item.insufficientPositionSupport).length,
+    F_OTHER: associations.filter((item) => item.conflictCategories.includes("F_OTHER")).length,
+  };
+  const conflictDiagnostics = associations.map((association) => ({
+    diagnosticId: association.diagnosticId,
+    stableBase: association.stableBase,
+    positionFrameCount: association.positionFrameCount,
+    locatorMatchFrameCount: association.locatorMatchFrameCount,
+    medianX: Number.isFinite(association.x) ? Number(association.x.toFixed(4)) : null,
+    medianY: Number.isFinite(association.y) ? Number(association.y.toFixed(4)) : null,
+    sessionPositionSpan: Number.isFinite(association.sessionPositionSpan)
+      ? Number(association.sessionPositionSpan.toFixed(4))
+      : null,
+    sameFrameSpatialConflict: association.sameFrameSpatialConflict,
+    nearbyCanonicalConflict: association.nearbyCanonicalConflict,
+    locatorTrackMultiDiagnosticConflict: association.locatorTrackMultiDiagnosticConflict,
+    temporalCameraMotionFalseConflict: association.temporalCameraMotionFalseConflict,
+    insufficientPositionSupport: association.insufficientPositionSupport,
+    finalConflict: association.finalConflict,
+    conflictCategories: association.conflictCategories,
+  }));
+
   return {
     slotCount: expected ?? confirmedCanonicalCount,
     physicalSlotDisplayCount: stableAssociations.length,
@@ -1088,6 +1160,11 @@ function buildPhysicalSlotUi(state, physicalLocatorUi, expectedQrCount, separate
     sessionPersistedSlotCount,
     currentFrameTrackCount: currentTracks.length,
     associationConflictCount: conflictIds.size,
+    conflictCategoryCounts,
+    conflictDiagnostics,
+    conflictDecompositionDiagnosticOnly: true,
+    conflictThresholdsChanged: false,
+    finalConflictRuleChanged: false,
     sameCanonicalMultiplePhysicalPositionCandidate,
     multipleCanonicalSamePhysicalSlotCandidate,
     duplicateIdentityWarning,
@@ -1353,6 +1430,22 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
         sessionPersistedSlotCount: full.productionShapeCandidate.physicalSlotUi?.sessionPersistedSlotCount ?? null,
         currentFrameTrackCount: full.productionShapeCandidate.physicalSlotUi?.currentFrameTrackCount ?? null,
         associationConflictCount: full.productionShapeCandidate.physicalSlotUi?.associationConflictCount ?? null,
+        conflictCategoryCounts: full.productionShapeCandidate.physicalSlotUi?.conflictCategoryCounts || null,
+        conflictDiagnostics: (full.productionShapeCandidate.physicalSlotUi?.conflictDiagnostics || []).slice(0, 8).map((item) => ({
+          diagnosticId: item.diagnosticId,
+          stableBase: item.stableBase,
+          positionFrameCount: item.positionFrameCount,
+          locatorMatchFrameCount: item.locatorMatchFrameCount,
+          medianX: item.medianX,
+          medianY: item.medianY,
+          sameFrameSpatialConflict: item.sameFrameSpatialConflict,
+          nearbyCanonicalConflict: item.nearbyCanonicalConflict,
+          locatorTrackMultiDiagnosticConflict: item.locatorTrackMultiDiagnosticConflict,
+          temporalCameraMotionFalseConflict: item.temporalCameraMotionFalseConflict,
+          insufficientPositionSupport: item.insufficientPositionSupport,
+          finalConflict: item.finalConflict,
+          conflictCategories: item.conflictCategories,
+        })),
         duplicateIdentityWarning: Boolean(full.productionShapeCandidate.physicalSlotUi?.duplicateIdentityWarning),
       },
     } : null,
