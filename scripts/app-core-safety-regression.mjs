@@ -251,5 +251,5 @@ assert(partsReview.includes('updatePart(index, "name"') && partsReview.includes(
 assert(partsReview.includes('onClick={() => removePart(index)}'), "parts formal review must keep row deletion");
 assert(partsReview.includes('.from("parts_ocr_documents")') && partsReview.includes('.from("parts_ocr_items")') && partsReview.includes('.from("parts")'), "parts formal review must keep the documents -> items -> parts formal save path");
 assert(partsReview.includes("const itemPayload = parts.map((part, index) => ({"), "all reviewed rows, including manual rows, must be written through parts_ocr_items");
-assert((partsReview.match(/saveFormal\\(\\)/g) || []).length === 2, "OCR/review load must not auto-trigger formal save; saveFormal may only exist as the function and explicit save-button call");
+assert((partsReview.match(/saveFormal\(\)/g) || []).length === 2, "OCR/review load must not auto-trigger formal save; saveFormal may only exist as the function and explicit save-button call");
 console.log("app-core safety regression passed");
