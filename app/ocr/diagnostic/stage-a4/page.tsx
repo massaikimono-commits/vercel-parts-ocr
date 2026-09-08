@@ -432,7 +432,7 @@ export default function StageA4Page() {
         const x = summarizeVariant(images.map((img) => img.variants[name]));
         aggregate[name] = {
           ...x,
-          recall: 54 ? x.gtCoverage / 54 : 0,
+          recall: x.gtCoverage / 54,
         };
       }
 
