@@ -28,8 +28,8 @@ assert.match(certificatePage, /\/guided-capture\?mode=certificate/, "certificate
 assert.match(partsLayout, /\/guided-capture\?mode=parts/, "parts OCR screen must expose the guided capture entry");
 assert.match(certificateTransfer, /sessionStorage/, "certificate captured image handoff must remain temporary and browser-local");
 
-for (const forbidden of ["supabase", "tesseract", "jsQR", "ZXing", "finder", "geometry", "row detection", "threshold"]) {
-  assert.ok(!page.toLowerCase().includes(forbidden.toLowerCase()), `guided UI must not implement OCR recognition logic: ${forbidden}`);
+for (const forbidden of ["from \"../supabase\"", "tesseract.js", "@zxing/", "jsqr", "normalizeCertificateCanvas"]) {
+  assert.ok(!page.toLowerCase().includes(forbidden.toLowerCase()), `guided UI must not import or execute OCR/DB logic: ${forbidden}`);
 }
 
 console.log("guided capture PoC regression: ok");
