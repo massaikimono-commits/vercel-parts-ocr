@@ -938,7 +938,11 @@ export default function CertificateQrLiveScanPoc() {
     : Math.max(0, kindEvidence.expected - confirmedCount);
 
   const locatorVisibleTracks = useMemo(() => physicalLocatorUi.tracks
-    .filter((track) => track.confidence !== "low"), [physicalLocatorUi]);
+    .filter((track) =>
+      track.confidence !== "low" &&
+      physicalLocatorUi.lastFrame != null &&
+      track.lastSeenFrame === physicalLocatorUi.lastFrame
+    ), [physicalLocatorUi]);
 
   const locatorUndecodedTracks = useMemo(() => locatorVisibleTracks
     .filter((track) => !track.decoded)
