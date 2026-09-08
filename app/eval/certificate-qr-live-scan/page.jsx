@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-spatial-subroi-search";
+const LIVE_SCAN_REVISION = "live-poc-v2-spatial-guided-remaining-one-rescue";
 const FRAME_INTERVAL_MS = 250;
 const MAX_DECODE_DIMENSION = 1280;
+const LOCAL_RESCUE_STALL_FRAMES = 16;
+const LOCAL_RESCUE_VARIANTS_PER_FRAME = 2;
+const LOCAL_RESCUE_RETARGET_EVERY_FRAMES = 6;
 const GUIDE_ROI = Object.freeze({ x: .04, y: .43, w: .92, h: .44 });
 const SUB_ROIS_PER_FRAME = 3;
 const SUB_ROIS = Object.freeze([
@@ -13,6 +16,15 @@ const SUB_ROIS = Object.freeze([
   { id: "center", x: .35, y: 0, w: .30, h: 1 },
   { id: "right-mid", x: .525, y: 0, w: .30, h: 1 },
   { id: "right", x: .70, y: 0, w: .30, h: 1 },
+]);
+const LOCAL_RESCUE_VARIANTS = Object.freeze([
+  { id: "wide", dx: -.06, dy: 0, dw: .12, dh: 0, scale: 1 },
+  { id: "narrow-upscale", dx: .04, dy: .08, dw: -.08, dh: -.16, scale: 1.25 },
+  { id: "left-offset", dx: -.08, dy: 0, dw: 0, dh: 0, scale: 1.1 },
+  { id: "right-offset", dx: .08, dy: 0, dw: 0, dh: 0, scale: 1.1 },
+  { id: "upper", dx: -.03, dy: 0, dw: .06, dh: -.28, scale: 1.15 },
+  { id: "lower", dx: -.03, dy: .28, dw: .06, dh: -.28, scale: 1.15 },
+  { id: "base-upscale", dx: 0, dy: 0, dw: 0, dh: 0, scale: 1.3 },
 ]);
 
 function canonicalText(value) {
@@ -276,6 +288,80 @@ function guidePositionFromHit(hit, roi) {
   };
 }
 
+function rescueRoiFromVariant(baseRoi, variant) {
+  const minW = .14;
+  const minH = .42;
+  let x = Number(baseRoi.x) + Number(variant.dx || 0);
+  let y = Number(baseRoi.y) + Number(variant.dy || 0);
+  let w = Math.max(minW, Number(baseRoi.w) + Number(variant.dw || 0));
+  let h = Math.max(minH, Number(baseRoi.h) + Number(variant.dh || 0));
+  x = Math.max(0, Math.min(1 - minW, x));
+  y = Math.max(0, Math.min(1 - minH, y));
+  w = Math.min(w, 1 - x);
+  h = Math.min(h, 1 - y);
+  return { x, y, w, h };
+}
+
+function cropRescueRoi(source, roi, scale = 1) {
+  const sx = Math.max(0, Math.round(source.width * roi.x));
+  const sy = Math.max(0, Math.round(source.height * roi.y));
+  const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * roi.w)));
+  const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * roi.h)));
+  const safeScale = Math.max(1, Math.min(1.35, Number(scale || 1)));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sw * safeScale));
+  canvas.height = Math.max(1, Math.round(sh * safeScale));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function createLocalRescueState() {
+  return {
+    active: false,
+    activatedFrame: null,
+    targetRoiId: null,
+    triggerCount: 0,
+    rescueFrameCount: 0,
+    variantCursor: 0,
+    zxingAttemptCount: 0,
+    rawSuccessCount: 0,
+    structuralSuccessCount: 0,
+    novelCanonicalCount: 0,
+    lastRescueFrame: null,
+    lastNovelRescueFrame: null,
+    variantStats: Object.fromEntries(LOCAL_RESCUE_VARIANTS.map((variant) => [
+      variant.id,
+      { attempts: 0, rawSuccesses: 0, structuralSuccesses: 0, novelCanonicalCount: 0 },
+    ])),
+  };
+}
+
+function localRescueSnapshot(state) {
+  return {
+    active: Boolean(state?.active),
+    activatedFrame: Number.isFinite(state?.activatedFrame) ? state.activatedFrame : null,
+    targetRoiId: state?.targetRoiId || null,
+    triggerCount: Number(state?.triggerCount || 0),
+    rescueFrameCount: Number(state?.rescueFrameCount || 0),
+    zxingAttemptCount: Number(state?.zxingAttemptCount || 0),
+    rawSuccessCount: Number(state?.rawSuccessCount || 0),
+    structuralSuccessCount: Number(state?.structuralSuccessCount || 0),
+    novelCanonicalCount: Number(state?.novelCanonicalCount || 0),
+    lastRescueFrame: Number.isFinite(state?.lastRescueFrame) ? state.lastRescueFrame : null,
+    lastNovelRescueFrame: Number.isFinite(state?.lastNovelRescueFrame) ? state.lastNovelRescueFrame : null,
+    variantStats: state?.variantStats || {},
+  };
+}
+
+function lastNovelCanonicalFrame(evidenceMap) {
+  let last = 0;
+  for (const entry of evidenceMap.values()) {
+    last = Math.max(last, Number(entry?.firstSeenFrame || 0));
+  }
+  return last;
+}
+
 function createSubRoiStats() {
   return new Map(SUB_ROIS.map((roi) => [roi.id, {
     id: roi.id,
@@ -435,6 +521,7 @@ export default function CertificateQrLiveScanPoc() {
   const qualityFramesRef = useRef([]);
   const successQualityFramesRef = useRef([]);
   const subRoiStatsRef = useRef(createSubRoiStats());
+  const localRescueRef = useRef(createLocalRescueState());
   const completionStoppedRef = useRef(false);
   const timersRef = useRef(new Set());
 
@@ -444,6 +531,7 @@ export default function CertificateQrLiveScanPoc() {
   const [candidates, setCandidates] = useState([]);
   const [frameStats, setFrameStats] = useState({ processed: 0, decoded: 0, lastDecodeMs: null, subRoiFrameAttempts: 0 });
   const [subRoiStats, setSubRoiStats] = useState(subRoiStatsSnapshot(subRoiStatsRef.current));
+  const [localRescueUi, setLocalRescueUi] = useState(localRescueSnapshot(localRescueRef.current));
   const [cameraInfo, setCameraInfo] = useState({ width: 0, height: 0 });
 
   const confirmedCount = useMemo(() => candidates.filter((item) => item.confirmed).length, [candidates]);
@@ -467,20 +555,27 @@ export default function CertificateQrLiveScanPoc() {
 
   const guidedTarget = useMemo(() => {
     if (!running || complete) return null;
-    const selected = selectSubRois(
-      Number(frameStats.processed || 0) + 1,
-      evidenceRef.current,
-      subRoiStatsRef.current
-    );
-    const roi = selected[0] || null;
+    let roi = null;
+    if (localRescueUi.active && localRescueUi.targetRoiId) {
+      roi = SUB_ROIS.find((item) => item.id === localRescueUi.targetRoiId) || null;
+    }
+    if (!roi) {
+      const selected = selectSubRois(
+        Number(frameStats.processed || 0) + 1,
+        evidenceRef.current,
+        subRoiStatsRef.current
+      );
+      roi = selected[0] || null;
+    }
     if (!roi) return null;
     return {
       id: roi.id,
       label: subRoiGuideLabel(roi.id),
       x: roi.x,
       w: roi.w,
+      localRescueActive: Boolean(localRescueUi.active),
     };
-  }, [running, complete, frameStats.processed, candidates, subRoiStats]);
+  }, [running, complete, frameStats.processed, candidates, subRoiStats, localRescueUi]);
 
   const provisionalRemaining = kindEvidence.expected == null
     ? null
@@ -517,11 +612,13 @@ export default function CertificateQrLiveScanPoc() {
     qualityFramesRef.current = [];
     successQualityFramesRef.current = [];
     subRoiStatsRef.current = createSubRoiStats();
+    localRescueRef.current = createLocalRescueState();
     completionStoppedRef.current = false;
     frameSeqRef.current = 0;
     setCandidates([]);
     setQuality(null);
     setSubRoiStats(subRoiStatsSnapshot(subRoiStatsRef.current));
+    setLocalRescueUi(localRescueSnapshot(localRescueRef.current));
     setFrameStats({ processed: 0, decoded: 0, lastDecodeMs: null, subRoiFrameAttempts: 0 });
     setStatus(runningRef.current ? "読取中" : "停止中");
   };
@@ -683,6 +780,103 @@ export default function CertificateQrLiveScanPoc() {
         grouped.get(hit.canonical).hits.push(hit);
       }
 
+      const completionBeforeRescue = completionFromEvidenceMap(evidenceRef.current);
+      const remainingOne =
+        completionBeforeRescue.expected != null &&
+        completionBeforeRescue.confirmedCount === completionBeforeRescue.expected - 1;
+      const lastNovelFrame = lastNovelCanonicalFrame(evidenceRef.current);
+      const stalledFrames = Math.max(0, frameId - lastNovelFrame);
+      const normalNovelStructural = [...grouped.keys()].some((canonical) =>
+        !evidenceRef.current.has(canonical) && structuralValidation(canonical).pass
+      );
+      const rescueState = localRescueRef.current;
+
+      if (
+        !rescueState.active &&
+        remainingOne &&
+        !normalNovelStructural &&
+        stalledFrames >= LOCAL_RESCUE_STALL_FRAMES
+      ) {
+        const target = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
+        if (target) {
+          rescueState.active = true;
+          rescueState.activatedFrame = frameId;
+          rescueState.targetRoiId = target.id;
+          rescueState.triggerCount += 1;
+          rescueState.variantCursor = 0;
+        }
+      }
+
+      if (rescueState.active && remainingOne) {
+        if (
+          rescueState.rescueFrameCount > 0 &&
+          rescueState.rescueFrameCount % LOCAL_RESCUE_RETARGET_EVERY_FRAMES === 0
+        ) {
+          const retarget = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
+          if (retarget) rescueState.targetRoiId = retarget.id;
+        }
+
+        const target = SUB_ROIS.find((roi) => roi.id === rescueState.targetRoiId) || null;
+        if (target) {
+          const variants = [];
+          for (let i = 0; i < LOCAL_RESCUE_VARIANTS_PER_FRAME; i += 1) {
+            variants.push(LOCAL_RESCUE_VARIANTS[
+              (rescueState.variantCursor + i) % LOCAL_RESCUE_VARIANTS.length
+            ]);
+          }
+          rescueState.variantCursor =
+            (rescueState.variantCursor + LOCAL_RESCUE_VARIANTS_PER_FRAME) %
+            LOCAL_RESCUE_VARIANTS.length;
+          rescueState.rescueFrameCount += 1;
+          rescueState.lastRescueFrame = frameId;
+
+          for (const variant of variants) {
+            const cropRoi = rescueRoiFromVariant(target, variant);
+            const rescueCanvas = cropRescueRoi(canvas, cropRoi, variant.scale);
+            const variantStats = rescueState.variantStats[variant.id];
+            rescueState.zxingAttemptCount += 1;
+            variantStats.attempts += 1;
+            try {
+              const zxHits = await decodeZxing(readerRef.current, rescueCanvas);
+              rescueState.rawSuccessCount += zxHits.length;
+              variantStats.rawSuccesses += zxHits.length;
+              for (const hit of zxHits) {
+                if (!hit.canonical) continue;
+                const structural = structuralValidation(hit.canonical);
+                if (structural.pass) {
+                  rescueState.structuralSuccessCount += 1;
+                  variantStats.structuralSuccesses += 1;
+                }
+                const alreadyKnown = evidenceRef.current.has(hit.canonical);
+                const alreadyNormalThisFrame = grouped.has(hit.canonical);
+                if (structural.pass && !alreadyKnown && !alreadyNormalThisFrame) {
+                  rescueState.novelCanonicalCount += 1;
+                  rescueState.lastNovelRescueFrame = frameId;
+                  variantStats.novelCanonicalCount += 1;
+                }
+                if (!grouped.has(hit.canonical)) {
+                  grouped.set(hit.canonical, { engines: new Set(), hits: [] });
+                }
+                grouped.get(hit.canonical).engines.add(hit.engine);
+                grouped.get(hit.canonical).hits.push({
+                  ...hit,
+                  subRoiId: `rescue-${target.id}-${variant.id}`,
+                  guidePosition: guidePositionFromHit(hit, cropRoi),
+                });
+              }
+            } finally {
+              rescueCanvas.width = 1;
+              rescueCanvas.height = 1;
+            }
+          }
+        }
+      } else if (!remainingOne) {
+        rescueState.active = false;
+        rescueState.targetRoiId = null;
+      }
+
+      setLocalRescueUi(localRescueSnapshot(rescueState));
+
       const evidenceUpdate = updateEvidence(frameId, grouped, q, selectedRois);
       const structuralHit = Boolean(evidenceUpdate.structuralHit);
       const decodeMs = Math.round(performance.now() - started);
@@ -697,7 +891,8 @@ export default function CertificateQrLiveScanPoc() {
           completionStoppedRef.current = true;
           stopStreamAndDecodeLoop("読み取り完了");
         }
-      } else if (structuralHit) setStatus("QR取得・蓄積中");
+      } else if (localRescueRef.current.active) setStatus("残り1件：局所探索中");
+      else if (structuralHit) setStatus("QR取得・蓄積中");
       else if (q.label === "soft") setStatus("読取中：もう少しピントを合わせる");
       else if (q.label === "dark") setStatus("読取中：明るい位置へ");
       else if (q.label === "bright") setStatus("読取中：反射を避ける");
@@ -784,6 +979,18 @@ export default function CertificateQrLiveScanPoc() {
         subRois: SUB_ROIS,
         confirmedRegionPolicy: "deprioritize-not-exclude",
         starvationProtection: true,
+      },
+      remainingOneLocalRescue: {
+        provisionalTrigger: true,
+        triggerRule: "expected known AND confirmedCount = expected-1 AND no new structural canonical for >=16 processed frames",
+        stallFrames: LOCAL_RESCUE_STALL_FRAMES,
+        decoder: "zxing-priority-only",
+        variantsPerRescueFrame: LOCAL_RESCUE_VARIANTS_PER_FRAME,
+        retargetEveryRescueFrames: LOCAL_RESCUE_RETARGET_EVERY_FRAMES,
+        variants: LOCAL_RESCUE_VARIANTS.map(({id,scale}) => ({id,scale})),
+        diagnostics: localRescueSnapshot(localRescueRef.current),
+        fullFramePreprocessingSweep: false,
+        qualityHardGate: false,
       },
       processedFrameCount: frameStats.processed,
       structuralDecodeFrameCount: frameStats.decoded,
@@ -917,7 +1124,9 @@ export default function CertificateQrLiveScanPoc() {
                 : ""}
             </div>
             <div style={{ marginTop: 2, color: "#ffd54f" }}>
-              次は{guidedTarget.label}をガイドへ合わせてください
+              {guidedTarget.localRescueActive
+                ? `残り1件：${guidedTarget.label}付近を少し上下左右に動かしながらガイドへ合わせてください`
+                : `次は${guidedTarget.label}をガイドへ合わせてください`}
             </div>
             <div style={{ marginTop: 1, fontSize: 11, fontWeight: 600, color: "#ddd" }}>
               黄色は現在の探索優先エリアです。未読QR位置を断定する表示ではありません。
