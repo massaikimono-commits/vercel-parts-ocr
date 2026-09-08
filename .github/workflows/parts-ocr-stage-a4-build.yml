@@ -1,0 +1,20 @@
+name: Parts OCR Stage A4 experiment build
+
+on:
+  push:
+    branches:
+      - experiment/parts-ocr-row-redesign-a4
+      - eval/parts-ocr-row-redesign-a4
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run build
