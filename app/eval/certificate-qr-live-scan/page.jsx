@@ -5,6 +5,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const LIVE_SCAN_REVISION = "live-poc-v2-decode-integrity-parser-separation-counterfactual-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separation-counterfactual-v1";
+const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
+const EVALUATION_BRANCH = "eval/certificate-qr-live-parser-separation";
+const LIVE_BASELINE_HEAD = "00d932767837d7cf501ea8ac96e8a4f6e945204a";
 const COUNTING_DIAGNOSTIC_SHORT_WINDOW_FRAMES = 3;
 const COUNTING_DIAGNOSTIC_SPATIAL_CLUSTER_DISTANCE = .11;
 const FRAME_INTERVAL_MS = 250;
@@ -825,6 +828,112 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
   };
 }
 
+function topHistogramEntry(histogram = {}) {
+  return Object.entries(histogram || {}).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))[0] || null;
+}
+
+function managementShortFromLiveFull(full, runtimeHead = null) {
+  const counting = full?.countingIntegrityDiagnostic || {};
+  const cf = full?.parserSeparationCounterfactual || {};
+  const completion = full?.completion || {};
+  const mainFail = topHistogramEntry(counting.failReasonHistogram);
+  const structuralFails = (counting.rawCandidates || [])
+    .filter((candidate) => candidate.structuralPass === false)
+    .sort((a, b) => Number(b.frameHitCount || 0) - Number(a.frameHitCount || 0))
+    .slice(0, 2)
+    .map((candidate) => ({
+      diagnosticId: candidate.diagnosticId,
+      frameHitCount: candidate.frameHitCount,
+      jsqrFrameCount: candidate.jsqrFrameCount,
+      zxingFrameCount: candidate.zxingFrameCount,
+      decodedTextLengthMedian: candidate.decodedTextLengthMedian,
+      slashCountMedian: candidate.slashCountMedian,
+      parserSchemaClasses: candidate.parserSchemaClasses,
+      failReasonHistogram: candidate.structuralFailReasonHistogram,
+      positionClusterCount: candidate.positionClusterCount,
+    }));
+  const unknownSafe = (cf.unrecognizedSafeCandidates || []).slice(0, 2).map((candidate) => ({
+    diagnosticId: candidate.diagnosticId,
+    frameHitCount: candidate.frameHitCount,
+    jsqrFrameCount: candidate.jsqrFrameCount,
+    zxingFrameCount: candidate.zxingFrameCount,
+    bothEngineFrameCount: candidate.bothEngineFrameCount,
+    payloadLength: candidate.payloadLength,
+    parserSchemaClass: candidate.parserSchemaClass,
+    confirmationSupport: candidate.confirmationSupport,
+    positionClusterCount: candidate.positionClusterCount,
+  }));
+  const importantCandidates = [...structuralFails, ...unknownSafe].slice(0, 3);
+  const h1Events = counting.sameCanonicalMultiplePhysicalPositionEvents || [];
+  const h3Candidates = counting.unconfirmedStructuralPassCandidates || [];
+  const h3Groups = counting.oneOffPatternGroups || [];
+  let primaryCause = "D-undetermined-or-decoder-stage";
+  if (Number(counting.structuralFailUniqueCount || 0) > 0) primaryCause = "H2-structural-parser-reject";
+  else if (h3Candidates.length || h3Groups.length) primaryCause = "H3-unconfirmed-canonical-instability";
+  else if (counting.duplicatePayloadPhysicalQrCandidateDetected) primaryCause = "H1-duplicate-payload-physical-candidate";
+  const sourceRevision = full?.revision || "unknown";
+  const sourceHeadMap = {
+    "live-poc-v2-counting-integrity-diagnostic-1": "dbbb2a92c3842d9ffbe3b2b5a6cf55e9e66224e2",
+  };
+  return {
+    schema: MANAGEMENT_SHORT_SCHEMA,
+    summaryVariant: "management-short",
+    sourceSchema: full?.schema || null,
+    revision: sourceRevision,
+    evaluationBranch: full?.evaluation?.branch || EVALUATION_BRANCH,
+    evaluationHead: full?.evaluation?.head || sourceHeadMap[sourceRevision] || runtimeHead || null,
+    baseline: full?.evaluation?.baseline || LIVE_BASELINE_HEAD,
+    majorResult: {
+      processedFrames: full?.processedFrameCount ?? null,
+      currentConfirmed: full?.confirmedQrCount ?? cf.currentConfirmedCount ?? null,
+      expectedQrCount: completion.expectedQrCount ?? cf.currentCompletion?.expectedQrCount ?? null,
+      currentComplete: Boolean(completion.complete ?? cf.currentCompletion?.complete),
+      rawUnique: counting.rawUniqueDiagnosticCandidateCount ?? cf.rawUniqueCount ?? null,
+      decodeIntegritySafeUnique: cf.decodeIntegritySafeUniqueCount ?? null,
+      recognizedSchemaUnique: cf.recognizedSchemaUniqueCount ?? null,
+      unrecognizedSafeUnique: cf.unrecognizedSafeUniqueCount ?? null,
+      structuralFailUnique: counting.structuralFailUniqueCount ?? null,
+      counterfactualConfirmed: cf.counterfactualConfirmedCount ?? null,
+      counterfactualComplete: Boolean(cf.counterfactualCompletion?.complete),
+    },
+    baselineReproduction: {
+      normalDecodeControlChanged: Boolean(counting.normalDecodeControlChanged),
+      dedupeChanged: Boolean(counting.dedupeChanged),
+      completionRuleChanged: Boolean(counting.completionRuleChanged),
+      rescueChanged: Boolean(counting.rescueChanged),
+    },
+    causeAggregate: {
+      primaryCause,
+      mainFailReason: mainFail ? { reason: mainFail[0], count: mainFail[1] } : null,
+      h1DuplicatePayloadCandidate: Boolean(counting.duplicatePayloadPhysicalQrCandidateDetected),
+      h1EventCount: h1Events.length,
+      h2StructuralFailUnique: counting.structuralFailUniqueCount ?? 0,
+      h3UnconfirmedStructuralPassCount: h3Candidates.length,
+      h3OneOffPatternGroupCount: h3Groups.length,
+      decoderStageMissingSupported: Number(counting.rawUniqueDiagnosticCandidateCount || 0) <= Number(counting.confirmedCanonicalCount || 0),
+    },
+    comparison: {
+      currentConfirmedCount: cf.currentConfirmedCount ?? full?.confirmedQrCount ?? null,
+      counterfactualConfirmedCount: cf.counterfactualConfirmedCount ?? null,
+      expectedQrCount: cf.counterfactualCompletion?.expectedQrCount ?? completion.expectedQrCount ?? null,
+      currentComplete: Boolean(cf.currentCompletion?.complete ?? completion.complete),
+      counterfactualComplete: Boolean(cf.counterfactualCompletion?.complete),
+    },
+    importantCases: importantCandidates,
+    changes: {
+      recognitionLogicChanged: false,
+      frozenChanged: false,
+      productionChanged: false,
+      mainChanged: false,
+      supabaseChanged: false,
+    },
+    privacy: {
+      payloadIncluded: false,
+      imageIncluded: false,
+    },
+  };
+}
+
 function cropSubRoi(source, roi) {
   const sx = Math.max(0, Math.round(source.width * roi.x));
   const sy = Math.max(0, Math.round(source.height * roi.y));
@@ -1470,6 +1579,8 @@ export default function CertificateQrLiveScanPoc() {
   const [localRescueUi, setLocalRescueUi] = useState(localRescueSnapshot(localRescueRef.current));
   const [physicalLocatorUi, setPhysicalLocatorUi] = useState(createPhysicalLocatorUi());
   const [cameraInfo, setCameraInfo] = useState({ width: 0, height: 0 });
+  const [fullJsonInput, setFullJsonInput] = useState("");
+  const [convertedShort, setConvertedShort] = useState("");
 
   const confirmedCount = useMemo(() => candidates.filter((item) => item.confirmed).length, [candidates]);
   const kindEvidence = useMemo(() => {
@@ -2055,10 +2166,19 @@ export default function CertificateQrLiveScanPoc() {
     await startCamera();
   };
 
-  const copyDiagnostic = async () => {
-    const snapshot = {
+  const buildDiagnosticSnapshot = () => {
+    let runtimeHead = null;
+    try {
+      runtimeHead = new URLSearchParams(window.location.search).get("head");
+    } catch {}
+    return {
       schema: "icb-certificate-qr-live-scan-poc-v2",
       revision: LIVE_SCAN_REVISION,
+      evaluation: {
+        branch: EVALUATION_BRANCH,
+        head: runtimeHead,
+        baseline: LIVE_BASELINE_HEAD,
+      },
       route: "/eval/certificate-qr-live-scan",
       privacy: {
         browserMemoryOnly: true,
@@ -2134,8 +2254,41 @@ export default function CertificateQrLiveScanPoc() {
         gtUsedInDecodeOrControl: false,
       },
     };
+  };
+
+  const copyManagementShort = async () => {
+    const full = buildDiagnosticSnapshot();
+    const short = managementShortFromLiveFull(full, full?.evaluation?.head || null);
+    await navigator.clipboard.writeText(JSON.stringify(short, null, 2));
+    setStatus("総合管理用短縮summaryをコピーしました");
+  };
+
+  const copyDiagnostic = async () => {
+    const snapshot = buildDiagnosticSnapshot();
     await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2));
-    setStatus("診断summaryをコピーしました");
+    setStatus("詳細診断JSONをコピーしました");
+  };
+
+  const convertExistingFullJson = () => {
+    try {
+      const parsed = JSON.parse(fullJsonInput);
+      let runtimeHead = null;
+      try {
+        runtimeHead = new URLSearchParams(window.location.search).get("head");
+      } catch {}
+      const short = managementShortFromLiveFull(parsed, runtimeHead);
+      setConvertedShort(JSON.stringify(short, null, 2));
+      setStatus("既存Full JSONから短縮summaryを生成しました");
+    } catch (error) {
+      setConvertedShort("");
+      setStatus(`JSON変換失敗: ${error?.message || error}`);
+    }
+  };
+
+  const copyConvertedShort = async () => {
+    if (!convertedShort) return;
+    await navigator.clipboard.writeText(convertedShort);
+    setStatus("変換済み短縮summaryをコピーしました");
   };
 
   useEffect(() => () => stopCamera(), []);
@@ -2375,10 +2528,38 @@ export default function CertificateQrLiveScanPoc() {
         </section>
       )}
       <section style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-        <button onClick={copyDiagnostic} style={{ padding: "10px 14px", fontWeight: 800 }}>
-          診断summaryをコピー
+        <button onClick={copyManagementShort} style={{ padding: "11px 15px", fontWeight: 900 }}>
+          総合管理用短縮summaryをコピー
+        </button>
+        <button onClick={copyDiagnostic} style={{ padding: "9px 13px", fontWeight: 650 }}>
+          詳細診断JSONをコピー
         </button>
       </section>
+
+      <details style={{ marginTop: 10 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>既存Full JSONから短縮summary生成</summary>
+        <div style={{ marginTop: 8 }}>
+          <textarea
+            value={fullJsonInput}
+            onChange={(event) => setFullJsonInput(event.target.value)}
+            placeholder="既存のFull Diagnostic JSONをここへ貼り付け"
+            style={{ width: "100%", minHeight: 120, boxSizing: "border-box", fontFamily: "monospace", fontSize: 11 }}
+          />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
+            <button onClick={convertExistingFullJson} disabled={!fullJsonInput.trim()} style={{ padding: "8px 12px", fontWeight: 700 }}>
+              短縮summary生成
+            </button>
+            <button onClick={copyConvertedShort} disabled={!convertedShort} style={{ padding: "8px 12px", fontWeight: 700 }}>
+              生成した短縮summaryをコピー
+            </button>
+          </div>
+          {convertedShort && (
+            <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 10, maxHeight: 260, overflow: "auto", background: "#f7f7f7", padding: 8 }}>
+              {convertedShort}
+            </pre>
+          )}
+        </div>
+      </details>
 
       <section style={{ marginTop: 14, padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>
