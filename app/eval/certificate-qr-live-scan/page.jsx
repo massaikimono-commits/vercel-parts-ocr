@@ -425,6 +425,7 @@ export default function CertificateQrLiveScanPoc() {
   const qualityFramesRef = useRef([]);
   const successQualityFramesRef = useRef([]);
   const subRoiStatsRef = useRef(createSubRoiStats());
+  const completionStoppedRef = useRef(false);
   const timersRef = useRef(new Set());
 
   const [running, setRunning] = useState(false);
@@ -452,7 +453,7 @@ export default function CertificateQrLiveScanPoc() {
     timersRef.current.clear();
   };
 
-  const stopCamera = () => {
+  const stopStreamAndDecodeLoop = (nextStatus = "停止中") => {
     runningRef.current = false;
     processingRef.current = false;
     clearTimers();
@@ -461,9 +462,16 @@ export default function CertificateQrLiveScanPoc() {
       for (const track of stream.getTracks()) track.stop();
     }
     streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+    }
     setRunning(false);
-    setStatus("停止中");
+    setStatus(nextStatus);
+  };
+
+  const stopCamera = () => {
+    stopStreamAndDecodeLoop("停止中");
   };
 
   const resetEvidence = () => {
@@ -471,6 +479,7 @@ export default function CertificateQrLiveScanPoc() {
     qualityFramesRef.current = [];
     successQualityFramesRef.current = [];
     subRoiStatsRef.current = createSubRoiStats();
+    completionStoppedRef.current = false;
     frameSeqRef.current = 0;
     setCandidates([]);
     setQuality(null);
@@ -645,8 +654,12 @@ export default function CertificateQrLiveScanPoc() {
         lastDecodeMs: decodeMs,
         subRoiFrameAttempts: prev.subRoiFrameAttempts + selectedRois.length,
       }));
-      if (evidenceUpdate.completion.complete) setStatus("必要QR取得済み");
-      else if (structuralHit) setStatus("QR取得・蓄積中");
+      if (evidenceUpdate.completion.complete) {
+        if (!completionStoppedRef.current) {
+          completionStoppedRef.current = true;
+          stopStreamAndDecodeLoop("読み取り完了");
+        }
+      } else if (structuralHit) setStatus("QR取得・蓄積中");
       else if (q.label === "soft") setStatus("読取中：もう少しピントを合わせる");
       else if (q.label === "dark") setStatus("読取中：明るい位置へ");
       else if (q.label === "bright") setStatus("読取中：反射を避ける");
@@ -678,6 +691,7 @@ export default function CertificateQrLiveScanPoc() {
 
   const startCamera = async () => {
     if (runningRef.current) return;
+    completionStoppedRef.current = false;
     setStatus("カメラ起動中");
     try {
       const [reader, jsMod] = await Promise.all([makeReader(), import("jsqr")]);
@@ -705,6 +719,11 @@ export default function CertificateQrLiveScanPoc() {
       stopCamera();
       setStatus(`カメラ起動失敗: ${error?.message || error}`);
     }
+  };
+
+  const restartScan = async () => {
+    resetEvidence();
+    await startCamera();
   };
 
   const copyDiagnostic = async () => {
@@ -756,10 +775,6 @@ export default function CertificateQrLiveScanPoc() {
 
   useEffect(() => () => stopCamera(), []);
 
-  useEffect(() => {
-    if (complete && runningRef.current) setStatus("必要QR取得済み");
-  }, [complete]);
-
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: "16px", fontFamily: "system-ui, sans-serif" }}>
       <h1 style={{ margin: "0 0 6px", fontSize: 24 }}>車検証 Guided Live QR Scan PoC v2</h1>
@@ -805,16 +820,40 @@ export default function CertificateQrLiveScanPoc() {
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
-      <section style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-        <button onClick={startCamera} disabled={running} style={{ padding: "10px 14px", fontWeight: 800 }}>
-          カメラ開始
-        </button>
-        <button onClick={stopCamera} disabled={!running} style={{ padding: "10px 14px", fontWeight: 800 }}>
-          停止
-        </button>
-        <button onClick={resetEvidence} style={{ padding: "10px 14px", fontWeight: 800 }}>
-          読取リセット
-        </button>
+      {complete ? (
+        <section style={{
+          marginTop: 14,
+          padding: "22px 16px",
+          border: "2px solid #2e7d32",
+          borderRadius: 14,
+          textAlign: "center",
+          background: "#f3fbf4",
+        }}>
+          <div style={{ fontSize: 30, fontWeight: 950 }}>✓ 読み取り完了</div>
+          <div style={{ marginTop: 8, fontSize: 18, fontWeight: 800 }}>
+            {confirmedCount}件のQRを取得しました
+          </div>
+          <div style={{ marginTop: 6, fontSize: 13, color: "#555" }}>
+            カメラとQR解析は停止しています。
+          </div>
+          <button onClick={restartScan} style={{ marginTop: 16, padding: "11px 18px", fontWeight: 900 }}>
+            もう一度読み取る
+          </button>
+        </section>
+      ) : (
+        <section style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+          <button onClick={startCamera} disabled={running} style={{ padding: "10px 14px", fontWeight: 800 }}>
+            カメラ開始
+          </button>
+          <button onClick={stopCamera} disabled={!running} style={{ padding: "10px 14px", fontWeight: 800 }}>
+            停止
+          </button>
+          <button onClick={resetEvidence} style={{ padding: "10px 14px", fontWeight: 800 }}>
+            読取リセット
+          </button>
+        </section>
+      )}
+      <section style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
         <button onClick={copyDiagnostic} style={{ padding: "10px 14px", fontWeight: 800 }}>
           診断summaryをコピー
         </button>
