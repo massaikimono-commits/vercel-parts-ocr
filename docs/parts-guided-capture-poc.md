@@ -1,6 +1,6 @@
 # Guided Parts Capture PoC
 
-Branch: experiment/parts-guided-capture
+Source branch: experiment/parts-guided-capture\nPreview branch: eval/parts-guided-capture
 
 Route: /ocr/guided-capture
 
