@@ -8,15 +8,27 @@ import type {
   StageA5SelectiveRow,
 } from "../stage-a5/selective-tsv";
 
-export type SplitHypothesis = StageA5LineProposal & {
+export type SplitHypothesis = {
+  top: number;
+  bottom: number;
+  center: number;
   source: "targeted-split";
+  height: number;
+  childWordCount: number;
+  hierarchyKey: string;
   parentCandidateIndex: number;
   evidenceModeCount: number;
   evidenceMemberCount: number;
 };
 
-export type AltRowProposal = StageA5LineProposal & {
+export type AltRowProposal = {
+  top: number;
+  bottom: number;
+  center: number;
   source: "alt-sparse-word-cluster";
+  height: number;
+  childWordCount: number;
+  hierarchyKey: string;
 };
 
 function median(values: number[]) {
