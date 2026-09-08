@@ -2624,37 +2624,33 @@ export default function CertificateQrLiveScanPoc() {
       </div>
       <section style={{
         marginBottom: 12,
-        padding: "10px 12px",
-        border: "1px solid #ddd",
-        borderRadius: 10,
+        padding: "12px 14px",
+        border: "1px solid #d8d8d8",
+        borderRadius: 12,
         background: "#fafafa",
-        fontSize: 13,
-        lineHeight: 1.55,
       }}>
-        <div style={{ fontWeight: 900 }}>CURRENT vs PARSER_SEPARATED</div>
-        <div>
-          Current confirmed：
-          <b>{parserSeparationUi.currentConfirmedCount}</b>
-          {parserSeparationUi.currentCompletion.expectedQrCount != null
-            ? ` / ${parserSeparationUi.currentCompletion.expectedQrCount}`
-            : ""}
+        <div style={{ fontSize: 14, color: "#555" }}>QR取得状況</div>
+        <div style={{ marginTop: 2, fontSize: 30, fontWeight: 950 }}>
+          {productionShapeUi.confirmedCanonicalCount}
+          {productionShapeUi.expectedQrCount != null ? ` / ${productionShapeUi.expectedQrCount}` : ""}
         </div>
-        <div>
-          Decode-integrity-safe：
-          <b>{parserSeparationUi.decodeIntegritySafeUniqueCount}</b>
-          {" ／ "}recognized schema：
-          <b>{parserSeparationUi.recognizedSchemaUniqueCount}</b>
-          {" ／ "}unrecognized-safe：
-          <b>{parserSeparationUi.unrecognizedSafeUniqueCount}</b>
+        <div style={{ marginTop: 5, fontSize: 15, fontWeight: 800 }}>
+          {productionShapeUi.qrAcquisitionState === "matched"
+            ? "QR取得完了候補"
+            : productionShapeUi.qrAcquisitionState === "over-count-review"
+              ? "QR数を確認してください"
+              : productionShapeUi.qrAcquisitionState === "kind-ambiguous"
+                ? "車種判定を確認中"
+                : productionShapeUi.qrAcquisitionState === "accounting-integrity-fail"
+                  ? "読取集計を確認中"
+                  : "QRを読み取り中"}
         </div>
-        <div>
-          PARSER_SEPARATED confirmed：
-          <b>{parserSeparationUi.separatedConfirmedCount}</b>
-          {parserSeparationUi.separatedCompletion.expectedQrCount != null
-            ? ` / ${parserSeparationUi.separatedCompletion.expectedQrCount}`
-            : ""}
-          {" "}
-          {parserSeparationUi.separatedCompletion.complete ? "✓ separated complete" : ""}
+        <div style={{ marginTop: 4, fontSize: 13, color: "#666" }}>
+          {productionShapeUi.payloadInterpretationState.complete
+            ? "QR内容の解釈完了"
+            : productionShapeUi.qrAcquisitionComplete
+              ? "車検証情報を確認中"
+              : "残りのQRをガイド内へ入れてください"}
         </div>
       </section>
 
@@ -2680,8 +2676,9 @@ export default function CertificateQrLiveScanPoc() {
           }}
         >
           {locatorVisibleTracks.map((track) => {
-            const undecoded = !track.decoded;
-            const border = track.decoded
+            const displayRead = Boolean(track.everDecoded || track.decoded);
+            const undecoded = !displayRead;
+            const border = displayRead
               ? "3px solid rgba(52,199,89,.98)"
               : track.confidence === "high"
                 ? "3px solid rgba(255,193,7,.98)"
@@ -2698,7 +2695,7 @@ export default function CertificateQrLiveScanPoc() {
                   boxSizing: "border-box",
                   border,
                   borderRadius: 7,
-                  background: track.decoded ? "rgba(52,199,89,.08)" : "rgba(255,193,7,.10)",
+                  background: displayRead ? "rgba(52,199,89,.08)" : "rgba(255,193,7,.10)",
                 }}
               >
                 <div style={{
@@ -2711,13 +2708,13 @@ export default function CertificateQrLiveScanPoc() {
                   borderRadius: 12,
                   display: "grid",
                   placeItems: "center",
-                  background: track.decoded ? "rgba(52,199,89,.98)" : "rgba(255,193,7,.98)",
-                  color: track.decoded ? "#fff" : "#3b2a00",
-                  fontSize: track.decoded ? 16 : 10,
+                  background: displayRead ? "rgba(52,199,89,.98)" : "rgba(255,193,7,.98)",
+                  color: displayRead ? "#fff" : "#3b2a00",
+                  fontSize: displayRead ? 16 : 10,
                   fontWeight: 950,
                   boxShadow: "0 1px 4px rgba(0,0,0,.35)",
                 }}>
-                  {track.decoded ? "✓" : undecoded ? "候補" : ""}
+                  {displayRead ? "✓" : undecoded ? "読取中" : ""}
                 </div>
               </div>
             );
@@ -2752,12 +2749,9 @@ export default function CertificateQrLiveScanPoc() {
             lineHeight: 1.45,
           }}>
             <div>
-              {kindEvidence.expected != null
-                ? `${confirmedCount} / ${kindEvidence.expected} 読み取り済み`
-                : `${confirmedCount}件 読み取り済み`}
-              {provisionalRemaining != null && provisionalRemaining > 0
-                ? ` ／ PoC上あと${provisionalRemaining}件`
-                : ""}
+              {productionShapeUi.expectedQrCount != null
+                ? `${productionShapeUi.confirmedCanonicalCount} / ${productionShapeUi.expectedQrCount} QR取得証拠`
+                : `${productionShapeUi.confirmedCanonicalCount}件 QR取得証拠`}
             </div>
             {locatorPrimaryTarget ? (
               <>
@@ -2781,37 +2775,49 @@ export default function CertificateQrLiveScanPoc() {
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
-      {!complete && (
-        <section style={{
-          marginTop: 12,
-          padding: "11px 12px",
-          border: "1px solid #ddd",
-          borderRadius: 12,
-          background: "#fafafa",
-        }}>
-          <div style={{ fontWeight: 900, fontSize: 15 }}>
-            2D QR位置：{confirmedCount}{kindEvidence.expected != null ? ` / ${kindEvidence.expected}` : "件"} 読み取り済み
-          </div>
-          <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.55, color: "#555" }}>
-            緑枠＋✓＝decode済み候補 ／ 黄色枠＝physical QR候補だが未decode
-          </div>
-          <div style={{ marginTop: 5, fontSize: 12, color: "#666" }}>
-            locator candidate {locatorVisibleTracks.length}件
-            ／ 未decode候補 {locatorUndecodedTracks.length}件
-            {physicalLocatorUi.lastLatencyMs != null ? ` ／ locator ${physicalLocatorUi.lastLatencyMs}ms` : ""}
-          </div>
-          {locatorPrimaryTarget && (
-            <div style={{ marginTop: 7, fontSize: 13 }}>
-              <b style={{ color: "#9a6500" }}>
-                狙う候補：{guide2DLabel(locatorPrimaryTarget.x, locatorPrimaryTarget.y)}
-              </b>
-              <span style={{ color: "#666" }}>
-                {" "}／ {locatorPrimaryTarget.confidence === "high" ? "確信度 高" : "確信度 中"}
-              </span>
-            </div>
+      <section style={{
+        marginTop: 12,
+        padding: "11px 12px",
+        border: "1px solid #ddd",
+        borderRadius: 12,
+        background: "#fafafa",
+      }}>
+        <div style={{ fontWeight: 900, fontSize: 15 }}>QR位置</div>
+        <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
+          {productionShapeUi.physicalSlotUi.slots.length ? productionShapeUi.physicalSlotUi.slots.map((slot, index) => {
+            const ordinals = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩"];
+            return (
+              <div key={`${slot.trackId || "uncertain"}-${index}`} style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 8,
+                padding: "9px 10px",
+                borderRadius: 9,
+                border: slot.status === "読取済" ? "1px solid #9bd5a8" : slot.status === "未読" ? "1px solid #e6c35b" : "1px solid #ccc",
+                background: slot.status === "読取済" ? "#f2fbf4" : slot.status === "未読" ? "#fff9e6" : "#f5f5f5",
+              }}>
+                <span style={{ fontWeight: 800 }}>
+                  {slot.displayOrdinal != null ? `${ordinals[slot.displayOrdinal - 1] || ""} ` : ""}
+                  {slot.positionLabel}
+                </span>
+                <span>{slot.status === "読取済" ? "✓ 読取済" : slot.status}</span>
+              </div>
+            );
+          }) : (
+            <div style={{ color: "#666" }}>QR位置を確認中です。</div>
           )}
-        </section>
-      )}
+        </div>
+        {productionShapeUi.physicalSlotUi.duplicateIdentityWarning && (
+          <div style={{ marginTop: 8, fontSize: 12, color: "#8a5a00" }}>
+            physical位置のidentityに重複候補があります。番号は確定表示しません。
+          </div>
+        )}
+        {!productionShapeUi.physicalSlotUi.identityStable && productionShapeUi.physicalSlotUi.uncertainCount > 0 && (
+          <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+            位置が不安定なQRは「位置不確定」と表示しています。
+          </div>
+        )}
+      </section>
 
       {complete ? (
         <section style={{
@@ -2822,12 +2828,17 @@ export default function CertificateQrLiveScanPoc() {
           textAlign: "center",
           background: "#f3fbf4",
         }}>
-          <div style={{ fontSize: 30, fontWeight: 950 }}>✓ 読み取り完了</div>
+          <div style={{ fontSize: 30, fontWeight: 950 }}>
+            {productionShapeUi.qrAcquisitionComplete ? "✓ QR取得完了" : "QR取得を確認中"}
+          </div>
           <div style={{ marginTop: 8, fontSize: 18, fontWeight: 800 }}>
-            {confirmedCount}件のQRを取得しました
+            {productionShapeUi.payloadInterpretationState.complete
+              ? "QR内容の解釈完了"
+              : "車検証情報を確認中"}
           </div>
           <div style={{ marginTop: 6, fontSize: 13, color: "#555" }}>
-            カメラとQR解析は停止しています。
+            CURRENT制御によりカメラとQR解析は停止しています。
+            Vehicle Field StateはこのPoCではまだ正式評価していません。
           </div>
           <button onClick={restartScan} style={{ marginTop: 16, padding: "11px 18px", fontWeight: 900 }}>
             もう一度読み取る
@@ -2880,9 +2891,23 @@ export default function CertificateQrLiveScanPoc() {
         </div>
       </details>
 
-      <section style={{ marginTop: 14, padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
+      <details style={{ marginTop: 14 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 800, padding: "10px 0" }}>診断詳細を表示</summary>
+        <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
+          <div style={{ fontWeight: 900 }}>CURRENT vs PARSER_SEPARATED</div>
+          <div style={{ marginTop: 4, fontSize: 13 }}>
+            CURRENT {parserSeparationUi.currentConfirmedCount}/{parserSeparationUi.currentCompletion.expectedQrCount ?? "?"}
+            {" ／ "}PARSER_SEPARATED {parserSeparationUi.separatedConfirmedCount}/{parserSeparationUi.separatedCompletion.expectedQrCount ?? "?"}
+            {" ／ "}raw {parserSeparationUi.rawUniqueCount}
+            {" ／ "}integrity-safe {parserSeparationUi.decodeIntegritySafeUniqueCount}
+            {" ／ "}recognized {parserSeparationUi.recognizedSchemaUniqueCount}
+            {" ／ "}unrecognized-safe {parserSeparationUi.unrecognizedSafeUniqueCount}
+            {" ／ "}accounting {parserSeparationUi.accountingIntegrityPass ? "PASS" : "FAIL"}
+          </div>
+        </section>
+        <section style={{ marginTop: 10, padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>
-          {complete ? "取得完了" : "読取中"}：{confirmedCount} / {kindEvidence.expected ?? "?"}
+          {complete ? "CURRENT取得完了" : "CURRENT読取中"}：{confirmedCount} / {kindEvidence.expected ?? "?"}
         </div>
         <div style={{ marginTop: 4, fontSize: 14 }}>
           判定：{kindEvidence.label} ／ 処理frame {frameStats.processed} ／ QR検出frame {frameStats.decoded}
@@ -2943,6 +2968,7 @@ export default function CertificateQrLiveScanPoc() {
         ・画像/payloadを外部送信しない<br />
         ・Ground Truthをdecode/control flowに使用しない
       </section>
+      </details>
     </main>
   );
 }
