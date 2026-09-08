@@ -20,7 +20,7 @@ assert.ok(customerPos >= 0 && vehiclePos > customerPos && reasonPos > vehiclePos
 
 assert.match(source, /if \(work\.reason === "車検"\) return "reason-shaken";/, "vehicle inspection reason color class exists");
 assert.match(source, /if \(work\.reason === "点検"\) return "reason-check";/, "inspection reason color class exists");
-assert.match(source, /if \\(work\\.reason === "一般整備"\\) return work\\.outsource_vendor_name\\?\\.trim\\(\\) \\? "reason-body" : "reason-repair";/, "general repair is yellow unless an outsource vendor is assigned, in which case it uses the white body/outsource class");
+assert.match(source, /if \(work\.reason === "一般整備"\) return work\.outsource_vendor_name\?\.trim\(\) \? "reason-body" : "reason-repair";/, "general repair is yellow unless an outsource vendor is assigned, in which case it uses the white body/outsource class");
 assert.match(source, /if \(work\.reason === "板金塗装" \|\| String\(work\.reason\) === "板金"\) return "reason-body";/, "bodywork reason uses white class for both labels");
 for (const cls of ["reason-shaken","reason-check","reason-repair","reason-body"]) {
   assert.match(source, new RegExp(`dailySlotCard\\.${cls}`), `daily board applies ${cls} color`);
