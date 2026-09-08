@@ -2,10 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v1-multiframe-dedupe";
+const LIVE_SCAN_REVISION = "live-poc-v2-spatial-subroi-search";
 const FRAME_INTERVAL_MS = 250;
 const MAX_DECODE_DIMENSION = 1280;
 const GUIDE_ROI = Object.freeze({ x: .04, y: .43, w: .92, h: .44 });
+const SUB_ROIS_PER_FRAME = 3;
+const SUB_ROIS = Object.freeze([
+  { id: "left", x: 0, y: 0, w: .30, h: 1 },
+  { id: "left-mid", x: .175, y: 0, w: .30, h: 1 },
+  { id: "center", x: .35, y: 0, w: .30, h: 1 },
+  { id: "right-mid", x: .525, y: 0, w: .30, h: 1 },
+  { id: "right", x: .70, y: 0, w: .30, h: 1 },
+]);
 
 function canonicalText(value) {
   return String(value ?? "")
@@ -190,7 +198,11 @@ function decodeJsMulti(jsQR, sourceCanvas, maxHits = 6) {
       const bytes = Array.from(result.binaryData || []);
       const canonical = canonicalDecode(result.data || "", bytes);
       const bounds = qrBounds(result, work.width, work.height);
-      if (canonical) hits.push({ canonical, engine: "jsqr" });
+      const localPosition = bounds ? {
+        nx: Number((((bounds.left + bounds.right) / 2) / work.width).toFixed(4)),
+        ny: Number((((bounds.top + bounds.bottom) / 2) / work.height).toFixed(4)),
+      } : null;
+      if (canonical) hits.push({ canonical, engine: "jsqr", localPosition });
       if (!bounds) break;
       ctx.fillStyle = "#fff";
       ctx.fillRect(
@@ -216,16 +228,125 @@ async function makeReader() {
   return new browser.BrowserQRCodeReader(hints);
 }
 
+function zxingLocalPosition(result, canvas) {
+  const rawPoints = result?.getResultPoints?.() || result?.resultPoints || [];
+  const points = Array.from(rawPoints || []).map((point) => ({
+    x: Number(point?.getX?.() ?? point?.x),
+    y: Number(point?.getY?.() ?? point?.y),
+  })).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+  if (!points.length || !canvas?.width || !canvas?.height) return null;
+  const x = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+  const y = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+  return {
+    nx: Number((x / canvas.width).toFixed(4)),
+    ny: Number((y / canvas.height).toFixed(4)),
+  };
+}
+
 async function decodeZxing(reader, canvas) {
   try {
     const result = await reader.decodeFromCanvas(canvas);
     const bytes = Array.from(result?.getRawBytes?.() || result?.rawBytes || []);
     const text = result?.getText?.() || result?.text || "";
     const canonical = canonicalDecode(text, bytes);
-    return canonical ? [{ canonical, engine: "zxing" }] : [];
+    return canonical ? [{ canonical, engine: "zxing", localPosition: zxingLocalPosition(result, canvas) }] : [];
   } catch {
     return [];
   }
+}
+
+function cropSubRoi(source, roi) {
+  const sx = Math.max(0, Math.round(source.width * roi.x));
+  const sy = Math.max(0, Math.round(source.height * roi.y));
+  const sw = Math.max(1, Math.min(source.width - sx, Math.round(source.width * roi.w)));
+  const sh = Math.max(1, Math.min(source.height - sy, Math.round(source.height * roi.h)));
+  const canvas = document.createElement("canvas");
+  canvas.width = sw;
+  canvas.height = sh;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
+  return canvas;
+}
+
+function guidePositionFromHit(hit, roi) {
+  if (!hit?.localPosition) return null;
+  return {
+    nx: Number((roi.x + hit.localPosition.nx * roi.w).toFixed(4)),
+    ny: Number((roi.y + hit.localPosition.ny * roi.h).toFixed(4)),
+  };
+}
+
+function createSubRoiStats() {
+  return new Map(SUB_ROIS.map((roi) => [roi.id, {
+    id: roi.id,
+    frameAttempts: 0,
+    jsqrAttempts: 0,
+    zxingAttempts: 0,
+    jsqrRawSuccesses: 0,
+    zxingRawSuccesses: 0,
+    structuralSuccesses: 0,
+    novelCanonicalCount: 0,
+    confirmedExistingCanonicalHits: 0,
+    confirmedOnlyStreak: 0,
+    lastAttemptFrame: 0,
+    lastNovelFrame: 0,
+  }]));
+}
+
+function medianNumber(values = []) {
+  const list = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!list.length) return null;
+  const mid = Math.floor(list.length / 2);
+  return list.length % 2 ? list[mid] : (list[mid - 1] + list[mid]) / 2;
+}
+
+function confirmedGuideXs(evidenceMap) {
+  const out = [];
+  for (const entry of evidenceMap.values()) {
+    if (!entry.confirmed) continue;
+    const x = medianNumber((entry.guidePositions || []).map((position) => Number(position?.nx)));
+    if (Number.isFinite(x)) out.push(x);
+  }
+  return out;
+}
+
+function selectSubRois(frameId, evidenceMap, statsMap) {
+  const confirmedXs = confirmedGuideXs(evidenceMap);
+  return SUB_ROIS.map((roi, index) => {
+    const stats = statsMap.get(roi.id);
+    const starvation = Math.max(0, frameId - Number(stats?.lastAttemptFrame || 0));
+    const confirmedOverlap = confirmedXs.filter((x) => x >= roi.x && x <= roi.x + roi.w).length;
+    const unseenBoost = Number(stats?.structuralSuccesses || 0) === 0 ? 14 : 0;
+    const novelBoost = Number(stats?.novelCanonicalCount || 0) === 0 ? 8 : 0;
+    const score =
+      starvation * 3 +
+      unseenBoost +
+      novelBoost -
+      confirmedOverlap * 9 -
+      Number(stats?.confirmedOnlyStreak || 0) * 4 -
+      index * .001;
+    return { roi, score, confirmedOverlap };
+  }).sort((a, b) => b.score - a.score).slice(0, SUB_ROIS_PER_FRAME).map((item) => item.roi);
+}
+
+function subRoiStatsSnapshot(statsMap) {
+  return SUB_ROIS.map((roi) => {
+    const stats = statsMap.get(roi.id) || {};
+    return {
+      subRoiId: roi.id,
+      frameAttempts: Number(stats.frameAttempts || 0),
+      jsqrAttempts: Number(stats.jsqrAttempts || 0),
+      zxingAttempts: Number(stats.zxingAttempts || 0),
+      jsqrRawSuccesses: Number(stats.jsqrRawSuccesses || 0),
+      zxingRawSuccesses: Number(stats.zxingRawSuccesses || 0),
+      structuralSuccesses: Number(stats.structuralSuccesses || 0),
+      novelCanonicalCount: Number(stats.novelCanonicalCount || 0),
+      confirmedExistingCanonicalHits: Number(stats.confirmedExistingCanonicalHits || 0),
+      confirmedOnlyStreak: Number(stats.confirmedOnlyStreak || 0),
+      lastAttemptFrame: Number(stats.lastAttemptFrame || 0),
+      lastNovelFrame: Number(stats.lastNovelFrame || 0),
+    };
+  });
 }
 
 function median(values = []) {
@@ -269,6 +390,7 @@ function completionFromEvidenceMap(map) {
   return {kind:"unknown",expected:null,label:"車種判定待ち",confirmedCount:confirmed.length,complete:false};
 }
 function candidateView(entry) {
+  const xs = (entry.guidePositions || []).map((position) => Number(position?.nx)).filter(Number.isFinite);
   return {
     fingerprint: entry.fingerprint,
     confirmed: Boolean(entry.confirmed),
@@ -280,6 +402,11 @@ function candidateView(entry) {
     bothEngineFrameCount: entry.bothEngineFrames.size,
     firstSeenFrame: entry.firstSeenFrame,
     lastSeenFrame: entry.lastSeenFrame,
+    firstSeenSubRoiId: entry.firstSeenSubRoiId || null,
+    firstSeenEngine: entry.firstSeenEngine || null,
+    firstSeenGuideX: Number.isFinite(entry.firstSeenGuidePosition?.nx) ? entry.firstSeenGuidePosition.nx : null,
+    medianGuideX: xs.length ? Number(medianNumber(xs).toFixed(4)) : null,
+    subRoiIds: [...entry.subRoiIds].sort(),
   };
 }
 
@@ -296,13 +423,15 @@ export default function CertificateQrLiveScanPoc() {
   const evidenceRef = useRef(new Map());
   const qualityFramesRef = useRef([]);
   const successQualityFramesRef = useRef([]);
+  const subRoiStatsRef = useRef(createSubRoiStats());
   const timersRef = useRef(new Set());
 
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("停止中");
   const [quality, setQuality] = useState(null);
   const [candidates, setCandidates] = useState([]);
-  const [frameStats, setFrameStats] = useState({ processed: 0, decoded: 0, lastDecodeMs: null });
+  const [frameStats, setFrameStats] = useState({ processed: 0, decoded: 0, lastDecodeMs: null, subRoiFrameAttempts: 0 });
+  const [subRoiStats, setSubRoiStats] = useState(subRoiStatsSnapshot(subRoiStatsRef.current));
   const [cameraInfo, setCameraInfo] = useState({ width: 0, height: 0 });
 
   const confirmedCount = useMemo(() => candidates.filter((item) => item.confirmed).length, [candidates]);
@@ -340,20 +469,33 @@ export default function CertificateQrLiveScanPoc() {
     evidenceRef.current = new Map();
     qualityFramesRef.current = [];
     successQualityFramesRef.current = [];
+    subRoiStatsRef.current = createSubRoiStats();
     frameSeqRef.current = 0;
     setCandidates([]);
     setQuality(null);
-    setFrameStats({ processed: 0, decoded: 0, lastDecodeMs: null });
+    setSubRoiStats(subRoiStatsSnapshot(subRoiStatsRef.current));
+    setFrameStats({ processed: 0, decoded: 0, lastDecodeMs: null, subRoiFrameAttempts: 0 });
     setStatus(runningRef.current ? "読取中" : "停止中");
   };
 
-  const updateEvidence = (frameId, grouped, frameQualityMetrics) => {
+  const updateEvidence = (frameId, grouped, frameQualityMetrics, scannedRois) => {
     let structuralHit = false;
-    for (const [canonical, engines] of grouped.entries()) {
+    const roiOutcomes = new Map(scannedRois.map((roi) => [roi.id, {
+      structural: false,
+      novel: false,
+      confirmedExisting: false,
+    }]));
+
+    for (const [canonical, group] of grouped.entries()) {
       const structural = structuralValidation(canonical);
       if (!structural.pass) continue;
       structuralHit = true;
-      let entry = evidenceRef.current.get(canonical);
+      const engines = group.engines;
+      const prior = evidenceRef.current.get(canonical);
+      const wasConfirmed = Boolean(prior?.confirmed);
+      let entry = prior;
+      const firstHit = group.hits.find((hit) => hit.guidePosition) || group.hits[0] || null;
+
       if (!entry) {
         entry = {
           canonical,
@@ -366,21 +508,54 @@ export default function CertificateQrLiveScanPoc() {
           bothEngineFrames: new Set(),
           firstSeenFrame: frameId,
           lastSeenFrame: frameId,
+          firstSeenSubRoiId: firstHit?.subRoiId || null,
+          firstSeenEngine: firstHit?.engine || null,
+          firstSeenGuidePosition: firstHit?.guidePosition || null,
+          guidePositions: [],
+          subRoiIds: new Set(),
           confirmed: false,
         };
         evidenceRef.current.set(canonical, entry);
       }
+
       entry.frameIds.add(frameId);
       if (engines.has("jsqr")) entry.jsqrFrames.add(frameId);
       if (engines.has("zxing")) entry.zxingFrames.add(frameId);
       if (engines.has("jsqr") && engines.has("zxing")) entry.bothEngineFrames.add(frameId);
+      for (const hit of group.hits) {
+        if (hit.subRoiId) entry.subRoiIds.add(hit.subRoiId);
+        if (hit.guidePosition && entry.guidePositions.length < 120) entry.guidePositions.push(hit.guidePosition);
+        const outcome = roiOutcomes.get(hit.subRoiId);
+        if (outcome) {
+          outcome.structural = true;
+          outcome.novel = outcome.novel || !prior;
+          outcome.confirmedExisting = outcome.confirmedExisting || wasConfirmed;
+        }
+      }
       entry.lastSeenFrame = frameId;
       entry.confirmed = entry.bothEngineFrames.size > 0 || entry.frameIds.size >= 2;
     }
+
+    for (const roi of scannedRois) {
+      const stats = subRoiStatsRef.current.get(roi.id);
+      const outcome = roiOutcomes.get(roi.id);
+      if (!stats || !outcome) continue;
+      if (outcome.structural) stats.structuralSuccesses += 1;
+      if (outcome.novel) {
+        stats.novelCanonicalCount += 1;
+        stats.lastNovelFrame = frameId;
+      }
+      if (outcome.confirmedExisting) stats.confirmedExistingCanonicalHits += 1;
+      if (outcome.structural && !outcome.novel && outcome.confirmedExisting) stats.confirmedOnlyStreak += 1;
+      else if (outcome.novel) stats.confirmedOnlyStreak = 0;
+      else stats.confirmedOnlyStreak = Math.max(0, stats.confirmedOnlyStreak - 1);
+    }
+
     if (structuralHit) {
       successQualityFramesRef.current.push({ ...frameQualityMetrics });
       if (successQualityFramesRef.current.length > 100) successQualityFramesRef.current.shift();
     }
+    setSubRoiStats(subRoiStatsSnapshot(subRoiStatsRef.current));
     setCandidates([...evidenceRef.current.values()].map(candidateView).sort((a, b) => {
       if (a.confirmed !== b.confirmed) return a.confirmed ? -1 : 1;
       return a.firstSeenFrame - b.firstSeenFrame;
@@ -421,23 +596,51 @@ export default function CertificateQrLiveScanPoc() {
       qualityFramesRef.current.push({ ...q });
       if (qualityFramesRef.current.length > 160) qualityFramesRef.current.shift();
 
-      const [jsHits, zxHits] = await Promise.all([
-        Promise.resolve(decodeJsMulti(jsQrRef.current, canvas, 6)),
-        decodeZxing(readerRef.current, canvas),
-      ]);
-      const grouped = new Map();
-      for (const hit of [...jsHits, ...zxHits]) {
-        if (!hit.canonical) continue;
-        if (!grouped.has(hit.canonical)) grouped.set(hit.canonical, new Set());
-        grouped.get(hit.canonical).add(hit.engine);
+      const selectedRois = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current);
+      const allHits = [];
+      for (const roi of selectedRois) {
+        const stats = subRoiStatsRef.current.get(roi.id);
+        stats.frameAttempts += 1;
+        stats.lastAttemptFrame = frameId;
+        const subCanvas = cropSubRoi(canvas, roi);
+        try {
+          stats.jsqrAttempts += 1;
+          stats.zxingAttempts += 1;
+          const [jsHits, zxHits] = await Promise.all([
+            Promise.resolve(decodeJsMulti(jsQrRef.current, subCanvas, 3)),
+            decodeZxing(readerRef.current, subCanvas),
+          ]);
+          stats.jsqrRawSuccesses += jsHits.length;
+          stats.zxingRawSuccesses += zxHits.length;
+          for (const hit of [...jsHits, ...zxHits]) {
+            allHits.push({
+              ...hit,
+              subRoiId: roi.id,
+              guidePosition: guidePositionFromHit(hit, roi),
+            });
+          }
+        } finally {
+          subCanvas.width = 1;
+          subCanvas.height = 1;
+        }
       }
-      const evidenceUpdate = updateEvidence(frameId, grouped, q);
+
+      const grouped = new Map();
+      for (const hit of allHits) {
+        if (!hit.canonical) continue;
+        if (!grouped.has(hit.canonical)) grouped.set(hit.canonical, { engines: new Set(), hits: [] });
+        grouped.get(hit.canonical).engines.add(hit.engine);
+        grouped.get(hit.canonical).hits.push(hit);
+      }
+
+      const evidenceUpdate = updateEvidence(frameId, grouped, q, selectedRois);
       const structuralHit = Boolean(evidenceUpdate.structuralHit);
       const decodeMs = Math.round(performance.now() - started);
       setFrameStats((prev) => ({
         processed: prev.processed + 1,
         decoded: prev.decoded + (structuralHit ? 1 : 0),
         lastDecodeMs: decodeMs,
+        subRoiFrameAttempts: prev.subRoiFrameAttempts + selectedRois.length,
       }));
       if (evidenceUpdate.completion.complete) setStatus("必要QR取得済み");
       else if (structuralHit) setStatus("QR取得・蓄積中");
@@ -503,7 +706,7 @@ export default function CertificateQrLiveScanPoc() {
 
   const copyDiagnostic = async () => {
     const snapshot = {
-      schema: "icb-certificate-qr-live-scan-poc-v1",
+      schema: "icb-certificate-qr-live-scan-poc-v2",
       revision: LIVE_SCAN_REVISION,
       route: "/eval/certificate-qr-live-scan",
       privacy: {
@@ -515,8 +718,16 @@ export default function CertificateQrLiveScanPoc() {
       camera: cameraInfo,
       frameIntervalMs: FRAME_INTERVAL_MS,
       guideRoiNormalized: GUIDE_ROI,
+      spatialSearch: {
+        strategy: "five-overlapping-horizontal-sub-rois-priority-rotated",
+        subRoisPerProcessedFrame: SUB_ROIS_PER_FRAME,
+        subRois: SUB_ROIS,
+        confirmedRegionPolicy: "deprioritize-not-exclude",
+        starvationProtection: true,
+      },
       processedFrameCount: frameStats.processed,
       structuralDecodeFrameCount: frameStats.decoded,
+      subRoiFrameAttemptCount: frameStats.subRoiFrameAttempts,
       confirmedQrCount: confirmedCount,
       completion: {
         kind: kindEvidence.kind,
@@ -524,6 +735,7 @@ export default function CertificateQrLiveScanPoc() {
         complete,
       },
       evidence: candidates,
+      subRoiDiagnostics: subRoiStatsSnapshot(subRoiStatsRef.current),
       latestFrameQuality: quality,
       qualityAllFrames: qualitySummary(qualityFramesRef.current),
       qualitySuccessfulFrames: qualitySummary(successQualityFramesRef.current),
@@ -531,6 +743,7 @@ export default function CertificateQrLiveScanPoc() {
         decodeHardQualityGate: false,
         confirmationRule: "same-canonical both-engines in one frame OR same-canonical structural-pass in >=2 frames",
         dedupeRule: "exact canonical in browser memory",
+        completionRuleStatus: "PoC provisional; registered=5 / kei=6 is not formal specification",
         gtUsedInDecodeOrControl: false,
       },
     };
@@ -546,9 +759,9 @@ export default function CertificateQrLiveScanPoc() {
 
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: "16px", fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ margin: "0 0 6px", fontSize: 24 }}>車検証 Guided Live QR Scan PoC</h1>
+      <h1 style={{ margin: "0 0 6px", fontSize: 24 }}>車検証 Guided Live QR Scan PoC v2</h1>
       <p style={{ margin: "0 0 12px", color: "#555", fontSize: 14 }}>
-        QR固有ロジック検証用。最終UIではありません。QR列をガイド枠内へ入れてください。
+        QR固有spatial search検証用。最終UIではありません。QR列全体をガイド枠内へ入れてください。
       </p>
 
       <section style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "#111", aspectRatio: "4 / 3" }}>
@@ -610,6 +823,7 @@ export default function CertificateQrLiveScanPoc() {
         </div>
         <div style={{ marginTop: 4, fontSize: 14 }}>
           判定：{kindEvidence.label} ／ 処理frame {frameStats.processed} ／ QR検出frame {frameStats.decoded}
+          ／ sub-ROI試行 {frameStats.subRoiFrameAttempts}
           {frameStats.lastDecodeMs != null ? ` ／ 直近 ${frameStats.lastDecodeMs}ms` : ""}
         </div>
         {quality && (
@@ -618,6 +832,19 @@ export default function CertificateQrLiveScanPoc() {
             luma={quality.lumaMean} ／ std={quality.lumaStdDev}
           </div>
         )}
+      </section>
+
+      <section style={{ marginTop: 14 }}>
+        <h2 style={{ fontSize: 17, marginBottom: 8 }}>sub-ROI diagnostic</h2>
+        <div style={{ display: "grid", gap: 6 }}>
+          {subRoiStats.map((item) => (
+            <div key={item.subRoiId} style={{ fontSize: 12, padding: 8, border: "1px solid #e1e1e1", borderRadius: 8 }}>
+              <b>{item.subRoiId}</b> ／ frame {item.frameAttempts} ／ ZXing {item.zxingRawSuccesses}/{item.zxingAttempts}
+              ／ jsQR {item.jsqrRawSuccesses}/{item.jsqrAttempts} ／ structural {item.structuralSuccesses}
+              ／ novel {item.novelCanonicalCount}
+            </div>
+          ))}
+        </div>
       </section>
 
       <section style={{ marginTop: 14 }}>
@@ -634,6 +861,8 @@ export default function CertificateQrLiveScanPoc() {
                 <div style={{ fontSize: 13, color: "#555", marginTop: 3 }}>
                   {item.fingerprint} ／ length {item.payloadLength} ／ frames {item.frameHitCount} ／
                   jsQR {item.jsqrFrameCount} ／ ZXing {item.zxingFrameCount} ／ both {item.bothEngineFrameCount}
+                  ／ first {item.firstSeenSubRoiId || "?"}/{item.firstSeenEngine || "?"}/f{item.firstSeenFrame}
+                  {item.medianGuideX != null ? ` ／ x≈${item.medianGuideX}` : ""}
                 </div>
               </div>
             ))}
@@ -643,9 +872,11 @@ export default function CertificateQrLiveScanPoc() {
 
       <section style={{ marginTop: 16, padding: 12, background: "#f7f7f7", borderRadius: 12, fontSize: 13, lineHeight: 1.6 }}>
         <strong>PoCルール</strong><br />
+        ・QR列を5つのoverlap sub-ROIへ分割し、未取得regionを優先探索<br />
+        ・confirmed済み位置は優先度を下げるが除外しない<br />
         ・同一canonicalはbrowser-memory内でdedupe<br />
         ・同一frameで両engine一致、または2frame以上で同一canonical再現するとconfirmed<br />
-        ・品質値は現段階ではhard gateに使わず、decode成功条件の分析用に記録<br />
+        ・品質値はhard gateに使わず、decode成功条件の分析用に記録<br />
         ・画像/payloadを外部送信しない<br />
         ・Ground Truthをdecode/control flowに使用しない
       </section>
