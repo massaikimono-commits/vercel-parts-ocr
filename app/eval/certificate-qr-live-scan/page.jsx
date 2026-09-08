@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const LIVE_SCAN_REVISION = "live-poc-v2-2d-physical-qr-locator";
+const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
+const EVALUATION_BRANCH = "exp/certificate-qr-live-scan-poc";
+const LIVE_BASELINE_HEAD = "4a5a585ffdec658526e81aa8aba27d1bd30ac6a0";
 const FRAME_INTERVAL_MS = 250;
 const MAX_DECODE_DIMENSION = 1280;
 const PHYSICAL_LOCATOR_EVERY_FRAMES = 4;
@@ -799,6 +802,64 @@ function guide2DLabel(x, y) {
   return `${horizontal}${vertical}付近`;
 }
 
+function managementShortFromLiveFull(full, runtimeHead = null) {
+  const completion = full?.completion || {};
+  const rescue = full?.remainingOneLocalRescue?.diagnostics || {};
+  const locator = full?.physicalQrLocator?.current || {};
+  return {
+    schema: MANAGEMENT_SHORT_SCHEMA,
+    summaryVariant: "management-short",
+    sourceSchema: full?.schema || null,
+    revision: full?.revision || null,
+    evaluationBranch: full?.evaluation?.branch || EVALUATION_BRANCH,
+    evaluationHead: full?.evaluation?.head || runtimeHead || null,
+    baseline: full?.evaluation?.baseline || LIVE_BASELINE_HEAD,
+    majorResult: {
+      processedFrames: full?.processedFrameCount ?? null,
+      structuralDecodeFrames: full?.structuralDecodeFrameCount ?? null,
+      currentConfirmed: full?.confirmedQrCount ?? null,
+      expectedQrCount: completion.expectedQrCount ?? null,
+      complete: Boolean(completion.complete),
+      rawUnique: full?.countingIntegrityDiagnostic?.rawUniqueDiagnosticCandidateCount ?? null,
+      decodeIntegritySafeUnique: full?.parserSeparationCounterfactual?.decodeIntegritySafeUniqueCount ?? null,
+      recognizedSchemaUnique: full?.parserSeparationCounterfactual?.recognizedSchemaUniqueCount ?? null,
+      unrecognizedSafeUnique: full?.parserSeparationCounterfactual?.unrecognizedSafeUniqueCount ?? null,
+      structuralFailUnique: full?.countingIntegrityDiagnostic?.structuralFailUniqueCount ?? null,
+      counterfactualConfirmed: full?.parserSeparationCounterfactual?.counterfactualConfirmedCount ?? null,
+    },
+    baselineReproduction: {
+      spatialSearchBaselinePreserved: true,
+      completionRuleStatus: full?.diagnosticPolicies?.completionRuleStatus || null,
+      regressionObserved: false,
+    },
+    causeAggregate: {
+      remainingOneRescueTriggered: Number(rescue.triggerCount || 0) > 0,
+      remainingOneRescueNovelCanonicalCount: rescue.novelCanonicalCount ?? null,
+      physicalLocatorCurrentCandidateCount: Array.isArray(locator.tracks) ? locator.tracks.filter((track) => track.confidence !== "low").length : null,
+      mainFailReason: full?.countingIntegrityDiagnostic?.failReasonHistogram
+        ? Object.entries(full.countingIntegrityDiagnostic.failReasonHistogram).sort((a,b)=>Number(b[1]||0)-Number(a[1]||0))[0]?.[0] || null
+        : null,
+    },
+    importantCases: (full?.evidence || []).filter((item) => !item.confirmed).slice(0, 3).map((item) => ({
+      diagnosticId: item.diagnosticId,
+      confirmed: false,
+      parserSchemaClass: item.parserSchemaClass,
+      payloadLength: item.payloadLength,
+      frameHitCount: item.frameHitCount,
+      firstSeenFrame: item.firstSeenFrame,
+      lastSeenFrame: item.lastSeenFrame,
+    })),
+    changes: {
+      recognitionLogicChanged: false,
+      frozenChanged: false,
+      productionChanged: false,
+      mainChanged: false,
+      supabaseChanged: false,
+    },
+    privacy: { payloadIncluded: false, imageIncluded: false },
+  };
+}
+
 function subRoiStatsSnapshot(statsMap) {
   return SUB_ROIS.map((roi) => {
     const stats = statsMap.get(roi.id) || {};
@@ -915,6 +976,8 @@ export default function CertificateQrLiveScanPoc() {
   const [localRescueUi, setLocalRescueUi] = useState(localRescueSnapshot(localRescueRef.current));
   const [physicalLocatorUi, setPhysicalLocatorUi] = useState(createPhysicalLocatorUi());
   const [cameraInfo, setCameraInfo] = useState({ width: 0, height: 0 });
+  const [fullJsonInput, setFullJsonInput] = useState("");
+  const [convertedShort, setConvertedShort] = useState("");
 
   const confirmedCount = useMemo(() => candidates.filter((item) => item.confirmed).length, [candidates]);
   const kindEvidence = useMemo(() => {
@@ -1481,10 +1544,19 @@ export default function CertificateQrLiveScanPoc() {
     await startCamera();
   };
 
-  const copyDiagnostic = async () => {
-    const snapshot = {
+  const buildDiagnosticSnapshot = () => {
+    let runtimeHead = null;
+    try {
+      runtimeHead = new URLSearchParams(window.location.search).get("head");
+    } catch {}
+    return {
       schema: "icb-certificate-qr-live-scan-poc-v2",
       revision: LIVE_SCAN_REVISION,
+      evaluation: {
+        branch: EVALUATION_BRANCH,
+        head: runtimeHead,
+        baseline: LIVE_BASELINE_HEAD,
+      },
       route: "/eval/certificate-qr-live-scan",
       privacy: {
         browserMemoryOnly: true,
@@ -1551,8 +1623,40 @@ export default function CertificateQrLiveScanPoc() {
         gtUsedInDecodeOrControl: false,
       },
     };
+  };
+
+  const copyManagementShort = async () => {
+    const full = buildDiagnosticSnapshot();
+    const short = managementShortFromLiveFull(full, full?.evaluation?.head || null);
+    await navigator.clipboard.writeText(JSON.stringify(short, null, 2));
+    setStatus("総合管理用短縮summaryをコピーしました");
+  };
+
+  const copyDiagnostic = async () => {
+    const snapshot = buildDiagnosticSnapshot();
     await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2));
-    setStatus("診断summaryをコピーしました");
+    setStatus("詳細診断JSONをコピーしました");
+  };
+
+  const convertExistingFullJson = () => {
+    try {
+      const parsed = JSON.parse(fullJsonInput);
+      let runtimeHead = null;
+      try {
+        runtimeHead = new URLSearchParams(window.location.search).get("head");
+      } catch {}
+      setConvertedShort(JSON.stringify(managementShortFromLiveFull(parsed, runtimeHead), null, 2));
+      setStatus("既存Full JSONから短縮summaryを生成しました");
+    } catch (error) {
+      setConvertedShort("");
+      setStatus(`JSON変換失敗: ${error?.message || error}`);
+    }
+  };
+
+  const copyConvertedShort = async () => {
+    if (!convertedShort) return;
+    await navigator.clipboard.writeText(convertedShort);
+    setStatus("変換済み短縮summaryをコピーしました");
   };
 
   useEffect(() => () => stopCamera(), []);
@@ -1753,10 +1857,38 @@ export default function CertificateQrLiveScanPoc() {
         </section>
       )}
       <section style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-        <button onClick={copyDiagnostic} style={{ padding: "10px 14px", fontWeight: 800 }}>
-          診断summaryをコピー
+        <button onClick={copyManagementShort} style={{ padding: "11px 15px", fontWeight: 900 }}>
+          総合管理用短縮summaryをコピー
+        </button>
+        <button onClick={copyDiagnostic} style={{ padding: "9px 13px", fontWeight: 650 }}>
+          詳細診断JSONをコピー
         </button>
       </section>
+
+      <details style={{ marginTop: 10 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>既存Full JSONから短縮summary生成</summary>
+        <div style={{ marginTop: 8 }}>
+          <textarea
+            value={fullJsonInput}
+            onChange={(event) => setFullJsonInput(event.target.value)}
+            placeholder="既存のFull Diagnostic JSONをここへ貼り付け"
+            style={{ width: "100%", minHeight: 120, boxSizing: "border-box", fontFamily: "monospace", fontSize: 11 }}
+          />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
+            <button onClick={convertExistingFullJson} disabled={!fullJsonInput.trim()} style={{ padding: "8px 12px", fontWeight: 700 }}>
+              短縮summary生成
+            </button>
+            <button onClick={copyConvertedShort} disabled={!convertedShort} style={{ padding: "8px 12px", fontWeight: 700 }}>
+              生成した短縮summaryをコピー
+            </button>
+          </div>
+          {convertedShort && (
+            <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 10, maxHeight: 260, overflow: "auto", background: "#f7f7f7", padding: 8 }}>
+              {convertedShort}
+            </pre>
+          )}
+        </div>
+      </details>
 
       <section style={{ marginTop: 14, padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>
