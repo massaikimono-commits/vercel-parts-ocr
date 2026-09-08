@@ -709,7 +709,7 @@ export default function ScheduleEditPage(){
                 if(next) setDeliveryEnabled(false);
                 resetWarningsForTargetChange();
               }} />
-              作業待ち（来社したお客様が点検完了まで待つ）
+              作業待ち（来社したお客様が作業完了まで待つ）
             </label>
           )}
           <div className="grid stayGrid">
