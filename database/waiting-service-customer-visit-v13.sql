@@ -3,8 +3,8 @@
 -- No new column, no backfill, and no existing work_order data changes.
 --
 -- IMPORTANT:
--- v1.2 was followed by SECURITY DEFINER active-app-user hardening.  Do not replay the
--- historical v1.2 function bodies here.  Instead patch the CURRENT live definitions so
+-- v1.2 was followed by SECURITY DEFINER active-app-user hardening. Do not replay the
+-- historical v1.2 function bodies here. Patch the CURRENT live definitions so
 -- authorization, grants, later compatibility work, and unrelated behavior stay intact.
 
 comment on column public.work_orders.is_waiting_service is
@@ -94,19 +94,14 @@ begin
   end if;
 
   v_def := pg_get_functiondef(v_oid);
-  if position('and p_reason = ''点検''' in v_def) = 0
-     or position('and wo.reason = ''点検''' in v_def) = 0
+  if position(E'     and p_reason = ''点検''\n' in v_def) = 0
+     or position(E'      and wo.reason = ''点検''\n' in v_def) = 0
      or position('点検の来社・作業待ちが同じ時刻に重複しています' in v_def) = 0 then
     raise exception 'waiting-service v1.3: old waiting duplicate-warning contract not found';
   end if;
 
-  v_next := replace(
-    v_def,
-    '    and warning_text <> ''点検の来社・作業待ちが同じ時刻に重複しています''',
-    '    and warning_text <> ''点検の来社・作業待ちが同じ時刻に重複しています''\n    and warning_text <> ''来社・作業待ちが同じ時刻に重複しています'''
-  );
-  v_next := replace(v_next, '     and p_reason = ''点検''\n', '');
-  v_next := replace(v_next, '      and wo.reason = ''点検''\n', '');
+  v_next := replace(v_def, E'     and p_reason = ''点検''\n', '');
+  v_next := replace(v_next, E'      and wo.reason = ''点検''\n', '');
   v_next := replace(
     v_next,
     '点検の来社・作業待ちが同じ時刻に重複しています',
