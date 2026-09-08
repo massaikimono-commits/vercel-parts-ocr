@@ -2003,6 +2003,166 @@ function quadSideMetricsFromDiagnostic(quad=[]) {
     perspectiveScaleSpread:Number((maxSidePx/Math.max(1,minSidePx)).toFixed(4)),
   };
 }
+function finderSpacingModulesFromTriplet(triplet,modulePx,qrDimension) {
+  const finders=Array.isArray(triplet?.findersRaw)?triplet.findersRaw:[];
+  if(finders.length<3||!Number.isFinite(Number(modulePx))||Number(modulePx)<=0) return null;
+  const distance=(a,b)=>Math.hypot(Number(a.x)-Number(b.x),Number(a.y)-Number(b.y))/Number(modulePx);
+  const tlTr=distance(finders[0],finders[1]);
+  const tlBl=distance(finders[0],finders[2]);
+  const trBl=distance(finders[1],finders[2]);
+  const majorSpanMean=(tlTr+tlBl)/2;
+  const expectedMajorSpan=Number(qrDimension)-7;
+  return {
+    tlTr:Number(tlTr.toFixed(4)),
+    tlBl:Number(tlBl.toFixed(4)),
+    trBl:Number(trBl.toFixed(4)),
+    majorSpanMean:Number(majorSpanMean.toFixed(4)),
+    expectedMajorSpanModules:Number.isFinite(expectedMajorSpan)?Number(expectedMajorSpan.toFixed(4)):null,
+    majorSpanToExpectedRatio:Number.isFinite(expectedMajorSpan)&&expectedMajorSpan>0
+      ?Number((majorSpanMean/expectedMajorSpan).toFixed(4))
+      :null,
+  };
+}
+function geometryScaleConsistencyRecord({
+  fileName,candidateIndex,triplet,formalAccepted,formalDecodeSuccess,formalStage,
+}) {
+  if(!triplet) return null;
+  const qrDimension=Number(triplet.qrDimension||0)||null;
+  const modulePx=Number(triplet.modulePx||0)||null;
+  const side=quadSideMetricsFromDiagnostic(triplet.qrQuad);
+  const minSideModules=side&&modulePx?side.minSidePx/modulePx:null;
+  const maxSideModules=side&&modulePx?side.maxSidePx/modulePx:null;
+  const areaModulesSquared=side&&modulePx?side.areaPx2/(modulePx*modulePx):null;
+  const finderSpacing=finderSpacingModulesFromTriplet(triplet,modulePx,qrDimension);
+  return {
+    fileName,
+    candidateIndex:Number(candidateIndex),
+    tripletRank:Number(triplet.rank||0)||null,
+    formalAccepted:Boolean(formalAccepted),
+    formalDecodeSuccess:Boolean(formalDecodeSuccess),
+    formalStage:formalStage||null,
+    rejectReason:triplet.rejectedReason||"none",
+    qrDimension,
+    modulePx,
+    quadMinSidePx:side?.minSidePx??null,
+    quadMaxSidePx:side?.maxSidePx??null,
+    quadAreaPx2:side?.areaPx2??null,
+    minSideModules:minSideModules!=null?Number(minSideModules.toFixed(4)):null,
+    maxSideModules:maxSideModules!=null?Number(maxSideModules.toFixed(4)):null,
+    minSideToDimensionRatio:minSideModules!=null&&qrDimension
+      ?Number((minSideModules/qrDimension).toFixed(4)):null,
+    maxSideToDimensionRatio:maxSideModules!=null&&qrDimension
+      ?Number((maxSideModules/qrDimension).toFixed(4)):null,
+    areaModulesSquared:areaModulesSquared!=null?Number(areaModulesSquared.toFixed(4)):null,
+    areaToDimensionSquaredRatio:areaModulesSquared!=null&&qrDimension
+      ?Number((areaModulesSquared/(qrDimension*qrDimension)).toFixed(4)):null,
+    sideAnisotropy:side?.perspectiveScaleSpread??null,
+    perspectiveScaleSpread:Number(triplet.perspectiveScaleSpread||side?.perspectiveScaleSpread||0)||null,
+    candidateCenterDistancePx:Number(triplet.candidateCenterDistancePx||0)||null,
+    finderSpacingModules:finderSpacing,
+  };
+}
+function formalSuccessfulGeometryScaleRecords(fileName,geometry) {
+  const records=[];
+  for(const eRow of geometry?.rows||[]){
+    if(!eRow?.geometrySuccess) continue;
+    const g=eRow.geometry||{};
+    const triplets=Array.isArray(g.tripletDiagnostics)?g.tripletDiagnostics:[];
+    const selected=triplets.find((item)=>item.selected) ||
+      triplets.find((item)=>Number(item.rank)===Number(g.selectedTripletRank)) ||
+      null;
+    const record=geometryScaleConsistencyRecord({
+      fileName,
+      candidateIndex:eRow.candidateIndex,
+      triplet:selected,
+      formalAccepted:true,
+      formalDecodeSuccess:true,
+      formalStage:"E-geometry-rectify",
+    });
+    if(record) records.push(record);
+  }
+  return records;
+}
+function distributionP25MedianP75(records,key) {
+  const values=(records||[]).map((item)=>Number(item?.[key])).filter(Number.isFinite);
+  return {
+    count:values.length,
+    p25:values.length?Number(percentile(values,.25).toFixed(4)):null,
+    median:values.length?Number(percentile(values,.5).toFixed(4)):null,
+    p75:values.length?Number(percentile(values,.75).toFixed(4)):null,
+  };
+}
+function buildGeometryScaleConsistencyAudit(results=[]) {
+  const references=[];
+  for(const result of results||[]){
+    for(const record of result.matrix?.formalSuccessfulGeometryScaleRecords||[]) references.push(record);
+  }
+  const referenceDistribution={
+    minSideToDimensionRatio:distributionP25MedianP75(references,"minSideToDimensionRatio"),
+    maxSideToDimensionRatio:distributionP25MedianP75(references,"maxSideToDimensionRatio"),
+    areaToDimensionSquaredRatio:distributionP25MedianP75(references,"areaToDimensionSquaredRatio"),
+    sideAnisotropy:distributionP25MedianP75(references,"sideAnisotropy"),
+    perspectiveScaleSpread:distributionP25MedianP75(references,"perspectiveScaleSpread"),
+    finderMajorSpanToExpectedRatio:distributionP25MedianP75(
+      references.map((item)=>({finderMajorSpanToExpectedRatio:item.finderSpacingModules?.majorSpanToExpectedRatio})),
+      "finderMajorSpanToExpectedRatio"
+    ),
+  };
+  const img0942=results.find((result)=>result.fileName==="IMG_0942.jpeg")||null;
+  const targets=[];
+  if(img0942){
+    const targetIndexes=new Set([3,5,6]);
+    for(const diagnostic of img0942.matrix?.geometryStage?.diagnostics||[]){
+      if(!targetIndexes.has(Number(diagnostic.candidateIndex))) continue;
+      for(const triplet of (diagnostic.tripletDiagnostics||[]).slice(0,3)){
+        if((triplet.rejectedReason||diagnostic.geometryFailReason)!=="quad-too-small") continue;
+        const record=geometryScaleConsistencyRecord({
+          fileName:"IMG_0942.jpeg",
+          candidateIndex:diagnostic.candidateIndex,
+          triplet,
+          formalAccepted:false,
+          formalDecodeSuccess:false,
+          formalStage:"formal-geometry-rejected",
+        });
+        if(record){
+          const relative={};
+          for(const key of [
+            "minSideToDimensionRatio",
+            "maxSideToDimensionRatio",
+            "areaToDimensionSquaredRatio",
+            "sideAnisotropy",
+            "perspectiveScaleSpread",
+          ]){
+            const median=Number(referenceDistribution[key]?.median);
+            const value=Number(record[key]);
+            relative[key]=Number.isFinite(value)&&Number.isFinite(median)&&median!==0
+              ?Number((value/median).toFixed(4)):null;
+          }
+          const finderMedian=Number(referenceDistribution.finderMajorSpanToExpectedRatio?.median);
+          const finderValue=Number(record.finderSpacingModules?.majorSpanToExpectedRatio);
+          relative.finderMajorSpanToExpectedRatio=
+            Number.isFinite(finderValue)&&Number.isFinite(finderMedian)&&finderMedian!==0
+              ?Number((finderValue/finderMedian).toFixed(4)):null;
+          targets.push({...record,relativeToSuccessfulReferenceMedian:relative});
+        }
+      }
+    }
+  }
+  return {
+    diagnosticOnly:true,
+    formalDecodeLogicChanged:false,
+    sourcePolicy:"existing formal geometry diagnostics only; no new finder/triplet/quad/decode",
+    successfulReferenceScope:"formal E geometry decode-success records only",
+    formalAReferenceExclusionReason:"formal geometry is fail-only and A-current successes are a-success-skip, so no formal A triplet geometry exists without running new geometry",
+    successfulReferenceCount:references.length,
+    successfulReferenceImageCount:new Set(references.map((item)=>item.fileName)).size,
+    successfulReferenceDistribution:referenceDistribution,
+    successfulReferenceRecords:references,
+    img0942QuadTooSmallRecords:targets,
+    payloadIncluded:false,
+    imageIncluded:false,
+  };
+}
 function currentCropReferenceMedian(entries=[]) {
   const current=(entries||[]).filter((item)=>item.sourceLabel==="A-current-decode-success");
   const keys=[
@@ -3851,6 +4011,10 @@ async function runMatrix(file) {
 
     const failOnlyExpectedElapsedMs =
       candidateDetectionElapsedMs + aElapsedMs + geometry.geometryElapsedMs + geometry.rectifyDecodeElapsedMs;
+    const formalSuccessfulGeometryScaleRecordsForImage=formalSuccessfulGeometryScaleRecords(
+      normalizeFixedFileName(file)||safeName(file),
+      geometry
+    );
     const qualityDiagnosticAudit=buildQualityDiagnosticAudit(file,raw,normalized,current,geometry);
     const img0942ACandidateDecodePathAudit=(normalizeFixedFileName(file)||safeName(file))==="IMG_0942.jpeg"
       ?buildImg0942ACandidateDecodePathAudit({
@@ -3961,6 +4125,7 @@ async function runMatrix(file) {
         conflicts:allConflicts,
         adoptedConflictRule:"same-position ambiguous conflicts remain rejected; compact physical consensus and multi-QR position resolution are tracked separately from parser recognition",
       },
+      formalSuccessfulGeometryScaleRecords:formalSuccessfulGeometryScaleRecordsForImage,
       qualityDiagnosticAudit,
       img0942ACandidateDecodePathAudit,
       img0942NearThresholdCounterfactualRescue,
@@ -4347,6 +4512,7 @@ export default function CertificateQrDecodeExperimentPage() {
   const successfulCurrentCropReferenceMedian=totals
     ?currentCropReferenceMedian(totals.qualityReferenceDiagnostics)
     :null;
+  const geometryScaleConsistencyAudit=gtReady?buildGeometryScaleConsistencyAudit(results):null;
   const img0942Result=results.find((result)=>result.fileName==="IMG_0942.jpeg")||null;
   const img0942AQuadTooSmallAudit=buildImg0942AQuadTooSmallAudit(
     img0942Result,
@@ -4366,7 +4532,7 @@ export default function CertificateQrDecodeExperimentPage() {
     schema:"icb-certificate-qr-decode-experiment-summary-v7",
     summaryVariant:"management-audit-short-v1",
     experimentalHead,
-    diagnosticRevision:"v7-postformal-0942-near-threshold-counterfactual-8",
+    diagnosticRevision:"v7-postformal-geometry-scale-consistency-9",
     experimentRoute:EXPERIMENT_ROUTE,
     baselineTargetRoute:PATHNAME,
     groundTruthUsedDuringDecode:false,
@@ -4405,6 +4571,7 @@ export default function CertificateQrDecodeExperimentPage() {
     overlayClassifications:overlayClassificationRows,
     img0942OwnershipClassifications,
     img0942OwnershipComplete,
+    geometryScaleConsistencyAudit,
     img0942AQuadTooSmallAudit,
     img0942NearThresholdCounterfactualRescue:img0942Result?.matrix?.img0942NearThresholdCounterfactualRescue||null,
     img0942ACandidateDecodePathAudit,
@@ -4444,7 +4611,7 @@ export default function CertificateQrDecodeExperimentPage() {
     experimentalHead,
     generatedAt:new Date().toISOString(),
     branchRole:"experimental-only",
-    diagnosticRevision:"v7-postformal-0942-near-threshold-counterfactual-8",
+    diagnosticRevision:"v7-postformal-geometry-scale-consistency-9",
     experimentRoute:EXPERIMENT_ROUTE,
     pathname:PATHNAME,
     pathnameRole:"baseline-target-route",
@@ -4578,6 +4745,7 @@ export default function CertificateQrDecodeExperimentPage() {
       payloadIncluded:false,
       canonicalPayloadIncluded:false,
     }:null,
+    geometryScaleConsistencyAudit,
     img0942AQuadTooSmallAudit,
     img0942NearThresholdCounterfactualRescue:img0942Result?.matrix?.img0942NearThresholdCounterfactualRescue||null,
     img0942ACandidateDecodePathAudit,
@@ -4857,7 +5025,7 @@ export default function CertificateQrDecodeExperimentPage() {
 
       <section style={{ marginTop: 18 }}>
         <div style={{fontSize:12,marginBottom:8,fontWeight:700}}>
-          IMG_0942 ownership分類: {img0942OwnershipClassifiedCount}/10 / near-threshold counterfactual: c3r1 / c5r1 / c5r2
+          IMG_0942 ownership分類: {img0942OwnershipClassifiedCount}/10 / geometry scale-consistency audit: fixed8 formal E-success vs 0942 c3/c5/c6
           {img0942OwnershipComplete ? "（全candidate分類完了）" : "（未分類candidateをA/B/C/D選択）"}
           {" / "}既存0944分類は引き継ぎ済み
         </div>
