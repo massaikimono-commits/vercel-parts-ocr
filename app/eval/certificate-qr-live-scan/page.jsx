@@ -1784,6 +1784,58 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
   const sourceHeadMap = {
     "live-poc-v2-counting-integrity-diagnostic-1": "dbbb2a92c3842d9ffbe3b2b5a6cf55e9e66224e2",
   };
+  const latencyFull = full?.remainingOneLatencyDiagnostic || null;
+  const rescueAttemptFull = latencyFull?.rescueAttemptDiagnostic || null;
+  const rescueAttemptRows = Array.isArray(rescueAttemptFull?.attempts) ? rescueAttemptFull.attempts : [];
+  const representativeRescueAttempts = rescueAttemptRows.length <= 8
+    ? rescueAttemptRows
+    : [...rescueAttemptRows.slice(0, 4), ...rescueAttemptRows.slice(-4)];
+  const latencyShort = latencyFull ? {
+    diagnosticOnly: true,
+    lastConfirmedDiagnosticId: latencyFull.lastConfirmedDiagnosticId,
+    firstSeenFrame: latencyFull.firstSeenFrame,
+    firstDecodeIntegrityPassFrame: latencyFull.firstDecodeIntegrityPassFrame,
+    firstRecognizedOrSafeFrame: latencyFull.firstRecognizedOrSafeFrame,
+    genericConfirmationFrame: latencyFull.genericConfirmationFrame,
+    firstSeenToConfirmationFrames: latencyFull.firstSeenToConfirmationFrames,
+    decodeIntegrityPassToConfirmationFrames: latencyFull.decodeIntegrityPassToConfirmationFrames,
+    normalDecodeHitFrames: latencyFull.normalDecodeHitFrames,
+    rescueHitFrames: latencyFull.rescueHitFrames,
+    jsQRHitFrames: latencyFull.jsQRHitFrames,
+    zxingHitFrames: latencyFull.zxingHitFrames,
+    sameFrameBothEngineFrames: latencyFull.sameFrameBothEngineFrames,
+    medianGuidePosition: latencyFull.medianGuidePosition,
+    remainingOneRescueActivatedFrame: latencyFull.remainingOneRescueActivatedFrame,
+    remainingOneRescueAttemptCount: latencyFull.remainingOneRescueAttemptCount,
+    remainingOneRescueFrameCount: latencyFull.remainingOneRescueFrameCount,
+    candidateRescueHitFrameCount: latencyFull.candidateRescueHitFrameCount,
+    candidateNormalHitFrameCount: latencyFull.candidateNormalHitFrameCount,
+    rescueStartToFinalConfirmationFrames: latencyFull.rescueStartToFinalConfirmationFrames,
+    preConfirmationRejectionReasonHistogram: latencyFull.preConfirmationRejectionReasonHistogram,
+    decoderAcquisitionDelayCandidate: latencyFull.decoderAcquisitionDelayCandidate,
+    confirmationDelayAfterFirstSeen: latencyFull.confirmationDelayAfterFirstSeen,
+    rescueAttemptDiagnostic: rescueAttemptFull ? {
+      diagnosticOnly: true,
+      totalAttemptCount: rescueAttemptFull.totalAttemptCount,
+      zxingAttemptCount: rescueAttemptFull.zxingAttemptCount,
+      jsQRAttemptCount: rescueAttemptFull.jsQRAttemptCount,
+      attemptContainingCandidatePositionCount: rescueAttemptFull.attemptContainingCandidatePositionCount,
+      attemptMissingCandidatePositionCount: rescueAttemptFull.attemptMissingCandidatePositionCount,
+      candidateHitAttemptCount: rescueAttemptFull.candidateHitAttemptCount,
+      candidateAttemptHitRate: rescueAttemptFull.candidateAttemptHitRate,
+      candidateHitRateWhenCovered: rescueAttemptFull.candidateHitRateWhenCovered,
+      targetRoiAttemptCounts: rescueAttemptFull.targetRoiAttemptCounts,
+      variantAttemptCounts: rescueAttemptFull.variantAttemptCounts,
+      candidateHitsByVariant: rescueAttemptFull.candidateHitsByVariant,
+      retargetCount: rescueAttemptFull.retargetCount,
+      sameRegionRetryCount: rescueAttemptFull.sameRegionRetryCount,
+      maxSameTargetRoiAttempts: rescueAttemptFull.maxSameTargetRoiAttempts,
+      targetSwitchDiagnostics: (rescueAttemptFull.targetSwitchDiagnostics || []).slice(0, 8),
+      primaryHypothesis: rescueAttemptFull.primaryHypothesis,
+      representativeAttempts: representativeRescueAttempts,
+      representativeAttemptsFromTotal: rescueAttemptRows.length,
+    } : null,
+  } : null;
   return {
     schema: MANAGEMENT_SHORT_SCHEMA,
     summaryVariant: "management-short",
@@ -1812,7 +1864,7 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       frameAtFinalConfirmed: separated.acquisitionLatencyDiagnostic?.frameAtFinalConfirmed ?? null,
       finalQrWaitFrames: separated.acquisitionLatencyDiagnostic?.finalQrWaitFrames ?? null,
     },
-    remainingOneLatencyDiagnostic: full?.remainingOneLatencyDiagnostic || null,
+    remainingOneLatencyDiagnostic: latencyShort,
     baselineReproduction: {
       normalDecodeControlChanged: Boolean(counting.normalDecodeControlChanged),
       dedupeChanged: Boolean(counting.dedupeChanged),
