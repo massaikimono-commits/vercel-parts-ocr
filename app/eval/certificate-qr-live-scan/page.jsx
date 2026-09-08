@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v2-production-shape-state-ui-1";
+const LIVE_SCAN_REVISION = "live-poc-v2-production-shape-state-ui-2-confirmed-interpretation";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -1010,12 +1010,24 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi)
     kind !== "ambiguous" &&
     accountingIntegrityPass;
 
-  const recognizedCount = Number(separated.recognizedSchemaUniqueCount || 0);
-  const unrecognizedSafeCount = Number(separated.unrecognizedSafeUniqueCount || 0);
-  const interpretedPayloadCount = recognizedCount;
+  const separatedCandidates = Array.isArray(separated.allCandidateDiagnostics)
+    ? separated.allCandidateDiagnostics
+    : [];
+  const confirmedRecognizedCount = separatedCandidates.filter((candidate) =>
+    candidate.genericConfirmationPass && candidate.parserSchemaRecognized
+  ).length;
+  const confirmedUnrecognizedSafeCount = separatedCandidates.filter((candidate) =>
+    candidate.genericConfirmationPass && !candidate.parserSchemaRecognized
+  ).length;
+  const completionEvidencePartitionIntegrityPass =
+    confirmedRecognizedCount + confirmedUnrecognizedSafeCount === confirmedCanonicalCount;
+
+  const recognizedCount = confirmedRecognizedCount;
+  const unrecognizedSafeCount = confirmedUnrecognizedSafeCount;
+  const interpretedPayloadCount = confirmedRecognizedCount;
   const payloadInterpretationComplete =
     qrAcquisitionComplete &&
-    unrecognizedSafeCount === 0 &&
+    confirmedUnrecognizedSafeCount === 0 &&
     interpretedPayloadCount === confirmedCanonicalCount;
 
   const vehicleFieldState = {
@@ -1052,12 +1064,18 @@ function productionShapeCandidateSnapshot(state, evidenceMap, physicalLocatorUi)
     accountingIntegrityPass,
     overCount,
     proposedStopCandidate,
+    confirmedRecognizedCount,
+    confirmedUnrecognizedSafeCount,
+    completionEvidencePartitionIntegrityPass,
     payloadInterpretationState: {
       state: payloadInterpretationComplete ? "complete" : "partial",
       complete: payloadInterpretationComplete,
       recognizedCount,
       unrecognizedSafeCount,
       interpretedPayloadCount,
+      confirmedRecognizedCount,
+      confirmedUnrecognizedSafeCount,
+      completionEvidencePartitionIntegrityPass,
       unknownSafeUsedForKindOrExpected: false,
       unknownSafeUsedForFieldInference: false,
     },
@@ -1181,6 +1199,9 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       accountingIntegrityPass: full.productionShapeCandidate.accountingIntegrityPass,
       overCount: full.productionShapeCandidate.overCount,
       proposedStopCandidate: full.productionShapeCandidate.proposedStopCandidate,
+      confirmedRecognizedCount: full.productionShapeCandidate.confirmedRecognizedCount ?? null,
+      confirmedUnrecognizedSafeCount: full.productionShapeCandidate.confirmedUnrecognizedSafeCount ?? null,
+      completionEvidencePartitionIntegrityPass: full.productionShapeCandidate.completionEvidencePartitionIntegrityPass ?? null,
       payloadInterpretationState: full.productionShapeCandidate.payloadInterpretationState,
       vehicleFieldState: {
         state: full.productionShapeCandidate.vehicleFieldState?.state ?? null,
