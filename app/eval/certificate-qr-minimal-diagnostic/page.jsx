@@ -1,246 +1,338 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { runPhotoQrDiagnostic } from "../certificate-qr-decode-experiment/photo-qr-diagnostic-core.generated";
+import {
+  MINIMAL_RUN_IDS,
+  runMinimalDiagnosticBatch,
+  buildMinimalDiagnosticSummary,
+} from "./minimal-contract.mjs";
 
 const FIXED_IDS = Array.from({ length: 8 }, (_, i) => `IMG_${String(940 + i).padStart(4, "0")}.jpeg`);
-const RUN_IDS = ["IMG_0940.jpeg","IMG_0941.jpeg","IMG_0943.jpeg","IMG_0945.jpeg","IMG_0946.jpeg","IMG_0947.jpeg"];
-const RUN_SET = new Set(RUN_IDS);
-const SKIP_IDS = new Set(["IMG_0942.jpeg","IMG_0944.jpeg"]);
-const DIAGNOSTIC_ROUTE = "/eval/certificate-qr-decode-experiment";
-const SUMMARY_SCHEMA = "icb-certificate-qr-minimal-diagnostic-summary-v1";
+const RUN_SET = new Set(MINIMAL_RUN_IDS);
+const SKIP_IDS = new Set(["IMG_0942.jpeg", "IMG_0944.jpeg"]);
+const EXPECTED_AFTER_DECODE = Object.freeze({
+  "IMG_0940.jpeg": 6,
+  "IMG_0941.jpeg": 6,
+  "IMG_0943.jpeg": 6,
+  "IMG_0945.jpeg": 6,
+  "IMG_0946.jpeg": 6,
+  "IMG_0947.jpeg": 5,
+});
 
-const EXISTING_EVIDENCE = {
-  "IMG_0942.jpeg": { source:"existing-diagnostic-evidence", candidateCount:10, ownership:{A:3,B:4,C:2,D:1}, rerun:false },
-  "IMG_0944.jpeg": { source:"existing-diagnostic-evidence", candidateCount:5, ownership:{A:2,B:3,C:0,D:0}, rerun:false },
-};
-
-function normalizeFixedName(file){
-  const leaf=String(file?.name||"").normalize("NFKC").trim().split(/[\\/]/).pop()||"";
-  const match=leaf.match(/^IMG_(094[0-7])(?:[\s_-]*(?:\(\d+\)|\d+|copy(?:[\s_-]*\d+)?))?\.(jpe?g)$/i);
-  return match?`IMG_${match[1]}.jpeg`:null;
+function normalizeFixedName(file) {
+  const leaf = String(file?.name || "").normalize("NFKC").trim().split(/[\\/]/).pop() || "";
+  const match = leaf.match(/^IMG_(094[0-7])(?:[\s_-]*(?:\(\d+\)|\d+|copy(?:[\s_-]*\d+)?))?\.(jpe?g)$/i);
+  return match ? `IMG_${match[1]}.jpeg` : null;
 }
 
-function mapFixedSet(files){
-  if(files.length!==8) return {mode:"invalid",rows:[],valid:false,message:`固定評価8枚をまとめて選択してください（現在 ${files.length}枚）。`};
-  const exact=new Map();
-  let duplicate=false;
-  for(const file of files){
-    const id=normalizeFixedName(file);
-    if(id&&exact.has(id)) duplicate=true;
-    if(id&&!exact.has(id)) exact.set(id,file);
+function mapFixedSet(files) {
+  if (files.length !== 8) {
+    return { mode: "invalid", rows: [], valid: false, message: `固定評価8枚をまとめて選択してください（現在 ${files.length}枚）。` };
   }
-  if(!duplicate&&exact.size===8&&FIXED_IDS.every((id)=>exact.has(id))){
-    return {mode:"filename",rows:FIXED_IDS.map((id)=>({id,file:exact.get(id),source:"File.name"})),valid:true,message:"固定8枚を正式IMG番号へ自動対応しました。サムネイルだけ確認してください。"};
+  const exact = new Map();
+  let duplicate = false;
+  for (const file of files) {
+    const id = normalizeFixedName(file);
+    if (id && exact.has(id)) duplicate = true;
+    if (id && !exact.has(id)) exact.set(id, file);
   }
-  const sorted=[...files].sort((a,b)=>Number(a.lastModified||0)-Number(b.lastModified||0)||String(a.name).localeCompare(String(b.name)));
-  return {mode:"metadata-fallback",rows:FIXED_IDS.map((id,i)=>({id,file:sorted[i],source:"metadata-fallback"})),valid:true,message:"iOSで正式IMG番号を保持していないためmetadata順で対応しました。8枚のサムネイルが固定評価セットであることだけ確認してください。"};
+  if (!duplicate && exact.size === 8 && FIXED_IDS.every((id) => exact.has(id))) {
+    return {
+      mode: "filename",
+      rows: FIXED_IDS.map((id) => ({ id, file: exact.get(id), source: "File.name" })),
+      valid: true,
+      message: "固定8枚を正式IMG番号へ自動対応しました。サムネイルだけ確認してください。",
+    };
+  }
+  const sorted = [...files].sort((a, b) => Number(a.lastModified || 0) - Number(b.lastModified || 0) || String(a.name).localeCompare(String(b.name)));
+  return {
+    mode: "metadata-fallback",
+    rows: FIXED_IDS.map((id, index) => ({ id, file: sorted[index], source: "metadata-fallback" })),
+    valid: true,
+    message: "iOSで正式IMG番号を保持していないためmetadata順で対応しました。8枚のサムネイルが固定評価セットであることだけ確認してください。",
+  };
 }
 
-function sleep(ms){ return new Promise((resolve)=>setTimeout(resolve,ms)); }
+function sumStats(stats, key) {
+  return (stats || []).reduce((sum, item) => sum + Number(item?.[key] || 0), 0);
+}
+function finiteValues(items, selector) {
+  return (items || []).map(selector).map(Number).filter(Number.isFinite);
+}
+function range(values) {
+  if (!values.length) return { count: 0, min: null, max: null, mean: null };
+  return {
+    count: values.length,
+    min: Number(Math.min(...values).toFixed(3)),
+    max: Number(Math.max(...values).toFixed(3)),
+    mean: Number((values.reduce((a, b) => a + b, 0) / values.length).toFixed(3)),
+  };
+}
+function provisionalOwnership(item) {
+  if (item?.skippedBecauseASuccess) return "A-current-success";
+  if (item?.skippedBecausePhysicalConsensus) return "compact-consensus-success";
+  if (item?.overlapRejected) return "geometry-overlap-duplicate";
+  if (item?.geometryValid) return "geometry-valid-candidate";
+  if (Number(item?.finderCount || 0) >= 3) return "finder-detected-no-valid-quad";
+  return "candidate-unresolved";
+}
 
-function findAdditionalResultsFromReact(doc){
-  const seen=new Set();
-  const nodes=[doc.documentElement,...doc.querySelectorAll("main,section,div")];
-  for(const node of nodes){
-    for(const key of Object.keys(node||{})){
-      if(!key.startsWith("__reactFiber$")) continue;
-      let fiber=node[key];
-      while(fiber&&!seen.has(fiber)){
-        seen.add(fiber);
-        let hook=fiber.memoizedState;
-        let guard=0;
-        while(hook&&guard++<80){
-          const value=hook.memoizedState;
-          if(Array.isArray(value)&&value.length>0&&value.every((item)=>item&&typeof item==="object"&&item.slotId&&item.baseline&&item.matrix)) return value;
-          hook=hook.next;
-        }
-        fiber=fiber.return;
+function summarizeRecord(record) {
+  const id = record.imageId;
+  if (!record.success || !record.matrix) {
+    return {
+      imageId: id.replace("IMG_", "").replace(".jpeg", ""),
+      formalImageId: id,
+      diagnosticRecordStatus: "diagnostic-error",
+      diagnosticError: record.diagnosticError,
+      decodedQrCount: null,
+      candidateOwnership: [],
+      detectedDecodeFail: null,
+      cropCoverage: null,
+      resolution: null,
+      finderQuad: null,
+      anglePerspective: null,
+      quietZone: null,
+      contrast: null,
+      multiQrInterference: null,
+      decoderDifference: null,
+      parserReject: null,
+      dedupeCounting: null,
+      nearThreshold: null,
+      provisionalCause: "diagnostic-runner-error",
+    };
+  }
+
+  const m = record.matrix;
+  const detection = m.candidateDetection || {};
+  const current = m.currentEnsemble || {};
+  const geometry = m.geometryStage || {};
+  const compact = m.compactSchemaAudit || {};
+  const conflicts = m.conflictPositionAudit || {};
+  const structural = m.structuralValidation || {};
+  const quality = m.qualityDiagnosticAudit || {};
+  const geoDiag = geometry.diagnostics || [];
+  const qualityRefs = quality.successfulReferences || [];
+  const finalCount = Number(geometry.finalUnionCanonicalCount || 0);
+  const aCount = Number(current.physicalSafeQrCount || 0);
+  const parserEligible = Number(geometry.parserEligibleUnionCanonicalCount || 0);
+  const expected = EXPECTED_AFTER_DECODE[id];
+
+  const candidateOwnership = geoDiag.map((item) => ({
+    candidateIndex: item.candidateIndex ?? null,
+    normalizedCenter: { x: item.x ?? null, y: item.y ?? null },
+    provisionalOwnership: provisionalOwnership(item),
+    skippedBecauseASuccess: Boolean(item.skippedBecauseASuccess),
+    skippedBecausePhysicalConsensus: Boolean(item.skippedBecausePhysicalConsensus),
+    finderCount: Number(item.finderCount || 0),
+    geometryValid: Boolean(item.geometryValid),
+    geometryFailReason: item.geometryFailReason || "unknown",
+    overlapRejected: Boolean(item.overlapRejected),
+  }));
+
+  const modulePx = finiteValues(geoDiag, (item) => item.modulePx);
+  const perspectiveScale = finiteValues(geoDiag, (item) => item.perspectiveScaleSpread);
+  const cropWidths = finiteValues(qualityRefs, (item) => item?.coarseCandidateCrop?.cropPixelWidth);
+  const lumaContrast = finiteValues(qualityRefs, (item) => item?.coarseCandidateCrop?.localContrastRange);
+  const lumaStd = finiteValues(qualityRefs, (item) => item?.coarseCandidateCrop?.localLumaStdDev);
+  const laplacian = finiteValues(qualityRefs, (item) => item?.coarseCandidateCrop?.blurIndicatorLaplacianVariance);
+  const skew = finiteValues(qualityRefs, (item) => item?.coarseCandidateCrop?.documentSkewDeg);
+  const perspectiveDoc = finiteValues(qualityRefs, (item) => item?.coarseCandidateCrop?.perspectiveSpreadDeg);
+  const nearThresholdRows = [];
+  for (const item of geoDiag) {
+    for (const triplet of item.tripletDiagnostics || []) {
+      if (["quad-too-small", "qr-center-too-far", "quad-side-spread-too-large"].includes(triplet.rejectedReason)) {
+        nearThresholdRows.push({ candidateIndex: item.candidateIndex, tripletRank: triplet.rank, rejectedReason: triplet.rejectedReason, modulePx: triplet.modulePx ?? null });
       }
     }
   }
-  return null;
-}
 
-function countAttempts(rows,key,predicate){
-  let n=0;
-  for(const row of rows||[]) for(const attempt of row?.[key]||[]) if(predicate(attempt,row)) n+=1;
-  return n;
-}
+  const jsSuccess = sumStats(current.stats, "jsqrSuccesses") + sumStats(geometry.stats, "jsqrSuccesses");
+  const zxSuccess = sumStats(current.stats, "zxingSuccesses") + sumStats(geometry.stats, "zxingSuccesses");
+  const rawDecodedCandidates = Number(current.rawDecodeCandidateCount || 0);
+  const coarseCount = Number(detection.coarsePhysicalCandidateCount || 0);
+  const finderNoQuad = Number(geometry.finderAtLeast3ButNoValidQuadCount || 0);
+  const multiQr = Number(conflicts.multiQrCropConflictCount || 0);
+  const ambiguous = Number(conflicts.remainingAmbiguousConflictCount || 0);
+  const structuralRejects = Number(structural.samePayloadStructuralFailCount || 0) + Number(structural.singleEngineStructuralFailCount || 0) + Number(structural.ambiguousConflictCount || 0);
 
-function summarizeMatrix(id,result){
-  const m=result?.matrix||{};
-  const current=m.currentEnsemble||{};
-  const geometry=m.geometryStage||{};
-  const compact=m.compactSchemaAudit||{};
-  const conflicts=m.conflictPositionAudit||{};
-  const structural=m.structuralValidationAudit||{};
-  const rows=current.rows||[];
-  const geoRows=geometry.rows||[];
-  const geoDiag=geometry.diagnostics||[];
-  const rawDecodeAttempts=countAttempts(rows,"currentAttempts",(a)=>Boolean(a?.jsqrSuccess||a?.zxingSuccess));
-  const jsOnly=countAttempts(rows,"currentAttempts",(a)=>Boolean(a?.jsqrSuccess&&!a?.zxingSuccess));
-  const zxingOnly=countAttempts(rows,"currentAttempts",(a)=>Boolean(!a?.jsqrSuccess&&a?.zxingSuccess));
-  const both=countAttempts(rows,"currentAttempts",(a)=>Boolean(a?.jsqrSuccess&&a?.zxingSuccess));
-  const candidateOwnership=(rows||[]).map((row)=>({
-    candidateIndex:row.candidateIndex??null,
-    decodeAccepted:Boolean(row.currentSuccess),
-    rawDecodeObserved:Boolean((row.currentAttempts||[]).some((a)=>a?.jsqrSuccess||a?.zxingSuccess)),
-    attemptCount:(row.currentAttempts||[]).length,
-  }));
-  const finderAtLeast3NoQuad=Number(geometry.finderAtLeast3ButNoValidQuadCount||0);
-  const alternateRecovered=Number(geometry.alternateTripletRecoveredCount||0);
-  const finalCount=Number(geometry.finalUnionCanonicalCount||0);
-  const aCount=Number(current.physicalSafeQrCount||0);
-  const parserEligible=Number(geometry.parserEligibleUnionCanonicalCount||0);
-  const multiQr=Number(conflicts.multiQrCropConflictCount||0);
-  const samePosition=Number(conflicts.samePhysicalQrConflictCount||0);
-  const ambiguous=Number(conflicts.remainingAmbiguousConflictCount||0);
-  const structuralReject=Number(structural.nonConflictStructuralRejectedCandidateCount||current.nonConflictStructuralRejectedCandidateCount||0);
-  const rawCandidates=Number(structural.rawDecodeCandidateCount||current.rawDecodeCandidateCount||rawDecodeAttempts||0);
-  let provisionalCause="undetermined";
-  if(finalCount===0&&finderAtLeast3NoQuad>0) provisionalCause="finder-detected-but-no-valid-quad / geometry";
-  else if(finalCount===0&&rawDecodeAttempts>0) provisionalCause="decode-observed-but-structural/parser-rejected";
-  else if(multiQr>0||ambiguous>0) provisionalCause="multi-qr-interference-or-position-conflict";
-  else if(finalCount<aCount) provisionalCause="geometry-stage-regression-or-dedupe";
-  else if(parserEligible<finalCount) provisionalCause="parser-eligibility-gap";
-  else if(finalCount>0) provisionalCause="partial-or-successful-decode; inspect remaining candidate failures";
+  let provisionalCause = "partial-or-successful-decode; inspect unresolved candidates";
+  if (finalCount === 0 && finderNoQuad > 0) provisionalCause = "finder-detected-but-no-valid-quad / geometry";
+  else if (finalCount === 0 && rawDecodedCandidates > 0) provisionalCause = "decoder-hit-but-structural/parser-reject";
+  else if (finalCount === 0 && coarseCount > 0) provisionalCause = "candidate-detected-but-decode-fail";
+  else if (multiQr > 0 || ambiguous > 0) provisionalCause = "multi-qr-interference-or-position-conflict";
+  else if (structuralRejects > 0) provisionalCause = "structural/parser-rejection-present";
+  else if (nearThresholdRows.length > 0) provisionalCause = "geometry-near-threshold-present";
+  else if (parserEligible < finalCount) provisionalCause = "parser-eligibility-gap";
 
   return {
-    imageId:id.replace("IMG_","").replace(".jpeg",""),
-    formalImageId:id,
-    decodedQrCount:finalCount,
-    baselineQrCount:Number(result?.baseline?.qrCount||0),
-    aPhysicalSafeQrCount:aCount,
+    imageId: id.replace("IMG_", "").replace(".jpeg", ""),
+    formalImageId: id,
+    diagnosticRecordStatus: "success",
+    diagnosticError: null,
+    decodedQrCount: finalCount,
     candidateOwnership,
-    detectedDecodeFail:{rawDecodeAttemptCount:rawDecodeAttempts,rawCandidateCount:rawCandidates,acceptedCandidateCount:candidateOwnership.filter((x)=>x.decodeAccepted).length},
-    cropCoverage:{candidateCount:rows.length,geometryCandidateCount:geoRows.length,diagnosticAvailable:rows.length>0},
-    resolution:{source:"existing decode configs",attemptCount:countAttempts(rows,"currentAttempts",()=>true),diagnosticAvailable:rows.length>0},
-    finderQuad:{finderAtLeast3ButNoValidQuadCount:finderAtLeast3NoQuad,alternateTripletRecoveredCount:alternateRecovered,geometryDiagnosticCount:geoDiag.length},
-    anglePerspective:{geometryDiagnosticCount:geoDiag.length,perspectiveRectifyAttemptCount:countAttempts(geoRows,"geometryAttempts",()=>true)},
-    quietZone:{source:"geometry/config trace",diagnosticAvailable:geoDiag.length>0},
-    contrast:{source:"decode-attempt trace",diagnosticAvailable:rows.length>0},
-    multiQrInterference:{multiQrCropConflictCount:multiQr,samePhysicalQrConflictCount:samePosition,remainingAmbiguousConflictCount:ambiguous},
-    decoderDifference:{jsOnlySuccessAttemptCount:jsOnly,zxingOnlySuccessAttemptCount:zxingOnly,bothSuccessAttemptCount:both},
-    parserReject:{parserEligibleUnionQrCount:parserEligible,compactParserRecognizedCount:Number(compact.compactParserRecognizedCount||0),structuralRejectedCandidateCount:structuralReject},
-    dedupeCounting:{duplicatePayloadCandidateCount:Number(current.duplicatePayloadCandidateCount||0),countingIntegrityFail:null,expectedCountUsedDuringDecode:false},
-    nearThreshold:{available:Boolean(m.img0942NearThresholdCounterfactualRescue),note:"no GT/runtime threshold use"},
+    detectedDecodeFail: {
+      coarseCandidateCount: coarseCount,
+      rawDecodeCandidateCount: rawDecodedCandidates,
+      aPhysicalSafeQrCount: aCount,
+      finalSafeUnionQrCount: finalCount,
+      estimatedUnresolvedCandidateCount: Math.max(0, coarseCount - finalCount),
+    },
+    cropCoverage: {
+      detectedCandidateCenters: (detection.physicalCandidates || []).map((candidate) => ({ index: candidate.index, x: candidate.x, y: candidate.y })),
+      candidatePositionDuplicateRemovedCount: Number(detection.candidatePositionDuplicateRemovedCount || 0),
+      qualitySampleCropWidthPx: range(cropWidths),
+    },
+    resolution: {
+      modulePx: range(modulePx),
+      qualitySampleLaplacianVariance: range(laplacian),
+      normalizeMode: m.normalizeMode || null,
+      normalizeConfidence: m.normalizeConfidence ?? null,
+    },
+    finderQuad: {
+      finderAtLeast3ButNoValidQuadCount: finderNoQuad,
+      finderOrQuadEstablishedCandidateCount: Number(geometry.finderOrQuadEstablishedCandidateCount || 0),
+      geometryKeptCandidateCount: Number(geometry.geometryKeptCandidateCount || 0),
+      geometryOverlapMergedCount: Number(geometry.geometryOverlapMergedCount || 0),
+      alternateTripletTriedCount: Number(geometry.alternateTripletTriedCount || 0),
+      alternateTripletRecoveredCount: Number(geometry.alternateTripletRecoveredCount || 0),
+    },
+    anglePerspective: {
+      candidatePerspectiveScaleSpread: range(perspectiveScale),
+      documentSkewDeg: range(skew),
+      documentPerspectiveSpreadDeg: range(perspectiveDoc),
+      nativeRectifyNetNewCanonicalCount: Number(geometry.nativeRectifyNetNewCanonicalCount || 0),
+    },
+    quietZone: {
+      geometryValidCandidateCount: geoDiag.filter((item) => item.geometryValid && !item.overlapRejected).length,
+      quadOrQuietRelatedRejectCount: geoDiag.filter((item) => ["quad-out-of-bounds", "quad-too-small", "quad-side-spread-too-large"].includes(item.geometryFailReason)).length,
+    },
+    contrast: {
+      successfulReferenceSampleCount: qualityRefs.length,
+      localContrastRange: range(lumaContrast),
+      localLumaStdDev: range(lumaStd),
+      note: "diagnostic measurement only; not an acceptance threshold",
+    },
+    multiQrInterference: {
+      multiQrCropConflictCount: multiQr,
+      samePhysicalQrConflictCount: Number(conflicts.samePhysicalQrConflictCount || 0),
+      positionUncertainConflictCount: Number(conflicts.positionUncertainConflictCount || 0),
+      resolvedAsSeparatePhysicalQrCount: Number(conflicts.resolvedAsSeparatePhysicalQrCount || 0),
+      remainingAmbiguousConflictCount: ambiguous,
+    },
+    decoderDifference: {
+      jsqrSuccesses: jsSuccess,
+      zxingSuccesses: zxSuccess,
+      crossEngineConflictCount: Number(structural.crossEngineConflictCount || 0),
+      samePayloadStructuralFailCount: Number(structural.samePayloadStructuralFailCount || 0),
+      singleEngineStructuralFailCount: Number(structural.singleEngineStructuralFailCount || 0),
+    },
+    parserReject: {
+      parserEligibleUnionQrCount: parserEligible,
+      compactPhysicalConsensusAcceptedCount: Number(compact.compactPhysicalConsensusAcceptedCount || 0),
+      compactParserRecognizedCount: Number(compact.compactParserRecognizedCount || 0),
+      structuralRejectCount: structuralRejects,
+    },
+    dedupeCounting: {
+      candidatePositionDuplicateRemovedCount: Number(detection.candidatePositionDuplicateRemovedCount || 0),
+      geometryOverlapMergedCount: Number(geometry.geometryOverlapMergedCount || 0),
+      expectedQrCountScoringOnlyAfterDecode: expected,
+      countingIntegrityFail: Number.isFinite(expected) ? finalCount > expected : null,
+      expectedCountUsedDuringDecode: false,
+    },
+    nearThreshold: {
+      candidateTriplets: nearThresholdRows,
+      count: nearThresholdRows.length,
+      acceptanceThresholdChanged: false,
+    },
     provisionalCause,
   };
 }
 
-export default function CertificateQrMinimalDiagnosticPage(){
-  const [files,setFiles]=useState([]);
-  const [thumbs,setThumbs]=useState({});
-  const [status,setStatus]=useState("固定評価8枚をまとめて選択してください。");
-  const [running,setRunning]=useState(false);
-  const [iframeReady,setIframeReady]=useState(false);
-  const [summary,setSummary]=useState(null);
-  const frameRef=useRef(null);
-  const mapping=useMemo(()=>mapFixedSet(files),[files]);
+export default function CertificateQrMinimalDiagnosticPage() {
+  const [files, setFiles] = useState([]);
+  const [thumbs, setThumbs] = useState({});
+  const [status, setStatus] = useState("固定評価8枚をまとめて選択してください。");
+  const [running, setRunning] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const mapping = useMemo(() => mapFixedSet(files), [files]);
 
-  useEffect(()=>{
-    const next={};
-    for(const row of mapping.rows||[]) next[row.id]=URL.createObjectURL(row.file);
+  useEffect(() => {
+    const next = {};
+    for (const row of mapping.rows || []) next[row.id] = URL.createObjectURL(row.file);
     setThumbs(next);
-    return()=>{for(const url of Object.values(next)) URL.revokeObjectURL(url);};
-  },[mapping]);
+    return () => { for (const url of Object.values(next)) URL.revokeObjectURL(url); };
+  }, [mapping]);
 
-  const runMinimal=async()=>{
-    if(!mapping.valid||!iframeReady||running)return;
-    setRunning(true); setSummary(null);
-    try{
-      const evaluationHead=new URLSearchParams(window.location.search).get("head")||null;
-      if(!/^[0-9a-f]{40}$/i.test(String(evaluationHead||""))) throw new Error("Preview HEADがURLへ固定されていません。管理側Preview URLを開き直してください。");
-      const win=frameRef.current?.contentWindow;
-      const doc=frameRef.current?.contentDocument;
-      if(!win||!doc) throw new Error("診断エンジンの準備ができていません。");
-      const sections=[...doc.querySelectorAll("section")];
-      const additionalSection=sections.find((s)=>String(s.textContent||"").includes("追加実車写真 Photo Decode評価"));
-      if(!additionalSection) throw new Error("内部diagnostic batchを取得できませんでした。");
-      const input=additionalSection.querySelector('input[type="file"][multiple]');
-      const button=[...additionalSection.querySelectorAll("button")].find((b)=>String(b.textContent||"").includes("追加実車 Photo Decode開始"));
-      if(!input||!button) throw new Error("内部diagnostic batch controlが見つかりません。");
-      const runRows=mapping.rows.filter((row)=>RUN_SET.has(row.id));
-      if(runRows.length!==6) throw new Error(`Minimal batch input不整合: ${runRows.length}/6`);
-      const dt=new win.DataTransfer();
-      for(const row of runRows) dt.items.add(row.file);
-      input.files=dt.files;
-      input.dispatchEvent(new win.Event("change",{bubbles:true}));
-      let selectedReady=false;
-      for(let i=0;i<40;i+=1){
-        if(String(additionalSection.textContent||"").includes("6枚 選択")){ selectedReady=true; break; }
-        await sleep(100);
+  const runMinimal = async () => {
+    if (!mapping.valid || running) return;
+    setRunning(true);
+    setSummary(null);
+    try {
+      const evaluationHead = new URLSearchParams(window.location.search).get("head") || null;
+      if (!/^[0-9a-f]{40}$/i.test(String(evaluationHead || ""))) {
+        throw new Error("Preview HEADがURLへ固定されていません。管理側Preview URLを開き直してください。");
       }
-      if(!selectedReady) throw new Error("内部batch selectedImageCountを6へ固定できませんでした。");
-      setStatus("Minimal Diagnostic実行中… 6枚だけを診断しています。0942 / 0944は投入していません。");
-      button.click();
-      let completed=false;
-      for(let i=0;i<1800;i+=1){
-        const text=String(doc.body?.textContent||"");
-        if(text.includes("追加実車写真のdecode完了")){ completed=true; break; }
-        if(text.includes("停止:")) throw new Error("内部diagnosticが停止しました。");
-        await sleep(250);
+      const byId = new Map(mapping.rows.map((row) => [row.id, row]));
+      const runRows = MINIMAL_RUN_IDS.map((id) => byId.get(id)).filter(Boolean);
+      if (runRows.length !== 6 || runRows.some((row, index) => row.id !== MINIMAL_RUN_IDS[index])) {
+        throw new Error("Minimal batch input不整合");
       }
-      if(!completed) throw new Error("Minimal Diagnosticが時間内に完了しませんでした。");
-      const internalResults=findAdditionalResultsFromReact(doc);
-      if(!Array.isArray(internalResults)||internalResults.length!==6) throw new Error(`診断結果復元失敗: ${Array.isArray(internalResults)?internalResults.length:"0"}/6`);
-      const perImageDiagnostics=internalResults.map((result,index)=>summarizeMatrix(RUN_IDS[index],result));
-      if(perImageDiagnostics.length!==6) throw new Error("perImageDiagnostics件数不整合");
-      const out={
-        schema:SUMMARY_SCHEMA,
-        evaluationHead,
-        formalReference:{finalSafeUnion:28,expectedQrCount:47,preserved:true,newFormalEvaluation:false},
-        selectedImageCount:6,
-        selectedImageIds:RUN_IDS.map((id)=>id.replace("IMG_","").replace(".jpeg","")),
-        decodedImageCount:internalResults.length,
-        perImageDiagnostics,
-        existingEvidence:{
-          "0942":{...EXISTING_EVIDENCE["IMG_0942.jpeg"]},
-          "0944":{...EXISTING_EVIDENCE["IMG_0944.jpeg"]},
-        },
-        isolation:{groundTruthScoringOnly:true,groundTruthUsedDuringDecode:false,formalDecodeLogicChanged:false,recognitionLogicChanged:false},
-        protection:{frozen:"HOLD",production:"HOLD",candidateLock:"NOT EVALUATED / HOLD",physicalSlot:"HOLD",adoptedHead:null},
-      };
-      if(out.selectedImageCount!==6||out.selectedImageIds.length!==6||out.perImageDiagnostics.length!==6) throw new Error("Minimal summary invariant FAIL");
+      setStatus("Minimal Diagnostic実行中… 6枚をdirect runnerで順番に診断しています。0942 / 0944は投入していません。");
+      const records = await runMinimalDiagnosticBatch(runRows, runPhotoQrDiagnostic);
+      const out = buildMinimalDiagnosticSummary({ evaluationHead, records, summarize: summarizeRecord });
       setSummary(out);
-      setStatus("完了。下の「総合管理用短縮summaryをコピー」だけ押してください。");
-    }catch(error){
+      const errors = out.diagnosticErrorImageCount;
+      setStatus(errors
+        ? `完了。6/6 result recordを保持しました（diagnostic error ${errors}件）。summaryをコピーしてください。`
+        : "完了。6/6 result recordを取得しました。下のsummaryコピーだけ押してください。"
+      );
+    } catch (error) {
       setSummary(null);
-      setStatus(`FAIL: ${error?.message||error}`);
-    }finally{ setRunning(false); }
+      setStatus(`FAIL: ${error?.message || error}`);
+    } finally {
+      setRunning(false);
+    }
   };
 
-  const copySummary=async()=>{
-    if(!summary)return;
-    await navigator.clipboard.writeText(JSON.stringify(summary,null,2));
+  const copySummary = async () => {
+    if (!summary) return;
+    await navigator.clipboard.writeText(JSON.stringify(summary, null, 2));
     setStatus("総合管理用短縮summaryをコピーしました。ChatGPTへそのまま貼り付けてください。");
   };
 
-  return <main style={{fontFamily:"system-ui,sans-serif",maxWidth:980,margin:"0 auto",padding:16}}>
-    <h1 style={{fontSize:22,marginBottom:6}}>Photo QR Minimal Diagnostic</h1>
-    <div style={{fontSize:13,fontWeight:800}}>操作は「8枚選択 → 開始 → summaryコピー」だけです。</div>
-    <div style={{fontSize:12,marginTop:5}}>Formal 28/47 preserved / 0942・0944は既存証拠利用 / recognition logic変更なし</div>
+  return <main style={{ fontFamily: "system-ui,sans-serif", maxWidth: 980, margin: "0 auto", padding: 16 }}>
+    <h1 style={{ fontSize: 22, marginBottom: 6 }}>Photo QR Minimal Diagnostic</h1>
+    <div style={{ fontSize: 13, fontWeight: 800 }}>操作は「8枚選択 → 開始 → summaryコピー」だけです。</div>
+    <div style={{ fontSize: 12, marginTop: 5 }}>Formal 28/47 preserved / direct diagnostic runner / 0942・0944は既存証拠 / iframe bridgeなし</div>
 
-    <section style={{marginTop:14,border:"1px solid #aaa",borderRadius:12,padding:12}}>
-      <label style={{display:"block",fontWeight:850,fontSize:15}}>① 固定評価8枚をまとめて選択</label>
-      <input type="file" accept="image/*" multiple disabled={running} onChange={(e)=>{setFiles([...e.target.files]);setSummary(null);setStatus("8枚を確認中…");}} style={{marginTop:8}} />
-      <div style={{marginTop:8,fontSize:13,fontWeight:700}}>{mapping.message}</div>
-      {mapping.valid&&<>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8,marginTop:12}}>
-          {mapping.rows.map((row)=><div key={row.id} style={{border:SKIP_IDS.has(row.id)?"2px solid #999":"2px solid #2f6fe4",borderRadius:10,padding:7,background:SKIP_IDS.has(row.id)?"#f4f4f4":"#fff"}}>
-            <div style={{fontFamily:"monospace",fontSize:12,fontWeight:900}}>{row.id}</div>
-            <div style={{fontSize:11,fontWeight:800,margin:"3px 0"}}>{SKIP_IDS.has(row.id)?"既存証拠を利用":"Minimal診断対象"}</div>
-            {thumbs[row.id]&&<img src={thumbs[row.id]} alt={row.id} style={{display:"block",width:"100%",height:110,objectFit:"contain",background:"#eee",borderRadius:7}} />}
+    <section style={{ marginTop: 14, border: "1px solid #aaa", borderRadius: 12, padding: 12 }}>
+      <label style={{ display: "block", fontWeight: 850, fontSize: 15 }}>① 固定評価8枚をまとめて選択</label>
+      <input type="file" accept="image/*" multiple disabled={running} onChange={(e) => { setFiles([...e.target.files]); setSummary(null); setStatus("8枚を確認中…"); }} style={{ marginTop: 8 }} />
+      <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>{mapping.message}</div>
+      {mapping.valid && <>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 8, marginTop: 12 }}>
+          {mapping.rows.map((row) => <div key={row.id} style={{ border: SKIP_IDS.has(row.id) ? "2px solid #888" : "2px solid #2f6fe4", borderRadius: 10, padding: 7, background: SKIP_IDS.has(row.id) ? "#f3f3f3" : "#fff" }}>
+            <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 900 }}>{row.id}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, margin: "3px 0" }}>{SKIP_IDS.has(row.id) ? "SKIP（既存証拠）" : "RUN対象"}</div>
+            {thumbs[row.id] && <img src={thumbs[row.id]} alt={row.id} style={{ display: "block", width: "100%", height: 110, objectFit: "contain", background: "#eee", borderRadius: 7 }} />}
           </div>)}
         </div>
-        <button onClick={runMinimal} disabled={!iframeReady||running} style={{marginTop:12,width:"100%",padding:"13px 16px",fontSize:17,fontWeight:900}}>
-          {running?"Minimal Diagnostic実行中…":"② Minimal Diagnostic開始"}
+        <button onClick={runMinimal} disabled={running} style={{ marginTop: 12, width: "100%", padding: "13px 16px", fontSize: 17, fontWeight: 900 }}>
+          {running ? "診断中…" : "② Minimal Diagnostic開始"}
         </button>
       </>}
-      <div style={{marginTop:10,fontWeight:800,fontSize:13}}>{status}</div>
-      {summary&&<button onClick={copySummary} style={{marginTop:12,width:"100%",padding:"13px 16px",fontSize:17,fontWeight:900}}>③ 総合管理用短縮summaryをコピー</button>}
+      <div style={{ marginTop: 10, fontWeight: 800, fontSize: 13 }}>{status}</div>
     </section>
 
-    <iframe ref={frameRef} title="hidden Photo QR diagnostic engine" src={`${DIAGNOSTIC_ROUTE}?minimalDiagnosticEngine=1`} onLoad={()=>setIframeReady(true)} aria-hidden="true" tabIndex={-1} style={{position:"absolute",width:1,height:1,border:0,opacity:0,pointerEvents:"none",left:-9999,top:-9999}} />
+    {summary && <section style={{ marginTop: 14, border: "2px solid #34a853", borderRadius: 12, padding: 12 }}>
+      <div style={{ fontWeight: 900 }}>Minimal Diagnostic完了</div>
+      <div style={{ fontSize: 12, marginTop: 4 }}>selected 6 / result records 6 / diagnostic errors {summary.diagnosticErrorImageCount}</div>
+      <button onClick={copySummary} style={{ marginTop: 10, width: "100%", padding: "13px 16px", fontSize: 16, fontWeight: 900 }}>
+        ③ 総合管理用短縮summaryをコピー
+      </button>
+    </section>}
   </main>;
 }
