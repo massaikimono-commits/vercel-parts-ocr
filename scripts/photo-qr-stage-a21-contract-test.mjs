@@ -25,12 +25,12 @@ const wrong=[...records];wrong[0]={...wrong[0],imageId:"IMG_9999.jpeg"};assert.t
 const lost=structuredClone(records);lost[0].methods.A_PHYSICAL_SEPARATION.lostCurrentQrCount=1;const lostSummary=buildA21Summary({records:lost});assert.equal(lostSummary.regressionGuard.currentSuccessfulQrLossZero,false);
 const inflated=structuredClone(records);inflated[0].methods.A_PHYSICAL_SEPARATION.duplicateInflationCount=1;const inflatedSummary=buildA21Summary({records:inflated});assert.equal(inflatedSummary.regressionGuard.duplicateInflationZero,false);
 const prep=fs.readFileSync("scripts/prepare-photo-qr-diagnostic-core.mjs","utf8");
-for(const token of ["runPhotoQrA21Counterfactual","A_PHYSICAL_SEPARATION","B_NORMALIZED_QUAD","C_RECTIFIED_RECOVERY","groundTruthUsedDuringDecode:false","formalDecodeLogicChanged:false"]){assert.ok(prep.includes(token),`missing ${token}`);}
+for(const token of ["runPhotoQrA21Counterfactual","A_PHYSICAL_SEPARATION","B_NORMALIZED_QUAD","C_RECTIFIED_RECOVERY","gtUsedDuringDecode:false","formalDecodeLogicChanged:false"]){assert.ok(prep.includes(token),`missing ${token}`);}
 const page=fs.readFileSync("app/eval/certificate-qr-stage-a21-counterfactual-matrix/page.jsx","utf8");
 assert.ok(page.includes("runPhotoQrA21Counterfactual"));
 assert.ok(!page.includes("iframe"));
 assert.ok(!page.includes("button.click"));
 assert.ok(!page.includes("input.files"));
-assert.equal((page.match(/総合管理用短縮summaryをコピー/g)||[]).length,2); // button + status text; one actual button only
-assert.equal((page.match(/<button/g)||[]).length,2); // start + single summary copy
+assert.equal((page.match(/総合管理用短縮summaryをコピー/g)||[]).length,2);
+assert.equal((page.match(/<button/g)||[]).length,2);
 console.log("PASS Stage A21 fixed8 CURRENT/A/B/C matrix invariants + no bridge + formal preservation");
