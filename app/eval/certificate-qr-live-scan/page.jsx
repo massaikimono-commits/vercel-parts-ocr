@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v3-rescue-variant-efficacy-decomposition-1";
+const LIVE_SCAN_REVISION = "live-poc-v3-candidate-lock-retarget-guard-counterfactual-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -1507,6 +1507,139 @@ function pointToNormalizedRoiDistance(x, y, roi) {
   return Math.hypot(dx, dy);
 }
 
+function normalizedRoiContainsPoint(roi, x, y) {
+  return Boolean(
+    roi &&
+    Number.isFinite(x) &&
+    Number.isFinite(y) &&
+    Number.isFinite(roi.x) &&
+    Number.isFinite(roi.y) &&
+    Number.isFinite(roi.w) &&
+    Number.isFinite(roi.h) &&
+    x >= roi.x &&
+    x <= roi.x + roi.w &&
+    y >= roi.y &&
+    y <= roi.y + roi.h
+  );
+}
+
+function nearestContainingSubRoi(x, y, preferredId = null) {
+  const containing = SUB_ROIS.filter((roi) => normalizedRoiContainsPoint(roi, x, y));
+  if (!containing.length) return null;
+  const preferred = containing.find((roi) => roi.id === preferredId);
+  if (preferred) return preferred;
+  return containing
+    .map((roi) => ({
+      roi,
+      distance: Math.hypot(
+        x - (roi.x + roi.w / 2),
+        y - (roi.y + roi.h / 2)
+      ),
+    }))
+    .sort((a, b) => a.distance - b.distance)[0]?.roi || null;
+}
+
+function counterfactualAttemptCoverage(attempt, targetRoiId, candidateX, candidateY) {
+  const target = SUB_ROIS.find((roi) => roi.id === targetRoiId) || null;
+  const variant = LOCAL_RESCUE_VARIANTS.find((item) => item.id === attempt.variantId) || null;
+  if (!target || !variant) {
+    return {
+      covered: false,
+      distance: null,
+      targetRoiId: targetRoiId || null,
+      cropRoi: null,
+    };
+  }
+  const cropRoi = rescueRoiFromVariant(target, variant);
+  const distance = pointToNormalizedRoiDistance(candidateX, candidateY, cropRoi);
+  return {
+    covered: Number.isFinite(distance) ? distance === 0 : false,
+    distance: Number.isFinite(distance) ? Number(distance.toFixed(4)) : null,
+    targetRoiId: target.id,
+    cropRoi,
+  };
+}
+
+function compressAttemptTargetTimeline(attempts = [], candidateX, candidateY) {
+  const rows = [];
+  let active = null;
+  for (const attempt of attempts) {
+    if (!active || active.targetRoiId !== attempt.targetRoiId) {
+      active = {
+        targetRoiId: attempt.targetRoiId || null,
+        startFrame: Number(attempt.frameId),
+        endFrame: Number(attempt.frameId),
+        attemptCount: 0,
+        coveredAttemptCount: 0,
+        targetContainsCandidatePosition: normalizedRoiContainsPoint(
+          SUB_ROIS.find((roi) => roi.id === attempt.targetRoiId) || null,
+          candidateX,
+          candidateY
+        ),
+      };
+      rows.push(active);
+    }
+    active.endFrame = Number(attempt.frameId);
+    active.attemptCount += 1;
+    if (attempt.containsCandidatePosition === true) active.coveredAttemptCount += 1;
+  }
+  return rows;
+}
+
+function counterfactualCoverageSummary(
+  attempts,
+  candidateX,
+  candidateY,
+  targetResolver,
+  lockStartFrame = null,
+  lockEndFrame = null
+) {
+  const evaluated = attempts.map((attempt) => {
+    const targetRoiId = targetResolver(attempt);
+    const result = counterfactualAttemptCoverage(
+      attempt,
+      targetRoiId,
+      candidateX,
+      candidateY
+    );
+    return {
+      frameId: Number(attempt.frameId),
+      variantId: attempt.variantId,
+      actualTargetRoiId: attempt.targetRoiId,
+      counterfactualTargetRoiId: result.targetRoiId,
+      covered: result.covered,
+      distance: result.distance,
+    };
+  });
+  const covered = evaluated.filter((item) => item.covered).length;
+  const missed = evaluated.length - covered;
+  const frameMap = new Map();
+  for (const item of evaluated) {
+    if (!frameMap.has(item.frameId)) frameMap.set(item.frameId, []);
+    frameMap.get(item.frameId).push(item);
+  }
+  const outsideFrames = [...frameMap.entries()]
+    .filter(([, items]) => items.length > 0 && items.every((item) => !item.covered))
+    .map(([frameId]) => Number(frameId))
+    .sort((a, b) => a - b);
+  return {
+    candidateLockStartFrame: lockStartFrame,
+    candidateLockEndFrame: lockEndFrame,
+    counterfactualCoveredAttemptCount: covered,
+    counterfactualMissedAttemptCount: missed,
+    counterfactualOutsideFrameCount: outsideFrames.length,
+    outsideFrames: compactFrameList(outsideFrames, 24),
+    targetUseCounts: Object.fromEntries(
+      [...new Set(evaluated.map((item) => item.counterfactualTargetRoiId || "none"))]
+        .map((targetId) => [
+          targetId,
+          evaluated.filter((item) => (item.counterfactualTargetRoiId || "none") === targetId).length,
+        ])
+    ),
+    diagnosticOnly: true,
+  };
+}
+
 function remainingOneLatencyDiagnostic(state, separated, rescueState) {
   const confirmed = (separated?.allCandidateDiagnostics || [])
     .filter((candidate) => candidate.genericConfirmationPass && Number.isFinite(candidate.genericConfirmationFrame))
@@ -1571,6 +1704,21 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
   const guideRegion = Number.isFinite(medianX) && Number.isFinite(medianY)
     ? guide2DLabel(medianX, medianY)
     : null;
+  const firstUnconfirmedSafeCandidateFrame = firstRecognizedOrSafeFrame;
+  const firstSafePositions = positions.filter((item) =>
+    Number(item.frameId) === Number(firstUnconfirmedSafeCandidateFrame)
+  );
+  const firstSafeXs = firstSafePositions.map((item) => Number(item.x)).filter(Number.isFinite);
+  const firstSafeYs = firstSafePositions.map((item) => Number(item.y)).filter(Number.isFinite);
+  const firstSafeX = firstSafeXs.length ? medianNumber(firstSafeXs) : medianX;
+  const firstSafeY = firstSafeYs.length ? medianNumber(firstSafeYs) : medianY;
+  const candidateGuidePositionAtFirstSeen = {
+    x: Number.isFinite(firstSafeX) ? Number(firstSafeX.toFixed(4)) : null,
+    y: Number.isFinite(firstSafeY) ? Number(firstSafeY.toFixed(4)) : null,
+    region: Number.isFinite(firstSafeX) && Number.isFinite(firstSafeY)
+      ? guide2DLabel(firstSafeX, firstSafeY)
+      : null,
+  };
 
   const normalFrames = compactFrameList([...(raw?.normalFrames || [])]);
   const rescueFrames = compactFrameList([...(raw?.rescueFrames || [])]);
@@ -1668,6 +1816,156 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     ? candidateHitAttempts.filter((item) => item.containsCandidatePosition === true).length /
       attemptsContainingCandidate.length
     : null;
+
+  const attemptsAfterFirstSeen = candidateAttempts.filter((attempt) =>
+    Number.isFinite(Number(firstUnconfirmedSafeCandidateFrame)) &&
+    Number(attempt.frameId) >= Number(firstUnconfirmedSafeCandidateFrame)
+  );
+  const actualTargetTimelineAfterFirstSeen = compressAttemptTargetTimeline(
+    attemptsAfterFirstSeen,
+    firstSafeX,
+    firstSafeY
+  );
+  const actualCoveredAttemptsAfterFirstSeen = attemptsAfterFirstSeen
+    .filter((attempt) => attempt.containsCandidatePosition === true).length;
+  const actualMissedAttemptsAfterFirstSeen =
+    attemptsAfterFirstSeen.length - actualCoveredAttemptsAfterFirstSeen;
+  const actualFrameMapAfterFirstSeen = new Map();
+  for (const attempt of attemptsAfterFirstSeen) {
+    if (!actualFrameMapAfterFirstSeen.has(attempt.frameId)) actualFrameMapAfterFirstSeen.set(attempt.frameId, []);
+    actualFrameMapAfterFirstSeen.get(attempt.frameId).push(attempt);
+  }
+  const actualOutsideFramesAfterFirstSeen = [...actualFrameMapAfterFirstSeen.entries()]
+    .filter(([, items]) => items.length > 0 && items.every((item) => item.containsCandidatePosition !== true))
+    .map(([frameId]) => Number(frameId))
+    .sort((a, b) => a - b);
+
+  let actualRetargetAwayCountAfterFirstSeen = 0;
+  for (let i = 1; i < actualTargetTimelineAfterFirstSeen.length; i += 1) {
+    const previous = actualTargetTimelineAfterFirstSeen[i - 1];
+    const current = actualTargetTimelineAfterFirstSeen[i];
+    if (
+      previous.targetContainsCandidatePosition === true &&
+      current.targetContainsCandidatePosition === false
+    ) {
+      actualRetargetAwayCountAfterFirstSeen += 1;
+    }
+  }
+
+  const targetAtFirstSeenAttempt = attemptsAfterFirstSeen[0] || null;
+  const targetAtFirstSeen = targetAtFirstSeenAttempt?.targetRoiId ||
+    [...(rescueState?.targetHistory || [])]
+      .filter((entry) => Number(entry.frameId) <= Number(firstUnconfirmedSafeCandidateFrame))
+      .sort((a, b) => Number(b.frameId) - Number(a.frameId))[0]?.targetRoiId ||
+    null;
+  const targetAtFirstSeenRoi = SUB_ROIS.find((roi) => roi.id === targetAtFirstSeen) || null;
+  const centerRoi = SUB_ROIS.find((roi) => roi.id === "center") || null;
+  const candidateContainingFallback = nearestContainingSubRoi(firstSafeX, firstSafeY);
+  const cf1LockedTargetRoi =
+    normalizedRoiContainsPoint(targetAtFirstSeenRoi, firstSafeX, firstSafeY)
+      ? targetAtFirstSeenRoi
+      : normalizedRoiContainsPoint(centerRoi, firstSafeX, firstSafeY)
+        ? centerRoi
+        : candidateContainingFallback;
+  const cf1LockedTarget = cf1LockedTargetRoi?.id || null;
+
+  const cf0 = {
+    candidateLockStartFrame: null,
+    candidateLockEndFrame: null,
+    counterfactualLockedTarget: null,
+    counterfactualCoveredAttemptCount: actualCoveredAttemptsAfterFirstSeen,
+    counterfactualMissedAttemptCount: actualMissedAttemptsAfterFirstSeen,
+    counterfactualOutsideFrameCount: actualOutsideFramesAfterFirstSeen.length,
+    outsideFrames: compactFrameList(actualOutsideFramesAfterFirstSeen, 24),
+    targetUseCounts: Object.fromEntries(
+      [...new Set(attemptsAfterFirstSeen.map((attempt) => attempt.targetRoiId || "none"))]
+        .map((targetId) => [
+          targetId,
+          attemptsAfterFirstSeen.filter((attempt) => (attempt.targetRoiId || "none") === targetId).length,
+        ])
+    ),
+    diagnosticOnly: true,
+  };
+
+  const cf1 = counterfactualCoverageSummary(
+    attemptsAfterFirstSeen,
+    firstSafeX,
+    firstSafeY,
+    () => cf1LockedTarget
+  );
+  cf1.counterfactualLockedTarget = cf1LockedTarget;
+
+  const cf2 = counterfactualCoverageSummary(
+    attemptsAfterFirstSeen,
+    firstSafeX,
+    firstSafeY,
+    (attempt) => {
+      const actual = SUB_ROIS.find((roi) => roi.id === attempt.targetRoiId) || null;
+      if (normalizedRoiContainsPoint(actual, firstSafeX, firstSafeY)) return actual.id;
+      return nearestContainingSubRoi(firstSafeX, firstSafeY, cf1LockedTarget)?.id || cf1LockedTarget;
+    }
+  );
+  cf2.counterfactualLockedTarget = "containing-target-only";
+
+  const cf3LockFrames = [6, 12, 18, 24];
+  const cf3Sweep = cf3LockFrames.map((lockFrames) => {
+    const lockStart = Number(firstUnconfirmedSafeCandidateFrame);
+    const lockEnd = Number.isFinite(lockStart) ? lockStart + lockFrames - 1 : null;
+    const summary = counterfactualCoverageSummary(
+      attemptsAfterFirstSeen,
+      firstSafeX,
+      firstSafeY,
+      (attempt) =>
+        Number.isFinite(lockEnd) && Number(attempt.frameId) <= lockEnd
+          ? cf1LockedTarget
+          : attempt.targetRoiId,
+      lockStart,
+      lockEnd
+    );
+    return {
+      lockFrames,
+      counterfactualLockedTarget: cf1LockedTarget,
+      ...summary,
+    };
+  });
+
+  const applyAvoidance = (summary) => ({
+    ...summary,
+    avoidableMissedAttemptCount: Math.max(
+      0,
+      actualMissedAttemptsAfterFirstSeen - Number(summary.counterfactualMissedAttemptCount || 0)
+    ),
+    avoidableOutsideFrames: Math.max(
+      0,
+      actualOutsideFramesAfterFirstSeen.length - Number(summary.counterfactualOutsideFrameCount || 0)
+    ),
+  });
+
+  const candidateLockRetargetGuardCounterfactual = {
+    diagnosticOnly: true,
+    runtimeChanged: false,
+    groundTruthUsed: false,
+    payloadUsed: false,
+    firstUnconfirmedSafeCandidateFrame,
+    candidateGuidePositionAtFirstSeen,
+    targetAtFirstSeen,
+    actualTargetTimelineAfterFirstSeen,
+    actualCoveredAttemptsAfterFirstSeen,
+    actualMissedAttemptsAfterFirstSeen,
+    actualRetargetAwayCountAfterFirstSeen,
+    actualFramesSpentOutsideCandidateRegion: actualOutsideFramesAfterFirstSeen.length,
+    actualOutsideFramesAfterFirstSeen: compactFrameList(actualOutsideFramesAfterFirstSeen, 24),
+    candidateLockStartFrame: firstUnconfirmedSafeCandidateFrame,
+    candidateLockEndFrame: confirmationFrame,
+    confirmationFrame,
+    CF0_CURRENT_SCHEDULED_RETARGET: applyAvoidance(cf0),
+    CF1_HOLD_FIRST_CONTAINING_TARGET: applyAvoidance(cf1),
+    CF2_CONTAINING_TARGETS_ONLY: applyAvoidance(cf2),
+    CF3_TEMPORARY_LOCK_SMALL_SWEEP: cf3Sweep.map(applyAvoidance),
+    cf3LockFrameSweep: cf3LockFrames,
+    counterfactualCoverageOnly: true,
+    decodeOutcomeCounterfactuallyInferred: false,
+  };
 
   const variantEfficacy = Object.fromEntries(LOCAL_RESCUE_VARIANTS.map((variant) => {
     const rows = candidateAttempts.filter((attempt) => attempt.variantId === variant.id);
@@ -1823,6 +2121,7 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
         grayscale: false,
         threshold: false,
       },
+      candidateLockRetargetGuardCounterfactual,
       retargetCount: Number(rescueState?.retargetCount || 0),
       sameRegionRetryCount,
       maxSameTargetRoiAttempts: targetCountValues.length ? Math.max(...targetCountValues) : 0,
@@ -1947,6 +2246,30 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       qualityProxySource: rescueAttemptFull.qualityProxySource || null,
       decodeTimingScope: rescueAttemptFull.decodeTimingScope || null,
       preprocessingVariants: rescueAttemptFull.preprocessingVariants || null,
+      candidateLockRetargetGuardCounterfactual: rescueAttemptFull.candidateLockRetargetGuardCounterfactual ? {
+        diagnosticOnly: true,
+        runtimeChanged: false,
+        groundTruthUsed: false,
+        payloadUsed: false,
+        firstUnconfirmedSafeCandidateFrame: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.firstUnconfirmedSafeCandidateFrame,
+        candidateGuidePositionAtFirstSeen: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.candidateGuidePositionAtFirstSeen,
+        targetAtFirstSeen: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.targetAtFirstSeen,
+        actualTargetTimelineAfterFirstSeen: (rescueAttemptFull.candidateLockRetargetGuardCounterfactual.actualTargetTimelineAfterFirstSeen || []).slice(0, 12),
+        actualCoveredAttemptsAfterFirstSeen: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.actualCoveredAttemptsAfterFirstSeen,
+        actualMissedAttemptsAfterFirstSeen: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.actualMissedAttemptsAfterFirstSeen,
+        actualRetargetAwayCountAfterFirstSeen: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.actualRetargetAwayCountAfterFirstSeen,
+        actualFramesSpentOutsideCandidateRegion: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.actualFramesSpentOutsideCandidateRegion,
+        candidateLockStartFrame: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.candidateLockStartFrame,
+        candidateLockEndFrame: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.candidateLockEndFrame,
+        confirmationFrame: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.confirmationFrame,
+        CF0_CURRENT_SCHEDULED_RETARGET: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.CF0_CURRENT_SCHEDULED_RETARGET,
+        CF1_HOLD_FIRST_CONTAINING_TARGET: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.CF1_HOLD_FIRST_CONTAINING_TARGET,
+        CF2_CONTAINING_TARGETS_ONLY: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.CF2_CONTAINING_TARGETS_ONLY,
+        CF3_TEMPORARY_LOCK_SMALL_SWEEP: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.CF3_TEMPORARY_LOCK_SMALL_SWEEP,
+        cf3LockFrameSweep: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.cf3LockFrameSweep,
+        counterfactualCoverageOnly: true,
+        decodeOutcomeCounterfactuallyInferred: false,
+      } : null,
       evaluationOverheadPresent: Boolean(rescueAttemptFull.evaluationOverheadPresent),
       timingComparableToNonDiagnosticRun: Boolean(rescueAttemptFull.timingComparableToNonDiagnosticRun),
       retargetCount: rescueAttemptFull.retargetCount,
