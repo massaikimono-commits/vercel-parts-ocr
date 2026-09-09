@@ -1817,10 +1817,29 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
       attemptsContainingCandidate.length
     : null;
 
-  const attemptsAfterFirstSeen = candidateAttempts.filter((attempt) =>
-    Number.isFinite(Number(firstUnconfirmedSafeCandidateFrame)) &&
-    Number(attempt.frameId) >= Number(firstUnconfirmedSafeCandidateFrame)
-  );
+  const attemptsAfterFirstSeen = candidateAttempts
+    .filter((attempt) =>
+      Number.isFinite(Number(firstUnconfirmedSafeCandidateFrame)) &&
+      Number(attempt.frameId) >= Number(firstUnconfirmedSafeCandidateFrame)
+    )
+    .map((attempt) => {
+      const firstSeenDistance = pointToNormalizedRoiDistance(
+        firstSafeX,
+        firstSafeY,
+        attempt.cropRoi
+      );
+      return {
+        ...attempt,
+        sessionMedianContainsCandidatePosition: attempt.containsCandidatePosition,
+        containsCandidatePosition: Number.isFinite(firstSeenDistance)
+          ? firstSeenDistance === 0
+          : null,
+        candidatePositionToRoiDistance: Number.isFinite(firstSeenDistance)
+          ? Number(firstSeenDistance.toFixed(4))
+          : null,
+        coverageReference: "candidate-guide-position-at-first-safe-seen",
+      };
+    });
   const actualTargetTimelineAfterFirstSeen = compressAttemptTargetTimeline(
     attemptsAfterFirstSeen,
     firstSafeX,
@@ -1963,6 +1982,7 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     CF2_CONTAINING_TARGETS_ONLY: applyAvoidance(cf2),
     CF3_TEMPORARY_LOCK_SMALL_SWEEP: cf3Sweep.map(applyAvoidance),
     cf3LockFrameSweep: cf3LockFrames,
+    coverageReference: "candidate-guide-position-at-first-safe-seen",
     counterfactualCoverageOnly: true,
     decodeOutcomeCounterfactuallyInferred: false,
   };
