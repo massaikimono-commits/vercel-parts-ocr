@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v3-remaining-one-rescue-attempt-diagnostic-1";
+const LIVE_SCAN_REVISION = "live-poc-v3-rescue-variant-efficacy-decomposition-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -1584,11 +1584,32 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     : null;
 
   const rescueAttempts = Array.isArray(rescueState?.attemptLog) ? rescueState.attemptLog : [];
+  const locatorTrackMatches = Array.isArray(raw?.locatorTrackMatches) ? raw.locatorTrackMatches : [];
+  const locatorWidths = locatorTrackMatches.map((item) => Number(item.w)).filter(Number.isFinite);
+  const locatorHeights = locatorTrackMatches.map((item) => Number(item.h)).filter(Number.isFinite);
+  const locatorMedianW = locatorWidths.length ? medianNumber(locatorWidths) : null;
+  const locatorMedianH = locatorHeights.length ? medianNumber(locatorHeights) : null;
   const candidateAttempts = rescueAttempts.map((attempt) => {
     const distance = pointToNormalizedRoiDistance(medianX, medianY, attempt.cropRoi);
     const containsCandidatePosition = Number.isFinite(distance) ? distance === 0 : null;
     const candidateHit = Array.isArray(attempt.hitDiagnosticIds) &&
       attempt.hitDiagnosticIds.includes(last.diagnosticId);
+    const relativeX =
+      Number.isFinite(medianX) && Number.isFinite(attempt.cropRoi?.x) && Number.isFinite(attempt.cropRoi?.w) && attempt.cropRoi.w > 0
+        ? (medianX - attempt.cropRoi.x) / attempt.cropRoi.w
+        : null;
+    const relativeY =
+      Number.isFinite(medianY) && Number.isFinite(attempt.cropRoi?.y) && Number.isFinite(attempt.cropRoi?.h) && attempt.cropRoi.h > 0
+        ? (medianY - attempt.cropRoi.y) / attempt.cropRoi.h
+        : null;
+    const relativeWidth =
+      Number.isFinite(locatorMedianW) && Number.isFinite(attempt.cropRoi?.w) && attempt.cropRoi.w > 0
+        ? locatorMedianW / attempt.cropRoi.w
+        : null;
+    const relativeHeight =
+      Number.isFinite(locatorMedianH) && Number.isFinite(attempt.cropRoi?.h) && attempt.cropRoi.h > 0
+        ? locatorMedianH / attempt.cropRoi.h
+        : null;
     return {
       attemptIndex: attempt.attemptIndex,
       frameId: attempt.frameId,
@@ -1597,6 +1618,24 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
       subRoiId: attempt.subRoiId,
       engine: attempt.engine,
       guideRegion: attempt.guideRegion,
+      cropRoi: attempt.cropRoi,
+      cropPixelWidth: Number(attempt.cropPixelWidth || 0),
+      cropPixelHeight: Number(attempt.cropPixelHeight || 0),
+      upscaleScale: Number(attempt.upscaleScale || 1),
+      grayscaleVariant: Boolean(attempt.grayscaleVariant),
+      thresholdVariant: Boolean(attempt.thresholdVariant),
+      quality: attempt.quality || null,
+      zxingDecodeMs: Number.isFinite(Number(attempt.zxingDecodeMs)) ? Number(attempt.zxingDecodeMs) : null,
+      candidateRelativePositionInCrop: {
+        x: Number.isFinite(relativeX) ? Number(relativeX.toFixed(4)) : null,
+        y: Number.isFinite(relativeY) ? Number(relativeY.toFixed(4)) : null,
+      },
+      candidateSizeRelativeToCropEstimate: {
+        source: "physical-locator-track-size-estimate",
+        width: Number.isFinite(relativeWidth) ? Number(relativeWidth.toFixed(4)) : null,
+        height: Number.isFinite(relativeHeight) ? Number(relativeHeight.toFixed(4)) : null,
+        available: Number.isFinite(relativeWidth) && Number.isFinite(relativeHeight),
+      },
       containsCandidatePosition,
       candidatePositionToRoiDistance: Number.isFinite(distance) ? Number(distance.toFixed(4)) : null,
       candidateHit,
@@ -1629,6 +1668,60 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     ? candidateHitAttempts.filter((item) => item.containsCandidatePosition === true).length /
       attemptsContainingCandidate.length
     : null;
+
+  const variantEfficacy = Object.fromEntries(LOCAL_RESCUE_VARIANTS.map((variant) => {
+    const rows = candidateAttempts.filter((attempt) => attempt.variantId === variant.id);
+    const covered = rows.filter((attempt) => attempt.containsCandidatePosition === true);
+    const hits = rows.filter((attempt) => attempt.candidateHit);
+    const coveredHits = covered.filter((attempt) => attempt.candidateHit);
+    const decodeTimes = rows.map((attempt) => attempt.zxingDecodeMs).filter(Number.isFinite);
+    const cropWs = rows.map((attempt) => Number(attempt.cropRoi?.w)).filter(Number.isFinite);
+    const cropHs = rows.map((attempt) => Number(attempt.cropRoi?.h)).filter(Number.isFinite);
+    const cropPixelWs = rows.map((attempt) => attempt.cropPixelWidth).filter(Number.isFinite);
+    const cropPixelHs = rows.map((attempt) => attempt.cropPixelHeight).filter(Number.isFinite);
+    const relXs = covered.map((attempt) => attempt.candidateRelativePositionInCrop?.x).filter(Number.isFinite);
+    const relYs = covered.map((attempt) => attempt.candidateRelativePositionInCrop?.y).filter(Number.isFinite);
+    const relWs = covered.map((attempt) => attempt.candidateSizeRelativeToCropEstimate?.width).filter(Number.isFinite);
+    const relHs = covered.map((attempt) => attempt.candidateSizeRelativeToCropEstimate?.height).filter(Number.isFinite);
+    const edgeStrengths = rows.map((attempt) => Number(attempt.quality?.edgeStrength)).filter(Number.isFinite);
+    const lapVars = rows.map((attempt) => Number(attempt.quality?.laplacianVariance)).filter(Number.isFinite);
+    const contrastRanges = rows.map((attempt) => Number(attempt.quality?.contrastRange)).filter(Number.isFinite);
+    const lumaStdDevs = rows.map((attempt) => Number(attempt.quality?.lumaStdDev)).filter(Number.isFinite);
+    return [variant.id, {
+      attemptCount: rows.length,
+      candidateCoveredAttemptCount: covered.length,
+      candidateHitCount: hits.length,
+      candidateHitWhenCoveredCount: coveredHits.length,
+      hitRateWhenCovered: covered.length ? Number((coveredHits.length / covered.length).toFixed(4)) : null,
+      cropNormalizedWidthMedian: cropWs.length ? Number(medianNumber(cropWs).toFixed(4)) : null,
+      cropNormalizedHeightMedian: cropHs.length ? Number(medianNumber(cropHs).toFixed(4)) : null,
+      cropPixelWidthMedian: cropPixelWs.length ? Number(medianNumber(cropPixelWs).toFixed(1)) : null,
+      cropPixelHeightMedian: cropPixelHs.length ? Number(medianNumber(cropPixelHs).toFixed(1)) : null,
+      upscaleScale: Number(variant.scale || 1),
+      candidateRelativePositionInCropMedian: {
+        x: relXs.length ? Number(medianNumber(relXs).toFixed(4)) : null,
+        y: relYs.length ? Number(medianNumber(relYs).toFixed(4)) : null,
+      },
+      candidateSizeRelativeToCropEstimateMedian: {
+        source: "physical-locator-track-size-estimate",
+        width: relWs.length ? Number(medianNumber(relWs).toFixed(4)) : null,
+        height: relHs.length ? Number(medianNumber(relHs).toFixed(4)) : null,
+        available: relWs.length > 0 && relHs.length > 0,
+      },
+      sharpnessProxyMedian: {
+        edgeStrength: edgeStrengths.length ? Number(medianNumber(edgeStrengths).toFixed(2)) : null,
+        laplacianVariance: lapVars.length ? Number(medianNumber(lapVars).toFixed(2)) : null,
+      },
+      contrastProxyMedian: {
+        contrastRange: contrastRanges.length ? Number(medianNumber(contrastRanges).toFixed(2)) : null,
+        lumaStdDev: lumaStdDevs.length ? Number(medianNumber(lumaStdDevs).toFixed(2)) : null,
+      },
+      grayscaleVariant: false,
+      thresholdVariant: false,
+      zxingDecodeMsMedian: decodeTimes.length ? Number(medianNumber(decodeTimes).toFixed(2)) : null,
+      zxingDecodeMsMax: decodeTimes.length ? Number(Math.max(...decodeTimes).toFixed(2)) : null,
+    }];
+  }));
 
   const targetHistory = Array.isArray(rescueState?.targetHistory) ? rescueState.targetHistory : [];
   const targetSwitchDiagnostics = targetHistory.map((entry, index) => {
@@ -1700,6 +1793,8 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
       diagnosticOnly: true,
       decoderChanged: false,
       rescueLogicChanged: false,
+      evaluationOverheadPresent: true,
+      timingComparableToNonDiagnosticRun: false,
       totalAttemptCount: candidateAttempts.length,
       zxingAttemptCount: candidateAttempts.filter((item) => item.engine === "zxing").length,
       jsQRAttemptCount: candidateAttempts.filter((item) => item.engine === "jsqr").length,
@@ -1715,6 +1810,19 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
       targetRoiAttemptCounts: targetCounts,
       variantAttemptCounts: variantCounts,
       candidateHitsByVariant,
+      variantEfficacy,
+      physicalLocatorCandidateSizeEstimate: {
+        width: Number.isFinite(locatorMedianW) ? Number(locatorMedianW.toFixed(4)) : null,
+        height: Number.isFinite(locatorMedianH) ? Number(locatorMedianH.toFixed(4)) : null,
+        matchCount: locatorTrackMatches.length,
+        diagnosticOnly: true,
+      },
+      qualityProxySource: "frameQuality-on-rescue-crop-diagnostic-only",
+      decodeTimingScope: "decodeZxing-call-only",
+      preprocessingVariants: {
+        grayscale: false,
+        threshold: false,
+      },
       retargetCount: Number(rescueState?.retargetCount || 0),
       sameRegionRetryCount,
       maxSameTargetRoiAttempts: targetCountValues.length ? Math.max(...targetCountValues) : 0,
@@ -2947,6 +3055,8 @@ export default function CertificateQrLiveScanPoc() {
           trackId: pair.track.trackId,
           x: pair.track.x,
           y: pair.track.y,
+          w: pair.track.w,
+          h: pair.track.h,
         });
         if (rawCandidate.locatorTrackMatches.length > 96) {
           rawCandidate.locatorTrackMatches = rawCandidate.locatorTrackMatches.slice(-96);
@@ -3163,6 +3273,13 @@ export default function CertificateQrLiveScanPoc() {
                 w: Number(cropRoi.w.toFixed(4)),
                 h: Number(cropRoi.h.toFixed(4)),
               },
+              cropPixelWidth: rescueCanvas.width,
+              cropPixelHeight: rescueCanvas.height,
+              upscaleScale: Number(variant.scale || 1),
+              grayscaleVariant: false,
+              thresholdVariant: false,
+              quality: frameQuality(rescueCanvas),
+              zxingDecodeMs: null,
               guideRegion: guide2DLabel(
                 cropRoi.x + cropRoi.w / 2,
                 cropRoi.y + cropRoi.h / 2
@@ -3171,7 +3288,9 @@ export default function CertificateQrLiveScanPoc() {
               hitDiagnosticIds: [],
             };
             try {
+              const decodeStartedAt = performance.now();
               const zxHits = await decodeZxing(readerRef.current, rescueCanvas);
+              rescueAttempt.zxingDecodeMs = Number((performance.now() - decodeStartedAt).toFixed(2));
               rescueAttempt.rawHitCount = zxHits.length;
               rescueState.rawSuccessCount += zxHits.length;
               variantStats.rawSuccesses += zxHits.length;
