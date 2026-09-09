@@ -29,6 +29,9 @@ function normalizeStored(value: unknown): GtMap {
 function hasGtRows(rows: GtRow[] | undefined) {
   return Boolean(rows?.some((r) => r.name.trim() || r.qty.trim() || r.retail.trim() || r.cost.trim()));
 }
+function completeCount(gt: GtMap) {
+  return EXPECTED_FILES.filter((f) => hasGtRows(gt[f])).length;
+}
 function canonical(name: string) {
   const m = name.match(/IMG_(067[5-9]|068[0-6])/i);
   return m ? EXPECTED_FILES.find((f) => f.startsWith(`IMG_${m[1]}`)) || "" : "";
@@ -36,28 +39,49 @@ function canonical(name: string) {
 function evalInput() {
   return document.querySelector('main input[type="file"][multiple]') as HTMLInputElement | null;
 }
+function fromBase64Url(value: string) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
 
 export default function GtBuilderEnhancer() {
   const [gt, setGt] = useState<GtMap>(() => blankMap());
   const [loaded, setLoaded] = useState(false);
   const [previews, setPreviews] = useState<PreviewMap>({});
   const [state, setState] = useState("A19保存済みGTを確認しています…");
-  const [importText, setImportText] = useState("");
   const urls = useRef<string[]>([]);
 
   useEffect(() => {
     try {
+      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+      const params = new URLSearchParams(hash);
+      const payload = params.get("a19gt");
+      if (payload) {
+        const migrated = normalizeStored(JSON.parse(fromBase64Url(payload)));
+        const count = completeCount(migrated);
+        if (count !== 12) throw new Error(`migrated GT incomplete: ${count}/12`);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        setGt(migrated);
+        setState("A19保存済みGTを移行しました。A19保存済みGTを使用中");
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+        setLoaded(true);
+        return;
+      }
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const next = normalizeStored(JSON.parse(raw));
         setGt(next);
-        const count = EXPECTED_FILES.filter((f) => hasGtRows(next[f])).length;
+        const count = completeCount(next);
         setState(count === 12 ? "A19保存済みGTを使用中" : `A19保存済みGTを検出しましたが ${count}/12 です。`);
       } else {
-        setState("このSafari originにはA19保存済みGTがありません。既存GT JSONがある場合のみ下の移行欄を使えます。");
+        setState("このSafari originにはA19保存済みGTがありません。A19移行ボタンから移してください。");
       }
     } catch {
-      setState("A19保存済みGTの読込に失敗しました。既存GT JSONがある場合は下から移行できます。");
+      setState("A19 GT移行payloadまたは保存済みGTを読み込めませんでした。GT内容は変更していません。");
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
     } finally {
       setLoaded(true);
     }
@@ -107,7 +131,7 @@ export default function GtBuilderEnhancer() {
     }
   }, []);
 
-  const completed = useMemo(() => EXPECTED_FILES.filter((f) => hasGtRows(gt[f])).length, [gt]);
+  const completed = useMemo(() => completeCount(gt), [gt]);
   const selected = EXPECTED_FILES.filter((f) => previews[f]).length;
   const rowCounts = useMemo(() => Object.fromEntries(EXPECTED_FILES.map((f) => [f, (gt[f] || []).filter((r) => r.name.trim() || r.qty.trim() || r.retail.trim() || r.cost.trim()).length])), [gt]);
 
@@ -125,26 +149,13 @@ export default function GtBuilderEnhancer() {
     input.dispatchEvent(new Event("change", { bubbles: true }));
     window.setTimeout(() => delete input.dataset.a20AllowRun, 0);
   }
-  function importExistingGt() {
-    try {
-      const parsed = normalizeStored(JSON.parse(importText));
-      const count = EXPECTED_FILES.filter((f) => hasGtRows(parsed[f])).length;
-      if (count !== 12) { setState(`移行JSONは ${count}/12 です。正式12枚すべてのGTが必要です。`); return; }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      setGt(parsed);
-      setImportText("");
-      setState("既存A19 GT JSONをこのSafariへ移行しました。A19保存済みGTを使用中");
-    } catch {
-      setState("GT JSONを読み込めませんでした。保存済みJSONを内容変更せずそのまま貼り付けてください。");
-    }
-  }
 
   return <section style={{ maxWidth: 1120, margin: "16px auto 0", padding: "0 12px" }}><div style={{ background: "#fff", border: "1px solid #dbe2ec", borderRadius: 16, padding: 14 }}>
     <h2 style={{ marginTop: 0 }}>Stage A20 正式12枚</h2>
     <p style={{ lineHeight: 1.6 }}>A19で保存した4項目GTを自動読込します。GTはscoring-onlyで、A20 runtime/controlには使用しません。GTの再入力は不要です。</p>
     <div style={{ padding: 10, borderRadius: 10, background: completed === 12 ? "#eef8f0" : "#fff4e5", marginBottom: 10, fontWeight: 700 }}>{loaded ? (completed === 12 ? "A19保存済みGTを使用中 ・ 12/12" : `A19 GT ${completed}/12`) : "A19保存済みGTを確認中…"}</div>
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 6, marginBottom: 12 }}>{EXPECTED_FILES.map((f) => <div key={f} style={{ border: "1px solid #e1e6ee", borderRadius: 8, padding: 8, fontSize: 12 }}>{f}<br/><strong>GT {rowCounts[f] || 0}行</strong></div>)}</div>
-    {completed !== 12 && loaded && <details style={{ marginBottom: 12 }}><summary style={{ cursor: "pointer", fontWeight: 700 }}>同一SafariにGTが無い場合の既存GT JSON移行</summary><p style={{ fontSize: 12, lineHeight: 1.5 }}>Vercelの別Preview hostname間ではlocalStorageを直接読めないため、同一originにGTが無い場合だけ既存GT JSONを移行できます。12枚を手入力し直すための欄ではありません。</p><textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="保存済みA19 GT JSON" style={{ width: "100%", minHeight: 90, boxSizing: "border-box" }} /><button type="button" onClick={importExistingGt} style={{ marginTop: 6, padding: "9px 12px" }}>既存GT JSONを移行</button></details>}
+    {completed !== 12 && loaded && <div style={{ marginBottom: 12, padding: 10, borderRadius: 10, background: "#fff4e5", fontSize: 13, lineHeight: 1.5 }}>このA20 originには正式GTがありません。12枚の再入力はしません。A19側の「A20へGTを移行」から移してください。</div>}
     <button type="button" onClick={choose} disabled={completed !== 12} style={{ width: "100%", border: 0, borderRadius: 12, padding: 12, background: completed === 12 ? "#174ea6" : "#aeb8c7", color: "#fff", fontWeight: 800, fontSize: 16 }}>黄色正式12枚を一括選択</button>
     <div style={{ margin: "10px 0 12px", fontSize: 13 }}>写真対応 {selected}/12 ・ GT {completed}/12<br/>{state}</div>
     {selected > 0 && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8, marginBottom: 12 }}>{EXPECTED_FILES.map((f) => { const p = previews[f]; return <div key={f} style={{ border: "1px solid #e1e6ee", borderRadius: 8, padding: 6, fontSize: 11 }}><strong>{f}</strong>{p ? <><img src={p.url} alt={`${f}対応画像`} style={{ width: "100%", height: 110, objectFit: "contain", display: "block", marginTop: 4 }} /><div style={{ overflowWrap: "anywhere" }}>{p.originalName}</div></> : <div style={{ height: 110, display: "grid", placeItems: "center", color: "#667085" }}>未選択</div>}</div>; })}</div>}
