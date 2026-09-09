@@ -19,6 +19,10 @@ export type ModelStats = {
 
 type SessionBundle = { session:any; dict:string[]; stats:ModelStats; modelBytes:ArrayBuffer };
 
+const ORT_VERSION="1.22.0";
+const ORT_DIST=`https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
+const ORT_SCRIPT=`${ORT_DIST}ort.min.js`;
+
 const MODELS = {
   ONNX_JA_LIGHT: {
     modelUrl:"https://huggingface.co/tobiichioriguchi/japan_PP-OCRv3_mobile_rec_onnx/resolve/main/inference.onnx?download=true",
@@ -35,7 +39,16 @@ const MODELS = {
 const cache:Partial<Record<keyof typeof MODELS,Promise<SessionBundle>>> = {};
 let ortPromise:Promise<any>|null=null;
 function getOrt(){
-  if(!ortPromise)ortPromise=import("onnxruntime-web");
+  if(typeof window==="undefined") return Promise.reject(new Error("ONNX runtime is browser-only"));
+  const existing=(window as any).ort;
+  if(existing){existing.env.wasm.wasmPaths=ORT_DIST;existing.env.wasm.numThreads=1;return Promise.resolve(existing);}
+  if(ortPromise)return ortPromise;
+  ortPromise=new Promise((resolve,reject)=>{
+    const prior=document.querySelector(`script[data-stage-a20-ort="${ORT_VERSION}"]`) as HTMLScriptElement|null;
+    const finish=()=>{const ort=(window as any).ort;if(!ort){reject(new Error("ONNX Runtime global missing after script load"));return;}ort.env.wasm.wasmPaths=ORT_DIST;ort.env.wasm.numThreads=1;resolve(ort);};
+    if(prior){if((window as any).ort)finish();else{prior.addEventListener("load",finish,{once:true});prior.addEventListener("error",()=>reject(new Error("ONNX Runtime script load failed")),{once:true});}return;}
+    const script=document.createElement("script");script.src=ORT_SCRIPT;script.async=true;script.crossOrigin="anonymous";script.dataset.stageA20Ort=ORT_VERSION;script.onload=finish;script.onerror=()=>reject(new Error("ONNX Runtime script load failed"));document.head.appendChild(script);
+  });
   return ortPromise;
 }
 
@@ -44,7 +57,7 @@ function normalizeFinal(raw:string,key:FieldKey){
   if(key==="name") return t.replace(/^[\s|:;.,・]+|[\s|:;.,・]+$/g,"").trim();
   const m=t.replace(/[|Il!]/g,"1").replace(/[Oo]/g,"0").match(/\d{1,3}(?:[,\.\s]\d{3})+|\d{1,7}/g);
   if(!m?.length)return"";
-  return m.map(x=>x.replace(/\D/g,"")).find(Boolean)||"";
+  return m.map((x:string)=>x.replace(/\D/g,"")).find(Boolean)||"";
 }
 
 function softmaxConfidence(row:Float32Array|number[],best:number){
@@ -66,7 +79,7 @@ function decodeCtc(data:Float32Array,dims:number[],dict:string[]){
     }
     prev=best;
   }
-  return {text,confidence:confs.length?confs.reduce((a,b)=>a+b,0)/confs.length:0};
+  return {text,confidence:confs.length?confs.reduce((a:number,b:number)=>a+b,0)/confs.length:0};
 }
 
 function tensorFromCanvas(ort:any,src:HTMLCanvasElement){
@@ -96,7 +109,6 @@ async function loadModel(key:keyof typeof MODELS):Promise<SessionBundle>{
     const stats:ModelStats={key,modelUrl:cfg.modelUrl,dictUrl:cfg.dictUrl,declaredModelMb:cfg.declaredModelMb,downloadedBytes:0,firstLoadMs:0,warmReuseLoadMs:0,available:false,error:"",inputName:"",outputName:""};
     try{
       const ort:any=await getOrt();
-      ort.env.wasm.numThreads=1;
       const [modelRes,dictRes]=await Promise.all([fetch(cfg.modelUrl,{cache:"force-cache"}),fetch(cfg.dictUrl,{cache:"force-cache"})]);
       if(!modelRes.ok)throw new Error(`model HTTP ${modelRes.status}`); if(!dictRes.ok)throw new Error(`dict HTTP ${dictRes.status}`);
       const [modelBytes,dictText]=await Promise.all([modelRes.arrayBuffer(),dictRes.text()]);
@@ -112,7 +124,7 @@ async function loadModel(key:keyof typeof MODELS):Promise<SessionBundle>{
 }
 
 export async function getModelStats(key:"ONNX_JA_LIGHT"|"ONNX_V5"){
-  try{return (await loadModel(key)).stats;}catch(e:any){return e.modelStats as ModelStats;}
+  try{return (await loadModel(key)).stats;}catch(e:any){return (e?.modelStats||{key,modelUrl:MODELS[key].modelUrl,dictUrl:MODELS[key].dictUrl,declaredModelMb:MODELS[key].declaredModelMb,downloadedBytes:0,firstLoadMs:0,warmReuseLoadMs:0,available:false,error:String(e?.message||e),inputName:"",outputName:""}) as ModelStats;}
 }
 
 export async function recognizeOnnx(key:"ONNX_JA_LIGHT"|"ONNX_V5",canvas:HTMLCanvasElement,field:FieldKey):Promise<RecognitionResult>{
