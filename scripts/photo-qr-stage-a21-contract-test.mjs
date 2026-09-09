@@ -31,6 +31,6 @@ assert.ok(page.includes("runPhotoQrA21Counterfactual"));
 assert.ok(!page.includes("iframe"));
 assert.ok(!page.includes("button.click"));
 assert.ok(!page.includes("input.files"));
-assert.equal((page.match(/総合管理用短縮summaryをコピー/g)||[]).length,2);
-assert.equal((page.match(/<button/g)||[]).length,2);
+assert.equal((page.match(/<button onClick=\{copy\}/g)||[]).length,1);
+assert.equal((page.match(/③ 総合管理用短縮summaryをコピー/g)||[]).length,1);
 console.log("PASS Stage A21 fixed8 CURRENT/A/B/C matrix invariants + no bridge + formal preservation");
