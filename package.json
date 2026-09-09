@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/prepare-photo-qr-diagnostic-core.mjs && next dev",
-    "build": "node scripts/prepare-photo-qr-diagnostic-core.mjs && npm run test:photo-qr-minimal && npm run test:photo-qr-a21 && npm run test:certificate && npm run test:parts && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:daily-report-secondary && npm run test:qr-speed && npm run test:parts-layout && next build",
+    "build": "node scripts/prepare-photo-qr-diagnostic-core.mjs && npm run test:photo-qr-minimal && npm run test:photo-qr-a21 && npm run test:photo-qr-a21-1 && npm run test:certificate && npm run test:parts && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:daily-report-secondary && npm run test:qr-speed && npm run test:parts-layout && next build",
     "start": "next start",
     "test:photo-qr-minimal": "node scripts/photo-qr-minimal-contract-test.mjs",
     "test:photo-qr-a21": "node scripts/photo-qr-stage-a21-contract-test.mjs",
+    "test:photo-qr-a21-1": "node scripts/photo-qr-stage-a21-1-audit-test.mjs",
     "test:certificate": "node scripts/vehicle-certificate-regression.mjs",
     "test:parts": "node scripts/parts-slip-regression.mjs",
     "test:inspection": "node scripts/inspection-autofill-regression.mjs",
