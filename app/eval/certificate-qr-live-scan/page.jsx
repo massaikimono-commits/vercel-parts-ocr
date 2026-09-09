@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const LIVE_SCAN_REVISION = "live-poc-v3-candidate-lock-retarget-guard-counterfactual-1";
+const LIVE_SCAN_REVISION = "live-poc-v3-candidate-lock-null-semantics-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -1727,9 +1727,13 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
   const bothEngineFrames = compactFrameList([...(raw?.bothEngineFrames || [])]);
 
   const firstSeenFrame = Number.isFinite(Number(last.firstSeenFrame)) ? Number(last.firstSeenFrame) : null;
-  const rescueActivatedFrame = Number.isFinite(Number(rescueState?.activatedFrame))
-    ? Number(rescueState.activatedFrame)
-    : null;
+  const rescueActivatedRaw = rescueState?.activatedFrame;
+  const rescueActivatedFrame =
+    rescueActivatedRaw == null
+      ? null
+      : Number.isFinite(Number(rescueActivatedRaw))
+        ? Number(rescueActivatedRaw)
+        : null;
 
   const rescueAttempts = Array.isArray(rescueState?.attemptLog) ? rescueState.attemptLog : [];
   const locatorTrackMatches = Array.isArray(raw?.locatorTrackMatches) ? raw.locatorTrackMatches : [];
@@ -1960,11 +1964,40 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     ),
   });
 
+  const rescueOrRetargetActivity =
+    candidateAttempts.length > 0 ||
+    Number(rescueState?.retargetCount || 0) > 0;
+  const postFirstSeenCoverageLoss =
+    attemptsAfterFirstSeen.length > 0 &&
+    (
+      actualMissedAttemptsAfterFirstSeen > 0 ||
+      actualOutsideFramesAfterFirstSeen.length > 0
+    );
+  const candidatePositionAvailable =
+    Number.isFinite(firstSafeX) &&
+    Number.isFinite(firstSafeY);
+  const candidateLockCounterfactualEvaluable =
+    rescueOrRetargetActivity &&
+    postFirstSeenCoverageLoss &&
+    candidatePositionAvailable;
+  const candidateLockCounterfactualNotEvaluableReason =
+    candidateLockCounterfactualEvaluable
+      ? null
+      : !rescueOrRetargetActivity
+        ? "NO_RESCUE_OR_RETARGET_ACTIVITY"
+        : !candidatePositionAvailable
+          ? "NO_CANDIDATE_GUIDE_POSITION"
+          : !postFirstSeenCoverageLoss
+            ? "NO_POST_FIRST_SEEN_COVERAGE_LOSS"
+            : "NOT_EVALUABLE";
+
   const candidateLockRetargetGuardCounterfactual = {
     diagnosticOnly: true,
     runtimeChanged: false,
     groundTruthUsed: false,
     payloadUsed: false,
+    candidateLockCounterfactualEvaluable,
+    candidateLockCounterfactualNotEvaluableReason,
     firstUnconfirmedSafeCandidateFrame,
     candidateGuidePositionAtFirstSeen,
     targetAtFirstSeen,
@@ -1974,13 +2007,25 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     actualRetargetAwayCountAfterFirstSeen,
     actualFramesSpentOutsideCandidateRegion: actualOutsideFramesAfterFirstSeen.length,
     actualOutsideFramesAfterFirstSeen: compactFrameList(actualOutsideFramesAfterFirstSeen, 24),
-    candidateLockStartFrame: firstUnconfirmedSafeCandidateFrame,
-    candidateLockEndFrame: confirmationFrame,
+    candidateLockStartFrame: candidateLockCounterfactualEvaluable
+      ? firstUnconfirmedSafeCandidateFrame
+      : null,
+    candidateLockEndFrame: candidateLockCounterfactualEvaluable
+      ? confirmationFrame
+      : null,
     confirmationFrame,
-    CF0_CURRENT_SCHEDULED_RETARGET: applyAvoidance(cf0),
-    CF1_HOLD_FIRST_CONTAINING_TARGET: applyAvoidance(cf1),
-    CF2_CONTAINING_TARGETS_ONLY: applyAvoidance(cf2),
-    CF3_TEMPORARY_LOCK_SMALL_SWEEP: cf3Sweep.map(applyAvoidance),
+    CF0_CURRENT_SCHEDULED_RETARGET: candidateLockCounterfactualEvaluable
+      ? applyAvoidance(cf0)
+      : null,
+    CF1_HOLD_FIRST_CONTAINING_TARGET: candidateLockCounterfactualEvaluable
+      ? applyAvoidance(cf1)
+      : null,
+    CF2_CONTAINING_TARGETS_ONLY: candidateLockCounterfactualEvaluable
+      ? applyAvoidance(cf2)
+      : null,
+    CF3_TEMPORARY_LOCK_SMALL_SWEEP: candidateLockCounterfactualEvaluable
+      ? cf3Sweep.map(applyAvoidance)
+      : null,
     cf3LockFrameSweep: cf3LockFrames,
     coverageReference: "candidate-guide-position-at-first-safe-seen",
     counterfactualCoverageOnly: true,
@@ -2271,6 +2316,8 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
         runtimeChanged: false,
         groundTruthUsed: false,
         payloadUsed: false,
+        candidateLockCounterfactualEvaluable: Boolean(rescueAttemptFull.candidateLockRetargetGuardCounterfactual.candidateLockCounterfactualEvaluable),
+        candidateLockCounterfactualNotEvaluableReason: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.candidateLockCounterfactualNotEvaluableReason || null,
         firstUnconfirmedSafeCandidateFrame: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.firstUnconfirmedSafeCandidateFrame,
         candidateGuidePositionAtFirstSeen: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.candidateGuidePositionAtFirstSeen,
         targetAtFirstSeen: rescueAttemptFull.candidateLockRetargetGuardCounterfactual.targetAtFirstSeen,
