@@ -1,0 +1,21 @@
+name: Parts OCR Stage A19 diagnostic build
+
+on:
+  push:
+    branches:
+      - eval/parts-ocr-stage-a19-runtime-reconnection
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_EVAL_HEAD: ${{ github.sha }}
