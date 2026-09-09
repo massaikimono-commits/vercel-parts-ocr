@@ -1,111 +1,115 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import CertificateQrDecodeExperimentPage from "../certificate-qr-decode-experiment/page";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-const FIXED_MATRIX = [
-  { id:"IMG_0940.jpeg", evidence:"insufficient", rerun:true, missing:"per-image decode path / candidate ownership / geometry cause trace", observe:"candidate ownership, detected→decode fail, crop/resolution, finder/quad, angle/perspective, quiet zone, contrast, multi-QR interference, decoder差, parser/dedupe/counting, near-threshold", reason:"formal count alone cannot identify the primary failure cause" },
-  { id:"IMG_0941.jpeg", evidence:"insufficient", rerun:true, missing:"per-image decode path / candidate ownership / geometry cause trace", observe:"candidate ownership, detected→decode fail, crop/resolution, finder/quad, angle/perspective, quiet zone, contrast, multi-QR interference, decoder差, parser/dedupe/counting, near-threshold", reason:"historical Full Diagnostic JSON is not persisted in the repository" },
-  { id:"IMG_0942.jpeg", evidence:"sufficient", rerun:false, missing:"none for candidate ownership reclassification", observe:"reuse existing 10-candidate A/B/C/D ownership evidence", reason:"10 candidate ownership classifications are already preserved as diagnostic evidence" },
-  { id:"IMG_0943.jpeg", evidence:"insufficient", rerun:true, missing:"per-image decode path / candidate ownership / geometry cause trace", observe:"candidate ownership, detected→decode fail, crop/resolution, finder/quad, angle/perspective, quiet zone, contrast, multi-QR interference, decoder差, parser/dedupe/counting, near-threshold", reason:"historical Full Diagnostic JSON is not persisted in the repository" },
-  { id:"IMG_0944.jpeg", evidence:"sufficient", rerun:false, missing:"none for candidate ownership reclassification", observe:"reuse existing 5-candidate A/B/C/D ownership evidence", reason:"5 candidate ownership classifications are already preserved as diagnostic evidence" },
-  { id:"IMG_0945.jpeg", evidence:"insufficient", rerun:true, missing:"per-image decode path / candidate ownership / geometry cause trace", observe:"candidate ownership, detected→decode fail, crop/resolution, finder/quad, angle/perspective, quiet zone, contrast, multi-QR interference, decoder差, parser/dedupe/counting, near-threshold", reason:"historical Full Diagnostic JSON is not persisted in the repository" },
-  { id:"IMG_0946.jpeg", evidence:"insufficient", rerun:true, missing:"per-image decode path / candidate ownership / geometry cause trace", observe:"candidate ownership, detected→decode fail, crop/resolution, finder/quad, angle/perspective, quiet zone, contrast, multi-QR interference, decoder差, parser/dedupe/counting, near-threshold", reason:"historical Full Diagnostic JSON is not persisted in the repository" },
-  { id:"IMG_0947.jpeg", evidence:"insufficient", rerun:true, missing:"per-image decode path / candidate ownership / geometry cause trace", observe:"candidate ownership, detected→decode fail, crop/resolution, finder/quad, angle/perspective, quiet zone, contrast, multi-QR interference, decoder差, parser/dedupe/counting, near-threshold", reason:"historical Full Diagnostic JSON is not persisted in the repository" },
-];
+const FIXED_IDS = Array.from({ length: 8 }, (_, i) => `IMG_${String(940 + i).padStart(4, "0")}.jpeg`);
+const RUN_IDS = new Set(["IMG_0940.jpeg","IMG_0941.jpeg","IMG_0943.jpeg","IMG_0945.jpeg","IMG_0946.jpeg","IMG_0947.jpeg"]);
+const SKIP_IDS = new Set(["IMG_0942.jpeg","IMG_0944.jpeg"]);
+const DIAGNOSTIC_ROUTE = "/eval/certificate-qr-decode-experiment";
 
-const FIXED_MINIMAL = FIXED_MATRIX.filter((r)=>r.rerun).map((r)=>r.id);
-const DIAGNOSTIC_BUNDLE = [
-  "candidate ownership",
-  "QR detected / decode fail",
-  "crop coverage",
-  "resolution",
-  "finder / quad",
-  "angle / perspective",
-  "quiet zone",
-  "contrast",
-  "multi-QR interference",
-  "decoder差",
-  "parser reject",
-  "dedupe / counting",
-  "near-threshold",
-];
+function normalizeFixedName(file){
+  const leaf=String(file?.name||"").normalize("NFKC").trim().split(/[\\/]/).pop()||"";
+  const match=leaf.match(/^IMG_(094[0-7])(?:[\s_-]*(?:\(\d+\)|\d+|copy(?:[\s_-]*\d+)?))?\.(jpe?g)$/i);
+  return match?`IMG_${match[1]}.jpeg`:null;
+}
 
-function tdStyle() { return {borderBottom:"1px solid #ddd",padding:"7px 6px",verticalAlign:"top",fontSize:12}; }
+function mapFixedSet(files){
+  const exact=new Map();
+  for(const file of files){
+    const id=normalizeFixedName(file);
+    if(id&&!exact.has(id)) exact.set(id,file);
+  }
+  if(files.length===8&&exact.size===8&&FIXED_IDS.every((id)=>exact.has(id))){
+    return {mode:"filename",rows:FIXED_IDS.map((id)=>({id,file:exact.get(id),source:"File.name"})),valid:true,message:"正式IMG番号を自動判別しました。"};
+  }
+  if(files.length!==8){
+    return {mode:"invalid",rows:[],valid:false,message:`8枚まとめて選択してください（現在 ${files.length}枚）。`};
+  }
+  const sorted=[...files].sort((a,b)=>Number(a.lastModified||0)-Number(b.lastModified||0)||String(a.name).localeCompare(String(b.name)));
+  return {
+    mode:"metadata-fallback",
+    rows:FIXED_IDS.map((id,i)=>({id,file:sorted[i],source:"metadata/selection fallback"})),
+    valid:true,
+    message:"iOSで正式IMG番号を保持していない可能性があります。撮影metadata順で自動対応しました。下の8枚サムネイルを1回だけ確認してください。",
+  };
+}
 
 export default function CertificateQrMinimalDiagnosticPage(){
-  const [additionalCount,setAdditionalCount]=useState(0);
-  const [copied,setCopied]=useState("");
-  const additionalRows=useMemo(()=>Array.from({length:Math.max(0,Math.min(32,Number(additionalCount)||0))},(_,i)=>({
-    vehicleRun:"historical-additional-real",
-    slotId:`additional-${String(i+1).padStart(2,"0")}`,
-    evidence:"insufficient",
-    rerun:true,
-    missing:"historical per-slot Full Diagnostic trace not persisted",
-    observe:DIAGNOSTIC_BUNDLE.join(", "),
-    reason:"slot-level cause cannot be inferred safely from aggregate counts",
-  })),[additionalCount]);
+  const [files,setFiles]=useState([]);
+  const [thumbs,setThumbs]=useState({});
+  const [status,setStatus]=useState("固定評価8枚をまとめて選択してください。");
+  const [running,setRunning]=useState(false);
+  const [iframeReady,setIframeReady]=useState(false);
+  const frameRef=useRef(null);
+  const mapping=useMemo(()=>mapFixedSet(files),[files]);
 
-  const plan={
-    schema:"icb-certificate-qr-minimal-diagnostic-plan-v1",
-    role:"Missing Evidence Matrix / acquisition-only",
-    formalReference:{finalSafeUnion:28,expectedQrCount:47,preserved:true},
-    fixed8:FIXED_MATRIX,
-    fixedMinimalRunOrder:FIXED_MINIMAL,
-    additionalReal:{
-      identityConstraint:"same historical photo set and same selection order; slots are assigned additional-01..N only",
-      historicalFullDiagnosticPersisted:false,
-      selectedSlotCount:additionalRows.length,
-      rows:additionalRows,
-    },
-    isolation:{groundTruthScoringOnly:true,runtimeControlUsesGroundTruth:false,formalDecodeLogicChanged:false,recognitionLogicChanged:false},
-    protection:{candidateLock:"HOLD / NOT EVALUATED",physicalSlot:"HOLD",frozen:"HOLD",production:"HOLD",adoptedHead:null},
+  useEffect(()=>{
+    const next={};
+    for(const row of mapping.rows||[]) next[row.id]=URL.createObjectURL(row.file);
+    setThumbs(next);
+    return()=>{for(const url of Object.values(next)) URL.revokeObjectURL(url);};
+  },[mapping]);
+
+  const runMinimal=async()=>{
+    if(!mapping.valid||!iframeReady||running)return;
+    setRunning(true);
+    try{
+      const win=frameRef.current?.contentWindow;
+      const doc=frameRef.current?.contentDocument;
+      if(!win||!doc)throw new Error("診断画面の準備ができていません。数秒後に再度押してください。");
+      const sections=[...doc.querySelectorAll("section")];
+      const additionalSection=sections.find((s)=>String(s.textContent||"").includes("追加実車写真 Photo Decode評価"));
+      if(!additionalSection)throw new Error("追加実車診断欄を取得できませんでした。");
+      const input=additionalSection.querySelector('input[type="file"][multiple]');
+      const button=[...additionalSection.querySelectorAll("button")].find((b)=>String(b.textContent||"").includes("追加実車 Photo Decode開始"));
+      if(!input||!button)throw new Error("Minimal Diagnostic実行UIを取得できませんでした。");
+      const runFiles=mapping.rows.filter((row)=>RUN_IDS.has(row.id)).map((row)=>row.file);
+      const dt=new win.DataTransfer();
+      for(const file of runFiles)dt.items.add(file);
+      input.files=dt.files;
+      input.dispatchEvent(new win.Event("change",{bubbles:true}));
+      await new Promise((r)=>setTimeout(r,120));
+      button.click();
+      setStatus("Minimal Diagnosticを開始しました。0942 / 0944は自動skip済みです。下の診断結果が完了するまでそのまま待ってください。");
+    }catch(error){
+      setStatus(`開始できませんでした: ${error?.message||error}`);
+    }finally{
+      setRunning(false);
+    }
   };
-  const copyPlan=async()=>{
-    await navigator.clipboard.writeText(JSON.stringify(plan,null,2));
-    setCopied("Missing Evidence Matrixをコピーしました。");
-  };
 
-  return <main style={{fontFamily:"system-ui,sans-serif",maxWidth:1180,margin:"0 auto",padding:16}}>
-    <h1 style={{fontSize:22,marginBottom:6}}>Photo QR Minimal Diagnostic Acquisition</h1>
-    <div style={{fontSize:13,fontWeight:800,color:"#8a4b00"}}>全面fixed8再runは禁止。0942 / 0944は既存証拠を再利用し、下記missing対象だけ取得します。</div>
-    <div style={{fontSize:12,marginTop:5}}>Formal 28/47 preserved / GT scoring-only / runtime-control利用なし / recognition logic変更なし</div>
+  return <main style={{fontFamily:"system-ui,sans-serif",maxWidth:1160,margin:"0 auto",padding:16}}>
+    <h1 style={{fontSize:22,marginBottom:6}}>Photo QR Minimal Diagnostic</h1>
+    <div style={{fontSize:13,fontWeight:800}}>固定8枚はまとめて選択するだけ。個別IMG番号を探す必要はありません。</div>
+    <div style={{fontSize:12,marginTop:5}}>Formal 28/47 preserved / GT scoring-only / recognition logic変更なし / 0942・0944は既存証拠利用</div>
 
-    <section style={{marginTop:14,border:"1px solid #bbb",borderRadius:10,padding:12}}>
-      <h2 style={{fontSize:17,margin:"0 0 8px"}}>Missing Evidence Matrix — fixed8</h2>
-      <div style={{overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%",minWidth:980}}>
-        <thead><tr>{["image","evidence","rerun","不足diagnostic","再runで観測","理由"].map(x=><th key={x} style={{textAlign:"left",borderBottom:"2px solid #aaa",padding:"6px",fontSize:12}}>{x}</th>)}</tr></thead>
-        <tbody>{FIXED_MATRIX.map(r=><tr key={r.id}>
-          <td style={tdStyle()}><code>{r.id}</code></td><td style={tdStyle()}><b>{r.evidence}</b></td><td style={tdStyle()}>{r.rerun?"yes":"no"}</td><td style={tdStyle()}>{r.missing}</td><td style={tdStyle()}>{r.observe}</td><td style={tdStyle()}>{r.reason}</td>
-        </tr>)}</tbody>
-      </table></div>
-      <div style={{marginTop:10,fontSize:13}}><b>fixed最小run順:</b> {FIXED_MINIMAL.join(" → ")}</div>
-      <div style={{fontSize:12,marginTop:4}}>この6枚のみを、下の既存「追加実車写真 Photo Decode評価」欄へ上記順で選択すると、additional-01〜06として同一decode pathを1回ずつ通せます。0942/0944は選択しないでください。</div>
+    <section style={{marginTop:14,border:"1px solid #aaa",borderRadius:12,padding:12}}>
+      <label style={{display:"block",fontWeight:850,fontSize:15}}>① 固定評価8枚をまとめて選択</label>
+      <input type="file" accept="image/*" multiple disabled={running} onChange={(e)=>{setFiles([...e.target.files]);setStatus("8枚を確認中…");}} style={{marginTop:8}} />
+      <div style={{marginTop:8,fontSize:13,fontWeight:700}}>{mapping.message}</div>
+      {mapping.valid&&<>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8,marginTop:12}}>
+          {mapping.rows.map((row)=><div key={row.id} style={{border:SKIP_IDS.has(row.id)?"2px solid #8b8b8b":"2px solid #2f6fe4",borderRadius:10,padding:7,background:SKIP_IDS.has(row.id)?"#f3f3f3":"#fff"}}>
+            <div style={{fontFamily:"monospace",fontSize:12,fontWeight:900}}>{row.id}</div>
+            <div style={{fontSize:11,fontWeight:800,margin:"3px 0"}}>{SKIP_IDS.has(row.id)?"SKIP（既存証拠）":"RUN対象"}</div>
+            {thumbs[row.id]&&<img src={thumbs[row.id]} alt={row.id} style={{display:"block",width:"100%",height:110,objectFit:"contain",background:"#eee",borderRadius:7}} />}
+            <div style={{fontSize:10,marginTop:4,overflowWrap:"anywhere"}}>取得名: {row.file?.name||"-"}</div>
+            <div style={{fontSize:10}}>metadata: {row.file?.lastModified?new Date(row.file.lastModified).toLocaleString():"なし"}</div>
+          </div>)}
+        </div>
+        <div style={{marginTop:10,fontSize:12}}>
+          自動run: 0940 / 0941 / 0943 / 0945 / 0946 / 0947　｜　自動skip: 0942 / 0944
+        </div>
+        <button onClick={runMinimal} disabled={!iframeReady||running} style={{marginTop:12,width:"100%",padding:"13px 16px",fontSize:17,fontWeight:900}}>
+          {running?"開始準備中…":"② この8枚でMinimal Diagnostic開始"}
+        </button>
+      </>}
+      <div style={{marginTop:10,fontWeight:800,fontSize:13}}>{status}</div>
     </section>
 
-    <section style={{marginTop:14,border:"1px solid #bbb",borderRadius:10,padding:12}}>
-      <h2 style={{fontSize:17,margin:"0 0 8px"}}>Missing Evidence Matrix — additional real</h2>
-      <p style={{fontSize:12,marginTop:0}}>過去のFull Diagnostic JSONはrepoへ保存されていないため、既存aggregateからslot causeを推測しません。過去と同じ写真セット・同じ選択順を維持し、slot IDで分離します。</p>
-      <label style={{fontSize:13,fontWeight:700}}>過去additional-realで使用した枚数（最大32）: <input type="number" min="0" max="32" value={additionalCount} onChange={e=>setAdditionalCount(e.target.value)} style={{width:72,padding:5,marginLeft:6}} /></label>
-      {additionalRows.length>0&&<div style={{overflowX:"auto",marginTop:8}}><table style={{borderCollapse:"collapse",width:"100%",minWidth:900}}>
-        <thead><tr>{["vehicle/run","slot","evidence","rerun","不足diagnostic","理由"].map(x=><th key={x} style={{textAlign:"left",borderBottom:"2px solid #aaa",padding:6,fontSize:12}}>{x}</th>)}</tr></thead>
-        <tbody>{additionalRows.map(r=><tr key={r.slotId}><td style={tdStyle()}>{r.vehicleRun}</td><td style={tdStyle()}><code>{r.slotId}</code></td><td style={tdStyle()}>{r.evidence}</td><td style={tdStyle()}>yes</td><td style={tdStyle()}>{r.missing}</td><td style={tdStyle()}>{r.reason}</td></tr>)}</tbody>
-      </table></div>}
-      <div style={{fontSize:12,marginTop:8}}>※ 枚数/slot identityが旧summaryから復元できる場合は、その値を使います。復元不能な場合だけ同一セットの選択順からslotを再構成します。</div>
-    </section>
-
-    <section style={{marginTop:14,border:"1px solid #8ab4f8",borderRadius:10,padding:12}}>
-      <h2 style={{fontSize:17,margin:"0 0 8px"}}>1-run acquisition rule</h2>
-      <div style={{fontSize:12,lineHeight:1.6}}>観測bundle: {DIAGNOSTIC_BUNDLE.join(" / ")}</div>
-      <div style={{fontSize:12,marginTop:5}}>同一画像を複数方式で手動runしません。既存Photo Decodeの1回のmatrix実行へ集約します。GTはdecode完了後のscoring-onlyです。</div>
-      <button onClick={copyPlan} style={{marginTop:9,padding:"9px 13px",fontWeight:800}}>Missing Evidence Matrix JSONをコピー</button>
-      {copied&&<span style={{marginLeft:8,fontSize:12}}>{copied}</span>}
-    </section>
-
-    <section style={{marginTop:18,borderTop:"3px solid #222",paddingTop:12}}>
-      <h2 style={{fontSize:18,marginBottom:4}}>既存 formal-decode diagnostic UI</h2>
-      <div style={{fontSize:12,fontWeight:800,marginBottom:8}}>固定8枚開始ボタンは使用しないでください。Minimal acquisitionでは上記不足対象だけを「追加実車写真」欄で選択します。</div>
-      <CertificateQrDecodeExperimentPage />
+    <section style={{marginTop:16,borderTop:"3px solid #222",paddingTop:10}}>
+      <div style={{fontSize:12,fontWeight:800,marginBottom:7}}>診断本体（自動操作対象）</div>
+      <iframe ref={frameRef} title="Photo QR diagnostic" src={`${DIAGNOSTIC_ROUTE}?head=fixed-eval-picker`} onLoad={()=>setIframeReady(true)} style={{width:"100%",height:1600,border:"1px solid #bbb",borderRadius:10}} />
     </section>
   </main>;
 }
