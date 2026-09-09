@@ -33,6 +33,11 @@ const MODELS = {
 } as const;
 
 const cache:Partial<Record<keyof typeof MODELS,Promise<SessionBundle>>> = {};
+let ortPromise:Promise<any>|null=null;
+function getOrt(){
+  if(!ortPromise)ortPromise=import("onnxruntime-web");
+  return ortPromise;
+}
 
 function normalizeFinal(raw:string,key:FieldKey){
   const t=raw.normalize("NFKC").replace(/\r/g,"").replace(/\s+/g," ").trim();
@@ -90,7 +95,7 @@ async function loadModel(key:keyof typeof MODELS):Promise<SessionBundle>{
     const cfg=MODELS[key]; const start=performance.now();
     const stats:ModelStats={key,modelUrl:cfg.modelUrl,dictUrl:cfg.dictUrl,declaredModelMb:cfg.declaredModelMb,downloadedBytes:0,firstLoadMs:0,warmReuseLoadMs:0,available:false,error:"",inputName:"",outputName:""};
     try{
-      const ort:any=await import("onnxruntime-web/wasm");
+      const ort:any=await getOrt();
       ort.env.wasm.numThreads=1;
       const [modelRes,dictRes]=await Promise.all([fetch(cfg.modelUrl,{cache:"force-cache"}),fetch(cfg.dictUrl,{cache:"force-cache"})]);
       if(!modelRes.ok)throw new Error(`model HTTP ${modelRes.status}`); if(!dictRes.ok)throw new Error(`dict HTTP ${dictRes.status}`);
@@ -111,7 +116,7 @@ export async function getModelStats(key:"ONNX_JA_LIGHT"|"ONNX_V5"){
 }
 
 export async function recognizeOnnx(key:"ONNX_JA_LIGHT"|"ONNX_V5",canvas:HTMLCanvasElement,field:FieldKey):Promise<RecognitionResult>{
-  const bundle=await loadModel(key); const ort:any=await import("onnxruntime-web/wasm");
+  const bundle=await loadModel(key); const ort:any=await getOrt();
   const tensor=tensorFromCanvas(ort,canvas); const st=performance.now();
   const outputs=await bundle.session.run({[bundle.stats.inputName]:tensor});
   const output=outputs[bundle.stats.outputName] || outputs[Object.keys(outputs)[0]];
