@@ -35,16 +35,24 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Deployment safety must be verified from actual Vercel deployment records, not only CI claims.
 - A specialist-reported deployment count is not authoritative until management checks Vercel directly.
 
-## Current lane ledger — verified 2026-09-10 21:55 JST
+## Current lane ledger — verified 2026-09-10 22:12 JST
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`.
-- Current formally passed HEAD: `a960c5f9d77abba219a3eb357e750fa3056ebc77`.
-- PR #62: Draft / Open / unmerged, base `main`; main SHA `20a715bf46156282b686a617d6744a040bc17fb3`.
-- Formal management verdict: PASS for schedule-detail direct work-state update using existing RPCs.
+- Current formally passed HEAD: `83e7df50322d14dbee6435e63f0152b582bb6bc6`.
+- Previous formal start HEAD: `a960c5f9d77abba219a3eb357e750fa3056ebc77`.
+- GitHub compare `a960c5f... -> 83e7df5...`: ahead 5 / behind 0; final net diff is only `app/schedule/detail/page.tsx` (+1) and `scripts/schedule-detail-regression.mjs` (+2).
+- PR #62 is Draft / Open / unmerged, base `main`; head is `83e7df5...`; main SHA remains `20a715bf46156282b686a617d6744a040bc17fb3`.
+- Batch: schedule detail -> same vehicle next booking. Adds `次回予定登録` under `この車両で続ける`, using existing `openVehicleTool("/schedule/active")`, existing `rememberActiveVehicle()`, and the existing `parts-active-vehicle` snapshot. No `/schedule/active` implementation change.
+- No DB schema/RPC/RLS/migration/Supabase/OCR change is introduced by this batch.
+- Targeted regression assertions pin both the `次回予定登録` label and use of `openVehicleTool("/schedule/active")`.
+- Successful batch validation: GitHub Actions `Schedule next-booking batch` run `34476337976` SUCCESS at tested commit `86087224f537ca6339ff7d70d8648c2b5eb2fceb`, after aligning build env with the existing app-core-build dummy Supabase env. That workflow performed targeted regressions + Full Build, then committed the verified two-file implementation and removed the temporary workflow, producing final HEAD `83e7df5...`.
+- Deployment safety run `34476343211`: SUCCESS on the tested batch commit. The final bot-generated HEAD has a later deployment-safety workflow entry `34476400374` with `action_required`; do not misrepresent that as a green final-HEAD run. It did not execute as a code/test failure and does not negate the successful tested workflow output.
+- Management independently verified zero Vercel deployments in the post-batch window. Vercel Preview remains HOLD.
+- Formal management verdict: PASS. `83e7df5...` becomes the next app-main formal start HEAD.
 - `legal_3m` shared-DB mutation remains HOLD because Netlify production is behind current development.
 - main, Supabase, Netlify Production, Vercel Production, OCR branches: unchanged/HOLD.
-- Vercel Preview remains HOLD while build-rate-limit clearance is not proven.
+- Next app-main action: before selecting another batch, re-audit current HEAD and choose one existing-DB-only, non-duplicate practical improvement that reduces iPhone taps/re-search/re-selection without OCR or shared DB changes; implement -> targeted regression -> Full Build; no intermediate Preview.
 
 ### Vehicle certificate QR/OCR
 - Formal A21.8 source branch: `eval/certificate-qr-stage-a21-4-format-counterfactual`, completed HEAD `b7230adf4acf3288c5fc3811d32309247361dcf1`.
