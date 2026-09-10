@@ -1,22 +1,65 @@
-name: Certificate QR Stage A21.3 attribution audit
+name: Certificate QR Stage A21.3 evidence capture
 on:
   push:
     branches:
       - eval/certificate-qr-stage-a21-3-attribution-audit
     paths:
-      - "scripts/photo-qr-stage-a21-3-attribution-audit.mjs"
-      - "scripts/photo-qr-stage-a21-3-attribution-test.mjs"
-      - ".github/workflows/certificate-qr-stage-a21-3-attribution.yml"
+      - "app/eval/certificate-qr-stage-a21-3-evidence/**"
+      - "scripts/photo-qr-stage-a21-3-attribution-*.mjs"
+      - "scripts/photo-qr-stage-a21-3-evidence-test.mjs"
+      - "scripts/append-photo-qr-a213-evidence.mjs"
       - "scripts/append-photo-qr-a212-runner.mjs"
+      - "scripts/run-photo-qr-a212-append-fixed.mjs"
+      - "scripts/prepare-photo-qr-diagnostic-core.mjs"
+      - "package.json"
+      - ".github/workflows/certificate-qr-stage-a21-3-attribution.yml"
 jobs:
-  audit:
+  evidence-and-regression:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Stage A21.3 attribution invariants
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Prepare shared diagnostic core
+        run: |
+          node scripts/prepare-photo-qr-diagnostic-core.mjs
+          node scripts/run-photo-qr-a212-append-fixed.mjs
+          node scripts/append-photo-qr-a213-evidence.mjs
+      - name: Stage A21.3 attribution audit invariants
         run: node scripts/photo-qr-stage-a21-3-attribution-test.mjs
-      - name: Prior A21.2 contract
-        run: node scripts/photo-qr-stage-a21-2-validity-test.mjs
+      - name: Stage A21.3 evidence capture invariants
+        run: npm run test:photo-qr-a21-3-evidence
+      - name: Prior Photo QR contracts
+        run: |
+          npm run test:photo-qr-minimal
+          npm run test:photo-qr-a21
+          npm run test:photo-qr-a21-1
+          npm run test:photo-qr-a21-2
+      - name: Vehicle certificate regression
+        run: npm run test:certificate
+      - name: Parts and record regressions
+        run: |
+          npm run test:parts
+          npm run test:inspection
+          npm run test:record-types
+          npm run test:workshop-record-types
+      - name: Schedule and print regressions
+        run: |
+          npm run test:schedule-print
+          npm run test:schedule-print-layout
+          npm run test:daily-report-template
+          npm run test:daily-report-allocation
+          npm run test:daily-report-print-model
+          npm run test:daily-report-secondary
+          npm run test:qr-speed
+          npm run test:parts-layout
+      - name: Next.js build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build
