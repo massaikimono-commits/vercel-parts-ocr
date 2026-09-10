@@ -20,7 +20,10 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 12. Never collapse technical implementation PASS into product/UX adoption PASS. For convenience/UI workflow changes, technical PASS means only that code/regression/build are sound. Whether the feature is actually useful, should remain, or should be removed is decided by the user after hands-on Preview evaluation unless the requirement was already explicitly fixed in the parent specification.
 13. Do not label an unsolicited convenience feature as "needed", "useful", or formally adopted merely because it reduces taps in theory. It may exist only as a Preview candidate until user evaluation.
 14. A speculative UX candidate must not be merged to main, propagated to Production, or written into the parent specification as adopted before user acceptance.
-15. While Preview is unavailable, do not keep stacking unsolicited convenience candidates. Continue only already-approved parent-spec work or explicitly requested work; hold additional speculative UX candidates until the user can evaluate the current candidate set in Preview.
+15. Before stating "no implementable confirmed requirement remains", perform a full confirmed-requirement audit against the latest parent spec section-by-section and the current app HEAD. A partial scan of recent/high-level items is insufficient. Record each confirmed requirement as implemented / implementable-unimplemented / intentionally HOLD / review-only. If even one implementable-unimplemented confirmed item exists, it takes priority over speculative UX work.
+16. When app work is otherwise idle, speculative convenience/UX candidates may be batched without a fixed item count, but only after rule 15 has found no immediately implementable confirmed requirement. Each candidate must have a clear current-pain explanation, behavior explanation, UX benefit explanation, conflict/duplication check, and be independently removable or revisable. These candidates remain Preview-only until user hands-on acceptance.
+17. Do not bounce between extremes ("auto-build convenience features" vs "stop all convenience work"). Priority is: confirmed requirement first; intentionally blocked confirmed requirement stays HOLD; then batched Preview-only UX candidates.
+18. Repeated correction of the same management error class is a handoff risk signal. If state/history/spec interactions become dense enough that recent assertions are being contradicted by the source of truth, prepare a fresh-chat handoff before continuing major decisions. Do not wait for the user to ask whether the chat is too long.
 
 ## Production and shared-resource rules
 
@@ -39,16 +42,21 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Deployment safety must be verified from actual Vercel deployment records, not only CI claims.
 - A specialist-reported deployment count is not authoritative until management checks Vercel directly.
 
-## Current lane ledger — verified 2026-09-10 23:40 JST
+## Current lane ledger — verified 2026-09-10 23:47 JST
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`.
-- Current branch HEAD: `b589a5238635c2ce0566d8518ab9788eb10043c3`.
+- Current branch HEAD: `1f5b63db4964c85cbd0c2766acd8dae432a55390`.
+- Previous HEAD: `b589a5238635c2ce0566d8518ab9788eb10043c3`.
+- GitHub compare `b589a523... -> 1f5b63db...`: ahead 4 / behind 0; final net diff is only `app/customer-vehicles/page.tsx` (+2) and `scripts/customer-migration-workflow-regression.mjs` (+2).
 - PR #62 remains Draft / Open / unmerged; base `main`; main SHA remains `20a715bf46156282b686a617d6744a040bc17fb3`.
-- Since `a960c5f9d77abba219a3eb357e750fa3056ebc77`, three convenience-oriented schedule-detail candidates were added on the Preview branch: next-booking direct action, customer/vehicle-info direct action, and one-tap customer call. These changes are technically implemented and regression/build validated, but they are NOT formally product-adopted yet.
-- The current candidate set must be judged by the user hands-on in Preview when Preview is available. Do not pre-judge that they should stay or be removed.
-- Do not revert these candidates merely because they were not explicitly requested; preserve them as Preview candidates until user evaluation.
-- Do not stack further unsolicited convenience candidates while Preview remains unavailable. Continue only parent-spec-confirmed or explicitly user-requested work that does not require shared DB/OCR/Production changes.
+- Parent-spec audit found one implementable confirmed requirement that management had incorrectly missed: the vehicle action menu requirement to navigate to integrated history and lease maintenance for the selected vehicle. This is confirmed specification work, not a speculative UX candidate.
+- Implemented at `1f5b63db...`: selected vehicle -> `/customer-vehicles/history?vehicle=<vehicle_id>` and selected vehicle -> `/customer-vehicles/lease-maintenance?vehicle=<vehicle_id>`, reusing existing pages and selected vehicle ID; no DB change.
+- Specialist-reported validation: `Customer vehicle menu contract batch` run `34492179232` PASS for targeted regressions + Full Build; Deployment Safety run `34492300705` PASS. No Preview/Production/DB/OCR change reported.
+- Formal management classification: confirmed-spec implementation, technical PASS pending only normal management source-of-truth checks; not subject to UX Preview adoption gating as an unsolicited candidate.
+- Convenience-oriented Preview candidates already present from earlier batches: next-booking direct action, customer/vehicle-info direct action, and one-tap customer call. These remain technically implemented Preview candidates, not formally product-adopted until hands-on Preview review.
+- Before any further UX candidate batch, perform a full section-by-section parent-spec confirmed-requirement audit against `1f5b63db...`; do not state "none remain" from memory or a partial checklist.
+- If that full audit finds no immediately implementable confirmed requirement, batched UX/convenience candidate work is allowed with no fixed count, provided each candidate is understandable, independently removable/revisable, non-duplicative, and Preview-only pending user acceptance.
 - `legal_3m` shared-DB mutation remains HOLD because Netlify production is behind current development.
 - main, Supabase, Netlify Production, Vercel Production, OCR branches: unchanged/HOLD.
 - Vercel Preview remains HOLD until build-rate-limit clearance is proven.
@@ -92,6 +100,7 @@ Every specialist handoff/report must include:
 - exact next verification/action
 - whether Vercel/Supabase/Netlify/main were changed
 - for UX/convenience candidates: technical PASS/HOLD and user Preview acceptance state must be reported separately
+- for app-main: result of the full section-by-section confirmed-requirement audit before declaring the lane free for speculative UX work
 
 ## Repeat-failure handling
 
@@ -104,3 +113,5 @@ If a mistake reveals a repeatable failure class:
 6. Common instructions that apply to multiple specialist lanes should be issued once in one shared paste-ready block instead of making the user repeat substantially identical instructions lane by lane.
 7. If a user-side action is the only remaining step, instruct the user directly instead of sending a redundant round-trip instruction to the specialist chat.
 8. When a convenience/UI candidate has technically passed but has not been hands-on tested by the user, preserve it as a Preview candidate and do not make an adoption/removal decision on the user's behalf.
+9. If management incorrectly declares there are no remaining confirmed requirements, the next action is not another convenience-feature instruction. First run a complete parent-spec-vs-current-HEAD audit and update the ledger with the result.
+10. If the same management mistake class recurs within the same chat, treat that recurrence as evidence that the chat context is becoming unsafe and prepare a handoff proactively.
