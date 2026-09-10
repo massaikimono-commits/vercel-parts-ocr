@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 const detail = fs.readFileSync(new URL("../app/schedule/detail/page.tsx", import.meta.url), "utf8");
 const schedule = fs.readFileSync(new URL("../app/schedule/page.tsx", import.meta.url), "utf8");
+const customerVehicles = fs.readFileSync(new URL("../app/customer-vehicles/page.tsx", import.meta.url), "utf8");
 
 assert.match(schedule, /\/schedule\/detail\?entry=/, "one-day schedule links directly to schedule detail");
 assert.doesNotMatch(schedule, /setActiveVehicle\(vehicle\)[\s\S]{0,500}dailySlotCard/s, "daily board no longer depends on customer-vehicles navigation");
@@ -54,4 +55,9 @@ assert.doesNotMatch(detail, /\.update\(\{[^}]*work_completed/, "detail does not 
 
 assert.ok(detail.includes("次回予定登録"), "detail shows next booking action");
 assert.match(detail, /openVehicleTool\("\/schedule\/active"\)/, "detail opens existing active-vehicle schedule registration");
+assert.ok(detail.includes("顧客・車両情報"), "detail shows direct customer and vehicle information action");
+assert.match(detail, /openVehicleTool\("\/customer-vehicles"\)/, "detail opens existing customer-vehicles page with active vehicle context");
+assert.match(customerVehicles, /const ACTIVE_KEY = "parts-active-vehicle"/, "customer-vehicles uses the shared active vehicle key");
+assert.match(customerVehicles, /sessionStorage\.getItem\(ACTIVE_KEY\)/, "customer-vehicles restores active vehicle context");
+assert.match(customerVehicles, /selectVehicle\(activeVehicle, customer\)/, "customer-vehicles auto-selects the staged active vehicle");
 console.log("schedule detail regression: ok");
