@@ -19,7 +19,7 @@ on:
       - ".github/workflows/certificate-qr-a218-static-standalone.yml"
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build-static:
     runs-on: ubuntu-latest
@@ -40,6 +40,7 @@ jobs:
         run: |
           mkdir -p a218-static-dist
           cp scripts/a218-standalone-index.html a218-static-dist/index.html
+          cp vercel.json a218-static-dist/vercel.json
           npx --yes esbuild@0.25.9 scripts/a218-standalone-entry.jsx \
             --bundle \
             --platform=browser \
@@ -51,6 +52,7 @@ jobs:
         run: |
           grep -q "connect-src 'none'" a218-static-dist/index.html
           grep -q "form-action 'none'" a218-static-dist/index.html
+          grep -q '"deploymentEnabled": false' a218-static-dist/vercel.json
           test -s a218-static-dist/app.js
           ! grep -q "NEXT_PUBLIC_SUPABASE" a218-static-dist/app.js
           ! grep -q "supabase.co" a218-static-dist/app.js
@@ -71,3 +73,14 @@ jobs:
           name: a218-static-standalone
           path: a218-static-dist/
           retention-days: 3
+      - name: Publish immutable static branch content
+        run: |
+          cp -a a218-static-dist /tmp/a218-static-dist
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan a218-static-publish
+          git rm -rf .
+          cp -a /tmp/a218-static-dist/. .
+          git add index.html app.js vercel.json
+          git commit -m "a21.8 static publish from $GITHUB_SHA"
+          git push --force origin HEAD:refs/heads/eval/certificate-qr-stage-a21-8-static-publish
