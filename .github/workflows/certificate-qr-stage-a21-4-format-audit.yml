@@ -30,4 +30,7 @@ jobs:
       - name: Prior A21.2 invariants
         run: node scripts/photo-qr-stage-a21-2-validity-test.mjs
       - name: Full regression + Next build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://a214-build-only.invalid
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: a214-build-only-placeholder-key
         run: npm run build
