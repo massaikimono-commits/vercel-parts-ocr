@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { runBrowserModelDiagnostics } from "./model-diagnostics";
+import RealImageAudit from "./RealImageAudit";
 
 const card: React.CSSProperties = { background: "#fff", border: "1px solid #dbe2ec", borderRadius: 16, padding: 14, marginBottom: 12 };
 const pre: React.CSSProperties = { whiteSpace: "pre-wrap", overflowWrap: "anywhere", background: "#f7f9fc", border: "1px solid #e2e7ef", borderRadius: 10, padding: 10, fontSize: 11, lineHeight: 1.45, maxHeight: 680, overflow: "auto" };
@@ -10,6 +11,11 @@ export default function Client({ deployedHead }: { deployedHead: string }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("実写真を使わず、model / dictionary / decoder contractを検証できます。");
   const [result, setResult] = useState<any>(null);
+  const [realEnabled, setRealEnabled] = useState(false);
+
+  useEffect(() => {
+    setRealEnabled(new URLSearchParams(window.location.search).get("real") === "1");
+  }, []);
 
   async function run() {
     setBusy(true);
@@ -54,8 +60,10 @@ export default function Client({ deployedHead }: { deployedHead: string }) {
 
     <section style={card}>
       <h2>Cell crop instrumentation</h2>
-      <p style={{ lineHeight: 1.6 }}>実写真再run用instrumentationは、crop dimensions / dark occupancy / ink bbox / edge truncation / strong table-line混入 / centroid slope / raw recognizer output / normalized output / confidence / decoder metadataをbrowser内だけで記録できる構成です。</p>
-      <div style={{ padding: 10, borderRadius: 8, background: "#fff4e5", fontWeight: 700 }}>実写真再run：HOLD。Stage A21診断結果から必要性を判定するまで画像選択UIは出しません。</div>
+      <p style={{ lineHeight: 1.6 }}>実写真再run用instrumentationは、crop dimensions / dark occupancy / ink bbox / edge truncation / strong table-line混入 / centroid slope / raw recognizer output / normalized output / confidence / decoder metadataをbrowser内だけで記録します。</p>
+      {!realEnabled && <div style={{ padding: 10, borderRadius: 8, background: "#fff4e5", fontWeight: 700 }}>実写真再run：HOLD。通常URLでは画像選択UIを出しません。</div>}
     </section>
+
+    {realEnabled && <RealImageAudit deployedHead={deployedHead} />}
   </main>;
 }
