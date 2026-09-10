@@ -39,4 +39,17 @@ assert.match(detail, /work\.reason!=="点検" && work\.reason!=="車検"/, "insp
 assert.doesNotMatch(detail, /location\.assign\("\/customer-vehicles"\)/, "detail does not bounce through the vehicle list");
 assert.doesNotMatch(detail, /\/ocr\//, "practical detail hub does not couple to OCR execution");
 
+assert.match(detail, /async function advanceWorkState\(\)/, "detail can advance work state without leaving the hub");
+assert.match(detail, /workStateBusy/, "detail prevents duplicate work-state submissions");
+assert.match(detail, /disabled=\{!work \|\| workStateBusy\}/, "work-state action is disabled while unavailable or saving");
+assert.match(detail, /onClick=\{\(\)=>void advanceWorkState\(\)\}/, "headline work-state badge performs the one-tap state action");
+for (const rpc of ["set_work_order_progress_state", "complete_work_order_one_tap", "reopen_work_order"]) {
+  assert.ok(detail.includes(`\"${rpc}\"`), `detail reuses existing ${rpc} RPC`);
+  assert.ok(schedule.includes(`\"${rpc}\"`), `one-day schedule still uses ${rpc} RPC`);
+}
+assert.match(detail, /p_state:"in_progress"/, "pending state advances to in-progress");
+assert.match(detail, /p_actor:"schedule"/, "detail work-state mutations preserve the schedule actor contract");
+assert.match(detail, /safeActionError\("作業状態の保存",error\)/, "detail work-state failures use safe user-facing errors");
+assert.doesNotMatch(detail, /\.update\(\{[^}]*work_completed/, "detail does not bypass work-state RPCs with direct completion updates");
+
 console.log("schedule detail regression: ok");
