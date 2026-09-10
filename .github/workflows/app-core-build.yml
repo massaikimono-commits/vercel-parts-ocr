@@ -2,12 +2,16 @@ name: App core build check
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: contains(github.event.head_commit.message, '[legal-3m-ci]') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
