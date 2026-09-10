@@ -98,8 +98,6 @@ export default function RealImageAudit({ deployedHead }: { deployedHead: string 
             columnGeometry: { x1Norm: col.x1, x2Norm: col.x2 },
             crop: {
               preview: cell.preview,
-              width: cell.width,
-              height: cell.height,
               padding: cell.padding,
               upscale: cell.upscale,
               contrast: cell.contrast,
@@ -111,8 +109,6 @@ export default function RealImageAudit({ deployedHead }: { deployedHead: string 
             gtScoringOnly: gt[r]?.[field] ?? null,
           });
         }
-        // IMPORTANT diagnostic difference from A20 scoring harness: preserve every dynamic row slot,
-        // even when all four recognizers are blank. This prevents blank-row compaction from shifting GT alignment.
         for (const e of ENGINES) rowsByEngine[e].push(out[e]);
       }
 
