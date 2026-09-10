@@ -1,0 +1,160 @@
+name: UX batch context preservation
+on:
+  push:
+    branches: [preview/schedule-ux-20260903]
+    paths:
+      - '.github/workflows/ux-batch-context-preservation.yml'
+permissions:
+  contents: write
+jobs:
+  implement-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview/schedule-ux-20260903
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Implement UX candidates and regression
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p=Path(path); s=p.read_text()
+              if new in s:
+                  return
+              if old not in s:
+                  raise SystemExit(f'{label}: anchor missing')
+              p.write_text(s.replace(old,new,1))
+
+          # UX-1: schedule detail keeps active vehicle before history/photo transitions.
+          replace_once(
+            'app/schedule/detail/page.tsx',
+            '  function openVehicleHistory(kind:"history"|"photos"){\n    if(!vehicle) return;\n    location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);\n  }',
+            '  function openVehicleHistory(kind:"history"|"photos"){\n    if(!vehicle) return;\n    rememberActiveVehicle();\n    location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);\n  }',
+            'schedule detail active context'
+          )
+
+          # UX-2: selected vehicle screen gets direct next-schedule registration.
+          replace_once(
+            'app/customer-vehicles/page.tsx',
+            '              <button onClick={() => location.assign("/schedule")}>📅 入出庫予定</button>',
+            '              <button onClick={() => location.assign("/schedule/active")}>📅 次回予定登録</button>\n              <button onClick={() => location.assign("/schedule")}>📅 入出庫予定</button>',
+            'customer vehicle direct schedule'
+          )
+
+          # Helper used by vehicle sub-pages. Active route only needs a stable vehicle id; extra fields are best-effort.
+          def add_continue_helper(path, anchor):
+              p=Path(path); s=p.read_text()
+              marker='  function openNextSchedule() {'
+              if marker in s:
+                  return
+              helper='''  function openNextSchedule() {\n    if (!vehicle) return;\n    const snapshot = {\n      id: vehicle.id,\n      number: "vehicle_number" in vehicle ? (vehicle.vehicle_number || "") : "",\n      registration: vehicle.registration_number || "",\n      last4: vehicle.registration_number_last4 || vehicle.registration_last4 || "",\n      chassis: vehicle.chassis_number || "",\n      model: vehicle.model || "",\n    };\n    try { sessionStorage.setItem("parts-active-vehicle", JSON.stringify(snapshot)); } catch {}\n    try { localStorage.setItem("parts-active-vehicle", JSON.stringify(snapshot)); } catch {}\n    location.assign("/schedule/active");\n  }\n\n'''
+              if anchor not in s:
+                  raise SystemExit(f'{path}: helper anchor missing')
+              p.write_text(s.replace(anchor, helper+anchor,1))
+
+          # UX-3: integrated history -> next schedule without back/research/reselect.
+          add_continue_helper('app/customer-vehicles/history/page.tsx','  return (\n')
+          replace_once(
+            'app/customer-vehicles/history/page.tsx',
+            '<button onClick={() => location.assign("/customer-vehicles")}>顧客・車両管理</button>',
+            '<div className="heroActions"><button onClick={openNextSchedule}>次回予定登録</button><button onClick={() => location.assign("/customer-vehicles")}>顧客・車両管理</button></div>',
+            'history quick action'
+          )
+
+          # UX-4: photo history -> next schedule without back/research/reselect.
+          add_continue_helper('app/customer-vehicles/photos/page.tsx','  return (\n')
+          replace_once(
+            'app/customer-vehicles/photos/page.tsx',
+            '<button onClick={() => location.assign("/customer-vehicles")}>顧客・車両管理</button>',
+            '<div className="heroActions"><button onClick={openNextSchedule}>次回予定登録</button><button onClick={() => location.assign("/customer-vehicles")}>顧客・車両管理</button></div>',
+            'photo quick action'
+          )
+
+          # UX-5: lease maintenance -> next schedule without back/research/reselect.
+          add_continue_helper('app/customer-vehicles/lease-maintenance/page.tsx','  return (\n')
+          # This page may use either a single management button or header controls; inject beside first customer-vehicles navigation.
+          lp=Path('app/customer-vehicles/lease-maintenance/page.tsx'); s=lp.read_text()
+          if 'onClick={openNextSchedule}>次回予定登録</button>' not in s:
+              target='<button onClick={() => location.assign("/customer-vehicles")}>顧客・車両管理</button>'
+              if target not in s:
+                  target='<button onClick={() => window.location.assign("/customer-vehicles")}>顧客・車両管理</button>'
+              if target not in s:
+                  raise SystemExit('lease quick action anchor missing')
+              s=s.replace(target, '<div className="heroActions"><button onClick={openNextSchedule}>次回予定登録</button>'+target+'</div>',1)
+              lp.write_text(s)
+
+          # UX-6: schedule detail deterministic return to the exact one-day board, instead of relying only on browser history.
+          p=Path('app/schedule/detail/page.tsx'); s=p.read_text()
+          if 'function openOneDaySchedule()' not in s:
+              anchor='  function openInspection(){\n'
+              helper='''  function openOneDaySchedule(){\n    const source=inboundEntry || entry;\n    if(!source) return;\n    const day=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(source.starts_at));\n    location.assign(`/schedule?day=${day}`);\n  }\n\n'''
+              if anchor not in s: raise SystemExit('one-day helper anchor missing')
+              s=s.replace(anchor,helper+anchor,1)
+          old='<button onClick={()=>history.back()}>← 戻る</button>\n        <strong>予定・車両詳細</strong>'
+          new='<div className="topBackActions"><button onClick={()=>history.back()}>← 戻る</button><button onClick={openOneDaySchedule} disabled={!entry}>1日の予定</button></div>\n        <strong>予定・車両詳細</strong>'
+          if new not in s:
+              if old not in s: raise SystemExit('one-day button anchor missing')
+              s=s.replace(old,new,1)
+          p.write_text(s)
+
+          # Dedicated batch regression: each candidate is asserted independently.
+          Path('scripts/ux-context-preservation-regression.mjs').write_text(r'''import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const detail=fs.readFileSync("app/schedule/detail/page.tsx","utf8");
+const customer=fs.readFileSync("app/customer-vehicles/page.tsx","utf8");
+const history=fs.readFileSync("app/customer-vehicles/history/page.tsx","utf8");
+const photos=fs.readFileSync("app/customer-vehicles/photos/page.tsx","utf8");
+const lease=fs.readFileSync("app/customer-vehicles/lease-maintenance/page.tsx","utf8");
+
+assert.match(detail,/function openVehicleHistory[\s\S]*rememberActiveVehicle\(\)[\s\S]*\/customer-vehicles\/\$\{kind\}/,"detail preserves active vehicle before history/photo navigation");
+assert.match(customer,/\/schedule\/active\"\)>📅 次回予定登録/,"selected vehicle opens next-schedule registration directly");
+for (const [name,source] of [["history",history],["photos",photos],["lease",lease]]) {
+  assert.match(source,/function openNextSchedule\(\)/,`${name}: independent next schedule helper exists`);
+  assert.match(source,/sessionStorage\.setItem\("parts-active-vehicle"/,`${name}: active vehicle context is saved`);
+  assert.match(source,/localStorage\.setItem\("parts-active-vehicle"/,`${name}: active vehicle context survives navigation`);
+  assert.match(source,/location\.assign\("\/schedule\/active"\)/,`${name}: opens existing active schedule route`);
+  assert.match(source,/onClick=\{openNextSchedule\}>次回予定登録<\/button>/,`${name}: clear preview action exists`);
+}
+assert.match(detail,/function openOneDaySchedule\(\)/,"detail has deterministic one-day navigation helper");
+assert.match(detail,/location\.assign\(`\/schedule\?day=\$\{day\}`\)/,"detail opens exact one-day board date");
+assert.match(detail,/>1日の予定<\/button>/,"detail exposes clear one-day action");
+
+for (const source of [detail,customer,history,photos,lease]) {
+  assert.doesNotMatch(source,/create table|alter table|create policy|create or replace function/i,"UX batch must not introduce DB DDL/RLS/RPC definitions");
+}
+console.log("ux context-preservation regression: ok");
+''')
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Targeted and related regressions
+        run: |
+          node scripts/ux-context-preservation-regression.mjs
+          npm run test:schedule-detail
+          npm run test:schedule-one-day-practical
+          npm run test:customer-migration-workflow
+          npm run test:lease-contract-foundation
+          npm run test:vehicle-business-state
+          npm run test:waiting-service-v13
+          npm run test:security
+          npm run test:app-core-safety
+      - name: Full build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_dummy
+        run: npm run build
+      - name: Commit verified UX batch and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm .github/workflows/ux-batch-context-preservation.yml
+          git add app/schedule/detail/page.tsx app/customer-vehicles/page.tsx app/customer-vehicles/history/page.tsx app/customer-vehicles/photos/page.tsx app/customer-vehicles/lease-maintenance/page.tsx scripts/ux-context-preservation-regression.mjs .github/workflows/ux-batch-context-preservation.yml
+          git commit -m 'feat: preserve vehicle context across daily workflows'
+          git push origin HEAD:preview/schedule-ux-20260903
