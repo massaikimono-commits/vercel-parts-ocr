@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EXPECTED_FILES } from "../stage-a4/gt";
+import { FORMAL_A19_GT, FORMAL_A19_GT_INVARIANT, assertFormalA19GtInvariant } from "./formal-gt";
 
 type GtRow = { name: string; qty: string; retail: string; cost: string };
 type GtMap = Record<string, GtRow[]>;
@@ -25,6 +26,9 @@ function normalizeStored(value: unknown): GtMap {
     });
   }
   return base;
+}
+function cloneFormalGt(): GtMap {
+  return JSON.parse(JSON.stringify(FORMAL_A19_GT)) as GtMap;
 }
 function hasGtRows(rows: GtRow[] | undefined) {
   return Boolean(rows?.some((r) => r.name.trim() || r.qty.trim() || r.retail.trim() || r.cost.trim()));
@@ -51,37 +55,37 @@ export default function GtBuilderEnhancer() {
   const [gt, setGt] = useState<GtMap>(() => blankMap());
   const [loaded, setLoaded] = useState(false);
   const [previews, setPreviews] = useState<PreviewMap>({});
-  const [state, setState] = useState("A19保存済みGTを確認しています…");
+  const [state, setState] = useState("復元済み正式GTを検証しています…");
   const urls = useRef<string[]>([]);
 
   useEffect(() => {
     try {
+      // Management-restored formal GT is copied into this Preview origin only for scoring.
+      // It is never consulted by row/column geometry, crop generation, recognition, or control flow.
+      const formal = cloneFormalGt();
+      const invariant = assertFormalA19GtInvariant(formal);
+      if (invariant.files !== 12 || invariant.rows !== 60 || invariant.fields !== 240) {
+        throw new Error("formal GT invariant mismatch");
+      }
+
+      // Keep the old browser-only fragment receiver compatible, but the restored formal GT is authoritative.
       const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
       const params = new URLSearchParams(hash);
       const payload = params.get("a19gt");
       if (payload) {
-        const migrated = normalizeStored(JSON.parse(fromBase64Url(payload)));
-        const count = completeCount(migrated);
-        if (count !== 12) throw new Error(`migrated GT incomplete: ${count}/12`);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-        setGt(migrated);
-        setState("A19保存済みGTを移行しました。A19保存済みGTを使用中");
-        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
-        setLoaded(true);
-        return;
+        try {
+          normalizeStored(JSON.parse(fromBase64Url(payload)));
+        } finally {
+          window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+        }
       }
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const next = normalizeStored(JSON.parse(raw));
-        setGt(next);
-        const count = completeCount(next);
-        setState(count === 12 ? "A19保存済みGTを使用中" : `A19保存済みGTを検出しましたが ${count}/12 です。`);
-      } else {
-        setState("このSafari originにはA19保存済みGTがありません。A19移行ボタンから移してください。");
-      }
-    } catch {
-      setState("A19 GT移行payloadまたは保存済みGTを読み込めませんでした。GT内容は変更していません。");
-      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(formal));
+      setGt(formal);
+      setState(`復元済みA19正式GTを使用中 ・ ${invariant.files}/12 ・ ${invariant.rows} rows ・ ${invariant.fields} fields ・ scoring-only`);
+    } catch (error) {
+      console.error(error);
+      setState("復元済みA19正式GTのinvariant確認に失敗しました。A20 formalは開始できません。");
     } finally {
       setLoaded(true);
     }
@@ -134,6 +138,7 @@ export default function GtBuilderEnhancer() {
   const completed = useMemo(() => completeCount(gt), [gt]);
   const selected = EXPECTED_FILES.filter((f) => previews[f]).length;
   const rowCounts = useMemo(() => Object.fromEntries(EXPECTED_FILES.map((f) => [f, (gt[f] || []).filter((r) => r.name.trim() || r.qty.trim() || r.retail.trim() || r.cost.trim()).length])), [gt]);
+  const totalRows = useMemo(() => Object.values(rowCounts).reduce((sum, n) => sum + Number(n || 0), 0), [rowCounts]);
 
   function choose() {
     const input = evalInput();
@@ -144,21 +149,26 @@ export default function GtBuilderEnhancer() {
     if (!input?.files?.length) { setState("先に正式12枚を選択してください。"); return; }
     const missing = EXPECTED_FILES.filter((f) => !previews[f]);
     if (missing.length) { setState(`写真対応が未完了: ${missing.join(", ")}`); return; }
-    if (completed !== 12) { setState(`A19保存済みGTが不足しています。${completed}/12`); return; }
+    if (completed !== 12 || totalRows !== 60 || FORMAL_A19_GT_INVARIANT.fields !== 240) {
+      setState(`GT invariant不一致: ${completed}/12 ・ ${totalRows}/60 rows ・ ${FORMAL_A19_GT_INVARIANT.fields}/240 fields`);
+      return;
+    }
     input.dataset.a20AllowRun = "1";
     input.dispatchEvent(new Event("change", { bubbles: true }));
     window.setTimeout(() => delete input.dataset.a20AllowRun, 0);
   }
 
+  const invariantOk = loaded && completed === 12 && totalRows === 60 && FORMAL_A19_GT_INVARIANT.fields === 240;
+
   return <section style={{ maxWidth: 1120, margin: "16px auto 0", padding: "0 12px" }}><div style={{ background: "#fff", border: "1px solid #dbe2ec", borderRadius: 16, padding: 14 }}>
     <h2 style={{ marginTop: 0 }}>Stage A20 正式12枚</h2>
-    <p style={{ lineHeight: 1.6 }}>A19で保存した4項目GTを自動読込します。GTはscoring-onlyで、A20 runtime/controlには使用しません。GTの再入力は不要です。</p>
-    <div style={{ padding: 10, borderRadius: 10, background: completed === 12 ? "#eef8f0" : "#fff4e5", marginBottom: 10, fontWeight: 700 }}>{loaded ? (completed === 12 ? "A19保存済みGTを使用中 ・ 12/12" : `A19 GT ${completed}/12`) : "A19保存済みGTを確認中…"}</div>
+    <p style={{ lineHeight: 1.6 }}>総合管理で復元したA19正式4項目GTをA20 scoring-only GTとして使用します。GTはruntime/controlには使用しません。再入力は不要です。</p>
+    <div style={{ padding: 10, borderRadius: 10, background: invariantOk ? "#eef8f0" : "#fff4e5", marginBottom: 10, fontWeight: 700 }}>{loaded ? (invariantOk ? "A19保存済みGTを使用中 ・ 12/12 ・ 60 rows ・ 240 fields" : `GT invariant確認中/不一致 ・ ${completed}/12 ・ ${totalRows}/60 rows`) : "復元済み正式GTを確認中…"}</div>
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 6, marginBottom: 12 }}>{EXPECTED_FILES.map((f) => <div key={f} style={{ border: "1px solid #e1e6ee", borderRadius: 8, padding: 8, fontSize: 12 }}>{f}<br/><strong>GT {rowCounts[f] || 0}行</strong></div>)}</div>
-    {completed !== 12 && loaded && <div style={{ marginBottom: 12, padding: 10, borderRadius: 10, background: "#fff4e5", fontSize: 13, lineHeight: 1.5 }}>このA20 originには正式GTがありません。12枚の再入力はしません。A19側の「A20へGTを移行」から移してください。</div>}
-    <button type="button" onClick={choose} disabled={completed !== 12} style={{ width: "100%", border: 0, borderRadius: 12, padding: 12, background: completed === 12 ? "#174ea6" : "#aeb8c7", color: "#fff", fontWeight: 800, fontSize: 16 }}>黄色正式12枚を一括選択</button>
-    <div style={{ margin: "10px 0 12px", fontSize: 13 }}>写真対応 {selected}/12 ・ GT {completed}/12<br/>{state}</div>
+    {!invariantOk && loaded && <div style={{ marginBottom: 12, padding: 10, borderRadius: 10, background: "#fff4e5", fontSize: 13, lineHeight: 1.5 }}>12/12・60 rows・240 fieldsが一致しないため、formal評価を停止しています。</div>}
+    <button type="button" onClick={choose} disabled={!invariantOk} style={{ width: "100%", border: 0, borderRadius: 12, padding: 12, background: invariantOk ? "#174ea6" : "#aeb8c7", color: "#fff", fontWeight: 800, fontSize: 16 }}>黄色正式12枚を一括選択</button>
+    <div style={{ margin: "10px 0 12px", fontSize: 13 }}>写真対応 {selected}/12 ・ GT {completed}/12 ・ {totalRows}/60 rows ・ {FORMAL_A19_GT_INVARIANT.fields}/240 fields<br/>{state}</div>
     {selected > 0 && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8, marginBottom: 12 }}>{EXPECTED_FILES.map((f) => { const p = previews[f]; return <div key={f} style={{ border: "1px solid #e1e6ee", borderRadius: 8, padding: 6, fontSize: 11 }}><strong>{f}</strong>{p ? <><img src={p.url} alt={`${f}対応画像`} style={{ width: "100%", height: 110, objectFit: "contain", display: "block", marginTop: 4 }} /><div style={{ overflowWrap: "anywhere" }}>{p.originalName}</div></> : <div style={{ height: 110, display: "grid", placeItems: "center", color: "#667085" }}>未選択</div>}</div>; })}</div>}
-    <button type="button" onClick={run} disabled={selected !== 12 || completed !== 12} style={{ width: "100%", border: 0, borderRadius: 13, padding: 14, marginTop: 6, background: selected === 12 && completed === 12 ? "#2468df" : "#aeb8c7", color: "#fff", fontWeight: 800, fontSize: 17 }}>この12枚で3 recognition方式を1run</button>
+    <button type="button" onClick={run} disabled={selected !== 12 || !invariantOk} style={{ width: "100%", border: 0, borderRadius: 13, padding: 14, marginTop: 6, background: selected === 12 && invariantOk ? "#2468df" : "#aeb8c7", color: "#fff", fontWeight: 800, fontSize: 17 }}>この12枚で3 recognition方式を1run</button>
   </div></section>;
 }
