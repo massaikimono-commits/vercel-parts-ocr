@@ -28,9 +28,10 @@ assert.ok(JSON.stringify(out).length<=6000);
 
 const page=fs.readFileSync("app/eval/certificate-qr-stage-a21-4-evidence/page.jsx","utf8");
 for(const token of ["localStorage.getItem(A214_STORAGE_KEY)","localStorage.setItem(A214_STORAGE_KEY","sanitizeA214Detail","analyzeA214Evidence","A21.4を1回だけ実行","raw payload/PII全文は保存せず"]){assert.ok(page.includes(token),`missing page invariant ${token}`);}
+assert.equal(page.includes("localStorage.removeItem(A214_STORAGE_KEY)"),false);
 assert.equal(page.includes("sessionStorage"),false);
 assert.equal(page.includes("indexedDB"),false);
 assert.equal(page.includes("button.click"),false);
 assert.equal(page.includes("input.files"),false);
 
-console.log(`Stage A21.4 persistence invariants: PASS; privacy-safe localStorage restore + compact ${JSON.stringify(out).length}/6000`);
+console.log(`Stage A21.4 persistence invariants: PASS; privacy-safe localStorage restore + successful-run-only replacement + compact ${JSON.stringify(out).length}/6000`);
