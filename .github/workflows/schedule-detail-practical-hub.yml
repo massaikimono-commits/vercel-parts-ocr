@@ -1,0 +1,120 @@
+name: Schedule detail practical hub
+
+on:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    if: contains(github.event.head_commit.message, '[schedule-detail-hub]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: preview/schedule-ux-20260903
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Apply practical detail hub patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('app/schedule/detail/page.tsx')
+          s = p.read_text()
+
+          def one(old, new):
+              global s
+              if s.count(old) != 1:
+                  raise SystemExit(f'expected one occurrence, got {s.count(old)}: {old[:90]!r}')
+              s = s.replace(old, new)
+
+          one(
+          '''  worker_name:string|null;\n  notes:string|null;\n  work_completed:boolean;\n  planned_delivery_date:string|null;''',
+          '''  worker_name:string|null;\n  outsource_vendor_name:string|null;\n  notes:string|null;\n  work_completed:boolean;\n  planned_delivery_date:string|null;\n  is_urgent:boolean;\n  needs_loaner:boolean;\n  is_waiting_service:boolean;''')
+
+          one(
+          '''  schedule_display_name:string|null;\n};''',
+          '''  schedule_display_name:string|null;\n  phone:string|null;\n};''')
+
+          one(
+          '''.select("id,vehicle_id,reason,status,worker_name,notes,work_completed,planned_delivery_date")''',
+          '''.select("id,vehicle_id,reason,status,worker_name,outsource_vendor_name,notes,work_completed,planned_delivery_date,is_urgent,needs_loaner,is_waiting_service")''')
+
+          one(
+          '''.select("id,name,company_name,schedule_display_name")''',
+          '''.select("id,name,company_name,schedule_display_name,phone")''')
+
+          one(
+          '''  const vehicleName=[vehicle?.maker,vehicle?.model || vehicle?.vehicle_type].filter(Boolean).join(" ") || "未登録";\n\n  return (''',
+          '''  const vehicleName=[vehicle?.maker,vehicle?.model || vehicle?.vehicle_type].filter(Boolean).join(" ") || "未登録";\n\n  function rememberActiveVehicle(){\n    if(!vehicle) return false;\n    const snapshot={\n      id:vehicle.id,\n      number:vehicle.vehicle_number || "",\n      registration:vehicle.registration_number || "",\n      last4:vehicle.registration_number_last4 || "",\n      chassis:vehicle.chassis_number || "",\n      model:vehicle.model || vehicle.vehicle_type || "",\n    };\n    try{sessionStorage.setItem("parts-active-vehicle",JSON.stringify(snapshot));}catch{}\n    try{localStorage.setItem("parts-active-vehicle",JSON.stringify(snapshot));}catch{}\n    return true;\n  }\n\n  function openVehicleTool(path:string){\n    if(!rememberActiveVehicle()) return;\n    location.assign(path);\n  }\n\n  function openVehicleHistory(kind:"history"|"photos"){\n    if(!vehicle) return;\n    location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);\n  }\n\n  function openInspection(){\n    if(!work || !vehicle || (work.reason!=="点検" && work.reason!=="車検")) return;\n    rememberActiveVehicle();\n    location.assign(`/inspection?workOrderId=${encodeURIComponent(work.id)}`);\n  }\n\n  return (''')
+
+          one(
+          '''                <div><span>お客様名</span><b>{customerLabel(customer)}</b></div>\n                <div><span>ナンバー情報</span><b>{numberInfo}</b></div>''',
+          '''                <div><span>お客様名</span><b>{customerLabel(customer)}</b></div>\n                <div><span>電話番号</span><b>{customer?.phone || "未登録"}</b></div>\n                <div><span>ナンバー情報</span><b>{numberInfo}</b></div>''')
+
+          one(
+          '''                <div><span>担当者</span><b>{work?.worker_name || "未設定"}</b></div>\n                <div><span>作業状態</span><b>{workStateLabel(work)}</b></div>''',
+          '''                <div><span>担当者</span><b>{work?.worker_name || "未設定"}</b></div>\n                <div><span>作業状態</span><b>{workStateLabel(work)}</b></div>\n                <div><span>作業待ち</span><b>{work?.is_waiting_service ? "あり" : "なし"}</b></div>\n                <div><span>代車</span><b>{work?.needs_loaner ? "必要" : "不要"}</b></div>\n                <div><span>優先</span><b>{work?.is_urgent ? "急ぎ" : "通常"}</b></div>\n                <div><span>外注先</span><b>{work?.outsource_vendor_name || "自社作業"}</b></div>''')
+
+          one(
+          '''            <section className="section">\n              <h2>備考</h2>\n              <div className="notes">{noteText || "備考なし"}</div>\n            </section>\n\n            {actionEntry && (''',
+          '''            <section className="section">\n              <h2>備考</h2>\n              <div className="notes">{noteText || "備考なし"}</div>\n            </section>\n\n            {vehicle && (\n              <section className="section">\n                <h2>この車両で続ける</h2>\n                <div className="toolActions">\n                  <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>\n                  <button onClick={()=>openVehicleHistory("history")}>車両履歴</button>\n                  <button onClick={()=>openVehicleHistory("photos")}>写真履歴</button>\n                  {work && (work.reason==="点検" || work.reason==="車検") && (\n                    <button onClick={openInspection}>点検記録簿</button>\n                  )}\n                </div>\n              </section>\n            )}\n\n            {actionEntry && (''')
+
+          one(
+          '''.notes{white-space:pre-wrap;border:1px solid #e0e6ef;background:#fffdf5;border-radius:11px;padding:11px;min-height:44px;font-size:13px;line-height:1.5}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}''',
+          '''.notes{white-space:pre-wrap;border:1px solid #e0e6ef;background:#fffdf5;border-radius:11px;padding:11px;min-height:44px;font-size:13px;line-height:1.5}.toolActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.toolActions button{border:1px solid #cbd7e7;background:#f8fbff;color:#205fbf;border-radius:11px;padding:11px 8px;font-weight:900}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}''')
+
+          one(
+          '''.notes{font-size:10px;padding:8px;min-height:36px}.actions{gap:6px;margin-top:10px}.actions button{min-height:44px;padding:8px 5px;font-size:13px}''',
+          '''.notes{font-size:10px;padding:8px;min-height:36px}.toolActions{gap:6px}.toolActions button{min-height:44px;padding:8px 5px;font-size:12px}.actions{gap:6px;margin-top:10px}.actions button{min-height:44px;padding:8px 5px;font-size:13px}''')
+
+          p.write_text(s)
+
+          p = Path('scripts/schedule-detail-regression.mjs')
+          s = p.read_text()
+          s = s.replace(
+          '''  "お客様名","ナンバー情報","車種","型式","車台番号",\n  "入庫日","入庫時間","入庫区分","入庫要因",\n  "納車予定日","納車予定時間","担当者","作業状態","備考"''',
+          '''  "お客様名","電話番号","ナンバー情報","車種","型式","車台番号",\n  "入庫日","入庫時間","入庫区分","入庫要因",\n  "納車予定日","納車予定時間","担当者","作業状態","作業待ち","代車","優先","外注先","備考",\n  "この車両で続ける"''')
+          old = '''assert.match(detail, /&mode=cancel/, "detail cancel action opens existing safe cancellation confirmation");\nassert.doesNotMatch(detail, /customer-vehicles/, "detail does not route through the vehicle list");'''
+          new = '''assert.match(detail, /&mode=cancel/, "detail cancel action opens existing safe cancellation confirmation");\nassert.match(detail, /outsource_vendor_name/, "detail reads outsource vendor");\nassert.match(detail, /is_urgent/, "detail reads urgent flag");\nassert.match(detail, /needs_loaner/, "detail reads loaner flag");\nassert.match(detail, /is_waiting_service/, "detail reads waiting-service flag");\nassert.match(detail, /schedule_display_name,phone/, "detail reads customer phone without another query");\nassert.match(detail, /sessionStorage\.setItem\("parts-active-vehicle"/, "detail stages vehicle context for parts flow");\nassert.match(detail, /localStorage\.setItem\("parts-active-vehicle"/, "detail stages vehicle context for inspection flow");\nassert.match(detail, /openVehicleTool\("\/parts-data"\)/, "detail opens vehicle parts directly");\nassert.match(detail, /customer-vehicles\/\$\{kind\}\?vehicle=/, "detail links selected vehicle directly to history/photo routes");\nassert.match(detail, /\/inspection\?workOrderId=/, "detail opens inspection record for current work order");\nassert.match(detail, /work\.reason!=="点検" && work\.reason!=="車検"/, "inspection shortcut is limited to inspection/vehicle-inspection work");\nassert.doesNotMatch(detail, /location\.assign\("\/customer-vehicles"\)/, "detail does not bounce through the vehicle list");\nassert.doesNotMatch(detail, /\/ocr\//, "practical detail hub does not couple to OCR execution");'''
+          if s.count(old) != 1:
+              raise SystemExit('schedule-detail regression tail marker mismatch')
+          p.write_text(s.replace(old, new))
+          PY
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run targeted regressions
+        run: |
+          npm run test:schedule-detail
+          npm run test:schedule-one-day-practical
+          npm run test:waiting-service-v13
+          npm run test:vehicle-business-state
+          npm run test:security
+
+      - name: Full build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build
+
+      - name: Commit tested practical detail hub
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/schedule/detail/page.tsx scripts/schedule-detail-regression.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: make schedule detail a practical work hub"
+          git push origin HEAD:preview/schedule-ux-20260903
