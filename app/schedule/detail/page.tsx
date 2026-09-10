@@ -287,6 +287,12 @@ export default function ScheduleDetailPage(){
     location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);
   }
 
+  function openVehicleScopedTool(path:string){
+    if(!vehicle) return;
+    rememberActiveVehicle();
+    location.assign(`${path}?vehicle=${encodeURIComponent(vehicle.id)}`);
+  }
+
   function openOneDaySchedule(){
     const source=inboundEntry || entry;
     if(!source) return;
@@ -372,6 +378,7 @@ export default function ScheduleDetailPage(){
                   <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>
                   <button onClick={()=>openVehicleHistory("history")}>車両履歴</button>
                   <button onClick={()=>openVehicleHistory("photos")}>写真履歴</button>
+                  <button onClick={()=>openVehicleScopedTool("/customer-vehicles/lease-maintenance")}>リースメンテ契約</button>
                   {work && (work.reason==="点検" || work.reason==="車検") && (
                     <button onClick={openInspection}>点検記録簿</button>
                   )}
