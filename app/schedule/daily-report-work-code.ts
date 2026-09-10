@@ -1,4 +1,4 @@
-export type InspectionScheduleType = "schedule" | "legal_6m" | "legal_12m" | null | undefined;
+export type InspectionScheduleType = "schedule" | "legal_3m" | "legal_6m" | "legal_12m" | null | undefined;
 
 /**
  * 日報印刷専用の入庫要因コード。
@@ -16,6 +16,7 @@ export function dailyReportWorkCode(
 
   if (normalized !== "点検") return "";
   if (inspectionScheduleType === "schedule") return "スケ";
+  if (inspectionScheduleType === "legal_3m") return "3";
   if (inspectionScheduleType === "legal_6m") return "6";
   if (inspectionScheduleType === "legal_12m") return "12";
 
