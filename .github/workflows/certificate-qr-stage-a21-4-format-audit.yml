@@ -17,9 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
       - name: Install dependencies
-        run: npm ci
+        run: npm install
       - name: Stage A21.4 format counterfactual invariants
         run: node scripts/photo-qr-stage-a21-4-format-audit-test.mjs
       - name: Stage A21.4 persistence invariants
