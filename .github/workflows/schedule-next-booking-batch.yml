@@ -26,8 +26,7 @@ jobs:
           s=p.read_text()
           needle='<button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>'
           assert needle in s
-          s=s.replace(needle, '<button onClick={()=>openVehicleTool("/schedule/active")}>次回予定登録</button>\n                  '+needle, 1)
-          p.write_text(s)
+          p.write_text(s.replace(needle, '<button onClick={()=>openVehicleTool("/schedule/active")}>次回予定登録</button>\n                  '+needle, 1))
           p=Path('scripts/schedule-detail-regression.mjs')
           s=p.read_text()
           marker='console.log("schedule detail regression: ok");'
@@ -46,8 +45,21 @@ jobs:
           npm run test:vehicle-business-state
           npm run test:security
       - name: Full build
-        run: npm run build
+        id: build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log
+      - uses: actions/upload-artifact@v4
+        if: steps.build.outcome == 'failure'
+        with:
+          name: next-booking-build-log
+          path: build.log
+      - name: Fail on build error
+        if: steps.build.outcome == 'failure'
+        run: exit 1
       - name: Commit verified implementation and remove temporary workflow
+        if: steps.build.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
