@@ -820,6 +820,7 @@ export default function CustomerVehiclesPage() {
               <button onClick={() => location.assign(`/customer-vehicles/photos?vehicle=${encodeURIComponent(selectedVehicle.id)}`)}>🖼 写真履歴</button>
               <button onClick={() => location.assign(`/customer-vehicles/history?vehicle=${encodeURIComponent(selectedVehicle.id)}`)}>🕘 統合履歴</button>
               <button onClick={() => location.assign(`/customer-vehicles/lease-maintenance?vehicle=${encodeURIComponent(selectedVehicle.id)}`)}>📄 リースメンテ契約</button>
+              <button onClick={() => location.assign("/schedule/active")}>📅 次回予定登録</button>
               <button onClick={() => location.assign("/schedule")}>📅 入出庫予定</button>
               <button onClick={() => location.assign("/vehicle-workflow")}>車両情報を編集</button>
             </div>

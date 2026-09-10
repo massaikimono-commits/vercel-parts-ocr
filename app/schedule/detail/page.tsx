@@ -283,7 +283,15 @@ export default function ScheduleDetailPage(){
 
   function openVehicleHistory(kind:"history"|"photos"){
     if(!vehicle) return;
+    rememberActiveVehicle();
     location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);
+  }
+
+  function openOneDaySchedule(){
+    const source=inboundEntry || entry;
+    if(!source) return;
+    const day=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(source.starts_at));
+    location.assign(`/schedule?day=${day}`);
   }
 
   function openInspection(){
@@ -295,7 +303,7 @@ export default function ScheduleDetailPage(){
   return (
     <main className="detailPage">
       <header className="top">
-        <button onClick={()=>history.back()}>← 戻る</button>
+        <div className="topBackActions"><button onClick={()=>history.back()}>← 戻る</button><button onClick={openOneDaySchedule} disabled={!entry}>1日の予定</button></div>
         <strong>予定・車両詳細</strong>
         <b>icb</b>
       </header>
