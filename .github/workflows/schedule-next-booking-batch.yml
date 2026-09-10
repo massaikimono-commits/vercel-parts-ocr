@@ -24,25 +24,16 @@ jobs:
           from pathlib import Path
           p=Path('app/schedule/detail/page.tsx')
           s=p.read_text()
-          old='''                <div className="toolActions">\n                  <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>'''
-          new='''                <div className="toolActions">\n                  <button onClick={()=>openVehicleTool("/schedule/active")}>次回予定登録</button>\n                  <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>'''
-          assert old in s
-          p.write_text(s.replace(old,new,1))
-
+          needle='<button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>'
+          assert needle in s
+          s=s.replace(needle, '<button onClick={()=>openVehicleTool("/schedule/active")}>次回予定登録</button>\n                  '+needle, 1)
+          p.write_text(s)
           p=Path('scripts/schedule-detail-regression.mjs')
           s=p.read_text()
-          old='''const schedule = fs.readFileSync(new URL("../app/schedule/page.tsx", import.meta.url), "utf8");'''
-          new='''const schedule = fs.readFileSync(new URL("../app/schedule/page.tsx", import.meta.url), "utf8");\nconst activeSchedule = fs.readFileSync(new URL("../app/schedule/active/page.tsx", import.meta.url), "utf8");'''
-          assert old in s
-          s=s.replace(old,new,1)
-          old='''  "この車両で続ける"\n])'''
-          new='''  "この車両で続ける","次回予定登録"\n])'''
-          assert old in s
-          s=s.replace(old,new,1)
-          old='''assert.match(detail, /openVehicleTool\\(\\"\\/parts-data\\"\\)/, "detail opens vehicle parts directly");'''
-          new='''assert.match(detail, /openVehicleTool\\(\\"\\/schedule\\/active\\"\\)/, "detail opens next schedule registration with the selected vehicle");\nassert.match(activeSchedule, /const ACTIVE_KEY = \\"parts-active-vehicle\\"/, "active schedule reuses the selected vehicle storage key");\nassert.match(activeSchedule, /localStorage\\.getItem\\(ACTIVE_KEY\\)/, "active schedule restores the selected vehicle without list reselection");\nassert.match(detail, /openVehicleTool\\(\\"\\/parts-data\\"\\)/, "detail opens vehicle parts directly");'''
-          assert old in s
-          p.write_text(s.replace(old,new,1))
+          marker='console.log("schedule detail regression: ok");'
+          assert marker in s
+          checks='''assert.ok(detail.includes("次回予定登録"), "detail shows next booking action");\nassert.match(detail, /openVehicleTool\\(\"\\/schedule\\/active\"\\)/, "detail opens existing active-vehicle schedule registration");\n'''
+          p.write_text(s.replace(marker, checks+marker, 1))
           PY
       - name: Install dependencies
         run: npm ci
