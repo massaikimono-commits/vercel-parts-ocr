@@ -1,0 +1,53 @@
+name: Schedule detail work state CI
+
+on:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run targeted regressions
+        run: |
+          npm run test:schedule-detail
+          npm run test:schedule-one-day-practical
+          npm run test:schedule-work-state
+          npm run test:waiting-service-v13
+          npm run test:vehicle-business-state
+          npm run test:security
+
+      - name: Full build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build
+
+      - name: Deployment safety
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+          with pathlib.Path("netlify.toml").open("rb") as f:
+              tomllib.load(f)
+          print("netlify.toml syntax is valid.")
+          PY
+          node scripts/deployment-safety-regression.mjs
