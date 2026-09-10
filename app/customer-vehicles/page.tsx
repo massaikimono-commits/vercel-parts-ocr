@@ -767,7 +767,7 @@ export default function CustomerVehiclesPage() {
 
       <section className="card searchCard">
         <h1>顧客・車両管理</h1>
-        <p className="searchIntro">検索方法を「下4桁・お客様名・電話番号」から選んで車両を探します。初期値は「下4桁」です。車両を開くと過去の部品OCR履歴まで確認でき、端末で保存した車両紐付け済み部品はクラウドにも自動同期します。</p>
+        <p className="searchIntro">検索方法を「下4桁・お客様名・電話番号」から選んで車両を探します。初期値は「下4桁」です。車両を開くと過去の部品OCR履歴まで確認でき、正式保存済み部品と端末の未確定データを分けて確認できます。</p>
         <div className="notice">{busy ? "顧客・車両を検索中…" : message}</div>
         <div className="vehicleSearchModes" aria-label="車両検索方法">
           <button type="button" className={vehicleSearchMode === "last4" ? "active" : ""} onClick={() => setVehicleSearchMode("last4")}>下4桁</button>
