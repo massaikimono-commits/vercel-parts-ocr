@@ -21,6 +21,10 @@ export function evaluateA218AdoptionReadiness(a217={}, options={}){
   if(!privacyGate)blockers.push("PRIVACY_GATE_NOT_MET");
   if(!formalIsolation)blockers.push("FORMAL_ISOLATION_NOT_MET");
   if(!additionalRealGate)blockers.push("ADDITIONAL_REAL_REGRESSION_REQUIRED");
+  let status="BLOCKED_SAFETY_GATE";
+  if(eligible)status="FORMAL_CANDIDATE_ELIGIBLE";
+  else if(!realEvidence)status="BLOCKED_REAL_EVIDENCE_REQUIRED";
+  else if(structuralGate&&privacyGate&&formalIsolation&&!additionalRealGate)status="BLOCKED_ADDITIONAL_REAL_REQUIRED";
   return {
     schema:"icb-certificate-qr-stage-a21-8-adoption-readiness-v1",
     diagnosticOnly:true,
@@ -29,7 +33,7 @@ export function evaluateA218AdoptionReadiness(a217={}, options={}){
     formal28of47Preserved:true,
     projected31of47Candidate:Boolean(a217?.projected31of47Candidate),
     formalCandidateEligible:eligible,
-    status:eligible?"FORMAL_CANDIDATE_ELIGIBLE":"BLOCKED_REAL_EVIDENCE_REQUIRED",
+    status,
     gates:{realEvidence,structuralGate,privacyGate,formalIsolation,additionalRealGate},
     blockers,
     requiredRealSequence:["fixed8 one authorized run with A21.7 character-class evidence","confirm 3 unique physical/fingerprint groups and shared schema","additional-real same-condition regression","only then management decision on guarded Formal acceptance candidate"],
