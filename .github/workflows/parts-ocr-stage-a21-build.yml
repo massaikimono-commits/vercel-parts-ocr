@@ -1,0 +1,33 @@
+name: Parts OCR Stage A21 root-cause isolation build
+
+on:
+  push:
+    branches:
+      - eval/parts-ocr-stage-a21-root-cause-isolation
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder-key
+      NEXT_PUBLIC_EVAL_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet numpy pillow onnxruntime
+      - name: Stage A21 exact model/dictionary contract sanity
+        run: python scripts/stage-a21-model-contract.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage-a21-model-contract
+          path: stage-a21-model-contract.json
+          retention-days: 7
+      - run: npm install
+      - run: npm run build
