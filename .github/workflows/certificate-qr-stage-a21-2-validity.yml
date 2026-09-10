@@ -1,0 +1,73 @@
+name: Certificate QR Stage A21.2 validity
+
+on:
+  push:
+    branches:
+      - eval/certificate-qr-stage-a21-2-direct-validity
+    paths:
+      - "app/eval/certificate-qr-stage-a21-2-direct-validity/**"
+      - "scripts/append-photo-qr-a212-runner.mjs"
+      - "scripts/photo-qr-stage-a21-2-validity-test.mjs"
+      - "scripts/prepare-photo-qr-diagnostic-core.mjs"
+      - "app/eval/certificate-qr-decode-experiment/**"
+      - "package.json"
+      - ".github/workflows/certificate-qr-stage-a21-2-validity.yml"
+
+jobs:
+  validity-and-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Prepare shared Photo QR diagnostic core
+        run: |
+          node scripts/prepare-photo-qr-diagnostic-core.mjs
+          node scripts/append-photo-qr-a212-runner.mjs
+
+      - name: Stage A21.2 invariants
+        run: npm run test:photo-qr-a21-2
+
+      - name: Prior Photo QR contracts
+        run: |
+          npm run test:photo-qr-minimal
+          npm run test:photo-qr-a21
+          npm run test:photo-qr-a21-1
+
+      - name: Vehicle certificate regression
+        run: npm run test:certificate
+
+      - name: Parts and record regressions
+        run: |
+          npm run test:parts
+          npm run test:inspection
+          npm run test:record-types
+          npm run test:workshop-record-types
+
+      - name: Schedule and print regressions
+        run: |
+          npm run test:schedule-print
+          npm run test:schedule-print-layout
+          npm run test:daily-report-template
+          npm run test:daily-report-allocation
+          npm run test:daily-report-print-model
+          npm run test:daily-report-secondary
+          npm run test:qr-speed
+          npm run test:parts-layout
+
+      - name: Next.js build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build
