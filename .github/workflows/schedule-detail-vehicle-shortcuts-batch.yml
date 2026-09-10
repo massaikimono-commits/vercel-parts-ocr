@@ -1,0 +1,119 @@
+name: Schedule detail vehicle shortcuts batch
+on:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
+    paths:
+      - .github/workflows/schedule-detail-vehicle-shortcuts-batch.yml
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview/schedule-ux-20260903
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply bundled vehicle shortcuts candidate
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/schedule/detail/page.tsx')
+          s=p.read_text()
+          old='''  function openVehicleHistory(kind:"history"|"photos"){
+    if(!vehicle) return;
+    rememberActiveVehicle();
+    location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);
+  }
+'''
+          new='''  function openVehicleHistory(kind:"history"|"photos"){
+    if(!vehicle) return;
+    rememberActiveVehicle();
+    location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);
+  }
+
+  function openVehicleScopedTool(path:string){
+    if(!vehicle) return;
+    rememberActiveVehicle();
+    location.assign(`${path}?vehicle=${encodeURIComponent(vehicle.id)}`);
+  }
+'''
+          assert old in s
+          s=s.replace(old,new,1)
+          old_buttons='''                  <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>
+                  <button onClick={()=>openVehicleHistory("history")}>車両履歴</button>
+                  <button onClick={()=>openVehicleHistory("photos")}>写真履歴</button>
+'''
+          new_buttons='''                  <button onClick={()=>openVehicleTool("/ocr/auto")}>部品OCR</button>
+                  <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>
+                  <button onClick={()=>openVehicleHistory("history")}>車両履歴</button>
+                  <button onClick={()=>openVehicleHistory("photos")}>写真履歴</button>
+                  <button onClick={()=>openVehicleScopedTool("/customer-vehicles/lease-maintenance")}>リースメンテ契約</button>
+'''
+          assert old_buttons in s
+          s=s.replace(old_buttons,new_buttons,1)
+          p.write_text(s)
+
+          r=Path('scripts/schedule-detail-vehicle-shortcuts-regression.mjs')
+          r.write_text('''import fs from "node:fs";\nimport assert from "node:assert/strict";\n\nconst detail = fs.readFileSync("app/schedule/detail/page.tsx", "utf8");\nassert.ok(detail.includes('openVehicleTool("/ocr/auto")'), "schedule detail links selected vehicle directly to parts OCR");\nassert.ok(detail.includes('>部品OCR</button>'), "parts OCR shortcut is visible");\nassert.ok(detail.includes('openVehicleScopedTool("/customer-vehicles/lease-maintenance")'), "schedule detail links selected vehicle directly to lease maintenance");\nassert.ok(detail.includes('rememberActiveVehicle();'), "shortcuts preserve selected vehicle handoff");\nassert.ok(detail.includes('次回予定登録'), "existing next-booking preview candidate remains present");\nassert.ok(detail.includes('顧客・車両情報'), "existing customer/vehicle preview candidate remains present");\nassert.ok(detail.includes('電話する'), "existing one-tap phone preview candidate remains present");\nconsole.log("schedule detail vehicle shortcuts regression: PASS");\n''')
+          PY
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Targeted and safety regression
+        run: |
+          node scripts/schedule-detail-vehicle-shortcuts-regression.mjs
+          node scripts/schedule-detail-regression.mjs
+          npm run test:security
+          npm run test:app-core-safety
+      - name: Full build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build
+      - name: Restore generated build artifacts
+        run: git checkout -- . || true
+      - name: Reapply source candidate and commit
+        run: |
+          git checkout -- app/schedule/detail/page.tsx scripts/schedule-detail-vehicle-shortcuts-regression.mjs 2>/dev/null || true
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/schedule/detail/page.tsx')
+          s=p.read_text()
+          if 'function openVehicleScopedTool' not in s:
+            old='''  function openVehicleHistory(kind:"history"|"photos"){
+    if(!vehicle) return;
+    rememberActiveVehicle();
+    location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);
+  }
+'''
+            new=old+'''\n  function openVehicleScopedTool(path:string){\n    if(!vehicle) return;\n    rememberActiveVehicle();\n    location.assign(`${path}?vehicle=${encodeURIComponent(vehicle.id)}`);\n  }\n'''
+            assert old in s
+            s=s.replace(old,new,1)
+          if '>部品OCR</button>' not in s:
+            old='''                  <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>
+                  <button onClick={()=>openVehicleHistory("history")}>車両履歴</button>
+                  <button onClick={()=>openVehicleHistory("photos")}>写真履歴</button>
+'''
+            new='''                  <button onClick={()=>openVehicleTool("/ocr/auto")}>部品OCR</button>
+                  <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>
+                  <button onClick={()=>openVehicleHistory("history")}>車両履歴</button>
+                  <button onClick={()=>openVehicleHistory("photos")}>写真履歴</button>
+                  <button onClick={()=>openVehicleScopedTool("/customer-vehicles/lease-maintenance")}>リースメンテ契約</button>
+'''
+            assert old in s
+            s=s.replace(old,new,1)
+          p.write_text(s)
+          r=Path('scripts/schedule-detail-vehicle-shortcuts-regression.mjs')
+          r.write_text('''import fs from "node:fs";\nimport assert from "node:assert/strict";\nconst detail = fs.readFileSync("app/schedule/detail/page.tsx", "utf8");\nassert.ok(detail.includes('openVehicleTool("/ocr/auto")'));\nassert.ok(detail.includes('openVehicleScopedTool("/customer-vehicles/lease-maintenance")'));\nassert.ok(detail.includes('次回予定登録'));\nassert.ok(detail.includes('顧客・車両情報'));\nassert.ok(detail.includes('電話する'));\nconsole.log("schedule detail vehicle shortcuts regression: PASS");\n''')
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/schedule/detail/page.tsx scripts/schedule-detail-vehicle-shortcuts-regression.mjs
+          git commit -m "ux: add selected vehicle direct shortcuts"
+          git rm .github/workflows/schedule-detail-vehicle-shortcuts-batch.yml
+          git commit -m "ci: remove vehicle shortcuts batch workflow"
+          git push origin HEAD:preview/schedule-ux-20260903
