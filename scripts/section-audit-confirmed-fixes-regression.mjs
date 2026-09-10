@@ -6,6 +6,7 @@ const customer = fs.readFileSync("app/customer-vehicles/page.tsx", "utf8");
 const inspection = fs.readFileSync("app/inspection/page.tsx", "utf8");
 
 assert.ok(login.includes('supabase.auth.signOut({ scope: "global" })'), "remote logout uses existing Supabase Auth global sign-out");
+assert.ok(login.includes('supabase.rpc("record_logout")'), "remote logout records the initiating logout event when available");
 assert.ok(login.includes('全端末からログアウト'), "remote logout is operator-visible");
 assert.ok(login.includes('window.confirm('), "remote logout requires explicit confirmation");
 assert.ok(login.includes('clearSensitiveLocalState();'), "remote logout clears sensitive local state");
