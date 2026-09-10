@@ -524,14 +524,16 @@ export default function CustomerVehiclesPage() {
     setLinkCustomerId(v.customerId || "");
     setLinkCustomerSearch("");
     setCustomerEditing(false);
-    sessionStorage.setItem(ACTIVE_KEY, JSON.stringify({
+    const activeVehiclePayload = JSON.stringify({
       id: v.id,
       number: v.number,
       registration: v.registration,
       last4: v.last4,
       chassis: v.chassis,
       model: v.model,
-    }));
+    });
+    sessionStorage.setItem(ACTIVE_KEY, activeVehiclePayload);
+    localStorage.setItem(ACTIVE_KEY, activeVehiclePayload);
     setMessage(`${vehicleLabel(v)} を作業車両に設定しました。`);
     void loadVehicleParts(v);
   }
@@ -835,6 +837,7 @@ export default function CustomerVehiclesPage() {
               <button onClick={() => location.assign(`/customer-vehicles/photos?vehicle=${encodeURIComponent(selectedVehicle.id)}`)}>🖼 写真履歴</button>
               <button onClick={() => location.assign(`/customer-vehicles/history?vehicle=${encodeURIComponent(selectedVehicle.id)}`)}>🕘 統合履歴</button>
               <button onClick={() => location.assign(`/customer-vehicles/lease-maintenance?vehicle=${encodeURIComponent(selectedVehicle.id)}`)}>📄 リースメンテ契約</button>
+              <button onClick={() => location.assign("/inspection")}>🧾 記録簿</button>
               <button onClick={() => location.assign("/schedule/active")}>📅 次回予定登録</button>
               <button onClick={() => location.assign("/schedule")}>📅 入出庫予定</button>
               {selectedCustomer?.phone && <button type="button" onClick={callSelectedCustomer}>📞 電話する</button>}
