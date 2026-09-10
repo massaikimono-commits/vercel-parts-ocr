@@ -16,7 +16,7 @@ jobs:
           ref: preview/schedule-ux-20260903
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - name: Implement direct next-booking action and regression
         run: |
@@ -35,7 +35,7 @@ jobs:
           p.write_text(s.replace(marker, checks+marker, 1))
           PY
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
       - name: Targeted regressions
         run: |
           npm run test:schedule-detail
@@ -45,21 +45,11 @@ jobs:
           npm run test:vehicle-business-state
           npm run test:security
       - name: Full build
-        id: build
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          npm run build 2>&1 | tee build.log
-      - uses: actions/upload-artifact@v4
-        if: steps.build.outcome == 'failure'
-        with:
-          name: next-booking-build-log
-          path: build.log
-      - name: Fail on build error
-        if: steps.build.outcome == 'failure'
-        run: exit 1
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build
       - name: Commit verified implementation and remove temporary workflow
-        if: steps.build.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
