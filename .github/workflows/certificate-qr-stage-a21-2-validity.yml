@@ -7,6 +7,7 @@ on:
     paths:
       - "app/eval/certificate-qr-stage-a21-2-direct-validity/**"
       - "scripts/append-photo-qr-a212-runner.mjs"
+      - "scripts/run-photo-qr-a212-append-fixed.mjs"
       - "scripts/photo-qr-stage-a21-2-validity-test.mjs"
       - "scripts/prepare-photo-qr-diagnostic-core.mjs"
       - "app/eval/certificate-qr-decode-experiment/**"
@@ -34,7 +35,7 @@ jobs:
       - name: Prepare shared Photo QR diagnostic core
         run: |
           node scripts/prepare-photo-qr-diagnostic-core.mjs
-          node scripts/append-photo-qr-a212-runner.mjs
+          node scripts/run-photo-qr-a212-append-fixed.mjs
 
       - name: Stage A21.2 invariants
         run: npm run test:photo-qr-a21-2
