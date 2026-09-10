@@ -101,6 +101,7 @@ export default function ScheduleDetailPage(){
   const [customer,setCustomer]=useState<Customer|null>(null);
   const [message,setMessage]=useState("予定・車両情報を読み込みます。");
   const [busy,setBusy]=useState(true);
+  const [workStateBusy,setWorkStateBusy]=useState(false);
 
   useEffect(()=>{
     const id=new URLSearchParams(location.search).get("entry");
@@ -182,6 +183,47 @@ export default function ScheduleDetailPage(){
     }
   }
 
+  async function advanceWorkState(){
+    if(!work || workStateBusy) return;
+    setWorkStateBusy(true);
+    try{
+      if(work.work_completed || work.status==="completed"){
+        const {data,error}=await supabase.rpc("reopen_work_order",{
+          p_work_order_id:work.id,
+          p_actor:"schedule",
+        });
+        if(error) throw error;
+        setWork({...work,work_completed:false,status:data?.status || "scheduled"});
+        setMessage("作業未実施へ戻しました。");
+        return;
+      }
+
+      if(work.status==="in_progress"){
+        const {data,error}=await supabase.rpc("complete_work_order_one_tap",{
+          p_work_order_id:work.id,
+          p_actor:"schedule",
+        });
+        if(error) throw error;
+        setWork({...work,work_completed:true,status:data?.status || "completed"});
+        setMessage("作業完了にしました。");
+        return;
+      }
+
+      const {data,error}=await supabase.rpc("set_work_order_progress_state",{
+        p_work_order_id:work.id,
+        p_state:"in_progress",
+        p_actor:"schedule",
+      });
+      if(error) throw error;
+      setWork({...work,work_completed:false,status:data?.status || "in_progress"});
+      setMessage("作業中にしました。");
+    }catch(error:any){
+      setMessage(safeActionError("作業状態の保存",error));
+    }finally{
+      setWorkStateBusy(false);
+    }
+  }
+
   const inboundEntry=useMemo(
     ()=>entries.find(x=>x.entry_type==="pickup" || x.entry_type==="customer_visit" || x.entry_type==="onsite_repair") || (entry?.entry_type!=="delivery" ? entry : null),
     [entries,entry]
@@ -206,6 +248,12 @@ export default function ScheduleDetailPage(){
   ].filter(Boolean).join(" / ") || "未登録";
 
   const vehicleName=[vehicle?.maker,vehicle?.model || vehicle?.vehicle_type].filter(Boolean).join(" ") || "未登録";
+  const currentWorkState=workStateLabel(work);
+  const workStateActionLabel=currentWorkState==="作業完了"
+    ? "作業未実施へ戻す"
+    : currentWorkState==="作業中"
+      ? "作業完了にする"
+      : "作業中にする";
 
   function rememberActiveVehicle(){
     if(!vehicle) return false;
@@ -252,9 +300,16 @@ export default function ScheduleDetailPage(){
             <small>{busy ? "読み込み中…" : message}</small>
             <h1>{customerLabel(customer)}</h1>
           </div>
-          <span className={`state ${workStateLabel(work)==="作業完了"?"done":workStateLabel(work)==="作業中"?"running":"pending"}`}>
-            {workStateLabel(work)}
-          </span>
+          <button
+            type="button"
+            className={`state stateButton ${currentWorkState==="作業完了"?"done":currentWorkState==="作業中"?"running":"pending"}`}
+            disabled={!work || workStateBusy}
+            onClick={()=>void advanceWorkState()}
+            aria-label={workStateActionLabel}
+            title={`${currentWorkState} → ${workStateActionLabel}`}
+          >
+            {workStateBusy ? "保存中…" : currentWorkState}
+          </button>
         </div>
 
         {entry && (
@@ -281,7 +336,7 @@ export default function ScheduleDetailPage(){
                 <div><span>納車予定日</span><b>{deliveryEntry ? dateLabel(deliveryEntry.starts_at) : (work?.planned_delivery_date || "未登録")}</b></div>
                 <div><span>納車予定時間</span><b>{timeLabel(deliveryEntry)}</b></div>
                 <div><span>担当者</span><b>{work?.worker_name || "未設定"}</b></div>
-                <div><span>作業状態</span><b>{workStateLabel(work)}</b></div>
+                <div><span>作業状態</span><b>{currentWorkState}</b></div>
                 <div><span>作業待ち</span><b>{work?.is_waiting_service ? "あり" : "なし"}</b></div>
                 <div><span>代車</span><b>{work?.needs_loaner ? "必要" : "不要"}</b></div>
                 <div><span>優先</span><b>{work?.is_urgent ? "急ぎ" : "通常"}</b></div>
@@ -320,8 +375,8 @@ export default function ScheduleDetailPage(){
 
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button{font:inherit}
-        .detailPage{max-width:820px;margin:0 auto;padding:14px 12px 44px}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.top button,.actions button{border:1px solid #ccd7e5;background:#fff;border-radius:11px;padding:10px 12px;font-weight:900}.top button{color:#2674e8}.card{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px}.headline{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.headline small{color:#718096}.headline h1{font-size:26px;margin:3px 0 0}.state{border-radius:999px;padding:6px 9px;font-size:12px;font-weight:900;white-space:nowrap}.state.pending{background:#f0f2f5;color:#657180}.state.running{background:#fff0d8;color:#9a5d00}.state.done{background:#e9f7ef;color:#176b37}.section{border-top:1px solid #e7ecf2;margin-top:14px;padding-top:13px}.section h2{font-size:15px;margin:0 0 9px}.infoGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.infoGrid>div{display:grid;gap:3px;border:1px solid #e0e6ef;background:#fafbfd;border-radius:11px;padding:10px}.infoGrid>div.wide{grid-column:1/-1}.infoGrid span{font-size:10px;color:#6b7788;font-weight:800}.infoGrid b{font-size:14px;word-break:break-word}.notes{white-space:pre-wrap;border:1px solid #e0e6ef;background:#fffdf5;border-radius:11px;padding:11px;min-height:44px;font-size:13px;line-height:1.5}.toolActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.toolActions button{border:1px solid #cbd7e7;background:#f8fbff;color:#205fbf;border-radius:11px;padding:11px 8px;font-weight:900}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}.actions .edit{background:#2f6fe4;border-color:#2f6fe4;color:#fff}.actions .cancel{background:#fff8f7;border-color:#e4a39d;color:#b42318}
-        @media(max-width:600px){.detailPage{padding:7px 6px 28px}.top{margin-bottom:5px}.top button{padding:6px 8px;font-size:10px}.top strong,.top b{font-size:11px}.card{border-radius:12px;padding:10px}.headline h1{font-size:18px}.headline small{font-size:9px}.state{font-size:9px;padding:4px 6px}.section{margin-top:9px;padding-top:8px}.section h2{font-size:12px;margin-bottom:5px}.infoGrid{gap:5px}.infoGrid>div{padding:7px;border-radius:8px}.infoGrid span{font-size:8px}.infoGrid b{font-size:11px}.notes{font-size:10px;padding:8px;min-height:36px}.toolActions{gap:6px}.toolActions button{min-height:44px;padding:8px 5px;font-size:12px}.actions{gap:6px;margin-top:10px}.actions button{min-height:44px;padding:8px 5px;font-size:13px}}
+        .detailPage{max-width:820px;margin:0 auto;padding:14px 12px 44px}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.top button,.actions button{border:1px solid #ccd7e5;background:#fff;border-radius:11px;padding:10px 12px;font-weight:900}.top button{color:#2674e8}.card{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px}.headline{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.headline small{color:#718096}.headline h1{font-size:26px;margin:3px 0 0}.state{border-radius:999px;padding:6px 9px;font-size:12px;font-weight:900;white-space:nowrap}.stateButton{border:0;cursor:pointer;min-height:34px}.stateButton:disabled{cursor:default;opacity:.65}.state.pending{background:#f0f2f5;color:#657180}.state.running{background:#fff0d8;color:#9a5d00}.state.done{background:#e9f7ef;color:#176b37}.section{border-top:1px solid #e7ecf2;margin-top:14px;padding-top:13px}.section h2{font-size:15px;margin:0 0 9px}.infoGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.infoGrid>div{display:grid;gap:3px;border:1px solid #e0e6ef;background:#fafbfd;border-radius:11px;padding:10px}.infoGrid>div.wide{grid-column:1/-1}.infoGrid span{font-size:10px;color:#6b7788;font-weight:800}.infoGrid b{font-size:14px;word-break:break-word}.notes{white-space:pre-wrap;border:1px solid #e0e6ef;background:#fffdf5;border-radius:11px;padding:11px;min-height:44px;font-size:13px;line-height:1.5}.toolActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.toolActions button{border:1px solid #cbd7e7;background:#f8fbff;color:#205fbf;border-radius:11px;padding:11px 8px;font-weight:900}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}.actions .edit{background:#2f6fe4;border-color:#2f6fe4;color:#fff}.actions .cancel{background:#fff8f7;border-color:#e4a39d;color:#b42318}
+        @media(max-width:600px){.detailPage{padding:7px 6px 28px}.top{margin-bottom:5px}.top button{padding:6px 8px;font-size:10px}.top strong,.top b{font-size:11px}.card{border-radius:12px;padding:10px}.headline h1{font-size:18px}.headline small{font-size:9px}.state{font-size:9px;padding:4px 6px}.stateButton{min-height:40px}.section{margin-top:9px;padding-top:8px}.section h2{font-size:12px;margin-bottom:5px}.infoGrid{gap:5px}.infoGrid>div{padding:7px;border-radius:8px}.infoGrid span{font-size:8px}.infoGrid b{font-size:11px}.notes{font-size:10px;padding:8px;min-height:36px}.toolActions{gap:6px}.toolActions button{min-height:44px;padding:8px 5px;font-size:12px}.actions{gap:6px;margin-top:10px}.actions button{min-height:44px;padding:8px 5px;font-size:13px}}
       `}</style>
     </main>
   );
