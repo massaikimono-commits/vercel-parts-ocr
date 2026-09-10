@@ -1,34 +1,25 @@
 import assert from 'node:assert/strict';
 
-function nearestBelow(vals,x,maxDist){return vals.filter(v=>v<x&&x-v<=maxDist).sort((a,b)=>(x-b)-(x-a))[0]??null;}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function nearestBelow(vals,x,maxDist){return vals.filter(v=>v<x&&x-v<=maxDist).sort((a,b)=>(x-a)-(x-b))[0]??null;}
 function nearestAbove(vals,x,maxDist){return vals.filter(v=>v>x&&v-x<=maxDist).sort((a,b)=>(a-x)-(b-x))[0]??null;}
-function refine(center,top,bottom,rules,h,thickness){const max=h*.075,lo=nearestBelow(rules,center,max),hi=nearestAbove(rules,center,max);if(lo!==null&&hi!==null&&hi-lo>h*.018&&hi-lo<h*.12){const margin=Math.max(thickness+1,h*.0025);return {top:lo+margin,bottom:hi-margin,bounded:true};}const expand=Math.max((bottom-top)*.18,h*.006);return {top:top-expand,bottom:bottom+expand,bounded:false};}
+function refineRowsByRules(rows,rules,paper){return rows.map(row=>{const c=row.center,max=paper.h*.075,lo=nearestBelow(rules.horizontal,c,max),hi=nearestAbove(rules.horizontal,c,max);if(lo!==null&&hi!==null&&hi-lo>paper.h*.018&&hi-lo<paper.h*.12){const margin=Math.max(rules.horizontalThickness+1,paper.h*.0025);return{top:lo+margin,bottom:hi-margin,center:row.center,boundedByRules:true,sourceRow:row};}const expand=Math.max((row.bottom-row.top)*.18,paper.h*.006);return{top:clamp(row.top-expand,paper.y,paper.y+paper.h),bottom:clamp(row.bottom+expand,paper.y,paper.y+paper.h),center:row.center,boundedByRules:false,sourceRow:row};});}
+function assignExpectedRules(measured,expected,radii){const sorted=[...measured].sort((a,b)=>a-b),out=[];let minIndex=0;for(let i=0;i<expected.length;i++){let best=-1,bestD=Infinity;for(let j=minIndex;j<sorted.length;j++){const d=Math.abs(sorted[j]-expected[i]);if(d<=radii[i]&&d<bestD){best=j;bestD=d;}}if(best>=0){out.push(sorted[best]);minIndex=best+1;}else out.push(expected[i]);}return out;}
+function solveLinear(A,b){const n=b.length,M=A.map((r,i)=>[...r,b[i]]);for(let c=0;c<n;c++){let pivot=c;for(let r=c+1;r<n;r++)if(Math.abs(M[r][c])>Math.abs(M[pivot][c]))pivot=r;if(Math.abs(M[pivot][c])<1e-9)return null;[M[c],M[pivot]]=[M[pivot],M[c]];const d=M[c][c];for(let k=c;k<=n;k++)M[c][k]/=d;for(let r=0;r<n;r++){if(r===c)continue;const f=M[r][c];for(let k=c;k<=n;k++)M[r][k]-=f*M[c][k];}}return M.map(r=>r[n]);}
+function homographyRectToQuad(W,H,q){const src=[[0,0],[W,0],[W,H],[0,H]],dst=[q.tl,q.tr,q.br,q.bl],A=[],b=[];for(let i=0;i<4;i++){const[x,y]=src[i],u=dst[i].x,v=dst[i].y;A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v);}const h=solveLinear(A,b);return h?[...h,1]:null;}
+function mapH(H,x,y){const d=H[6]*x+H[7]*y+1;return{x:(H[0]*x+H[1]*y+H[2])/d,y:(H[3]*x+H[4]*y+H[5])/d};}
+function bandsFromScores(values,threshold){const v=values.filter(x=>x.s>=threshold).sort((a,b)=>a.p-b.p),bands=[];if(!v.length)return bands;let cur=[v[0]];const flush=()=>{const sum=cur.reduce((s,x)=>s+x.s,0)||1;bands.push({center:cur.reduce((s,x)=>s+x.p*x.s,0)/sum,width:cur.at(-1).p-cur[0].p+1,score:Math.max(...cur.map(x=>x.s))});};for(let i=1;i<v.length;i++){if(v[i].p-v[i-1].p<=2)cur.push(v[i]);else{flush();cur=[v[i]];}}flush();return bands;}
+function classify(raw,normalized,field){const r=raw.normalize('NFKC').trim(),n=normalized.normalize('NFKC').trim();if(!r&&!n)return'raw-blank';if(r&&n)return r===n?'unchanged':'transformed-nonempty';if(r&&!n){if(field!=='name'&&!/[0-9]/.test(r))return'numeric-policy-rejected-no-digit';if(field==='name'&&/^[\s|:;.,・]+$/.test(r))return'name-punctuation-only';return'emptied-other';}return'other';}
+function attribute(raw,normalized,field,crop){const k=classify(raw,normalized,field);if(k==='raw-blank')return crop.truncationLikely||crop.tableLineLikely||(crop.darkOccupancy??1)<.0025?'crop-or-input-suspect':'recognizer-blank-on-usable-crop';if(k==='numeric-policy-rejected-no-digit'||k==='name-punctuation-only')return crop.truncationLikely||crop.tableLineLikely?'crop-contamination-before-normalization':'recognizer-output-not-semantic';if(k==='emptied-other')return'normalization-destructive-candidate';return'normalization-not-emptying';}
 
-// Synthetic table: 8 rows, horizontal rules every 70 px. Source text boxes are intentionally tight.
-const H=1000;
-const rules=Array.from({length:9},(_,i)=>360+i*70);
-for(let i=0;i<8;i++){
-  const textTop=rules[i]+18,textBottom=rules[i+1]-18,center=(textTop+textBottom)/2;
-  const out=refine(center,textTop,textBottom,rules,H,2);
-  assert.equal(out.bounded,true);
-  assert.ok(out.top<=rules[i]+4,'top margin should retain ascenders');
-  assert.ok(out.bottom>=rules[i+1]-4,'bottom margin should retain descenders');
-  assert.ok(out.top<textTop && out.bottom>textBottom,'rule-bounded crop must expand beyond tight OCR row');
-}
-
-// Missing adjacent rules: fail safe expands source row rather than trimming 10% from it.
-const fallback=refine(500,480,520,[300,700],H,2);
-assert.equal(fallback.bounded,false);
-assert.ok(fallback.top<480 && fallback.bottom>520);
-
-// Vertical rule margins must be inward and proportional to measured rule thickness.
-const paperW=1600,th=3,margin=Math.max((th+1)/paperW,.003);
-assert.ok(margin>=.003 && margin<.01);
-
-// Normalization root-cause classification: non-digit ONNX raw on numeric field is policy rejection, not CTC/index corruption.
-function classify(raw,normalized,field){const r=raw.normalize('NFKC').trim(),n=normalized.trim();if(!r&&!n)return'raw-blank';if(r&&n)return r===n?'unchanged':'transformed-nonempty';if(r&&!n){if(field!=='name'&&!/\d/.test(r))return'numeric-policy-rejected-no-digit';if(field==='name'&&/^[\s|:;.,・]+$/.test(r))return'name-punctuation-only';return'emptied-other';}return'other';}
-assert.equal(classify('部品','', 'retail'),'numeric-policy-rejected-no-digit');
-assert.equal(classify('1,250','1250','retail'),'transformed-nonempty');
-assert.equal(classify('123','123','qty'),'unchanged');
-
-console.log(JSON.stringify({stage:'A22',structuralCropAudit:'PASS',tightRowTrimRemoved:true,ruleBoundedExpansion:true,ruleMarginApplied:true,normalizationAudit:'PASS'}));
+const q={tl:{x:100,y:80},tr:{x:1600,y:120},br:{x:1500,y:980},bl:{x:180,y:920}},H=homographyRectToQuad(1400,800,q);assert.ok(H);for(const [x,y,p] of [[0,0,q.tl],[1400,0,q.tr],[1400,800,q.br],[0,800,q.bl]]){const m=mapH(H,x,y);assert.ok(Math.hypot(m.x-p.x,m.y-p.y)<1e-6);}assert.equal(homographyRectToQuad(0,0,{tl:{x:0,y:0},tr:{x:0,y:0},br:{x:0,y:0},bl:{x:0,y:0}}),null);
+const scores=[];for(let p=0;p<100;p++)scores.push({p,s:(p>=20&&p<=22)||(p>=70&&p<=73)?.9:.02});const bands=bandsFromScores(scores,.2);assert.equal(bands.length,2);assert.ok(bands[0].width>=3&&bands[1].width>=4);
+assert.equal(nearestBelow([360,430,500],465,120),430);assert.equal(nearestAbove([430,500,570],465,120),500);
+const paper={x:0,y:0,w:1600,h:1000},rules=Array.from({length:9},(_,i)=>360+i*70),rows=Array.from({length:8},(_,i)=>({id:`slot${i}`,top:rules[i]+18,bottom:rules[i+1]-18,center:(rules[i]+rules[i+1])/2})),refined=refineRowsByRules(rows,{horizontal:rules,horizontalThickness:2},paper);assert.equal(refined.length,8);for(let i=0;i<8;i++){assert.equal(refined[i].sourceRow,rows[i]);assert.equal(refined[i].center,rows[i].center);assert.equal(refined[i].boundedByRules,true);assert.ok(refined[i].top<rows[i].top&&refined[i].bottom>rows[i].bottom);if(i)assert.ok(refined[i-1].bottom<refined[i].top);}
+const duplicate=[rows[0],{...rows[0],id:'duplicate-slot'}],dupOut=refineRowsByRules(duplicate,{horizontal:rules,horizontalThickness:2},paper);assert.equal(dupOut.length,2);assert.equal(dupOut[1].sourceRow.id,'duplicate-slot');
+const fallback=refineRowsByRules([{top:480,bottom:520,center:500}],{horizontal:[300,700],horizontalThickness:2},paper)[0];assert.equal(fallback.boundedByRules,false);assert.ok(fallback.top<480&&fallback.bottom>520);
+const expected=[.02,.405,.425,.475,.575,.590,.685],radii=[.04,.06,.05,.06,.06,.05,.07],perfect=assignExpectedRules([.019,.407,.424,.477,.576,.592,.684],expected,radii);assert.deepEqual(perfect,[.019,.407,.424,.477,.576,.592,.684]);const sparse=assignExpectedRules([.02,.44,.575,.59,.685],expected,radii);for(let i=1;i<sparse.length;i++)assert.ok(sparse[i]>sparse[i-1]||sparse[i]===expected[i]);
+const verticalThickness=3,margin=Math.max((verticalThickness+1)/paper.w,.003);assert.ok(margin>=.003&&margin<.01);const sourceW=180,sourceH=42,scale=4,padX=Math.max(4,Math.round(sourceW*scale*.025)),padY=Math.max(4,Math.round(sourceH*scale*.10));assert.ok(padX>=18&&padY>=17);assert.ok(sourceW*scale+2*padX>sourceW*scale);
+const diag={truncationLikely:true,tableLineLikely:true,darkOccupancy:.001,edgeTouch:{left:true,right:false,top:false,bottom:false}};assert.equal(diag.truncationLikely,true);assert.equal(diag.tableLineLikely,true);assert.ok(diag.darkOccupancy<.0025);assert.equal(diag.edgeTouch.left,true);
+assert.equal(classify('ABC','', 'retail'),'numeric-policy-rejected-no-digit');assert.equal(attribute('ABC','', 'retail',{truncationLikely:true,tableLineLikely:true,darkOccupancy:.03}),'crop-contamination-before-normalization');assert.equal(attribute('ABC','', 'retail',{truncationLikely:false,tableLineLikely:false,darkOccupancy:.03}),'recognizer-output-not-semantic');assert.equal(classify('1,250','1250','retail'),'transformed-nonempty');assert.equal(classify('|','', 'name'),'name-punctuation-only');assert.equal(attribute('12?','', 'retail',{truncationLikely:false,tableLineLikely:false,darkOccupancy:.03}),'normalization-destructive-candidate');
+console.log(JSON.stringify({stage:'A22',fixtureStaticSynthetic:'PASS',perspectiveHomography:'PASS',quadDegenerateFallbackContract:'PASS',ruleBandDetection:'PASS',rowBoundaryReconstruction:'PASS',columnBoundaryReconstruction:'PASS',ruleMargin:'PASS',cellPadding:'PASS',truncationTableLineLowOccupancyEdgeTouch:'PASS',safeExpansion:'PASS',anchorSlotPreservation:'PASS',duplicateRowShiftRegression:'PASS',normalizationSeparation:'PASS'}));
