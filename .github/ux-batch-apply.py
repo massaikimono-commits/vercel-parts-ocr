@@ -52,18 +52,19 @@ const customer=fs.readFileSync("app/customer-vehicles/page.tsx","utf8");
 const history=fs.readFileSync("app/customer-vehicles/history/page.tsx","utf8");
 const photos=fs.readFileSync("app/customer-vehicles/photos/page.tsx","utf8");
 const lease=fs.readFileSync("app/customer-vehicles/lease-maintenance/page.tsx","utf8");
-assert.match(detail,/function openVehicleHistory[\s\S]*rememberActiveVehicle\(\)[\s\S]*\/customer-vehicles\/\$\{kind\}/);
-assert.match(customer,/\/schedule\/active\"\)>📅 次回予定登録/);
+assert.ok(detail.includes('function openVehicleHistory(kind:"history"|"photos"){'));
+assert.ok(detail.includes('rememberActiveVehicle();\n    location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);'));
+assert.ok(customer.includes('location.assign("/schedule/active")}>📅 次回予定登録</button>'));
 for (const source of [history,photos,lease]) {
-  assert.match(source,/function openNextSchedule\(\)/);
-  assert.match(source,/sessionStorage\.setItem\("parts-active-vehicle"/);
-  assert.match(source,/localStorage\.setItem\("parts-active-vehicle"/);
-  assert.match(source,/location\.assign\("\/schedule\/active"\)/);
-  assert.match(source,/onClick=\{openNextSchedule\}>次回予定登録<\/button>/);
+  assert.ok(source.includes('function openNextSchedule()'));
+  assert.ok(source.includes('sessionStorage.setItem("parts-active-vehicle"'));
+  assert.ok(source.includes('localStorage.setItem("parts-active-vehicle"'));
+  assert.ok(source.includes('location.assign("/schedule/active")'));
+  assert.ok(source.includes('onClick={openNextSchedule}>次回予定登録</button>'));
 }
-assert.match(detail,/function openOneDaySchedule\(\)/);
-assert.match(detail,/location\.assign\(`\/schedule\?day=\$\{day\}`\)/);
-assert.match(detail,/>1日の予定<\/button>/);
+assert.ok(detail.includes('function openOneDaySchedule()'));
+assert.ok(detail.includes('location.assign(`/schedule?day=${day}`)'));
+assert.ok(detail.includes('>1日の予定</button>'));
 for (const source of [detail,customer,history,photos,lease]) assert.doesNotMatch(source,/create table|alter table|create policy|create or replace function/i);
 console.log("ux context-preservation regression: ok");
 ''')
