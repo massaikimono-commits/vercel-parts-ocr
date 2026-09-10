@@ -1,0 +1,2 @@
+Stage A21 management summary copy workflow deployment trigger.
+Diagnostic-only. No runtime/control parameter changes.
