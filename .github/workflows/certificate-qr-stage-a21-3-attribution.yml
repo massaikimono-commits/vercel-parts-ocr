@@ -1,0 +1,22 @@
+name: Certificate QR Stage A21.3 attribution audit
+on:
+  push:
+    branches:
+      - eval/certificate-qr-stage-a21-3-attribution-audit
+    paths:
+      - "scripts/photo-qr-stage-a21-3-attribution-audit.mjs"
+      - "scripts/photo-qr-stage-a21-3-attribution-test.mjs"
+      - ".github/workflows/certificate-qr-stage-a21-3-attribution.yml"
+      - "scripts/append-photo-qr-a212-runner.mjs"
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Stage A21.3 attribution invariants
+        run: node scripts/photo-qr-stage-a21-3-attribution-test.mjs
+      - name: Prior A21.2 contract
+        run: node scripts/photo-qr-stage-a21-2-validity-test.mjs
