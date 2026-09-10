@@ -6,8 +6,12 @@ on:
       - eval/parts-ocr-stage-a22-cell-crop-correction
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
+    if: ${{ !contains(github.event.head_commit.message || '', '[skip ci]') }}
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
@@ -23,4 +27,17 @@ jobs:
       - name: Stage A22 invariant fuzz and policy audit
         run: node scripts/stage-a22-invariant-audit.mjs
       - run: npm install
+      - name: Build standalone Safari evaluator
+        run: node scripts/build-parts-a22-standalone.mjs
       - run: npm run build
+      - name: Publish standalone bundle to evaluation branch only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add standalone/parts-a22/dist/bundle.js
+          if git diff --cached --quiet; then
+            echo "bundle unchanged"
+          else
+            git commit -m "build: refresh A22 standalone bundle [skip ci]"
+            git push
+          fi
