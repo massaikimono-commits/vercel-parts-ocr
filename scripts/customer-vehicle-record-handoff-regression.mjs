@@ -5,6 +5,7 @@ const customerVehicles = fs.readFileSync("app/customer-vehicles/page.tsx", "utf8
 const inspection = fs.readFileSync("app/inspection/page.tsx", "utf8");
 const activeSchedule = fs.readFileSync("app/schedule/active/page.tsx", "utf8");
 
+assert.ok(customerVehicles.includes('const ACTIVE_KEY = "parts-active-vehicle";'), "customer vehicle screen uses the shared active-vehicle key");
 assert.ok(customerVehicles.includes('const activeVehiclePayload = JSON.stringify({'), "vehicle selection creates one shared active payload");
 assert.ok(customerVehicles.includes('sessionStorage.setItem(ACTIVE_KEY, activeVehiclePayload);'), "vehicle selection keeps session handoff");
 assert.ok(customerVehicles.includes('localStorage.setItem(ACTIVE_KEY, activeVehiclePayload);'), "vehicle selection persists handoff for existing operational routes");
