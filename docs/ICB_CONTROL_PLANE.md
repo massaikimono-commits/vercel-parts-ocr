@@ -35,21 +35,21 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Deployment safety must be verified from actual Vercel deployment records, not only CI claims.
 - A specialist-reported deployment count is not authoritative until management checks Vercel directly.
 
-## Current lane ledger — verified 2026-09-10 22:12 JST
+## Current lane ledger — verified 2026-09-10 22:26 JST
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`.
-- Current formally passed HEAD: `83e7df50322d14dbee6435e63f0152b582bb6bc6`.
-- Previous formal start HEAD: `a960c5f9d77abba219a3eb357e750fa3056ebc77`.
-- GitHub compare `a960c5f... -> 83e7df5...`: ahead 5 / behind 0; final net diff is only `app/schedule/detail/page.tsx` (+1) and `scripts/schedule-detail-regression.mjs` (+2).
-- PR #62 is Draft / Open / unmerged, base `main`; head is `83e7df5...`; main SHA remains `20a715bf46156282b686a617d6744a040bc17fb3`.
-- Batch: schedule detail -> same vehicle next booking. Adds `次回予定登録` under `この車両で続ける`, using existing `openVehicleTool("/schedule/active")`, existing `rememberActiveVehicle()`, and the existing `parts-active-vehicle` snapshot. No `/schedule/active` implementation change.
-- No DB schema/RPC/RLS/migration/Supabase/OCR change is introduced by this batch.
-- Targeted regression assertions pin both the `次回予定登録` label and use of `openVehicleTool("/schedule/active")`.
-- Successful batch validation: GitHub Actions `Schedule next-booking batch` run `34476337976` SUCCESS at tested commit `86087224f537ca6339ff7d70d8648c2b5eb2fceb`, after aligning build env with the existing app-core-build dummy Supabase env. That workflow performed targeted regressions + Full Build, then committed the verified two-file implementation and removed the temporary workflow, producing final HEAD `83e7df5...`.
-- Deployment safety run `34476343211`: SUCCESS on the tested batch commit. The final bot-generated HEAD has a later deployment-safety workflow entry `34476400374` with `action_required`; do not misrepresent that as a green final-HEAD run. It did not execute as a code/test failure and does not negate the successful tested workflow output.
-- Management independently verified zero Vercel deployments in the post-batch window. Vercel Preview remains HOLD.
-- Formal management verdict: PASS. `83e7df5...` becomes the next app-main formal start HEAD.
+- Current formally passed HEAD: `87c92df216afac15466da217c2a93174e71e01eb`.
+- Previous formal start HEAD: `83e7df50322d14dbee6435e63f0152b582bb6bc6`.
+- GitHub compare `83e7df5... -> 87c92df...`: ahead 4 / behind 0; final net diff is only `app/schedule/detail/page.tsx` (+1) and `scripts/schedule-detail-regression.mjs` (+6).
+- PR #62 is Draft / Open / unmerged, base `main`; head is `87c92df...`; main SHA remains `20a715bf46156282b686a617d6744a040bc17fb3`.
+- Batch: schedule detail -> selected vehicle customer/vehicle information. Adds `顧客・車両情報` under `この車両で続ける`, using existing `openVehicleTool("/customer-vehicles")`, existing `rememberActiveVehicle()`, and the existing `parts-active-vehicle` restoration path on `/customer-vehicles`. Customer/vehicle management implementation itself is unchanged.
+- No DB schema/RPC/RLS/migration/Supabase/OCR/legal_3m change is introduced by this batch.
+- Targeted regression assertions pin button presence, `/customer-vehicles` routing, active-vehicle key reuse, sessionStorage restoration, and `selectVehicle(activeVehicle, customer)` reuse.
+- Successful batch validation: GitHub Actions `Schedule vehicle-info hub batch` run `34482323614` SUCCESS at tested commit `e3a0ee5f61a77482b92f18ed861e180c6b16d962`, using Node 22 and dummy public Supabase build env; targeted regressions + Full Build completed successfully before verified implementation commit.
+- Deployment safety run `34482458852`: SUCCESS on probe commit `51a7493c720f9602e81d09fd58c4c788aaa3812d`; final cleanup commit `87c92df...` removes the temporary probe and leaves only the two functional/regression file diffs relative to formal start HEAD.
+- Management independently verified zero Vercel deployments from 2026-09-10 22:20 JST through the audit window. Vercel Preview remains HOLD.
+- Formal management verdict: PASS. `87c92df...` becomes the next app-main formal start HEAD.
 - `legal_3m` shared-DB mutation remains HOLD because Netlify production is behind current development.
 - main, Supabase, Netlify Production, Vercel Production, OCR branches: unchanged/HOLD.
 - Next app-main action: before selecting another batch, re-audit current HEAD and choose one existing-DB-only, non-duplicate practical improvement that reduces iPhone taps/re-search/re-selection without OCR or shared DB changes; implement -> targeted regression -> Full Build; no intermediate Preview.
@@ -67,7 +67,8 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Stage A21.8 adoption readiness: `NOT EVALUATED`.
 - Fixed8 authorization is unconsumed: IMG_0940-0947 selected 0 times, QR processing started 0 times, formal fixed8 run not executed.
 - Do not repeat the same rawgit/jsDelivr/ChatGPT attachment delivery attempts.
-- Vercel read-only audit at 21:55 JST still shows a dense rolling-24h deployment history with additional pagination beyond the first 40 records. This does not prove build-rate-limit clearance, so Preview remains HOLD; do not test clearance by creating a deployment.
+- Vercel read-only audit at 21:55 JST still showed a dense rolling-24h deployment history. Preview remains HOLD until build-rate-limit clearance is proven without creating a test deployment.
+- Current direct impact: completed A21.8 cannot perform its required real-photo fixed8 run through the intended Preview path while the deployment limit is active; this is a concrete development-blocking impact, not merely deployment waste.
 - Next vehicle-cert action: either establish a genuinely executable HTTPS host without touching prohibited production/shared resources, or wait until Vercel build-rate-limit clearance can be proven read-only and then consider exactly one completed A21.8 Preview deployment. No intermediate deployment.
 - When an executable route is actually available, perform exactly one fixed8 run and copy `総合管理用短縮summary`; no redundant rerun.
 - Frozen OCR branch, main, Netlify Production, Vercel Production, Supabase: HOLD.
@@ -81,6 +82,7 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Next meaningful blocker is one browser real-photo diagnostic targeting IMG_0684 from the formal yellow12 set, automatic mapping, no user filename identification.
 - Do not describe parts OCR as practically improved until the real-photo result exists.
 - A common GO has been issued to investigate a Vercel-independent iPhone Safari evaluation route; evaluate that lane independently and do not assume the vehicle-cert static-delivery result automatically applies.
+- If its independent alternate-delivery attempt also fails and Preview remains unavailable, record that as a second OCR-lane concrete development-blocking impact from the Vercel deployment-limit incident rather than inferring it in advance.
 - Do not request repeated user testing.
 - Frozen OCR branch, Stage B, Guided Live, main, Netlify Production, Vercel Production, Supabase: HOLD.
 
