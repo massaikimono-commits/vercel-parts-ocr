@@ -1,0 +1,74 @@
+name: Certificate QR A21.8 standalone static
+on:
+  push:
+    branches:
+      - eval/certificate-qr-stage-a21-8-static-standalone
+    paths:
+      - "scripts/a218-standalone-entry.jsx"
+      - "scripts/a218-standalone-index.html"
+      - "app/eval/certificate-qr-stage-a21-8-real-evidence/**"
+      - "app/eval/certificate-qr-stage-a21-3-evidence/**"
+      - "app/eval/certificate-qr-stage-a21-4-evidence/**"
+      - "scripts/photo-qr-stage-a21-7-structure-counterfactual.mjs"
+      - "scripts/photo-qr-stage-a21-8-adoption-readiness.mjs"
+      - "scripts/prepare-photo-qr-diagnostic-core.mjs"
+      - "scripts/run-photo-qr-a212-append-fixed.mjs"
+      - "scripts/append-photo-qr-a213-evidence.mjs"
+      - "scripts/append-photo-qr-a217-character-class-evidence.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/certificate-qr-a218-static-standalone.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate diagnostic core exactly as app build
+        run: |
+          node scripts/prepare-photo-qr-diagnostic-core.mjs
+          node scripts/run-photo-qr-a212-append-fixed.mjs
+          node scripts/append-photo-qr-a213-evidence.mjs
+          node scripts/append-photo-qr-a217-character-class-evidence.mjs
+      - name: Bundle standalone browser app
+        run: |
+          mkdir -p a218-static-dist
+          cp scripts/a218-standalone-index.html a218-static-dist/index.html
+          npx --yes esbuild@0.25.9 scripts/a218-standalone-entry.jsx \
+            --bundle \
+            --platform=browser \
+            --format=iife \
+            --target=safari16 \
+            --define:process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA='"b7230adf4acf3288c5fc3811d32309247361dcf1"' \
+            --outfile=a218-static-dist/app.js
+      - name: Privacy and standalone invariants
+        run: |
+          grep -q "connect-src 'none'" a218-static-dist/index.html
+          grep -q "form-action 'none'" a218-static-dist/index.html
+          test -s a218-static-dist/app.js
+          ! grep -q "NEXT_PUBLIC_SUPABASE" a218-static-dist/app.js
+          ! grep -q "supabase.co" a218-static-dist/app.js
+          ! grep -q "vercel.app" a218-static-dist/app.js
+          ! grep -q "rawPayloadIncluded:true" a218-static-dist/app.js
+          ! grep -q "payloadFragmentIncluded:true" a218-static-dist/app.js
+      - name: Existing A21.8 invariants
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://a218-static-build-only.invalid
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: a218-static-build-only-placeholder-key
+        run: |
+          node scripts/photo-qr-stage-a21-7-privacy-test.mjs
+          node scripts/photo-qr-stage-a21-7-structure-counterfactual-test.mjs
+          node scripts/photo-qr-stage-a21-8-adoption-readiness-test.mjs
+          node scripts/photo-qr-stage-a21-8-real-ui-test.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a218-static-standalone
+          path: a218-static-dist/
+          retention-days: 3
