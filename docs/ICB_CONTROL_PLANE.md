@@ -26,6 +26,7 @@ This file is the required source of truth for any GO/HOLD, adoption, DB change, 
 18. Repeated correction of the same management error class is a handoff-risk signal. Prepare a fresh-chat handoff before continuing major decisions if source-of-truth contradictions recur.
 19. Before discussing any incident count, deployment safety, production state, or `実害`, read the Permanent Incident Register below. Never reconstruct the incident list from conversation memory alone.
 20. Before creating a handoff, copy the current lane ledger, Permanent Incident Register, HOLD matrix, absolute prohibitions, and display/copy rules from this file. Do not omit them to shorten the handoff.
+21. A prior management statement of `no unimplemented confirmed requirement` is invalidated immediately if a specialist later finds a confirmed-spec gap. In that case, reset app-main audit status to `FULL RE-AUDIT REQUIRED` and do not return to speculative UX work until the section-by-section audit has been completed against the new current HEAD.
 
 ## Permanent Incident Register — MUST NOT BE OMITTED FROM HANDOFFS
 
@@ -71,15 +72,20 @@ These incidents are permanent project history. They are not interchangeable and 
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`.
-- Current formal branch HEAD: `ea613c032c043d5747c4484c357b063ef62c9dbe`.
-- Previous formal HEAD: `1f5b63db4964c85cbd0c2766acd8dae432a55390`.
+- Current formal branch HEAD: `6b2f81782715a233461bd62d1b7afe8588096468`.
+- Previous formal HEAD: `ea613c032c043d5747c4484c357b063ef62c9dbe`.
 - PR #62: Draft / Open / unmerged; base `main`.
 - main SHA: `20a715bf46156282b686a617d6744a040bc17fb3` unchanged.
-- `1f5b63db... -> ea613c03...`: 12 commits; final net diff only `app/customer-vehicles/page.tsx`, `app/schedule/detail/page.tsx`, `scripts/ux-context-preservation-regression.mjs`.
-- Confirmed-spec direct routes already implemented before the UX batch: selected vehicle -> integrated history and lease maintenance, reusing existing screens, no DB change.
-- UX batch technical verdict: PASS. Full Build run `34493724712` PASS; Deployment Safety run `34494030359` PASS.
-- Six retained Preview candidates: schedule detail -> next booking; schedule detail -> customer/vehicle info; one-tap call; active-vehicle context before history/photo navigation; customer/vehicle management -> next booking; schedule detail -> target day's one-day schedule.
-- These six are technical-PASS Preview candidates, not formally UX-adopted until user iPhone hands-on review (adopt / modify / remove).
+- Latest confirmed-spec correction: `/schedule/active` now implements waiting-service v1.3 for selected existing vehicles.
+- Eligibility: `customer_visit` only, reason-independent; inspection / vehicle inspection / general repair / body-paint are all eligible when entry type is customer visit.
+- Switching away from customer visit clears waiting state; submit revalidates `entryType === customer_visit` instead of trusting UI state alone.
+- Existing `schedule_slot_check_v2` receives `p_is_waiting_service`; no new RPC, migration, RLS, or shared Supabase change.
+- Waiting ON persists `is_waiting_service = true`, suppresses `planned_delivery_at`, suppresses delivery `schedule_entry`, and does not require delivery-time selection.
+- Clean pre-fix anchor `6ce9a668cef5dbb14966a52d42ff9f8255ccef07` -> final `6b2f81782715a233461bd62d1b7afe8588096468`: ahead 4 / behind 0; final net diff only `app/schedule/active/page.tsx` and `scripts/schedule-active-waiting-v13-regression.mjs`.
+- Regression / Full Build run `34540513883`: PASS. Deployment Safety run `34540599471`: PASS on final HEAD.
+- Formal classification: confirmed-spec implementation PASS; this is not a Preview-only UX candidate.
+- Earlier six convenience UX items remain technical-PASS Preview candidates only, pending user iPhone hands-on review.
+- Management audit status: `FULL RE-AUDIT REQUIRED`. A prior management conclusion that no implementable confirmed-spec gap remained was disproven by this `/schedule/active` waiting-service omission and is invalid. Do not state `未反映なし` until a new section-by-section parent-spec-v1.3 vs current-HEAD audit is completed and recorded.
 - `legal_3m` shared-DB mutation remains HOLD because Netlify Production is behind current development.
 - Vercel Preview remains HOLD until build-rate-limit/deployment safety clearance is proven without creating an unnecessary deployment.
 
