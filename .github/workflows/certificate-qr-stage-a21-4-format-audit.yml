@@ -6,6 +6,8 @@ on:
     paths:
       - "scripts/photo-qr-stage-a21-4-format-audit.mjs"
       - "scripts/photo-qr-stage-a21-4-format-audit-test.mjs"
+      - "scripts/photo-qr-stage-a21-4-persistence-test.mjs"
+      - "app/eval/certificate-qr-stage-a21-4-evidence/**"
       - ".github/workflows/certificate-qr-stage-a21-4-format-audit.yml"
 jobs:
   audit:
@@ -15,11 +17,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
       - name: Stage A21.4 format counterfactual invariants
         run: node scripts/photo-qr-stage-a21-4-format-audit-test.mjs
+      - name: Stage A21.4 persistence invariants
+        run: node scripts/photo-qr-stage-a21-4-persistence-test.mjs
       - name: Prior A21.3 attribution invariants
         run: node scripts/photo-qr-stage-a21-3-attribution-test.mjs
       - name: Prior A21.3 evidence invariants
         run: node scripts/photo-qr-stage-a21-3-evidence-test.mjs
       - name: Prior A21.2 invariants
         run: node scripts/photo-qr-stage-a21-2-validity-test.mjs
+      - name: Full regression + Next build
+        run: npm run build
