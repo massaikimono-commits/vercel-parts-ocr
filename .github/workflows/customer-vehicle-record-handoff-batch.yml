@@ -1,0 +1,59 @@
+name: Customer vehicle record handoff batch
+
+on:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
+    paths:
+      - .github/workflows/customer-vehicle-record-handoff-batch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: preview/schedule-ux-20260903
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Apply confirmed parent-spec handoff fix
+        run: python .github/scripts/apply-customer-vehicle-record-handoff.py
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Targeted regression
+        run: |
+          node scripts/customer-vehicle-record-handoff-regression.mjs
+          npm run test:schedule-existing-vehicle
+          npm run test:schedule-detail
+          npm run test:record-types
+          npm run test:workshop-record-types
+          npm run test:vehicle-business-state
+          npm run test:security
+          npm run test:app-core-safety
+
+      - name: Full build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build
+
+      - name: Commit verified source changes only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/customer-vehicles/page.tsx scripts/customer-vehicle-record-handoff-regression.mjs
+          git rm .github/scripts/apply-customer-vehicle-record-handoff.py .github/workflows/customer-vehicle-record-handoff-batch.yml
+          git commit -m "fix: preserve vehicle handoff for record workflows"
+          git push origin HEAD:preview/schedule-ux-20260903
