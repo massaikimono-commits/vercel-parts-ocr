@@ -114,6 +114,7 @@ export default function ActiveVehicleSchedulePage() {
   const [vendorName, setVendorName] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [needsLoaner, setNeedsLoaner] = useState(false);
+  const [isWaitingService, setIsWaitingService] = useState(false);
   const [notes, setNotes] = useState("");
   const [addDelivery, setAddDelivery] = useState(true);
   const [deliveryDay, setDeliveryDay] = useState(todayJst());
@@ -164,8 +165,13 @@ export default function ActiveVehicleSchedulePage() {
   }, [day, reason]);
 
   useEffect(() => {
-    if (addDelivery) void loadDeliveryOptions();
-  }, [deliveryDay, addDelivery, reason]);
+    if (entryType !== "customer_visit" && isWaitingService) setIsWaitingService(false);
+    if (isWaitingService && addDelivery) setAddDelivery(false);
+  }, [entryType, isWaitingService, addDelivery]);
+
+  useEffect(() => {
+    if (addDelivery && !isWaitingService) void loadDeliveryOptions();
+  }, [deliveryDay, addDelivery, reason, isWaitingService]);
 
   async function loadActiveVehicle() {
     try {
@@ -280,7 +286,7 @@ export default function ActiveVehicleSchedulePage() {
     };
   }
 
-  async function checkSlot(entry: string, startsAt: string, endsAt: string, printMode: string) {
+  async function checkSlot(entry: string, startsAt: string, endsAt: string, printMode: string, waitingService = false) {
     const { data, error } = await supabase.rpc("schedule_slot_check_v2", {
       p_entry_type: entry,
       p_starts_at: startsAt,
@@ -288,6 +294,7 @@ export default function ActiveVehicleSchedulePage() {
       p_reason: reason,
       p_exclude_entry_id: null,
       p_print_time_mode: printMode,
+      p_is_waiting_service: waitingService,
     });
     if (error) throw error;
     return extractCheck(data);
@@ -305,16 +312,17 @@ export default function ActiveVehicleSchedulePage() {
       setErrors(["時間を選択してください。"]);
       return;
     }
-    if (addDelivery && !selectedDelivery) {
+    const waitingService = entryType === "customer_visit" && isWaitingService;
+    if (!waitingService && addDelivery && !selectedDelivery) {
       setErrors(["納車時間を選択してください。"]);
       return;
     }
 
     setBusy(true);
     try {
-      const mainCheck = await checkSlot(entryType, main.startsAt, main.endsAt, main.printMode);
-      const deliveryCheck = addDelivery && selectedDelivery
-        ? await checkSlot("delivery", selectedDelivery.startsAt, selectedDelivery.endsAt, selectedDelivery.mode)
+      const mainCheck = await checkSlot(entryType, main.startsAt, main.endsAt, main.printMode, waitingService);
+      const deliveryCheck = !waitingService && addDelivery && selectedDelivery
+        ? await checkSlot("delivery", selectedDelivery.startsAt, selectedDelivery.endsAt, selectedDelivery.mode, false)
         : { allowed: true, overrideRequired: false, hardErrors: [] as string[], warnings: [] as string[] };
 
       const hardErrors = [...mainCheck.hardErrors, ...deliveryCheck.hardErrors];
@@ -340,7 +348,8 @@ export default function ActiveVehicleSchedulePage() {
           inspection_schedule_type: inspectionScheduleType || null,
           is_urgent: urgent,
           needs_loaner: needsLoaner,
-          planned_delivery_at: addDelivery && selectedDelivery ? selectedDelivery.startsAt : null,
+          is_waiting_service: waitingService,
+          planned_delivery_at: !waitingService && addDelivery && selectedDelivery ? selectedDelivery.startsAt : null,
         })
         .select("id")
         .single();
@@ -368,7 +377,7 @@ export default function ActiveVehicleSchedulePage() {
         if (assignmentError) throw assignmentError;
       }
 
-      if (addDelivery && selectedDelivery) {
+      if (!waitingService && addDelivery && selectedDelivery) {
         const { error: deliveryError } = await supabase.from("schedule_entries").insert({
           vehicle_id: vehicle.id,
           work_order_id: work.id,
@@ -448,15 +457,15 @@ export default function ActiveVehicleSchedulePage() {
             </label>
             {!vendorId && <label>外注先名（必要な時だけ）<input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：ガラス業者、電装業者、○○鈑金" /></label>}
           </>}
-          <div className="flags"><label><input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} /> 急ぎ</label><label><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} /> 代車あり</label></div>
+          <div className="flags"><label><input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} /> 急ぎ</label><label><input type="checkbox" checked={needsLoaner} onChange={(e) => setNeedsLoaner(e.target.checked)} /> 代車あり</label>{entryType === "customer_visit" && <label><input type="checkbox" checked={isWaitingService} onChange={(e) => setIsWaitingService(e.target.checked)} /> 作業待ち</label>}</div>
           <label className="wide">備考<textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>
       </section>
 
       <section className="card">
         <h2>② 納車予定</h2>
-        <label className="switch"><input type="checkbox" checked={addDelivery} onChange={(e) => setAddDelivery(e.target.checked)} /> 入庫と同時に納車予定も登録する</label>
-        {addDelivery && <div className="grid delivery"><label>納車日<input type="date" value={deliveryDay} onChange={(e) => setDeliveryDay(e.target.value)} /></label><label>納車時間<select value={deliveryKey} onChange={(e) => setDeliveryKey(e.target.value)}>{!deliveryOptions.length && <option value="">候補なし</option>}{deliveryOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</select></label></div>}
+        {isWaitingService ? <div className="notice">作業待ちのため納車予定は登録しません。</div> : <label className="switch"><input type="checkbox" checked={addDelivery} onChange={(e) => setAddDelivery(e.target.checked)} /> 入庫と同時に納車予定も登録する</label>}
+        {!isWaitingService && addDelivery && <div className="grid delivery"><label>納車日<input type="date" value={deliveryDay} onChange={(e) => setDeliveryDay(e.target.value)} /></label><label>納車時間<select value={deliveryKey} onChange={(e) => setDeliveryKey(e.target.value)}>{!deliveryOptions.length && <option value="">候補なし</option>}{deliveryOptions.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</select></label></div>}
       </section>
 
       <section className="card">
