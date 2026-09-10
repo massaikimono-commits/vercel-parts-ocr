@@ -20,5 +20,7 @@ jobs:
           node-version: 22
       - name: Stage A22 static structural crop audit
         run: node scripts/stage-a22-static-crop-audit.mjs
+      - name: Stage A22 invariant fuzz and policy audit
+        run: node scripts/stage-a22-invariant-audit.mjs
       - run: npm install
       - run: npm run build
