@@ -16,7 +16,6 @@ on:
       - "scripts/append-photo-qr-a213-evidence.mjs"
       - "scripts/append-photo-qr-a217-character-class-evidence.mjs"
       - "package.json"
-      - "package-lock.json"
       - ".github/workflows/certificate-qr-a218-static-standalone.yml"
   workflow_dispatch:
 permissions:
@@ -30,7 +29,7 @@ jobs:
         with:
           node-version: "20"
       - name: Install dependencies
-        run: npm ci
+        run: npm install
       - name: Generate diagnostic core exactly as app build
         run: |
           node scripts/prepare-photo-qr-diagnostic-core.mjs
