@@ -1,0 +1,66 @@
+name: Schedule next-booking batch
+on:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
+    paths:
+      - .github/workflows/schedule-next-booking-batch.yml
+jobs:
+  implement-and-verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview/schedule-ux-20260903
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Implement direct next-booking action and regression
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/schedule/detail/page.tsx')
+          s=p.read_text()
+          old='''                <div className="toolActions">\n                  <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>'''
+          new='''                <div className="toolActions">\n                  <button onClick={()=>openVehicleTool("/schedule/active")}>次回予定登録</button>\n                  <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>'''
+          assert old in s
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('scripts/schedule-detail-regression.mjs')
+          s=p.read_text()
+          old='''const schedule = fs.readFileSync(new URL("../app/schedule/page.tsx", import.meta.url), "utf8");'''
+          new='''const schedule = fs.readFileSync(new URL("../app/schedule/page.tsx", import.meta.url), "utf8");\nconst activeSchedule = fs.readFileSync(new URL("../app/schedule/active/page.tsx", import.meta.url), "utf8");'''
+          assert old in s
+          s=s.replace(old,new,1)
+          old='''  "この車両で続ける"\n])'''
+          new='''  "この車両で続ける","次回予定登録"\n])'''
+          assert old in s
+          s=s.replace(old,new,1)
+          old='''assert.match(detail, /openVehicleTool\\(\\"\\/parts-data\\"\\)/, "detail opens vehicle parts directly");'''
+          new='''assert.match(detail, /openVehicleTool\\(\\"\\/schedule\\/active\\"\\)/, "detail opens next schedule registration with the selected vehicle");\nassert.match(activeSchedule, /const ACTIVE_KEY = \\"parts-active-vehicle\\"/, "active schedule reuses the selected vehicle storage key");\nassert.match(activeSchedule, /localStorage\\.getItem\\(ACTIVE_KEY\\)/, "active schedule restores the selected vehicle without list reselection");\nassert.match(detail, /openVehicleTool\\(\\"\\/parts-data\\"\\)/, "detail opens vehicle parts directly");'''
+          assert old in s
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Targeted regressions
+        run: |
+          npm run test:schedule-detail
+          npm run test:schedule-one-day-practical
+          npm run test:schedule-work-state
+          npm run test:waiting-service-v13
+          npm run test:vehicle-business-state
+          npm run test:security
+      - name: Full build
+        run: npm run build
+      - name: Commit verified implementation and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/schedule-next-booking-batch.yml
+          git add app/schedule/detail/page.tsx scripts/schedule-detail-regression.mjs
+          git commit -m "feat: open next booking from schedule detail"
+          git push origin HEAD:preview/schedule-ux-20260903
