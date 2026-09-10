@@ -17,6 +17,8 @@ expect(customer, "deleteSelectedCustomer", "customer deletion");
 expect(customer, '.from("customers").delete()', "customer deletion");
 expect(customer, "車両・予定・作業履歴は残", "customer deletion safety copy");
 expect(customer, "/customer-vehicles/bulk-import", "bulk import navigation");
+expect(customer, "/customer-vehicles/history?vehicle=", "selected vehicle integrated history navigation");
+expect(customer, "/customer-vehicles/lease-maintenance?vehicle=", "selected vehicle lease maintenance navigation");
 
 expect(schedule, "selectedVehicleIds", "multi-vehicle schedule");
 expect(schedule, "toggleRegisteredVehicle", "multi-vehicle schedule");
