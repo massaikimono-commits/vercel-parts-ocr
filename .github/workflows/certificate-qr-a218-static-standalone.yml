@@ -65,7 +65,7 @@ jobs:
           node scripts/photo-qr-stage-a21-7-privacy-test.mjs
           node scripts/photo-qr-stage-a21-7-structure-counterfactual-test.mjs
           node scripts/photo-qr-stage-a21-8-adoption-readiness-test.mjs
-          node scripts/photo-qr-stage-a21-8-real-ui-test.mjs
+          node scripts/photo-qr-stage-a21-8-real-evidence-ui-test.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: a218-static-standalone
