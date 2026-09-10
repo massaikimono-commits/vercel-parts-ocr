@@ -34,7 +34,7 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Deployment safety must be verified from actual Vercel deployment records, not only CI claims.
 - A specialist-reported deployment count is not authoritative until management checks Vercel directly.
 
-## Current lane ledger — verified 2026-09-10 19:56 JST
+## Current lane ledger — verified 2026-09-10 20:06 JST
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`
@@ -51,17 +51,19 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 
 ### Vehicle certificate QR/OCR
 - Branch: `eval/certificate-qr-stage-a21-4-format-counterfactual`
-- HEAD: `93459de154dc358321044a5a8b23a083afe7d2fc`
-- Parent: `8b9b4c4dcc180b8b1d41a15ca898f3e5cf77f911`.
-- Stage A21.8 guarded adoption-readiness contract: implemented.
-- GitHub Actions run `34466939372`: SUCCESS, including A21.4/A21.5/A21.6/A21.7/A21.8 audits, prior A21.3/A21.2 invariants, Full regression, and Next build.
-- Vercel Git auto-deploy: fail-closed; management verified zero new deployment records after the A21.8 push.
+- HEAD: `b7230adf4acf3288c5fc3811d32309247361dcf1`
+- Stage A21.8 one-shot real-evidence route is implemented at `/eval/certificate-qr-stage-a21-8-real-evidence`.
+- User flow is intended to be one selection of all fixed8 images, automatic image mapping/run, no manual IMG mapping, and one `総合管理用短縮summaryをコピー` result action.
+- GitHub Actions run `34468741224`: SUCCESS at this HEAD, covering A21.4/A21.5/A21.6/A21.7/A21.8, one-shot UI invariants, prior A21.3/A21.2, Full regression, and Next build.
+- Management independently verified the branch HEAD and CI result, and verified zero new Vercel deployment records after the latest push.
 - Formal Photo QR Decode: `28/47` preserved.
 - `31/47`: candidate only, not adopted.
-- Adoption contract blocks unless real character-class evidence, exactly 3 eligible physical/fingerprint groups, shared schema, jsQR+ZXing structural agreement, same-physical reproduction, length 60, control/replacement 0, no CURRENT canonical/physical collision, privacy/formal isolation, and additional-real regression PASS are all satisfied.
-- Non-Preview internal work is considered exhausted for this exact blocker.
-- Next meaningful action: one authorized fixed8 real-photo run only, collecting privacy-safe character-class evidence; no redundant reruns. Then feed the result into A21.8, followed by additional-real regression if eligible.
-- Raw payload/fragments/codepoints/PII must not be stored.
+- Formal parser/decoder/acceptance gate: unchanged.
+- Current exact blocker: the existing Preview is A21.5 generation and cannot execute the A21.7/A21.8 one-shot evaluation route; a new evaluation Preview from this completed HEAD is required before the single authorized fixed8 real-photo run can occur.
+- Do not create that Preview while the Vercel build-rate-limit HOLD is still active or without a fresh management deployment-budget check.
+- When Preview becomes permitted, deploy only this completed meaningful real-device unit, then perform exactly one fixed8 run; no redundant reruns.
+- If fixed8 safety gates pass, additional-real regression remains required before any guarded Formal candidate can be considered.
+- Raw payload/fragments/codepoints/canonical payload/PII must not be stored or displayed.
 - Frozen OCR branch, main, Netlify Production, Vercel Production, Supabase: HOLD.
 
 ### Parts OCR
