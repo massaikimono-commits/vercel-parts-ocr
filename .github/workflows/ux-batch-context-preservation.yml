@@ -50,3 +50,5 @@ jobs:
           git add app/schedule/detail/page.tsx app/customer-vehicles/page.tsx app/customer-vehicles/history/page.tsx app/customer-vehicles/photos/page.tsx app/customer-vehicles/lease-maintenance/page.tsx scripts/ux-context-preservation-regression.mjs .github/workflows/ux-batch-context-preservation.yml .github/ux-batch-apply.py
           git commit -m 'feat: preserve vehicle context across daily workflows'
           git push origin HEAD:preview/schedule-ux-20260903
+
+# trigger retry after regression assertion correction
