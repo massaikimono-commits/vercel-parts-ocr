@@ -1,0 +1,24 @@
+name: Parts OCR Stage A22 crop correction build
+
+on:
+  push:
+    branches:
+      - eval/parts-ocr-stage-a22-cell-crop-correction
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder-key
+      NEXT_PUBLIC_EVAL_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Stage A22 static structural crop audit
+        run: node scripts/stage-a22-static-crop-audit.mjs
+      - run: npm install
+      - run: npm run build
