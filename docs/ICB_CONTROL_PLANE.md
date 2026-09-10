@@ -17,6 +17,10 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 9. If the verified branch HEAD has advanced since this ledger, inspect the delta before issuing new instructions; never overwrite or duplicate work already completed by a specialist.
 10. When a lane reaches a real-device blocker, first confirm that no non-Preview/static/fixture/synthetic/code-audit work remains before asking the user to test.
 11. A generated/published static branch is not by itself proof that an iPhone-accessible hosted URL works; actual Safari delivery/execution result controls the next GO.
+12. Never collapse technical implementation PASS into product/UX adoption PASS. For convenience/UI workflow changes, technical PASS means only that code/regression/build are sound. Whether the feature is actually useful, should remain, or should be removed is decided by the user after hands-on Preview evaluation unless the requirement was already explicitly fixed in the parent specification.
+13. Do not label an unsolicited convenience feature as "needed", "useful", or formally adopted merely because it reduces taps in theory. It may exist only as a Preview candidate until user evaluation.
+14. A speculative UX candidate must not be merged to main, propagated to Production, or written into the parent specification as adopted before user acceptance.
+15. While Preview is unavailable, do not keep stacking unsolicited convenience candidates. Continue only already-approved parent-spec work or explicitly requested work; hold additional speculative UX candidates until the user can evaluate the current candidate set in Preview.
 
 ## Production and shared-resource rules
 
@@ -35,24 +39,19 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Deployment safety must be verified from actual Vercel deployment records, not only CI claims.
 - A specialist-reported deployment count is not authoritative until management checks Vercel directly.
 
-## Current lane ledger — verified 2026-09-10 22:26 JST
+## Current lane ledger — verified 2026-09-10 23:40 JST
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`.
-- Current formally passed HEAD: `87c92df216afac15466da217c2a93174e71e01eb`.
-- Previous formal start HEAD: `83e7df50322d14dbee6435e63f0152b582bb6bc6`.
-- GitHub compare `83e7df5... -> 87c92df...`: ahead 4 / behind 0; final net diff is only `app/schedule/detail/page.tsx` (+1) and `scripts/schedule-detail-regression.mjs` (+6).
-- PR #62 is Draft / Open / unmerged, base `main`; head is `87c92df...`; main SHA remains `20a715bf46156282b686a617d6744a040bc17fb3`.
-- Batch: schedule detail -> selected vehicle customer/vehicle information. Adds `顧客・車両情報` under `この車両で続ける`, using existing `openVehicleTool("/customer-vehicles")`, existing `rememberActiveVehicle()`, and the existing `parts-active-vehicle` restoration path on `/customer-vehicles`. Customer/vehicle management implementation itself is unchanged.
-- No DB schema/RPC/RLS/migration/Supabase/OCR/legal_3m change is introduced by this batch.
-- Targeted regression assertions pin button presence, `/customer-vehicles` routing, active-vehicle key reuse, sessionStorage restoration, and `selectVehicle(activeVehicle, customer)` reuse.
-- Successful batch validation: GitHub Actions `Schedule vehicle-info hub batch` run `34482323614` SUCCESS at tested commit `e3a0ee5f61a77482b92f18ed861e180c6b16d962`, using Node 22 and dummy public Supabase build env; targeted regressions + Full Build completed successfully before verified implementation commit.
-- Deployment safety run `34482458852`: SUCCESS on probe commit `51a7493c720f9602e81d09fd58c4c788aaa3812d`; final cleanup commit `87c92df...` removes the temporary probe and leaves only the two functional/regression file diffs relative to formal start HEAD.
-- Management independently verified zero Vercel deployments from 2026-09-10 22:20 JST through the audit window. Vercel Preview remains HOLD.
-- Formal management verdict: PASS. `87c92df...` becomes the next app-main formal start HEAD.
+- Current branch HEAD: `b589a5238635c2ce0566d8518ab9788eb10043c3`.
+- PR #62 remains Draft / Open / unmerged; base `main`; main SHA remains `20a715bf46156282b686a617d6744a040bc17fb3`.
+- Since `a960c5f9d77abba219a3eb357e750fa3056ebc77`, three convenience-oriented schedule-detail candidates were added on the Preview branch: next-booking direct action, customer/vehicle-info direct action, and one-tap customer call. These changes are technically implemented and regression/build validated, but they are NOT formally product-adopted yet.
+- The current candidate set must be judged by the user hands-on in Preview when Preview is available. Do not pre-judge that they should stay or be removed.
+- Do not revert these candidates merely because they were not explicitly requested; preserve them as Preview candidates until user evaluation.
+- Do not stack further unsolicited convenience candidates while Preview remains unavailable. Continue only parent-spec-confirmed or explicitly user-requested work that does not require shared DB/OCR/Production changes.
 - `legal_3m` shared-DB mutation remains HOLD because Netlify production is behind current development.
 - main, Supabase, Netlify Production, Vercel Production, OCR branches: unchanged/HOLD.
-- Next app-main action: before selecting another batch, re-audit current HEAD and choose one existing-DB-only, non-duplicate practical improvement that reduces iPhone taps/re-search/re-selection without OCR or shared DB changes; implement -> targeted regression -> Full Build; no intermediate Preview.
+- Vercel Preview remains HOLD until build-rate-limit clearance is proven.
 
 ### Vehicle certificate QR/OCR
 - Formal A21.8 source branch: `eval/certificate-qr-stage-a21-4-format-counterfactual`, completed HEAD `b7230adf4acf3288c5fc3811d32309247361dcf1`.
@@ -60,30 +59,24 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Vercel-independent static workaround build remains logically isolated from Formal recognition behavior.
 - Latest static build branch: `eval/certificate-qr-stage-a21-8-static-standalone`, HEAD `52fd060d774015ca127abbd04467b5f674106170`.
 - Latest static publish branch: `eval/certificate-qr-stage-a21-8-static-publish`, HEAD `6f9249cf5719e3ce35461296f3beb6d8f9062539`.
-- GitHub Actions run `34473767112`: specialist reports SUCCESS; current static generation uses a single-file inline Safari-target bundle while preserving `connect-src 'none'`, no external raw-photo storage, and `git.deploymentEnabled=false`.
-- Independent GitHub audit confirms `52fd060...` changes the standalone workflow to inline the JS bundle into `index.html`, target Safari16, retain privacy/static checks, and publish only `index.html` + `vercel.json`; publish HEAD `6f9249c...` exists and keeps deployment disabled.
-- Real iPhone Safari delivery result: `STATIC DELIVERY FAIL`. Attempts via rawgit/rawcdn githack, jsDelivr, and ChatGPT HTML attachment did not produce a usable executable A21.8 page (white screen or source-text rendering). Treat this as hosting/Content-Type/execution failure, not QR recognition failure.
+- Real iPhone Safari delivery result: `STATIC DELIVERY FAIL`. Treat this as hosting/Content-Type/execution failure, not QR recognition failure.
 - Stage A21.8 real evidence: `NOT EVALUATED`.
 - Stage A21.8 adoption readiness: `NOT EVALUATED`.
 - Fixed8 authorization is unconsumed: IMG_0940-0947 selected 0 times, QR processing started 0 times, formal fixed8 run not executed.
-- Do not repeat the same rawgit/jsDelivr/ChatGPT attachment delivery attempts.
-- Vercel read-only audit at 21:55 JST still showed a dense rolling-24h deployment history. Preview remains HOLD until build-rate-limit clearance is proven without creating a test deployment.
 - Current direct impact: completed A21.8 cannot perform its required real-photo fixed8 run through the intended Preview path while the deployment limit is active; this is a concrete development-blocking impact, not merely deployment waste.
 - Next vehicle-cert action: either establish a genuinely executable HTTPS host without touching prohibited production/shared resources, or wait until Vercel build-rate-limit clearance can be proven read-only and then consider exactly one completed A21.8 Preview deployment. No intermediate deployment.
-- When an executable route is actually available, perform exactly one fixed8 run and copy `総合管理用短縮summary`; no redundant rerun.
 - Frozen OCR branch, main, Netlify Production, Vercel Production, Supabase: HOLD.
 
 ### Parts OCR
-- Source branch: `experiment/parts-ocr-stage-a22-cell-crop-correction`, HEAD `391ffcdb31050df2afa028ca00ec0d41c55a6f8a`.
-- Eval branch: `eval/parts-ocr-stage-a22-cell-crop-correction`, HEAD `fa8df79c3eff7cc9c100d48b357d09c930168cdf`.
+- Source branch: `experiment/parts-ocr-stage-a22-cell-crop-correction`, formal non-Preview PASS HEAD `391ffcdb31050df2afa028ca00ec0d41c55a6f8a`.
+- Eval branch: `eval/parts-ocr-stage-a22-cell-crop-correction`; formal non-Preview PASS eval HEAD `fa8df79c3eff7cc9c100d48b357d09c930168cdf`; current infrastructure HEAD `cac7de9e5f208f859a2ee374dc29ea959c6dbeac`.
 - Formal adopted OCR HEAD: none.
 - Stage A22 non-Preview work is complete for the current hypothesis.
 - A21 baseline remains truncation `32/32`, table-line contamination `26/32`, `CELL_CROP_QUALITY` primary.
 - Next meaningful blocker is one browser real-photo diagnostic targeting IMG_0684 from the formal yellow12 set, automatic mapping, no user filename identification.
+- Standalone evaluator build exists and CI passes, but GitHub Pages is not published and no safe iPhone Safari execution path is established yet.
 - Do not describe parts OCR as practically improved until the real-photo result exists.
-- A common GO has been issued to investigate a Vercel-independent iPhone Safari evaluation route; evaluate that lane independently and do not assume the vehicle-cert static-delivery result automatically applies.
-- If its independent alternate-delivery attempt also fails and Preview remains unavailable, record that as a second OCR-lane concrete development-blocking impact from the Vercel deployment-limit incident rather than inferring it in advance.
-- Do not request repeated user testing.
+- If alternate delivery cannot be established while Preview remains unavailable, record the resulting real-photo evaluation stop as a concrete development-blocking impact from the Vercel deployment-limit incident.
 - Frozen OCR branch, Stage B, Guided Live, main, Netlify Production, Vercel Production, Supabase: HOLD.
 
 ## Handoff requirement
@@ -98,6 +91,7 @@ Every specialist handoff/report must include:
 - blockers and the original reason for each blocker
 - exact next verification/action
 - whether Vercel/Supabase/Netlify/main were changed
+- for UX/convenience candidates: technical PASS/HOLD and user Preview acceptance state must be reported separately
 
 ## Repeat-failure handling
 
@@ -109,3 +103,4 @@ If a mistake reveals a repeatable failure class:
 5. Do not consume user time discussing prevention when management can implement the prevention itself.
 6. Common instructions that apply to multiple specialist lanes should be issued once in one shared paste-ready block instead of making the user repeat substantially identical instructions lane by lane.
 7. If a user-side action is the only remaining step, instruct the user directly instead of sending a redundant round-trip instruction to the specialist chat.
+8. When a convenience/UI candidate has technically passed but has not been hands-on tested by the user, preserve it as a Preview candidate and do not make an adoption/removal decision on the user's behalf.
