@@ -48,12 +48,17 @@ jobs:
             --target=safari16 \
             --define:process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA='"b7230adf4acf3288c5fc3811d32309247361dcf1"' \
             --outfile=a218-static-dist/app.js
+          node -e "const fs=require('fs');const p='a218-static-dist/index.html';let h=fs.readFileSync(p,'utf8');let j=fs.readFileSync('a218-static-dist/app.js','utf8').replace(/<\\/script/gi,'<\\\\/script');if(!h.includes('/*__A218_INLINE_BUNDLE__*/'))throw new Error('INLINE_MARKER_MISSING');h=h.replace('/*__A218_INLINE_BUNDLE__*/',j);fs.writeFileSync(p,h);"
       - name: Privacy and standalone invariants
         run: |
           grep -q "connect-src 'none'" a218-static-dist/index.html
           grep -q "form-action 'none'" a218-static-dist/index.html
+          grep -q "script-src 'unsafe-inline'" a218-static-dist/index.html
+          ! grep -q 'script src=' a218-static-dist/index.html
+          ! grep -q '__A218_INLINE_BUNDLE__' a218-static-dist/index.html
           grep -q '"deploymentEnabled": false' a218-static-dist/vercel.json
           test -s a218-static-dist/app.js
+          test $(wc -c < a218-static-dist/index.html) -gt 1000000
           ! grep -q "NEXT_PUBLIC_SUPABASE" a218-static-dist/app.js
           ! grep -q "supabase.co" a218-static-dist/app.js
           ! grep -q "vercel.app" a218-static-dist/app.js
@@ -81,6 +86,7 @@ jobs:
           git checkout --orphan a218-static-publish
           git rm -rf .
           cp -a /tmp/a218-static-dist/. .
-          git add index.html app.js vercel.json
-          git commit -m "a21.8 static publish from $GITHUB_SHA"
+          rm -f app.js
+          git add index.html vercel.json
+          git commit -m "a21.8 inline static publish from $GITHUB_SHA"
           git push --force origin HEAD:refs/heads/eval/certificate-qr-stage-a21-8-static-publish
