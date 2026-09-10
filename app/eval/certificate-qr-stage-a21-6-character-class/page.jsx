@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { A214_STORAGE_KEY } from "../certificate-qr-stage-a21-4-evidence/contract.mjs";
-import { analyzeA216PersistedEvidence } from "../../../../scripts/photo-qr-stage-a21-6-character-class-audit.mjs";
+import { analyzeA216PersistedEvidence } from "../../../scripts/photo-qr-stage-a21-6-character-class-audit.mjs";
 
 export default function Page(){
   const [detail,setDetail]=useState(null);
