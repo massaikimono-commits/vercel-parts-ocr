@@ -47,8 +47,8 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           rm .github/workflows/ux-batch-context-preservation.yml .github/ux-batch-apply.py
-          git add app/schedule/detail/page.tsx app/customer-vehicles/page.tsx app/customer-vehicles/history/page.tsx app/customer-vehicles/photos/page.tsx app/customer-vehicles/lease-maintenance/page.tsx scripts/ux-context-preservation-regression.mjs .github/workflows/ux-batch-context-preservation.yml .github/ux-batch-apply.py
-          git commit -m 'feat: preserve vehicle context across daily workflows'
+          git add app/schedule/detail/page.tsx app/customer-vehicles/page.tsx scripts/ux-context-preservation-regression.mjs .github/workflows/ux-batch-context-preservation.yml .github/ux-batch-apply.py
+          git commit -m 'feat: preserve context in daily vehicle workflows'
           git push origin HEAD:preview/schedule-ux-20260903
 
-# trigger retry after regression assertion correction
+# rerun narrowed stable grouped UX candidates
