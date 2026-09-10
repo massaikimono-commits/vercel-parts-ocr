@@ -353,6 +353,7 @@ export default function ScheduleDetailPage(){
               <section className="section">
                 <h2>この車両で続ける</h2>
                 <div className="toolActions">
+                  <button onClick={()=>openVehicleTool("/schedule/active")}>次回予定登録</button>
                   <button onClick={()=>openVehicleTool("/parts-data")}>部品データ</button>
                   <button onClick={()=>openVehicleHistory("history")}>車両履歴</button>
                   <button onClick={()=>openVehicleHistory("photos")}>写真履歴</button>

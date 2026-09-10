@@ -52,4 +52,6 @@ assert.match(detail, /p_actor:"schedule"/, "detail work-state mutations preserve
 assert.match(detail, /safeActionError\("作業状態の保存",error\)/, "detail work-state failures use safe user-facing errors");
 assert.doesNotMatch(detail, /\.update\(\{[^}]*work_completed/, "detail does not bypass work-state RPCs with direct completion updates");
 
+assert.ok(detail.includes("次回予定登録"), "detail shows next booking action");
+assert.match(detail, /openVehicleTool\("\/schedule\/active"\)/, "detail opens existing active-vehicle schedule registration");
 console.log("schedule detail regression: ok");
