@@ -16,9 +16,11 @@ on:
       - "scripts/photo-qr-stage-a21-7-structure-counterfactual-test.mjs"
       - "scripts/photo-qr-stage-a21-8-adoption-readiness.mjs"
       - "scripts/photo-qr-stage-a21-8-adoption-readiness-test.mjs"
+      - "scripts/photo-qr-stage-a21-8-real-evidence-ui-test.mjs"
       - "app/eval/certificate-qr-stage-a21-4-evidence/**"
       - "app/eval/certificate-qr-stage-a21-5-compact-acceptance/**"
       - "app/eval/certificate-qr-stage-a21-6-character-class/**"
+      - "app/eval/certificate-qr-stage-a21-8-real-evidence/**"
       - "package.json"
       - ".github/workflows/certificate-qr-stage-a21-4-format-audit.yml"
 jobs:
@@ -45,6 +47,8 @@ jobs:
         run: node scripts/photo-qr-stage-a21-7-structure-counterfactual-test.mjs
       - name: Stage A21.8 adoption-readiness invariants
         run: node scripts/photo-qr-stage-a21-8-adoption-readiness-test.mjs
+      - name: Stage A21.8 one-shot real evidence UI invariants
+        run: node scripts/photo-qr-stage-a21-8-real-evidence-ui-test.mjs
       - name: Prior A21.3 attribution invariants
         run: node scripts/photo-qr-stage-a21-3-attribution-test.mjs
       - name: Prior A21.3 evidence invariants
