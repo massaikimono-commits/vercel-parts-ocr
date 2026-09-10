@@ -34,7 +34,7 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Deployment safety must be verified from actual Vercel deployment records, not only CI claims.
 - A specialist-reported deployment count is not authoritative until management checks Vercel directly.
 
-## Current lane ledger — verified 2026-09-10 20:06 JST
+## Current lane ledger — verified 2026-09-10 20:10 JST
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`
@@ -68,18 +68,22 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 
 ### Parts OCR
 - Source branch: `experiment/parts-ocr-stage-a22-cell-crop-correction`
-- Source HEAD: `391ffcdb31050df2afa028ca00ec0d41c55a6f8a`
-- Previous source HEAD: `e681b6331039977faaf0b3cf6f115745222cfe80`.
-- Latest source commit: align source with audited crop-isolation candidate.
+- Source HEAD: `391ffcdb31050df2afa028ca00ec0d41c55a6f8a`.
 - Eval branch: `eval/parts-ocr-stage-a22-cell-crop-correction`
-- Eval HEAD: `fa8df79c3eff7cc9c100d48b357d09c930168cdf`
-- Previous eval HEAD: `f78bfb6dcd22dc04c9074d35c09b199b8e64fc5a`.
-- Latest eval commit: extend A22 invariant and attribution regression.
+- Eval HEAD: `fa8df79c3eff7cc9c100d48b357d09c930168cdf`.
 - Formal adopted OCR HEAD: none.
-- Continue non-Preview A22 validation until internal evidence is genuinely exhausted; do not ask the user to identify/select fixed filenames.
-- Any eventual real-photo target must auto-map from the formal yellow12 set and avoid repeated testing.
-- Before issuing the next parts-OCR instruction, management must inspect the exact A22 delta and CI/deployment status at these current HEADs; do not duplicate the work already advanced after the previous ledger.
-- Frozen OCR branch, Stage B, Guided Live, main, Production, Supabase: HOLD.
+- Stage A22 non-Preview work is complete for the current hypothesis. The source is connected to the audited crop-isolation candidate and the eval branch adds invariant/attribution regression.
+- Implemented/verified candidate scope includes projective rectification via 4-point homography, paper-quad estimation, horizontal/vertical rule-band detection and thickness, A19 row-center anchoring, nearest-rule row reconstruction, safe expansion, monotonic/unique column mapping, rule exclusion margins, white padding, preserved row slots, duplicate/row-shift prevention, crop diagnostics, and normalization attribution separation.
+- Recognizer/model unchanged; A17/A19 thresholds unchanged; GT is scoring-only and not used by runtime/control.
+- Static/invariant validation includes 500 homography fuzz cases, row-slot matrix across 1-12 rows, duplicate preservation, 500 column-assignment fuzz cases, normalization-attribution matrix, GT isolation, and deployment fail-closed checks.
+- GitHub Actions run `34468717743`: SUCCESS at eval HEAD `fa8df79...`, including Stage A22 static structural crop audit, Stage A22 invariant fuzz/policy audit, npm install, and Next build.
+- Management independently verified both branch HEADs and the latest eval diff, and verified zero new Vercel deployment records after the current source/eval update window.
+- A21 formal evidence remains the baseline for diagnosis: truncation `32/32`, table-line contamination `26/32`, with `CELL_CROP_QUALITY` primary. A22 is aimed directly at those causes; A20/A21 formal results are not overwritten.
+- Internal/static/fixture/synthetic evidence is now considered exhausted for the next question. The next meaningful blocker is one browser real-photo diagnostic targeting IMG_0684 from the formal yellow12 set, with automatic mapping and no user filename identification.
+- The one real-photo run should verify GT rows 8, dynamic rows 8, rule-bounded rows, projective application/quad confidence, rule counts, reduction from truncation 32/32 and table-line 26/32, occupancy/edge-touch, TESS/JA_LIGHT/V5 accuracy, and normalization-attribution breakdown.
+- Preview is required for that browser real-photo run. Do not create an intermediate Preview. While the Vercel build-rate-limit HOLD is active, stop at this completed eval HEAD; once Preview is permitted, use only this completed meaningful real-device unit for one targeted run.
+- Do not request repeated user testing. Do not ask the user to identify/select fixed filenames.
+- Frozen OCR branch, Stage B, Guided Live, main, Netlify Production, Vercel Production, Supabase: HOLD.
 
 ## Handoff requirement
 
