@@ -1,0 +1,276 @@
+name: Legal 3m pre-DB validate
+
+on:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    if: contains(github.event.head_commit.message, '[legal-3m-pre-db]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: preview/schedule-ux-20260903
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Apply DB-independent legal 3m patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_one(path, old, new):
+              p = Path(path)
+              s = p.read_text()
+              if s.count(old) != 1:
+                  raise SystemExit(f'{path}: expected one occurrence, found {s.count(old)} for {old!r}')
+              p.write_text(s.replace(old, new))
+
+          replace_one(
+              'app/schedule/daily-report-work-code.ts',
+              '"schedule" | "legal_6m" | "legal_12m" | null | undefined',
+              '"schedule" | "legal_3m" | "legal_6m" | "legal_12m" | null | undefined',
+          )
+          replace_one(
+              'app/schedule/daily-report-work-code.ts',
+              '  if (inspectionScheduleType === "schedule") return "スケ";\n  if (inspectionScheduleType === "legal_6m") return "6";',
+              '  if (inspectionScheduleType === "schedule") return "スケ";\n  if (inspectionScheduleType === "legal_3m") return "3";\n  if (inspectionScheduleType === "legal_6m") return "6";',
+          )
+
+          p = Path('app/schedule/print/page.tsx')
+          s = p.read_text()
+          old = '"schedule" | "legal_6m" | "legal_12m" | null'
+          if s.count(old) != 2:
+              raise SystemExit(f'print page: expected two inspection unions, found {s.count(old)}')
+          p.write_text(s.replace(old, '"schedule" | "legal_3m" | "legal_6m" | "legal_12m" | null'))
+
+          replace_one(
+              'app/schedule/detail/page.tsx',
+              '  reason:string;\n  status:string;',
+              '  reason:string;\n  inspection_schedule_type:"schedule"|"legal_3m"|"legal_6m"|"legal_12m"|null;\n  status:string;',
+          )
+          replace_one(
+              'app/schedule/detail/page.tsx',
+              '.select("id,vehicle_id,reason,status,worker_name,notes,work_completed,planned_delivery_date")',
+              '.select("id,vehicle_id,reason,inspection_schedule_type,status,worker_name,notes,work_completed,planned_delivery_date")',
+          )
+          replace_one(
+              'app/schedule/detail/page.tsx',
+              'function workStateLabel(work:WorkOrder|null){',
+              'function inspectionTypeLabel(value:WorkOrder["inspection_schedule_type"]){\n  if(value==="schedule") return "スケジュール点検";\n  if(value==="legal_3m") return "法定3ヶ月点検";\n  if(value==="legal_6m") return "法定6ヶ月点検";\n  if(value==="legal_12m") return "法定12ヶ月点検";\n  return "未指定";\n}\n\nfunction workStateLabel(work:WorkOrder|null){',
+          )
+          replace_one(
+              'app/schedule/detail/page.tsx',
+              '                <div><span>入庫要因</span><b>{work?.reason || "未登録"}</b></div>\n                <div><span>納車予定日</span>',
+              '                <div><span>入庫要因</span><b>{work?.reason || "未登録"}</b></div>\n                {work?.reason==="点検" && <div><span>点検区分</span><b>{inspectionTypeLabel(work.inspection_schedule_type)}</b></div>}\n                <div><span>納車予定日</span>',
+          )
+
+          replace_one(
+              'scripts/daily-report-work-code-regression.mjs',
+              'assert.match(helper, /inspectionScheduleType === "schedule"\\) return "スケ"/, "scheduleはスケ");\nassert.match(helper, /inspectionScheduleType === "legal_6m"\\) return "6"/, "legal_6mは6");',
+              'assert.match(helper, /inspectionScheduleType === "schedule"\\) return "スケ"/, "scheduleはスケ");\nassert.match(helper, /inspectionScheduleType === "legal_3m"\\) return "3"/, "legal_3mは3");\nassert.match(helper, /inspectionScheduleType === "legal_6m"\\) return "6"/, "legal_6mは6");',
+          )
+          replace_one(
+              'scripts/daily-report-work-code-regression.mjs',
+              'assert.doesNotMatch(helper, /legal_3m/, "legal_3mは今回未実装");',
+              'assert.match(helper, /legal_3m/, "日報コード変換はlegal_3mを先行対応");',
+          )
+          replace_one(
+              'scripts/daily-report-work-code-regression.mjs',
+              'assert.doesNotMatch(printPage, /legal_3m/, "日報側にもlegal_3mを追加しない");',
+              'assert.match(printPage, /legal_3m/, "日報印刷型はlegal_3mを受け取れる");',
+          )
+          # New registration must remain blocked until the DB CHECK migration is approved/applied.
+          # Keep the existing doesNotMatch(newPage, /legal_3m/) assertion intact.
+
+          p = Path('scripts/schedule-detail-regression.mjs')
+          s = p.read_text()
+          marker = 'assert.match(detail, /work\\.status==="in_progress"/, "detail uses in-progress work state");\n'
+          if s.count(marker) != 1:
+              raise SystemExit('schedule detail regression marker missing')
+          extra = marker + 'assert.match(detail, /inspection_schedule_type/, "detail loads inspection schedule type");\nassert.match(detail, /legal_3m/, "detail can render legal 3m subtype after DB migration");\nassert.match(detail, /点検区分/, "detail shows inspection subtype for inspection work");\n'
+          p.write_text(s.replace(marker, extra))
+
+          Path('database/legal-3m-v13.sql').write_text(r'''-- ICB-SPEC v1.3 legal_3m minimal database migration draft.
+-- IMPORTANT: DO NOT APPLY until management gives DB GO.
+-- This adds a value to the existing inspection subtype model; reason remains 点検.
+-- No data backfill, no new column, no RLS/policy change.
+
+alter table public.work_orders
+  drop constraint if exists work_orders_inspection_schedule_type_check;
+
+alter table public.work_orders
+  add constraint work_orders_inspection_schedule_type_check
+  check (
+    inspection_schedule_type is null
+    or inspection_schedule_type = any (
+      array['schedule'::text, 'legal_3m'::text, 'legal_6m'::text, 'legal_12m'::text]
+    )
+  );
+
+create or replace function public.daily_report_work_mark(
+  p_reason text,
+  p_inspection_schedule_type text,
+  p_override text default null::text
+)
+returns text
+language sql
+immutable
+set search_path to 'public', 'pg_temp'
+as $function$
+  select coalesce(
+    nullif(btrim(p_override),''),
+    case
+      when p_reason='車検' then 'S'
+      when p_reason='点検' and p_inspection_schedule_type='schedule' then 'スケ'
+      when p_reason='点検' and p_inspection_schedule_type='legal_3m' then '3'
+      when p_reason='点検' and p_inspection_schedule_type='legal_6m' then '法6'
+      when p_reason='点検' and p_inspection_schedule_type='legal_12m' then '法12'
+      when p_reason='点検' then '点'
+      when p_reason='一般整備' then 'Q'
+      when p_reason='板金塗装' then 'b/p'
+      else null
+    end
+  );
+$function$;
+
+-- quick_choice_catalog is a compatibility/shared API. Add legal_3m without changing
+-- existing reason/entry choices or authorization semantics.
+create or replace function public.quick_choice_catalog()
+returns jsonb
+language sql
+stable
+set search_path to 'public'
+as $function$
+select jsonb_build_object(
+  'workReasons',jsonb_build_array(
+    jsonb_build_object('key','車検','label','車検'),
+    jsonb_build_object('key','点検','label','点検'),
+    jsonb_build_object('key','一般整備','label','一般整備'),
+    jsonb_build_object('key','板金塗装','label','板金塗装')
+  ),
+  'inspectionTypes',jsonb_build_array(
+    jsonb_build_object('key','schedule','label','スケ'),
+    jsonb_build_object('key','legal_3m','label','法3'),
+    jsonb_build_object('key','legal_6m','label','法6'),
+    jsonb_build_object('key','legal_12m','label','法12')
+  ),
+  'entryTypes',jsonb_build_array(
+    jsonb_build_object('key','customer_visit','label','来社'),
+    jsonb_build_object('key','pickup','label','引取'),
+    jsonb_build_object('key','onsite_repair','label','出張'),
+    jsonb_build_object('key','delivery','label','納車')
+  ),
+  'loanerNeed',jsonb_build_array(
+    jsonb_build_object('key','not_needed','label','不要'),
+    jsonb_build_object('key','needed','label','必要')
+  ),
+  'loanerSource',jsonb_build_array(
+    jsonb_build_object('key','company_vehicle','label','弊社社用車'),
+    jsonb_build_object('key','rental_company','label','レンタカー会社')
+  ),
+  'cancellationReasons',jsonb_build_array(
+    jsonb_build_object('key','reschedule','label','日程変更'),
+    jsonb_build_object('key','health','label','体調不良'),
+    jsonb_build_object('key','customer_convenience','label','都合変更'),
+    jsonb_build_object('key','other','label','その他')
+  ),
+  'waitlistTimePreference',jsonb_build_array(
+    jsonb_build_object('key','morning','label','午前なら可'),
+    jsonb_build_object('key','afternoon','label','午後なら可'),
+    jsonb_build_object('key','any','label','いつでも可')
+  ),
+  'staff',coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id',s.id,
+      'label',coalesce(nullif(btrim(s.short_name),''),s.display_name),
+      'displayName',s.display_name
+    ) order by s.display_order,s.display_name)
+    from public.staff_members s
+    where s.is_active and s.quick_select
+  ),'[]'::jsonb),
+  'cannedNotes',coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id',n.id,
+      'category',n.category,
+      'label',n.label,
+      'text',n.note_text
+    ) order by n.category,n.display_order,n.label)
+    from public.canned_notes n
+    where n.is_active
+  ),'[]'::jsonb)
+);
+$function$;
+''')
+
+          Path('scripts/legal-3m-pre-db-regression.mjs').write_text(r'''import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const newPage = fs.readFileSync(new URL("../app/schedule/new/page.tsx", import.meta.url), "utf8");
+const helper = fs.readFileSync(new URL("../app/schedule/daily-report-work-code.ts", import.meta.url), "utf8");
+const printPage = fs.readFileSync(new URL("../app/schedule/print/page.tsx", import.meta.url), "utf8");
+const detail = fs.readFileSync(new URL("../app/schedule/detail/page.tsx", import.meta.url), "utf8");
+const migration = fs.readFileSync(new URL("../database/legal-3m-v13.sql", import.meta.url), "utf8");
+
+assert.doesNotMatch(newPage, /value="legal_3m"/, "legal_3m write option must stay hidden until DB GO");
+assert.match(helper, /legal_3m[^\n]*return "3"/, "daily report maps legal_3m to 3");
+assert.match(printPage, /legal_3m/, "daily report print type accepts legal_3m");
+assert.match(detail, /inspection_schedule_type/, "detail reads inspection subtype");
+assert.match(detail, /法定3ヶ月点検/, "detail has legal 3m label");
+assert.match(migration, /legal_3m/, "migration draft adds legal_3m");
+assert.match(migration, /work_orders_inspection_schedule_type_check/, "migration draft updates existing subtype constraint");
+assert.match(migration, /p_inspection_schedule_type='legal_3m' then '3'/, "DB daily report compatibility mark is 3");
+assert.match(migration, /jsonb_build_object\('key','legal_3m','label','法3'\)/, "compatibility choice catalog includes legal_3m");
+assert.doesNotMatch(migration, /insert\s+into\s+public\.work_orders/i, "migration performs no backfill");
+assert.doesNotMatch(migration, /create\s+policy|drop\s+policy|alter\s+policy/i, "migration does not alter RLS");
+
+console.log("legal 3m pre-DB regression: ok");
+''')
+
+          p = Path('package.json')
+          s = p.read_text()
+          marker = '"test:waiting-service-v13": "node scripts/waiting-service-customer-visit-v13-regression.mjs"'
+          if marker not in s:
+              raise SystemExit('package marker missing')
+          if 'test:legal-3m-pre-db' not in s:
+              s = s.replace(marker, marker + ',\n    "test:legal-3m-pre-db": "node scripts/legal-3m-pre-db-regression.mjs"')
+          p.write_text(s)
+          PY
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run legal 3m targeted regressions
+        run: |
+          npm run test:legal-3m-pre-db
+          npm run test:daily-report-work-code
+          npm run test:schedule-detail
+          npm run test:inspection
+          npm run test:record-types
+          npm run test:workshop-record-types
+          npm run test:waiting-service-v13
+
+      - name: Full build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build
+
+      - name: Commit tested DB-independent legal 3m preparation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/schedule/daily-report-work-code.ts app/schedule/print/page.tsx app/schedule/detail/page.tsx scripts/daily-report-work-code-regression.mjs scripts/schedule-detail-regression.mjs scripts/legal-3m-pre-db-regression.mjs database/legal-3m-v13.sql package.json
+          git commit -m 'feat: prepare legal 3m support before database migration'
+          git push origin HEAD:preview/schedule-ux-20260903
