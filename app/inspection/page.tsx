@@ -475,8 +475,11 @@ export default function InspectionPage() {
   }
 
   async function printCurrent() {
-    if (mode === "inspection") await saveInspection("printed");
-    else await saveDesignated("printed");
+    if (mode !== "inspection") {
+      setMessage("指定整備記録簿の正式印刷は、正式PDF・最終印刷座標の確認完了後に有効化します。");
+      return;
+    }
+    await saveInspection("printed");
     window.print();
   }
 
@@ -549,7 +552,7 @@ export default function InspectionPage() {
               <div className="result"><small>サイドブレーキ</small><b>{designatedCalc.parkingSum} ÷ {designated.vehicleWeight || "-"} = {designatedCalc.parkingRatio}</b></div>
             </div>
           </section>
-          <section className="card actions noPrint"><button onClick={() => void saveDesignated("draft")}>下書き保存</button><button className="primary" onClick={() => void saveDesignated("confirmed")}>担当者確認済みにする</button><button onClick={() => void printCurrent()}>🖨 印刷</button></section>
+          <section className="card actions noPrint"><button onClick={() => void saveDesignated("draft")}>下書き保存</button><button className="primary" onClick={() => void saveDesignated("confirmed")}>担当者確認済みにする</button><button disabled title="正式PDF・最終印刷座標の確認待ち">🖨 正式印刷（確認待ち）</button><small className="help">正式PDF・最終印刷座標が確定するまで、指定整備記録簿の正式印刷は無効です。</small></section>
         </>
       )}
 
