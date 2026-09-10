@@ -26,7 +26,8 @@ This file is the required source of truth for any GO/HOLD, adoption, DB change, 
 18. Repeated correction of the same management error class is a handoff-risk signal. Prepare a fresh-chat handoff before continuing major decisions if source-of-truth contradictions recur.
 19. Before discussing any incident count, deployment safety, production state, or `実害`, read the Permanent Incident Register below. Never reconstruct the incident list from conversation memory alone.
 20. Before creating a handoff, copy the current lane ledger, Permanent Incident Register, HOLD matrix, absolute prohibitions, and display/copy rules from this file. Do not omit them to shorten the handoff.
-21. A prior management statement of `no unimplemented confirmed requirement` is invalidated immediately if a specialist later finds a confirmed-spec gap. In that case, reset app-main audit status to `FULL RE-AUDIT REQUIRED` and do not return to speculative UX work until the section-by-section audit has been completed against the new current HEAD.
+21. A prior management statement of `no unimplemented confirmed requirement` is invalidated immediately if a specialist later finds a confirmed-spec gap. Reset app-main audit status to `FULL RE-AUDIT REQUIRED` and do not return to speculative UX work until the section-by-section audit has been completed against the new current HEAD.
+22. `未反映なし` is never a universal claim. The only permitted form is scope-bound: `current safe conditions = no shared DB mutation, no OCR tuning, no review-only item, no Production change; immediately implementable confirmed-spec / explicit-request gap count = 0`, and only after a complete section audit.
 
 ## Permanent Incident Register — MUST NOT BE OMITTED FROM HANDOFFS
 
@@ -72,22 +73,25 @@ These incidents are permanent project history. They are not interchangeable and 
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`.
-- Current formal branch HEAD: `6b2f81782715a233461bd62d1b7afe8588096468`.
-- Previous formal HEAD: `ea613c032c043d5747c4484c357b063ef62c9dbe`.
+- Current formal branch HEAD: `77248cb970bd040f57b21400273b920aab641248`.
+- Previous formal HEAD: `790f06a4d5a208d6a8e0e7d25f301abd84515a57`.
 - PR #62: Draft / Open / unmerged; base `main`.
 - main SHA: `20a715bf46156282b686a617d6744a040bc17fb3` unchanged.
-- Latest confirmed-spec correction: `/schedule/active` now implements waiting-service v1.3 for selected existing vehicles.
-- Eligibility: `customer_visit` only, reason-independent; inspection / vehicle inspection / general repair / body-paint are all eligible when entry type is customer visit.
-- Switching away from customer visit clears waiting state; submit revalidates `entryType === customer_visit` instead of trusting UI state alone.
-- Existing `schedule_slot_check_v2` receives `p_is_waiting_service`; no new RPC, migration, RLS, or shared Supabase change.
-- Waiting ON persists `is_waiting_service = true`, suppresses `planned_delivery_at`, suppresses delivery `schedule_entry`, and does not require delivery-time selection.
-- Clean pre-fix anchor `6ce9a668cef5dbb14966a52d42ff9f8255ccef07` -> final `6b2f81782715a233461bd62d1b7afe8588096468`: ahead 4 / behind 0; final net diff only `app/schedule/active/page.tsx` and `scripts/schedule-active-waiting-v13-regression.mjs`.
-- Regression / Full Build run `34540513883`: PASS. Deployment Safety run `34540599471`: PASS on final HEAD.
-- Formal classification: confirmed-spec implementation PASS; this is not a Preview-only UX candidate.
+- Full ICB-SPEC v1.3 section-by-section audit status: COMPLETE for the app-core scope under current safe conditions.
+- Scope-bound result: with shared DB mutation, OCR tuning, review-only items, final physical print alignment, and Production reflection excluded, the count of immediately implementable confirmed-spec + explicit-request gaps is 0.
+- This does NOT classify DB-dependent HOLD, review-only items, OCR quality work, or final print coordinates as implemented.
+- During the final audit, three remaining mismatches were corrected before UX work resumed:
+  1. Section 18 designated-maintenance-record formal print is now fail-closed until formal PDF/final coordinates are confirmed. The designated screen shows a disabled `正式印刷（確認待ち）`; `printCurrent()` refuses non-inspection mode. Draft and confirmed saves remain available.
+  2. Section 3 remote logout is now exposed from login history using existing Supabase Auth `signOut({ scope: "global" })`, with explicit confirmation, local sensitive-state cleanup, and best-effort existing `record_logout` RPC logging. No new RPC/schema/migration.
+  3. Section 15 obsolete auto-sync wording was removed. Customer/vehicle management now describes formally saved parts separately from local unconfirmed data; no auto-promotion logic was added.
+- `790f06a4... -> 77248cb9...`: ahead 7 / behind 0; final net diff is 5 files only: `app/inspection/page.tsx`, `app/settings/login-history/page.tsx`, `app/customer-vehicles/page.tsx`, `scripts/designated-print-hold-regression.mjs`, `scripts/section-audit-confirmed-fixes-regression.mjs`.
+- Regression / Full Build run `34542447527`: SUCCESS.
+- Deployment Safety run `34542538123`: SUCCESS on final HEAD `77248cb970bd040f57b21400273b920aab641248`.
+- Formal classification of this batch: PASS as confirmed-spec correction; not a speculative UX batch.
 - Earlier six convenience UX items remain technical-PASS Preview candidates only, pending user iPhone hands-on review.
-- Management audit status: `FULL RE-AUDIT REQUIRED`. A prior management conclusion that no implementable confirmed-spec gap remained was disproven by this `/schedule/active` waiting-service omission and is invalid. Do not state `未反映なし` until a new section-by-section parent-spec-v1.3 vs current-HEAD audit is completed and recorded.
-- `legal_3m` shared-DB mutation remains HOLD because Netlify Production is behind current development.
-- Vercel Preview remains HOLD until build-rate-limit/deployment safety clearance is proven without creating an unnecessary deployment.
+- Next app-core phase is permitted to return to a bundled UX-candidate batch because the scope-bound full section audit is complete and immediately implementable confirmed-spec/explicit-request gaps are 0.
+- Existing HOLD/review exclusions remain active: `legal_3m`; shared-DB/RLS-dependent role separation; parent-spec review items; OCR-quality work; final physical print coordinates; Production reflection.
+- Vercel Preview remains HOLD until explicit management GO after deployment-limit/safety clearance. No new Preview was created in this batch.
 
 ### Vehicle certificate QR/OCR
 - Frozen body branch: `work/certificate-photo-ocr`, HEAD `7b421eea35154baa5b19e61e56151a8d73363bbf`; unchanged/HOLD.
@@ -119,6 +123,9 @@ These incidents are permanent project history. They are not interchangeable and 
 - Vercel Preview: HOLD until explicit management GO after safety/limit clearance.
 - shared Supabase: HOLD unless explicit DB GO.
 - `legal_3m`: HOLD.
+- Shared-DB/RLS-dependent role separation: HOLD pending compatibility/authorization review.
+- Parent-spec review-only items: HOLD until user review.
+- Final physical print coordinates / printer offsets: HOLD pending real-paper confirmation.
 - Vehicle certificate OCR Frozen: HOLD.
 - Parts OCR Frozen: HOLD.
 - Parts OCR Stage B: HOLD.
@@ -134,6 +141,7 @@ These incidents are permanent project history. They are not interchangeable and 
 - No small-change Preview spam.
 - No GT use in OCR runtime/control/candidate/stop/fallback/expected-count logic; GT is scoring-only.
 - No declaring OCR accuracy improvement from CI/static PASS without formal real-photo evidence.
+- No declaring review-only/DB-HOLD/OCR-quality/final-coordinate items implemented merely because app-core has no immediately implementable safe-scope gaps.
 
 ## Handoff requirement
 
@@ -148,6 +156,7 @@ Every specialist/management handoff must include:
 - whether Vercel/Supabase/Netlify/main changed
 - technical PASS/HOLD separately from user Preview acceptance for UX candidates
 - full parent-spec audit status before declaring app-main free for speculative UX work
+- if the audit result is 0, include the exact scope/exclusions rather than saying universal `未反映なし`
 - the complete Permanent Incident Register (Supabase / Netlify / Vercel) or an explicit statement that this canonical file was read and all three remain active history
 - the Global HOLD matrix and Absolute prohibitions
 
