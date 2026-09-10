@@ -17,17 +17,21 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
-      - run: node .github/scripts/apply-customer-quick-actions.mjs
+      - name: Apply customer quick actions
+        run: node .github/scripts/apply-customer-quick-actions.mjs
       - run: npm ci --no-audit --no-fund
-      - run: |
+      - name: Targeted regression
+        run: |
           node scripts/ux-context-preservation-regression.mjs
           npm run test:security
           npm run test:app-core-safety
-      - env:
+      - name: Full build
+        env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
         run: npx next build
-      - run: |
+      - name: Commit verified batch
+        run: |
           rm .github/workflows/customer-vehicle-quick-actions-batch.yml
           rm .github/scripts/apply-customer-quick-actions.mjs
           git config user.name "github-actions[bot]"
