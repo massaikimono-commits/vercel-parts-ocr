@@ -9,13 +9,30 @@ import { analyzeCellCrop } from "./crop-diagnostics";
 
 const FIELDS: FieldKey[] = ["name", "qty", "retail", "cost"];
 const ENGINES = ["CONTROL_TESS", "ONNX_JA_LIGHT", "ONNX_V5"] as const;
+const FORMAL_IDS = Array.from({ length: 12 }, (_, i) => String(675 + i).padStart(4, "0"));
+const TARGET_BASE_ID = "0684";
 type EngineKey = typeof ENGINES[number];
 type Row = { name: string; qty: string; retail: string; cost: string };
 
-function canonical(name: string) {
-  const m = name.match(/IMG_(067[5-9]|068[0-6])/i);
-  return m ? `IMG_${m[1]}(1)` : "";
+export function normalizeFormalBaseId(name: string): string | null {
+  const normalized = name.normalize("NFKC").replace(/\\/g, "/").split("/").pop() || "";
+  const m = normalized.match(/(?:^|[^0-9])(?:IMG[_\- ]*)?(067[5-9]|068[0-6])(?=[^0-9]|$)/i);
+  return m ? m[1] : null;
 }
+
+export function resolveTarget0684(files: File[]): { target: File | null; reason: string; mappedIds: string[] } {
+  if (files.length !== 12) return { target: null, reason: `formal-count:${files.length}`, mappedIds: [] };
+  const mapped = files.map((file) => ({ file, id: normalizeFormalBaseId(file.name) }));
+  const ids = mapped.map((x) => x.id).filter((x): x is string => !!x);
+  const unique = new Set(ids);
+  const formalCoverageOk = FORMAL_IDS.every((id) => unique.has(id));
+  const targetMatches = mapped.filter((x) => x.id === TARGET_BASE_ID);
+  if (!formalCoverageOk || unique.size !== 12) return { target: null, reason: "formal-mapping-incomplete-or-ambiguous", mappedIds: ids };
+  if (targetMatches.length !== 1) return { target: null, reason: `target-match-count:${targetMatches.length}`, mappedIds: ids };
+  return { target: targetMatches[0].file, reason: "ok", mappedIds: ids };
+}
+
+function canonicalFromBaseId(id: string) { return `IMG_${id}(1)`; }
 function norm(v: string) { return v.normalize("NFKC").replace(/[￥¥,\s]/g, "").toUpperCase(); }
 function score(gt: Row[], pred: Row[]) {
   const byField: any = Object.fromEntries(FIELDS.map((f) => [f, { correct: 0, total: gt.length }]));
@@ -36,14 +53,29 @@ function score(gt: Row[], pred: Row[]) {
 export default function RealImageAudit({ deployedHead }: { deployedHead: string }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("対象1枚だけをbrowser内で診断します。画像/GT/cropはuploadしません。");
+  const [status, setStatus] = useState("正式12枚を一括選択してください。対象画像はUI側で自動識別します。");
   const [result, setResult] = useState<any>(null);
 
-  async function run(file: File | undefined) {
-    if (!file) return;
-    const fileName = canonical(file.name);
-    if (!fileName || !FORMAL_A19_GT[fileName]) { setStatus("正式黄色12枚の対象ファイル名を選択してください。"); return; }
+  async function run(selected: FileList | null) {
+    if (!selected) return;
+    const files = Array.from(selected);
+    const resolved = resolveTarget0684(files);
+    if (!resolved.target) {
+      setStatus(`STOP：正式12枚mappingから対象を一意に自動識別できませんでした（${resolved.reason}）。ユーザー手動判別は要求しません。`);
+      if (input.current) input.current.value = "";
+      return;
+    }
+    const file = resolved.target;
+    const fileName = canonicalFromBaseId(TARGET_BASE_ID);
+    const gt = FORMAL_A19_GT[fileName] as Row[] | undefined;
+    if (!gt) {
+      setStatus("STOP：既存formal mapping上のGT参照を解決できませんでした。ユーザー手動判別は要求しません。");
+      if (input.current) input.current.value = "";
+      return;
+    }
+
     setBusy(true); setResult(null);
+    setStatus("対象画像を自動識別しました。targeted diagnosticを実行中…");
     let worker: any = null;
     try {
       const tesseract: any = await import("tesseract.js");
@@ -52,12 +84,10 @@ export default function RealImageAudit({ deployedHead }: { deployedHead: string 
         ONNX_JA_LIGHT: await getModelStats("ONNX_JA_LIGHT"),
         ONNX_V5: await getModelStats("ONNX_V5"),
       };
-      setStatus(`${fileName} A19_TABLE geometry…`);
       const color = await orientedCanvas(file);
       const paper = detectPaperBox(color.canvas);
       const dynamic = await getA19DynamicRows(worker, tesseract, file, color, paper);
       const columns = adaptiveColumns(color.canvas, paper);
-      const gt = FORMAL_A19_GT[fileName] as Row[];
       const rowsByEngine: Record<EngineKey, Row[]> = {
         CONTROL_TESS: [], ONNX_JA_LIGHT: [], ONNX_V5: [],
       };
@@ -71,7 +101,7 @@ export default function RealImageAudit({ deployedHead }: { deployedHead: string 
         };
         const row = dynamic.rows[r];
         for (const field of FIELDS) {
-          setStatus(`${fileName} row ${r + 1}/${dynamic.rows.length} ${field}…`);
+          setStatus(`対象画像を自動識別済み。row ${r + 1}/${dynamic.rows.length} ${field}を診断中…`);
           const col = columns.boxes[field];
           const cell = await makeCellCrop(dynamic.ocrCanvas, paper, row, col, field, r, field === "name" ? 1600 : 900);
           const cropDiagnostic = analyzeCellCrop(cell.canvas);
@@ -113,9 +143,13 @@ export default function RealImageAudit({ deployedHead }: { deployedHead: string 
       }
 
       const summary = {
-        schema: "icb.parts-ocr.stage-a21-targeted-cell-root-cause.v1",
+        schema: "icb.parts-ocr.stage-a21-targeted-cell-root-cause.v2",
         deployedHead,
-        fileName,
+        targetBaseId: TARGET_BASE_ID,
+        targetResolution: "automatic-from-formal12-filename-normalization",
+        selectedFileCount: files.length,
+        mappedFormalIds: resolved.mappedIds.slice().sort(),
+        userTargetSelectionCount: 0,
         diagnosticOnly: true,
         gtRuntimeUse: false,
         gtScoringOnly: true,
@@ -130,7 +164,7 @@ export default function RealImageAudit({ deployedHead }: { deployedHead: string 
         cells,
       };
       setResult(summary);
-      setStatus(`${fileName} targeted root-cause diagnostic完了。画像/cropはbrowser memory内のみ。`);
+      setStatus("対象画像を自動識別しました。targeted diagnostic完了。画像/cropはbrowser memory内のみです。");
     } catch (e: any) {
       setStatus(`ERROR: ${String(e?.message || e)}`);
     } finally {
@@ -142,10 +176,10 @@ export default function RealImageAudit({ deployedHead }: { deployedHead: string 
 
   return <section style={{ background: "#fff", border: "1px solid #dbe2ec", borderRadius: 16, padding: 14, marginBottom: 12 }}>
     <h2>Targeted real-cell diagnostic</h2>
-    <p>管理GO時だけ使用。12枚再runではなく、原因分離に適した1枚を選んでcell cropとraw outputを確認します。</p>
-    <input ref={input} hidden type="file" accept="image/*" onChange={(e) => run(e.target.files?.[0])} />
+    <p>正式黄色12枚を一括選択してください。UIが既存formal mappingに従って対象を自動識別し、対象1枚だけを診断します。</p>
+    <input ref={input} hidden multiple type="file" accept="image/*" onChange={(e) => run(e.target.files)} />
     <button disabled={busy} onClick={() => input.current?.click()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 12, background: busy ? "#aeb8c7" : "#7a4e00", color: "#fff", fontWeight: 800 }}>
-      {busy ? "診断中…" : "対象1枚を選択してbrowser-only診断"}
+      {busy ? "診断中…" : "正式12枚を選択してください"}
     </button>
     <div style={{ marginTop: 8, fontSize: 13 }}>{status}</div>
     {result && <>
