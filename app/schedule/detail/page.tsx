@@ -270,6 +270,12 @@ export default function ScheduleDetailPage(){
     return true;
   }
 
+  function callCustomer(){
+    const phone=customer?.phone?.replace(/[^\d+]/g,"") || "";
+    if(!phone) return;
+    location.href=`tel:${phone}`;
+  }
+
   function openVehicleTool(path:string){
     if(!rememberActiveVehicle()) return;
     location.assign(path);
@@ -318,7 +324,7 @@ export default function ScheduleDetailPage(){
               <h2>お客様・車両</h2>
               <div className="infoGrid">
                 <div><span>お客様名</span><b>{customerLabel(customer)}</b></div>
-                <div><span>電話番号</span><b>{customer?.phone || "未登録"}</b></div>
+                <div><span>電話番号</span><b>{customer?.phone || "未登録"}</b>{customer?.phone && <button type="button" className="phoneButton" onClick={callCustomer}>電話する</button>}</div>
                 <div><span>ナンバー情報</span><b>{numberInfo}</b></div>
                 <div><span>車種</span><b>{vehicleName}</b></div>
                 <div><span>型式</span><b>{vehicle?.model_code || "未登録"}</b></div>

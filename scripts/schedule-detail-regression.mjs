@@ -60,4 +60,6 @@ assert.match(detail, /openVehicleTool\("\/customer-vehicles"\)/, "detail opens e
 assert.match(customerVehicles, /const ACTIVE_KEY = "parts-active-vehicle"/, "customer-vehicles uses the shared active vehicle key");
 assert.match(customerVehicles, /sessionStorage\.getItem\(ACTIVE_KEY\)/, "customer-vehicles restores active vehicle context");
 assert.match(customerVehicles, /selectVehicle\(activeVehicle, customer\)/, "customer-vehicles auto-selects the staged active vehicle");
+assert.match(detail, /function callCustomer\(\)[\s\S]*customer\?\.phone\?\.replace\(\/\[\^\\d\+\]\/g,""\)[\s\S]*location\.href=`tel:\$\{phone\}`/s, "detail normalizes the stored phone number and opens the native phone dialer");
+assert.match(detail, /customer\?\.phone && <button[^>]*onClick=\{callCustomer\}>電話する<\/button>/, "detail offers one-tap customer phone call only when a phone number exists");
 console.log("schedule detail regression: ok");
