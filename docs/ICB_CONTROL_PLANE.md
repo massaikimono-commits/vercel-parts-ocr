@@ -34,20 +34,26 @@ This file is the required preflight reference for any GO/HOLD, adoption, DB chan
 - Deployment safety must be verified from actual Vercel deployment records, not only CI claims.
 - A specialist-reported deployment count is not authoritative until management checks Vercel directly.
 
-## Current lane ledger — verified 2026-09-10 20:10 JST
+## Current lane ledger — verified 2026-09-10 20:15 JST
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`
-- HEAD: `e5538be901a3c4d97d39fdc372be447efa650e8f`
-- Previous management ledger HEAD: `0895ab6204324b7482aca66fed3bf79c936bf246`
-- GitHub delta from `0895ab...`: ahead 3 / behind 0; functional files changed are `app/schedule/detail/page.tsx` and `scripts/schedule-detail-regression.mjs`.
-- Implemented after previous ledger: practical schedule-detail work hub. It adds customer phone, waiting-service, loaner, urgent, outsource vendor, and direct current-vehicle actions for parts/history/photos/inspection; the one-time implementation workflow was removed after use.
-- PR #62: Draft / Open / unmerged unless a newer direct verification says otherwise.
-- Base main: `20a715bf46156282b686a617d6744a040bc17fb3` unless a newer direct verification says otherwise.
-- `legal_3m` DB mutation remains HOLD.
-- `legal_3m` DB-independent work completed: design audit, daily report code `3`, regression, migration draft.
+- HEAD: `e5538be901a3c4d97d39fdc372be447efa650e8f`.
+- Start HEAD for the completed DB-free batch: `0895ab6204324b7482aca66fed3bf79c936bf246`.
+- GitHub compare: ahead 3 / behind 0; final net functional diff is only `app/schedule/detail/page.tsx` and `scripts/schedule-detail-regression.mjs`.
+- PR #62 is independently verified Draft / Open / unmerged, base `main`, head `e5538be...`; base main SHA is `20a715bf46156282b686a617d6744a040bc17fb3`.
+- Practical schedule-detail work hub batch: PASS. It adds customer phone, waiting-service, loaner, urgent, outsource vendor, and direct current-vehicle actions for parts/history/photos/inspection while preserving reservation edit/cancel.
+- The active vehicle snapshot uses the existing `parts-active-vehicle` sessionStorage/localStorage convention; no new DB/state model is introduced.
+- History/photo routes remain vehicle-ID scoped; inspection shortcut is limited to 点検/車検 and passes the current workOrderId.
+- OCR execution is not coupled into this hub; OCR code is unchanged.
+- Waiting-service semantics are read-only in this batch; selection/save/delivery/duplicate-warning behavior is unchanged.
+- GitHub Actions run `34468632333`: SUCCESS including patch application, dependency install, targeted regressions, Full build, and tested commit.
+- Deployment safety guard run `34468739945`: SUCCESS at final HEAD. Management independently verified no new Vercel deployment records after the current update window.
+- `legal_3m` shared-DB mutation remains HOLD. DB-independent legal_3m work already completed: design audit, daily-report code `3`, regression, migration draft.
 - Shared DB reason for HOLD: Netlify is the intended production app but is behind current development; Vercel Preview-only needs must not mutate shared DB ahead of Netlify compatibility.
-- Next management action: independently audit the new schedule-detail hub regression/build/deployment safety before deciding the next DB-free app-main batch. Do not re-instruct work already present at `e5538be...`.
+- Supabase, main, Netlify Production, Vercel Production, OCR lanes: unchanged.
+- Vercel Preview remains HOLD while the build-rate-limit policy is active.
+- Next app-main selection should again prefer a practical, existing-DB-only improvement that reduces real shop workflow steps and does not depend on OCR or shared DB mutation. Before issuing it, inspect the latest branch HEAD again to avoid duplicate work.
 
 ### Vehicle certificate QR/OCR
 - Branch: `eval/certificate-qr-stage-a21-4-format-counterfactual`
