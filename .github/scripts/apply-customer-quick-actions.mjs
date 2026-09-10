@@ -81,7 +81,13 @@ fs.writeFileSync(pagePath, page);
 
 const regressionPath = "scripts/ux-context-preservation-regression.mjs";
 let regression = fs.readFileSync(regressionPath, "utf8");
-const marker = `assert.ok(detail.includes('>1日の予定</button>'));\n`;
-const extra = `assert.ok(customer.includes('aria-label="検索をクリア"'), "customer vehicle search has one-tap clear");\nassert.ok(customer.includes('function callSelectedCustomer()'), "selected customer has direct call action");\nassert.ok(customer.includes('location.href = \\`tel:\\${phone.replace(/\\\\s+/g, "")}\\`;'), "call action uses tel link");\nassert.ok(customer.includes('function openSelectedAddress()'), "selected customer has direct map action");\nassert.ok(customer.includes('https://www.google.com/maps/search/?api=1&query=\\${encodeURIComponent(address)}'), "map action encodes address");\n`;
+const marker = "assert.ok(detail.includes('>1日の予定</button>'));\n";
+const extra = [
+  "assert.ok(customer.includes('aria-label=\\\"検索をクリア\\\"'), \\\"customer vehicle search has one-tap clear\\\");",
+  "assert.ok(customer.includes('function callSelectedCustomer()'), \\\"selected customer has direct call action\\\");",
+  "assert.ok(customer.includes('location.href = `tel:'), \\\"call action uses tel link\\\");",
+  "assert.ok(customer.includes('function openSelectedAddress()'), \\\"selected customer has direct map action\\\");",
+  "assert.ok(customer.includes('https://www.google.com/maps/search/?api=1&query='), \\\"map action uses encoded map search\\\");"
+].join("\n") + "\n";
 regression = replaceOnce(regression, marker, marker + extra, "regression");
 fs.writeFileSync(regressionPath, regression);
