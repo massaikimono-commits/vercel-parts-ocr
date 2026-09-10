@@ -1,4 +1,4 @@
-name: Certificate QR Stage A21.4/A21.5/A21.6 audit
+name: Certificate QR Stage A21.4/A21.5/A21.6/A21.7 audit
 on:
   push:
     branches:
@@ -10,9 +10,14 @@ on:
       - "scripts/photo-qr-stage-a21-5-compact-acceptance-test.mjs"
       - "scripts/photo-qr-stage-a21-6-character-class-audit.mjs"
       - "scripts/photo-qr-stage-a21-6-character-class-audit-test.mjs"
+      - "scripts/append-photo-qr-a217-character-class-evidence.mjs"
+      - "scripts/photo-qr-stage-a21-7-privacy-test.mjs"
+      - "scripts/photo-qr-stage-a21-7-structure-counterfactual.mjs"
+      - "scripts/photo-qr-stage-a21-7-structure-counterfactual-test.mjs"
       - "app/eval/certificate-qr-stage-a21-4-evidence/**"
       - "app/eval/certificate-qr-stage-a21-5-compact-acceptance/**"
       - "app/eval/certificate-qr-stage-a21-6-character-class/**"
+      - "package.json"
       - ".github/workflows/certificate-qr-stage-a21-4-format-audit.yml"
 jobs:
   audit:
@@ -32,6 +37,10 @@ jobs:
         run: node scripts/photo-qr-stage-a21-5-compact-acceptance-test.mjs
       - name: Stage A21.6 character-class invariants
         run: node scripts/photo-qr-stage-a21-6-character-class-audit-test.mjs
+      - name: Stage A21.7 privacy invariants
+        run: node scripts/photo-qr-stage-a21-7-privacy-test.mjs
+      - name: Stage A21.7 parser counterfactual and false-accept invariants
+        run: node scripts/photo-qr-stage-a21-7-structure-counterfactual-test.mjs
       - name: Prior A21.3 attribution invariants
         run: node scripts/photo-qr-stage-a21-3-attribution-test.mjs
       - name: Prior A21.3 evidence invariants
@@ -40,6 +49,6 @@ jobs:
         run: node scripts/photo-qr-stage-a21-2-validity-test.mjs
       - name: Full regression + Next build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: https://a216-build-only.invalid
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: a216-build-only-placeholder-key
+          NEXT_PUBLIC_SUPABASE_URL: https://a217-build-only.invalid
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: a217-build-only-placeholder-key
         run: npm run build
