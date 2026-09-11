@@ -62,8 +62,8 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 ### App main
 - Repo: `massaikimono-commits/vercel-parts-ocr`.
 - Branch: `preview/schedule-ux-20260903`.
-- Current technical HEAD: `08ac0010c2c92498b5fc384a0dff9743c34fd89e`.
-- Previous technical HEAD: `f1742dcc65ea4170e5c8ca6d60acb00a9fbdadb3`.
+- Current technical HEAD: `b711f46e2dfa8e9d2a75d81ff70a4ad0a14b16f7`.
+- Previous technical HEAD: `b2a16f264c76f1766742ea3c2747f648d8ba40c7`.
 - PR #62: Draft / Open / unmerged; base `main`.
 - main SHA: `20a715bf46156282b686a617d6744a040bc17fb3` unchanged.
 - Full ICB-SPEC v1.3 section-by-section app-core audit: COMPLETE under current safe conditions.
@@ -71,22 +71,26 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - This does not classify DB-HOLD/review-only/OCR/final-coordinate items as implemented.
 - Confirmed-spec correction baseline remains `77248cb970bd040f57b21400273b920aab641248`.
 
-#### Latest UX Preview candidate: history/photo continuation hub
-- Classification: technical PASS only; UX adoption HOLD pending Vercel Preview + iPhone hands-on review.
-- Delta `f1742dcc... -> 08ac0010...`: ahead 8 / behind 0.
+#### Latest UX Preview candidate: month mobile visible-row count consistency
+- Classification: technical PASS and performance PASS; UX adoption HOLD pending Vercel Preview + iPhone hands-on review.
+- Delta `b2a16f26... -> b711f46e...`: ahead 7 / behind 0.
 - Final net diff only:
-  - `app/customer-vehicles/history/page.tsx`
-  - `app/customer-vehicles/photos/page.tsx`
-  - `scripts/history-photo-continuation-regression.mjs`
-- Both history and photo pages add `この車両で続ける` with:
-  - `📅 次回予定登録` -> `/schedule/active`
-  - `🧾 記録簿` -> `/inspection`
-- Before navigation, existing vehicle snapshot is saved to `parts-active-vehicle` in both sessionStorage and localStorage.
-- No `/ocr/auto` shortcut and no OCR coupling.
-- No new DB query/RPC/schema/migration/RLS.
-- Full validation workflow run `34549716920`: SUCCESS after correcting workflow dummy env to `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; app logic did not need a fix for the earlier workflow-only failures.
-- Deployment Safety run `34549836962`: SUCCESS on final HEAD `08ac0010c2c92498b5fc384a0dff9743c34fd89e`.
-- `vercel.json` at final HEAD preserves `git.deploymentEnabled=false`.
+  - `app/schedule/month/page.tsx` (1 addition / 1 deletion)
+  - `scripts/month-mobile-visible-row-count-regression.mjs` (new regression)
+- Existing monthly UI already renders `rows.slice(0, 3)` and computes the `ほか n件` count from `rows.length - 3`.
+- Mobile CSS previously hid from the 3rd row onward, effectively showing only 2 rows. It now hides from the 4th row onward so desktop/mobile both expose up to 3 rows and the remainder count is consistent.
+- The change is CSS-only in app runtime; no new DB query, fetch, RPC, listener, MutationObserver, storage write, viewport JS branch, OCR processing, or data-volume change.
+- Dedicated regression locks: three source rows, mobile three-row visibility, removal of the old two-row hide rule, existing remainder calculation, day-link behavior, and no JS viewport/listener/observer/storage coupling.
+- Final audit workflow run `34565308798`: SUCCESS. Workflow push SHA was an intermediate audit commit; PR metadata already pointed to final head.
+- Deployment Safety run `34565372136`: SUCCESS on final HEAD `b711f46e2dfa8e9d2a75d81ff70a4ad0a14b16f7`.
+
+#### Prior UX Preview candidate: week navigation anchor sync
+- Classification: technical PASS and performance PASS; UX adoption HOLD pending Preview + iPhone review.
+- `moveWeek(delta)` keeps `weekStart` and `jumpDay` synchronized; `goCurrentWeek()` synchronizes both to JST today/current week.
+- Month navigation continues to use `/schedule/month?day=<jumpDay>`.
+- Helper bodies remain local-state only; no added Supabase/fetch/loadWeek/location side effect.
+- Regression / Full Build run `34557551129`: SUCCESS.
+- Deployment Safety run `34557638480`: SUCCESS on final HEAD `b2a16f264c76f1766742ea3c2747f648d8ba40c7`.
 
 #### Performance guard — parent spec Section 20
 - Fixed policy: new functions must not make ordinary operation heavy at several-thousand-vehicle scale.
@@ -95,8 +99,8 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - Schedule registration/customer-vehicle/parts history keep bounded initial/search/page sizes.
 - Vehicle photos fetch only the selected vehicle; current photo page remains `PHOTO_PAGE_SIZE = 24`, metadata-only paging, original signed URL created only on explicit open.
 - Integrated history fetches only the selected vehicle and keeps bounded source paging at `SOURCE_PAGE_SIZE = 25` / display page 25.
-- Latest history/photo continuation candidate adds no mount-time fetch, listener, OCR helper, observer, or unbounded list. It only writes a small vehicle snapshot and navigates when the user taps an action.
-- Formal performance classification for latest candidate: no material regression detected by code audit; final perceived-performance confirmation remains part of iPhone Preview review.
+- Latest month-mobile candidate is CSS-only and does not alter data loading or data volume.
+- Final perceived-performance confirmation remains part of iPhone Preview review.
 
 #### Retained technical-PASS Preview candidates
 - schedule detail -> next schedule registration.
@@ -110,6 +114,8 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - customer/vehicle same-tab search-state memory.
 - integrated history source filter.
 - history/photo -> same vehicle next schedule / inspection.
+- week navigation anchor sync.
+- month mobile visible-row count consistency.
 - These remain Preview candidates, not formally UX-adopted until user iPhone acceptance.
 
 - Vercel Preview: HOLD until explicit management GO after deployment-limit/safety clearance.
