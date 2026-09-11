@@ -62,8 +62,8 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 ### App main
 - Repo: `massaikimono-commits/vercel-parts-ocr`.
 - Branch: `preview/schedule-ux-20260903`.
-- Current technical HEAD: `b711f46e2dfa8e9d2a75d81ff70a4ad0a14b16f7`.
-- Previous technical HEAD: `b2a16f264c76f1766742ea3c2747f648d8ba40c7`.
+- Current technical HEAD: `7c4c6dccca4477bd01fc916ac9e35912c39e0b8c`.
+- Previous technical HEAD: `b711f46e2dfa8e9d2a75d81ff70a4ad0a14b16f7`.
 - PR #62: Draft / Open / unmerged; base `main`.
 - main SHA: `20a715bf46156282b686a617d6744a040bc17fb3` unchanged.
 - Full ICB-SPEC v1.3 section-by-section app-core audit: COMPLETE under current safe conditions.
@@ -71,17 +71,30 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - This does not classify DB-HOLD/review-only/OCR/final-coordinate items as implemented.
 - Confirmed-spec correction baseline remains `77248cb970bd040f57b21400273b920aab641248`.
 
-#### Latest UX Preview candidate: month mobile visible-row count consistency
+#### Latest UX Preview candidate: lease maintenance continuation hub
+- Classification: technical PASS and performance PASS; UX adoption HOLD pending Vercel Preview + iPhone hands-on review.
+- Delta `b711f46e... -> 7c4c6dcc...`: ahead 4 / behind 0.
+- Final net diff only:
+  - `app/customer-vehicles/lease-maintenance/page.tsx`
+  - `scripts/lease-maintenance-continue-actions-regression.mjs`
+- Lease maintenance screen now adds `この車両で続ける` with:
+  - `📅 次回予定登録` -> `/schedule/active`
+  - `🧾 記録簿` -> `/inspection`
+- Before navigation, the already-loaded vehicle snapshot is saved to existing `parts-active-vehicle` in both sessionStorage and localStorage.
+- Continue actions are shown only when the target vehicle has loaded.
+- No OCR execution shortcut was added.
+- No new DB query, fetch, RPC, schema, migration, RLS, listener, MutationObserver, or OCR helper was added by the continuation helper; existing lease contract loading/paging remains unchanged.
+- Dedicated regression locks the vehicle-scoped helper, both storage handoffs, both destination routes, vehicle-loaded gating, absence of OCR shortcut, and absence of new query/fetch/listener/observer coupling in the helper.
+- Regression / Full Build workflow run `34570687623`: SUCCESS. Its push SHA is an intermediate CI commit; PR metadata points to final HEAD.
+- Deployment Safety run `34570768822`: SUCCESS on final HEAD `7c4c6dccca4477bd01fc916ac9e35912c39e0b8c`.
+- `vercel.json` at final HEAD preserves `git.deploymentEnabled=false`.
+
+#### Prior UX Preview candidate: month mobile visible-row count consistency
 - Classification: technical PASS and performance PASS; UX adoption HOLD pending Vercel Preview + iPhone hands-on review.
 - Delta `b2a16f26... -> b711f46e...`: ahead 7 / behind 0.
-- Final net diff only:
-  - `app/schedule/month/page.tsx` (1 addition / 1 deletion)
-  - `scripts/month-mobile-visible-row-count-regression.mjs` (new regression)
-- Existing monthly UI already renders `rows.slice(0, 3)` and computes the `ほか n件` count from `rows.length - 3`.
-- Mobile CSS previously hid from the 3rd row onward, effectively showing only 2 rows. It now hides from the 4th row onward so desktop/mobile both expose up to 3 rows and the remainder count is consistent.
-- The change is CSS-only in app runtime; no new DB query, fetch, RPC, listener, MutationObserver, storage write, viewport JS branch, OCR processing, or data-volume change.
-- Dedicated regression locks: three source rows, mobile three-row visibility, removal of the old two-row hide rule, existing remainder calculation, day-link behavior, and no JS viewport/listener/observer/storage coupling.
-- Final audit workflow run `34565308798`: SUCCESS. Workflow push SHA was an intermediate audit commit; PR metadata already pointed to final head.
+- Existing monthly UI renders `rows.slice(0, 3)` and computes `ほか n件` from `rows.length - 3`.
+- Mobile CSS now hides from the 4th row onward, so desktop/mobile both expose up to 3 rows and the remainder count is consistent.
+- Final audit workflow run `34565308798`: SUCCESS.
 - Deployment Safety run `34565372136`: SUCCESS on final HEAD `b711f46e2dfa8e9d2a75d81ff70a4ad0a14b16f7`.
 
 #### Prior UX Preview candidate: week navigation anchor sync
@@ -99,7 +112,7 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - Schedule registration/customer-vehicle/parts history keep bounded initial/search/page sizes.
 - Vehicle photos fetch only the selected vehicle; current photo page remains `PHOTO_PAGE_SIZE = 24`, metadata-only paging, original signed URL created only on explicit open.
 - Integrated history fetches only the selected vehicle and keeps bounded source paging at `SOURCE_PAGE_SIZE = 25` / display page 25.
-- Latest month-mobile candidate is CSS-only and does not alter data loading or data volume.
+- Lease-maintenance continuation adds only a small vehicle snapshot write on user action and does not alter existing DB loading/paging.
 - Final perceived-performance confirmation remains part of iPhone Preview review.
 
 #### Retained technical-PASS Preview candidates
@@ -116,6 +129,7 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - history/photo -> same vehicle next schedule / inspection.
 - week navigation anchor sync.
 - month mobile visible-row count consistency.
+- lease maintenance -> same vehicle next schedule / inspection.
 - These remain Preview candidates, not formally UX-adopted until user iPhone acceptance.
 
 - Vercel Preview: HOLD until explicit management GO after deployment-limit/safety clearance.
@@ -127,7 +141,7 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - Formal Photo QR Decode remains 28/47; 31/47 candidate only; adopted HEAD none.
 - Static workaround branches remain, but iPhone Safari delivery failed; classify as hosting/execution failure, not QR recognition failure.
 - Fixed8 authorization remains unconsumed.
-- Next meaningful action when safe execution path exists: exactly one A21.8 fixed8 real-photo run.
+- Next meaningful action when a safe execution path exists: exactly one A21.8 fixed8 real-photo run.
 
 ### Parts OCR
 - Frozen body: `work/parts-ocr-regression` HEAD `6a31ec4b9028410e90a8dbd9c8b40d53de7742d2`; HOLD.
