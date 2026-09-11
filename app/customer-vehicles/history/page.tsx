@@ -384,6 +384,20 @@ export default function VehicleHistoryPage() {
     ];
   }
 
+  function rememberVehicleAndOpen(path: string) {
+    if (!vehicle) return;
+    const snapshot = JSON.stringify({
+      id: vehicle.id,
+      registration: vehicle.registration_number || "",
+      last4: vehicle.registration_number_last4 || vehicle.registration_last4 || "",
+      chassis: vehicle.chassis_number || "",
+      model: vehicle.model || "",
+    });
+    try { sessionStorage.setItem("parts-active-vehicle", snapshot); } catch {}
+    try { localStorage.setItem("parts-active-vehicle", snapshot); } catch {}
+    location.assign(path);
+  }
+
   async function showMore() {
     if (busy) return;
 
@@ -435,6 +449,16 @@ export default function VehicleHistoryPage() {
       </section>
 
       <div className="notice">{busy && !items.length ? "読み込み中…" : message}</div>
+
+      {vehicle && (
+        <section className="continueCard card">
+          <b>この車両で続ける</b>
+          <div className="continueActions">
+            <button onClick={() => rememberVehicleAndOpen("/schedule/active")}>📅 次回予定登録</button>
+            <button onClick={() => rememberVehicleAndOpen("/inspection")}>🧾 記録簿</button>
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <div className="sectionHead">
@@ -517,8 +541,8 @@ export default function VehicleHistoryPage() {
         .timeline{display:grid;margin-top:10px}.timelineItem{position:relative;display:grid;grid-template-columns:18px minmax(0,1fr);gap:7px}.timelineItem:not(:last-child):before{content:"";position:absolute;left:7px;top:16px;bottom:-1px;width:2px;background:#e1e7ef}.timelineDot{width:14px;height:14px;border:3px solid #fff;border-radius:50%;background:#2f6fe4;box-shadow:0 0 0 1px #b9c9df;margin-top:14px;z-index:1}
         .timelineBody{border:1px solid #dbe3ee;border-radius:13px;padding:11px;margin-bottom:8px;min-width:0}.timelineTop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.timelineTop>div{display:flex;align-items:center;gap:7px;min-width:0}.sourceBadge{font-size:10px;font-weight:900;padding:4px 7px;border-radius:999px;background:#eef4ff;color:#2674e8;white-space:nowrap}.timelineTop>b{font-size:14px}.timelineTop time{font-size:11px;color:#718096;white-space:nowrap}.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11px;color:#657386}
         .timelineBody details{margin-top:7px;border-top:1px solid #edf0f4;padding-top:6px}.timelineBody summary{cursor:pointer;color:#49617d;font-size:11px;font-weight:800}.detailGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:7px}.detailGrid>div{background:#f8fafc;border-radius:9px;padding:8px;min-width:0}.detailGrid .wide{grid-column:1/-1}.detailGrid small{display:block;color:#718096;margin-bottom:4px}.detailGrid pre{margin:0;white-space:pre-wrap;word-break:break-word;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:#364152}
-        .more{display:flex;justify-content:center;margin-top:9px}.empty{margin-top:10px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}
-        @media(max-width:650px){.historyPage{padding:7px 7px 34px}.top{margin-bottom:5px}.top button{min-height:40px;padding:7px 9px}.card{padding:10px;margin-bottom:8px;border-radius:14px}.vehicleCard h1{font-size:19px}.vehicleCard button{min-height:40px;font-size:11px;padding:7px}.notice{font-size:12px;padding:7px 8px;margin-bottom:7px}.sectionHead h2{font-size:18px}.sourceFilters{margin-right:-3px}.sourceFilters button{min-height:40px;padding:7px 11px}.filterNote{font-size:10px}.timeline{margin-top:7px}.timelineItem{grid-template-columns:15px minmax(0,1fr);gap:5px}.timelineItem:not(:last-child):before{left:6px}.timelineDot{width:12px;height:12px;margin-top:13px}.timelineBody{padding:9px;margin-bottom:6px;border-radius:11px}.timelineTop{display:grid;gap:4px}.timelineTop>div{align-items:flex-start}.timelineTop time{font-size:10px}.meta{display:grid;gap:3px}.detailGrid{grid-template-columns:1fr}.detailGrid .wide{grid-column:auto}.more button{width:100%;min-height:42px}}
+        .continueCard{display:flex;align-items:center;justify-content:space-between;gap:10px}.continueActions{display:flex;gap:8px;flex-wrap:wrap}.continueActions button{min-height:40px}.more{display:flex;justify-content:center;margin-top:9px}.empty{margin-top:10px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}
+        @media(max-width:650px){.continueCard{display:grid}.continueActions{display:grid;grid-template-columns:1fr 1fr}.continueActions button{width:100%;font-size:12px;padding:8px}.historyPage{padding:7px 7px 34px}.top{margin-bottom:5px}.top button{min-height:40px;padding:7px 9px}.card{padding:10px;margin-bottom:8px;border-radius:14px}.vehicleCard h1{font-size:19px}.vehicleCard button{min-height:40px;font-size:11px;padding:7px}.notice{font-size:12px;padding:7px 8px;margin-bottom:7px}.sectionHead h2{font-size:18px}.sourceFilters{margin-right:-3px}.sourceFilters button{min-height:40px;padding:7px 11px}.filterNote{font-size:10px}.timeline{margin-top:7px}.timelineItem{grid-template-columns:15px minmax(0,1fr);gap:5px}.timelineItem:not(:last-child):before{left:6px}.timelineDot{width:12px;height:12px;margin-top:13px}.timelineBody{padding:9px;margin-bottom:6px;border-radius:11px}.timelineTop{display:grid;gap:4px}.timelineTop>div{align-items:flex-start}.timelineTop time{font-size:10px}.meta{display:grid;gap:3px}.detailGrid{grid-template-columns:1fr}.detailGrid .wide{grid-column:auto}.more button{width:100%;min-height:42px}}
       `}</style>
     </main>
   );

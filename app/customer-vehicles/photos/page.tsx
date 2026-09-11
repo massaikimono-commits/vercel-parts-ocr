@@ -124,6 +124,21 @@ export default function VehiclePhotoHistoryPage() {
     return { rows: (data || []) as VehiclePhotoRow[] };
   }
 
+  function rememberVehicleAndOpen(path: string) {
+    if (!vehicle) return;
+    const snapshot = JSON.stringify({
+      id: vehicle.id,
+      number: vehicle.vehicle_number || "",
+      registration: vehicle.registration_number || "",
+      last4: vehicle.registration_number_last4 || vehicle.registration_last4 || "",
+      chassis: vehicle.chassis_number || "",
+      model: vehicle.model || "",
+    });
+    try { sessionStorage.setItem("parts-active-vehicle", snapshot); } catch {}
+    try { localStorage.setItem("parts-active-vehicle", snapshot); } catch {}
+    location.assign(path);
+  }
+
   async function loadMore() {
     if (!vehicleId || busy || !hasMore) return;
     setBusy(true);
@@ -171,6 +186,16 @@ export default function VehiclePhotoHistoryPage() {
         </div>
         <button onClick={() => location.assign("/customer-vehicles")}>顧客・車両管理</button>
       </section>
+
+      {vehicle && (
+        <section className="continueCard card">
+          <b>この車両で続ける</b>
+          <div className="continueActions">
+            <button onClick={() => rememberVehicleAndOpen("/schedule/active")}>📅 次回予定登録</button>
+            <button onClick={() => rememberVehicleAndOpen("/inspection")}>🧾 記録簿</button>
+          </div>
+        </section>
+      )}
 
       <section className="card foundationNotice">
         <b>写真保存機能の土台</b>
@@ -229,9 +254,9 @@ export default function VehiclePhotoHistoryPage() {
         button{font:inherit;border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 12px;font-weight:800}
         button:disabled{opacity:.5}.photoPage{max-width:920px;margin:0 auto;padding:16px 14px 50px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
         .card{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:16px;margin-bottom:12px}.hero{display:flex;justify-content:space-between;align-items:center;gap:12px}.hero>div{display:grid;gap:3px}.hero span{font-size:12px;color:#2674e8;font-weight:900}.hero h1{font-size:25px;line-height:1.2;margin:0}.hero small{color:#6b7789}
-        .foundationNotice{background:#fff8df;border-color:#ead88f}.foundationNotice p{margin:5px 0;color:#625d4d;line-height:1.5}.foundationNotice small{color:#746d57}.sectionHead{display:flex;align-items:center;justify-content:space-between;gap:10px}.sectionHead h2{margin:0;font-size:21px}.sectionHead span{font-size:12px;background:#eef4ff;color:#2674e8;border-radius:999px;padding:5px 8px}.notice{margin-top:8px;padding:8px 10px;background:#f5f8fc;border-radius:10px;color:#53647b;font-size:13px}
+        .continueCard{display:flex;align-items:center;justify-content:space-between;gap:10px}.continueActions{display:flex;gap:8px;flex-wrap:wrap}.continueActions button{min-height:40px}.foundationNotice{background:#fff8df;border-color:#ead88f}.foundationNotice p{margin:5px 0;color:#625d4d;line-height:1.5}.foundationNotice small{color:#746d57}.sectionHead{display:flex;align-items:center;justify-content:space-between;gap:10px}.sectionHead h2{margin:0;font-size:21px}.sectionHead span{font-size:12px;background:#eef4ff;color:#2674e8;border-radius:999px;padding:5px 8px}.notice{margin-top:8px;padding:8px 10px;background:#f5f8fc;border-radius:10px;color:#53647b;font-size:13px}
         .photoList{display:grid;gap:8px;margin-top:10px}.photoRow{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid #dbe3ee;border-radius:13px;padding:10px}.photoPlaceholder{width:64px;height:52px;border-radius:9px;background:#eef2f7;color:#7e8998;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900}.photoMeta{display:grid;gap:4px;min-width:0}.photoMeta>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.photoMeta>div{display:flex;gap:8px;flex-wrap:wrap;color:#5f6b7a;font-size:12px}.photoMeta small{color:#8994a3}.empty{margin-top:10px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}.actions{display:flex;justify-content:center;margin-top:10px}
-        @media(max-width:650px){.photoPage{padding:7px 7px 34px}.top{margin-bottom:5px}.top button{min-height:40px;padding:7px 9px}.card{padding:11px;margin-bottom:8px;border-radius:14px}.hero{align-items:flex-start}.hero h1{font-size:20px}.hero button{min-height:40px;padding:7px 9px;font-size:12px}.foundationNotice{padding:9px 10px}.foundationNotice p{font-size:12px}.foundationNotice small{font-size:11px}.photoRow{grid-template-columns:52px minmax(0,1fr);padding:8px;gap:8px}.photoPlaceholder{width:52px;height:46px}.photoRow>button{grid-column:1/-1;min-height:40px}.sectionHead h2{font-size:18px}.notice{font-size:12px;padding:7px 8px}}
+        @media(max-width:650px){.continueCard{display:grid}.continueActions{display:grid;grid-template-columns:1fr 1fr}.continueActions button{width:100%;font-size:12px;padding:8px}.photoPage{padding:7px 7px 34px}.top{margin-bottom:5px}.top button{min-height:40px;padding:7px 9px}.card{padding:11px;margin-bottom:8px;border-radius:14px}.hero{align-items:flex-start}.hero h1{font-size:20px}.hero button{min-height:40px;padding:7px 9px;font-size:12px}.foundationNotice{padding:9px 10px}.foundationNotice p{font-size:12px}.foundationNotice small{font-size:11px}.photoRow{grid-template-columns:52px minmax(0,1fr);padding:8px;gap:8px}.photoPlaceholder{width:52px;height:46px}.photoRow>button{grid-column:1/-1;min-height:40px}.sectionHead h2{font-size:18px}.notice{font-size:12px;padding:7px 8px}}
       `}</style>
     </main>
   );
