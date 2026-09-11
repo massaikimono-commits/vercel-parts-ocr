@@ -1,0 +1,25 @@
+name: Daily schedule parent spec repair
+on:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Regression
+        run: |
+          node scripts/daily-schedule-parent-spec-navigation-regression.mjs
+          npm run test:security
+          npm run test:app-core-safety
+      - name: Full build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_dummy
+        run: npx next build
