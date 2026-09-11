@@ -1,35 +1,62 @@
 # ICB Deployment Governance Incident — 2026-09-11
 
-Status: OPEN
-Severity: HIGH
+Status: CONTAINED — NORMAL GITHUB DEVELOPMENT RESUMED / PREVIEW RE-ENABLE VALIDATION OPEN
+Severity: HIGH (incident), current automatic-deployment risk contained
 Owner: ICB app overall management
 Scope: Vercel project `vercel-parts-ocr` / repo `massaikimono-commits/vercel-parts-ocr`
 
 ## Incident definition
 
-Vercel deployment governance failed because GitHub pushes across app/OCR experiment/eval branches generated Vercel Deployment records, including CANCELED records, and previously exhausted or threatened the Hobby deployment limit. Deployment Safety is therefore not defined as “management did not intentionally create a Preview”. The required definition is: **no unintended new Vercel Deployment record is generated**.
-
-READY, CANCELED, ERROR and skipped/ignored-equivalent records are all in scope for auditing.
+GitHub pushes across app/OCR experiment/eval branches generated Vercel Deployment records, including CANCELED records, and previously exhausted or threatened the Hobby deployment limit. Deployment Safety is therefore defined as: **no unintended new Vercel Deployment record is generated**. READY, CANCELED, ERROR and skipped/ignored-equivalent records are all audit scope.
 
 ## Historical configuration evidence
 
 - 2026-08-27 commit `dff03bf4f2dc3abfb7c53c1b3767d845ebcb9469` introduced `ignoreCommand` using a `[deploy]` commit-message gate.
 - 2026-09-02 commit `44928ded4e1d0f8ce35bd94507b3da46fdadc0c2` added `git.deploymentEnabled=false` while retaining the old `ignoreCommand` gate.
-- Current active app / vehicle OCR eval / parts OCR source+eval branches audited on 2026-09-11 all carry `git.deploymentEnabled=false` and the legacy `ignoreCommand` simultaneously.
+- This created redundant deployment control and an obsolete `[deploy]` operational path.
 
-## Target operating model
+## Corrected operating model
 
 Normal GitHub push -> Vercel Deployment records: 0.
 
 Preview needed -> management GO -> exact target HEAD -> exactly one explicit deployment.
 
-Do not use small-change Preview deployments.
+`git.deploymentEnabled=false` is now the single repository-level Git auto-deployment lock. The legacy Vercel `ignoreCommand` / `[deploy]` marker gate has been removed from the active app, management, vehicle-OCR eval, parts-OCR source and parts-OCR eval lanes. Deployment Safety regression now rejects reintroduction of `ignoreCommand`.
 
-`git.deploymentEnabled=false` is the preferred central control. The legacy `ignoreCommand` / `[deploy]` marker mechanism is pending controlled retirement after Vercel project-setting audit and a zero-deployment push test. Do not disconnect GitHub integration unless keeping the integration while achieving zero automatic deployments is shown to be impossible.
+GitHub Integration remains connected. Disconnect is not needed because zero automatic deployments has been measured with the integration retained.
+
+## 2026-09-11 measured validation
+
+Initial independent 24-hour audit returned 4 Vercel Deployment records: 4 CANCELED, 0 READY, 0 ERROR. All four were tied to earlier OCR experiment/eval pushes.
+
+Controlled GitHub pushes were then performed after confirming `git.deploymentEnabled=false` across the active lanes. The legacy gate and its regression contract were retired. During and after the following active-lane pushes, Vercel returned **0 new Deployment records** for the validation window beginning 2026-09-11 18:30 JST:
+
+- app branch `preview/schedule-ux-20260903`
+- management branch `management/icb-control-plane-20260910`
+- vehicle OCR eval branch `eval/certificate-qr-stage-a21-4-format-counterfactual`
+- parts OCR source branch `experiment/parts-ocr-stage-a22-cell-crop-correction`
+- parts OCR eval branch `eval/parts-ocr-stage-a22-cell-crop-correction`
+
+App Deployment Safety initially failed because the old regression still required the obsolete `ignoreCommand`; that regression was corrected to require `git.deploymentEnabled=false` and reject `ignoreCommand`. App Deployment Safety run `34585226425` then completed SUCCESS on app infrastructure HEAD `8a5796834ac0dd43ef56e94a2a75557a57ef5d2a`.
+
+This is measured evidence that ordinary GitHub development pushes can resume without consuming Vercel Deployment records under the current active-lane configuration.
+
+## Development / Preview state
+
+- Normal GitHub development: RESUMED.
+- New app/UX implementation work: RESUMED, subject to normal spec/safety rules.
+- OCR experiment/eval GitHub work: RESUMED where the lane itself is otherwise GO; Frozen OCR bodies remain HOLD.
+- Vercel Preview: still HOLD until one exact-HEAD explicit Preview method is selected and verified. This does not block normal GitHub development.
+- Vercel Production: HOLD.
+- Netlify Production: HOLD.
+- main merge: HOLD.
+- shared Supabase mutation: HOLD.
+- OCR Frozen branches: HOLD / unchanged.
+- legal_3m: HOLD.
 
 ## Mandatory management audit
 
-At management start and before Preview GO, inspect:
+At management start and before Preview GO, inspect where tooling permits:
 
 - Vercel project state
 - deployments in the preceding 24 hours
@@ -37,59 +64,21 @@ At management start and before Preview GO, inspect:
 - source branches / commit SHAs
 - Production target changes
 - current `vercel.json`
-- relevant Git Integration / project settings when accessible
+- relevant Git Integration / project settings
 - whether ordinary pushes generated any deployment record
 
 If an unintended deployment appears, stop additional pushes in the affected lane and investigate first.
 
-## 2026-09-11 live audit snapshot
+## Remaining Preview re-enable condition
 
-At the first independent management re-audit after escalation, the connected Vercel project was confirmed as `vercel-parts-ocr` on Hobby plan. In the preceding 24-hour query window, 4 Deployment records were returned and all 4 were CANCELED; no READY or ERROR record was returned in that window. All four records were associated with OCR experiment/eval GitHub pushes. This indicates the earlier >100/24h flood has rolled out of the current 24-hour window, but it does **not** by itself close the incident or authorize Preview.
+Automatic-deployment containment is complete and normal development is resumed. The remaining infrastructure validation is Preview-specific: before the next real-device test, confirm the exact explicit deployment path, exact branch/HEAD, current 24-hour deployment state, then create exactly one Preview and verify Vercel Production remains unchanged.
 
-## Immediate HOLD
-
-Until closure criteria are met:
-
-- Vercel Preview: HOLD except a management-approved controlled validation/deployment step
-- Vercel Production: HOLD
-- Netlify Production: HOLD
-- main merge: HOLD
-- shared Supabase mutation: HOLD
-- OCR Frozen branches: HOLD / unchanged
-- legal_3m: HOLD
-- additional UX candidate development is lower priority than this incident
-
-## Closure criteria
-
-Do not close until all are satisfied:
-
-- direct cause of mass Deployment creation is documented
-- historical cause commits/settings are documented
-- Vercel project settings are independently audited to the extent tooling allows
-- ordinary Git push -> 0 new Deployment records is measured
-- legacy `ignoreCommand` / `[deploy]` mechanism is retired or a documented reason to retain it is approved
-- automatic deployment flood is confirmed stopped
-- current preceding-24h deployment state is reviewed
-- availability of the required Preview is determined
-- when authorized, exactly one required Preview is created successfully
-- Vercel Production unchanged
-- Netlify Production unchanged
-- main unchanged
-- shared Supabase unchanged
-- OCR Frozen unchanged
-- Management Control Plane references this incident and its new audit definition
-- Deployment Governance is added to the next parent-spec revision
-- future management handoffs carry these rules
+Do not use `vercel deploy`, Deploy Hooks, Git marker commits, or another deployment path speculatively.
 
 ## Parent-spec next-version requirement
 
-The next ICB-SPEC revision must add a formal `Deployment Governance / 共通インフラ運用` section that fixes at minimum:
+The required next-spec text is staged in `docs/ICB_SPEC_NEXT_DEPLOYMENT_GOVERNANCE_ADDENDUM.md` and must be integrated into the next formal ICB-SPEC revision.
 
-1. ordinary Git push must not create Vercel deployments
-2. Preview only on management GO
-3. no small-change Preview spam
-4. inspect preceding-24h deployment state before Preview
-5. audit CANCELED / ERROR as well as READY
-6. management approval required for `vercel.json`, Git Integration, `deploymentEnabled`, `ignoreCommand`, Deploy Hooks, Git auto deployment, Production Branch, project settings, and CLI/API deployment method changes
-7. control changes must document old -> new -> conflict check -> old-control removal -> measured validation
-8. configuration-only review is insufficient; measured ordinary push -> 0 Deployment records is required for PASS
+## Reopen condition
+
+If any ordinary GitHub push creates a new Vercel Deployment record, immediately classify this incident OPEN/HIGH again, stop pushes in the affected lane, and investigate before continuing.
