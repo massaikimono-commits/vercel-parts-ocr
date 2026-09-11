@@ -1,0 +1,61 @@
+name: Lease maintenance continue actions batch
+on:
+  push:
+    branches:
+      - preview/schedule-ux-20260903
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co"
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_dummy_for_build_only"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Apply candidate
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/customer-vehicles/lease-maintenance/page.tsx')
+          s=p.read_text()
+          marker='  async function openSourceDocument(contract: LeaseContract) {'
+          helper='''  function rememberVehicleAndOpen(path: string) {\n    if (!vehicle) return;\n    const snapshot = JSON.stringify({\n      id: vehicle.id,\n      registration: vehicle.registration_number || "",\n      last4: vehicle.registration_number_last4 || vehicle.registration_last4 || "",\n      chassis: vehicle.chassis_number || "",\n      model: vehicle.model || "",\n    });\n    try { sessionStorage.setItem("parts-active-vehicle", snapshot); } catch {}\n    try { localStorage.setItem("parts-active-vehicle", snapshot); } catch {}\n    location.assign(path);\n  }\n\n'''
+          if marker not in s: raise SystemExit('helper insertion target not found')
+          if 'function rememberVehicleAndOpen(path: string)' not in s:
+              s=s.replace(marker, helper+marker, 1)
+          notice='      <div className="notice">{busy ? "読み込み中…" : message}</div>\n\n'
+          card='''      {vehicle && (\n        <section className="continueCard card">\n          <b>この車両で続ける</b>\n          <div className="continueActions">\n            <button onClick={() => rememberVehicleAndOpen("/schedule/active")}>📅 次回予定登録</button>\n            <button onClick={() => rememberVehicleAndOpen("/inspection")}>🧾 記録簿</button>\n          </div>\n        </section>\n      )}\n\n'''
+          if notice not in s: raise SystemExit('continue card insertion target not found')
+          if '<section className="continueCard card">' not in s:
+              s=s.replace(notice, notice+card, 1)
+          css='.notice{background:#eef5ff;border:1px solid #d6e6fb;color:#40546e;border-radius:11px;padding:9px 11px;margin-bottom:10px;font-size:13px}.sectionHead'
+          css_new='.notice{background:#eef5ff;border:1px solid #d6e6fb;color:#40546e;border-radius:11px;padding:9px 11px;margin-bottom:10px;font-size:13px}.continueCard{display:flex;align-items:center;justify-content:space-between;gap:10px}.continueActions{display:flex;gap:8px;flex-wrap:wrap}.continueActions button{min-height:40px}.sectionHead'
+          if css not in s and '.continueCard{display:flex' not in s: raise SystemExit('desktop css insertion target not found')
+          s=s.replace(css, css_new, 1)
+          mobile='@media(max-width:650px){.leasePage'
+          mobile_new='@media(max-width:650px){.continueCard{display:grid}.continueActions{display:grid;grid-template-columns:1fr 1fr}.continueActions button{width:100%;font-size:12px;padding:8px}.leasePage'
+          if mobile not in s and '.continueActions{display:grid;grid-template-columns:1fr 1fr}' not in s: raise SystemExit('mobile css insertion target not found')
+          s=s.replace(mobile, mobile_new, 1)
+          p.write_text(s)
+          PY
+      - run: npm ci
+      - name: Regression
+        run: |
+          node scripts/lease-maintenance-continue-actions-regression.mjs
+          node scripts/security-regression.mjs
+          node scripts/app-core-safety-regression.mjs
+      - name: Full build
+        run: npm run build
+      - name: Commit intended source only
+        run: |
+          git checkout -- next-env.d.ts tsconfig.json public/tesseract || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/customer-vehicles/lease-maintenance/page.tsx
+          git diff --cached --quiet || git commit -m "ux: add lease maintenance continue actions [skip ci]"
+          git push
