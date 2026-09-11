@@ -74,6 +74,7 @@ type CustomerForm = {
 
 const ACTIVE_KEY = "parts-active-vehicle";
 const PARTS_KEY = "parts-data";
+const SEARCH_STATE_KEY = "customer-vehicles-search-state";
 
 const blankCustomer: CustomerForm = {
   id: "",
@@ -183,6 +184,7 @@ export default function CustomerVehiclesPage() {
   const [selectedCustomerSnapshot, setSelectedCustomerSnapshot] = useState<Customer | null>(null);
   const [query, setQuery] = useState("");
   const [vehicleSearchMode, setVehicleSearchMode] = useState<VehicleSearchMode>("last4");
+  const [searchStateReady, setSearchStateReady] = useState(false);
   const [busy, setBusy] = useState(true);
   const [vehicleOffset, setVehicleOffset] = useState(0);
   const [vehicleHasMore, setVehicleHasMore] = useState(false);
@@ -203,11 +205,30 @@ export default function CustomerVehiclesPage() {
   const linkCustomerLoadSeq = useRef(0);
 
   useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(SEARCH_STATE_KEY) || "null");
+      if (typeof saved?.query === "string") setQuery(saved.query);
+      if (["last4", "customer", "phone"].includes(saved?.mode)) {
+        setVehicleSearchMode(saved.mode as VehicleSearchMode);
+      }
+    } catch {}
+    setSearchStateReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!searchStateReady) return;
+    try {
+      sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify({ query, mode: vehicleSearchMode }));
+    } catch {}
+  }, [query, vehicleSearchMode, searchStateReady]);
+
+  useEffect(() => {
+    if (!searchStateReady) return;
     const timer = window.setTimeout(() => {
       void loadVehicleList(query, false, vehicleSearchMode);
     }, query.trim() ? 300 : 0);
     return () => window.clearTimeout(timer);
-  }, [query, vehicleSearchMode]);
+  }, [query, vehicleSearchMode, searchStateReady]);
 
   useEffect(() => {
     if (!selectedVehicleId) {
@@ -785,6 +806,7 @@ export default function CustomerVehiclesPage() {
         {query.trim() && (
           <button type="button" className="clearSearch" onClick={() => setQuery("")}>検索をクリア</button>
         )}
+        <small className="searchStateHint">検索条件はこのタブ内で保持します。</small>
         <div className="actions bulkImportAction">
           <button onClick={() => location.assign("/customer-vehicles/bulk-import")}>📄 複数PDFをまとめて登録</button>
         </div>
