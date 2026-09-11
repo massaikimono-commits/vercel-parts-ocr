@@ -1,0 +1,37 @@
+name: Parts OCR corrected rescore v2
+
+on:
+  push:
+    branches:
+      - eval/parts-ocr-corrected-rescore-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrity-and-build:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder-key
+      NEXT_PUBLIC_EVAL_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Evaluation integrity v2
+        run: node scripts/validate-ocr-evaluation-integrity-v2.mjs
+      - name: Parts regression
+        run: node scripts/parts-slip-regression.mjs
+      - name: Layout semantics
+        run: node scripts/parts-layout-semantics-regression.mjs
+      - name: A22 GT isolation and invariants
+        run: node scripts/stage-a22-invariant-audit.mjs
+      - name: A22 static crop audit
+        run: node scripts/stage-a22-static-crop-audit.mjs
+      - name: Install dependencies
+        run: npm install
+      - name: Full Next build
+        run: npm run build

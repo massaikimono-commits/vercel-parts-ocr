@@ -4,6 +4,7 @@
 import { useRef, useState } from "react";
 import { adaptiveColumns, detectPaperBox, getA19DynamicRows, makeCellCrop, orientedCanvas } from "../stage-a20/a19-table-crops";
 import { FORMAL_A19_GT } from "../stage-a20/formal-gt";
+import { downloadPredictionExport,relationFor,rowsFromCells,type StagePredictionExport } from "../corrected-rescore/prediction-export";
 import { getModelStats, recognizeOnnx, recognizeTess, type FieldKey } from "../stage-a20/recognition";
 import { analyzeCellCrop } from "./crop-diagnostics";
 
@@ -219,6 +220,13 @@ export default function RealImageAudit({ deployedHead }: { deployedHead: string 
     }
   }
 
+  function exportPredictions() {
+    if (!result) return;
+    const imageId = "IMG_0684", relation = relationFor(imageId);
+    const payload: StagePredictionExport = { schema:"icb.parts-ocr.prediction-export.v2", stage:"A21", timestamp:new Date().toISOString(), runtimeConfigIdentifier:`stage-a21-targeted-cell-root-cause.v3@${deployedHead}`, gtIncluded:false, images:[{ imageId, ...relation, engines:Object.fromEntries(ENGINES.map((engine) => [engine,{rows:rowsFromCells(result.cells,engine),processingTimeMs:null,error:null}])) }] };
+    downloadPredictionExport(payload); setCopyStatus("GTなしprediction JSONを保存しました。");
+  }
+
   return <section style={{ background: "#fff", border: "1px solid #dbe2ec", borderRadius: 16, padding: 14, marginBottom: 12 }}>
     <h2>Targeted real-cell diagnostic</h2>
     <p>正式黄色12枚を一括選択してください。UIが既存formal mappingに従って対象を自動識別し、対象1枚だけを診断します。</p>
@@ -228,6 +236,7 @@ export default function RealImageAudit({ deployedHead }: { deployedHead: string 
     </button>
     <div style={{ marginTop: 8, fontSize: 13 }}>{status}</div>
     {result && <>
+      <button onClick={exportPredictions} style={{ width:"100%", marginTop:12, border:0, borderRadius:12, padding:13, background:"#0f766e", color:"#fff", fontWeight:900 }}>GTなしprediction JSONを保存</button>
       <button onClick={async () => { await copyText(buildManagementSummary(result)); setCopyStatus("総合管理用短縮summaryをコピーしました。"); }} style={{ width: "100%", marginTop: 12, border: 0, borderRadius: 12, padding: 13, background: "#176b2c", color: "#fff", fontWeight: 900 }}>
         総合管理用短縮summaryをコピー
       </button>

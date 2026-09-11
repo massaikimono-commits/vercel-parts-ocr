@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://icb.local/schemas/ocr-evaluation-manifest.v2.json",
+  "title": "ICB OCR evaluation manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "setType", "annotationVersion", "documents", "captures", "historicalFixtures"],
+  "properties": {
+    "schemaVersion": { "const": "2.0.0" },
+    "setType": { "const": "REGRESSION" },
+    "annotationVersion": { "type": "string", "minLength": 1 },
+    "documents": { "type": "array", "items": { "$ref": "#/$defs/document" } },
+    "captures": { "type": "array", "items": { "$ref": "#/$defs/capture" } },
+    "historicalFixtures": { "type": "array", "items": { "$ref": "#/$defs/historicalFixture" } }
+  },
+  "$defs": {
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rowId", "partName", "qty", "retail", "cost"],
+      "properties": {
+        "rowId": { "type": "string", "minLength": 1 },
+        "partName": { "type": "string", "minLength": 1 },
+        "qty": { "type": "string", "minLength": 1 },
+        "retail": { "type": "string", "minLength": 1 },
+        "cost": { "type": "string", "minLength": 1 }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["documentId", "documentFamily", "physicalRowCount", "rows", "fieldGT", "sourceOfTruth", "annotationVersion", "reviewStatus", "reviewer", "reviewedAt", "notes"],
+      "properties": {
+        "documentId": { "type": "string", "pattern": "^YD-[0-9]{3}$" },
+        "documentFamily": { "const": "yellow-parts-slip" },
+        "physicalRowCount": { "type": "integer", "minimum": 1 },
+        "rows": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "fieldGT": { "type": "string", "pattern": "^parts-yellow-corrected-scoring-only\\.2#YD-[0-9]{3}$" },
+        "sourceOfTruth": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "annotationVersion": { "type": "string", "minLength": 1 },
+        "reviewStatus": { "const": "CONFIRMED" },
+        "reviewer": { "type": "string", "minLength": 1 },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      }
+    },
+    "documentInCapture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["documentId", "documentRegion", "visibleRowCount", "visibleRowIds"],
+      "properties": {
+        "documentId": { "type": "string", "pattern": "^YD-[0-9]{3}$" },
+        "documentRegion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y", "width", "height", "coordinateSpace"],
+          "properties": {
+            "x": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "y": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "width": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "height": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "coordinateSpace": { "const": "normalized-review-copy" }
+          }
+        },
+        "visibleRowCount": { "type": "integer", "minimum": 1 },
+        "visibleRowIds": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["captureId", "imageId", "reviewCopyHash", "historicalEvaluationHash", "documentsInCapture", "captureVisibleRowCount", "subset", "sourceOfTruth", "annotationVersion", "reviewStatus", "reviewer", "reviewedAt", "notes"],
+      "properties": {
+        "captureId": { "type": "string", "minLength": 1 },
+        "imageId": { "type": "string", "pattern": "^IMG_0[0-9]{3}$" },
+        "reviewCopyHash": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+        "historicalEvaluationHash": { "type": "null" },
+        "documentsInCapture": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/documentInCapture" } },
+        "captureVisibleRowCount": { "type": "integer", "minimum": 1 },
+        "subset": { "enum": ["SINGLE_DOCUMENT", "MULTI_DOCUMENT_COMPOSITE"] },
+        "sourceOfTruth": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "annotationVersion": { "type": "string", "minLength": 1 },
+        "reviewStatus": { "const": "CONFIRMED" },
+        "reviewer": { "type": "string", "minLength": 1 },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      }
+    },
+    "historicalFixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixtureId", "historicalInvalid", "invalidReason", "affectedImages", "replacedBy", "runtimeUse"],
+      "properties": {
+        "fixtureId": { "type": "string", "minLength": 1 },
+        "historicalInvalid": { "const": true },
+        "invalidReason": { "type": "string", "minLength": 1 },
+        "affectedImages": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "replacedBy": { "type": "string", "minLength": 1 },
+        "runtimeUse": { "const": false }
+      }
+    }
+  }
+}

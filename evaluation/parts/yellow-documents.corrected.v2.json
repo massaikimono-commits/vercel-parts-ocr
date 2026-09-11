@@ -1,0 +1,55 @@
+{
+  "fixtureVersion": "parts-yellow-corrected-scoring-only.2",
+  "gtScoringOnly": true,
+  "runtimeUse": false,
+  "documents": {
+    "YD-001": [
+      {"rowId":"YD-001-R01","partName":"F/ワイパーラバー","qty":"1","retail":"900","cost":"405"},
+      {"rowId":"YD-001-R02","partName":"F/ワイパーラバー","qty":"1","retail":"1000","cost":"450"},
+      {"rowId":"YD-001-R03","partName":"R/ワイパーラバー","qty":"1","retail":"900","cost":"405"},
+      {"rowId":"YD-001-R04","partName":"ファンベルト","qty":"1","retail":"5070","cost":"2410"},
+      {"rowId":"YD-001-R05","partName":"クリーンフィルター","qty":"1","retail":"2100","cost":"1260"},
+      {"rowId":"YD-001-R06","partName":"キーレスデンチ","qty":"1","retail":"460","cost":"270"}
+    ],
+    "YD-002": [
+      {"rowId":"YD-002-R01","partName":"バルブカバーG/K","qty":"1","retail":"1210","cost":"1029"},
+      {"rowId":"YD-002-R02","partName":"スパークプラグ","qty":"4","retail":"2700","cost":"1740"},
+      {"rowId":"YD-002-R03","partName":"キャンバーガスケット","qty":"1","retail":"410","cost":"246"},
+      {"rowId":"YD-002-R04","partName":"ショック","qty":"2","retail":"9630","cost":"6741"},
+      {"rowId":"YD-002-R05","partName":"ショックアブソーバーブッシュ","qty":"4","retail":"850","cost":"105"}
+    ],
+    "YD-003": [
+      {"rowId":"YD-003-R01","partName":"ウォーターポンプ","qty":"1","retail":"10300","cost":"6650"},
+      {"rowId":"YD-003-R02","partName":"ロワボールブーツ","qty":"2","retail":"1060","cost":"552"}
+    ],
+    "YD-004": [
+      {"rowId":"YD-004-R01","partName":"ファンベルト","qty":"1","retail":"2250","cost":"1025"},
+      {"rowId":"YD-004-R02","partName":"クーラーベルト","qty":"1","retail":"1540","cost":"710"}
+    ],
+    "YD-005": [
+      {"rowId":"YD-005-R01","partName":"F/ワイパーラバー","qty":"1","retail":"420","cost":"338"},
+      {"rowId":"YD-005-R02","partName":"F/ワイパーラバー","qty":"1","retail":"640","cost":"360"},
+      {"rowId":"YD-005-R03","partName":"R/ワイパーラバー","qty":"1","retail":"420","cost":"293"},
+      {"rowId":"YD-005-R04","partName":"F/ブレーキホース:LH","qty":"1","retail":"2500","cost":"2125"},
+      {"rowId":"YD-005-R05","partName":"F/ブレーキホース","qty":"1","retail":"2500","cost":"2125"},
+      {"rowId":"YD-005-R06","partName":"R/ブレーキホース","qty":"2","retail":"1820","cost":"1547"}
+    ],
+    "YD-006": [
+      {"rowId":"YD-006-R01","partName":"クリーンフィルター","qty":"1","retail":"2100","cost":"1260"},
+      {"rowId":"YD-006-R02","partName":"ブレーキホースP/K","qty":"2","retail":"310","cost":"196"}
+    ]
+  },
+  "captureDocumentOrder": {
+    "IMG_0675":["YD-001"],"IMG_0676":["YD-001"],"IMG_0677":["YD-001"],
+    "IMG_0678":["YD-002"],"IMG_0679":["YD-002"],
+    "IMG_0680":["YD-003"],"IMG_0681":["YD-003"],
+    "IMG_0682":["YD-004"],"IMG_0683":["YD-004"],
+    "IMG_0684":["YD-005","YD-006"],"IMG_0685":["YD-005","YD-006"],"IMG_0686":["YD-005","YD-006"]
+  },
+  "historicalLineage": {
+    "fixtureId":"stage-a20/formal-gt.ts@cdec6c4232e39f9ecacd83caa1af7aee397fb6a4",
+    "historicalInvalid":true,
+    "invalidReason":"cross-document GT duplication for IMG_0682 and IMG_0683; composite captures not document-separated",
+    "replacedBy":"parts-yellow-corrected-scoring-only.2"
+  }
+}
