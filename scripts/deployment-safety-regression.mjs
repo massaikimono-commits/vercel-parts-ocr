@@ -30,9 +30,7 @@ if (!fs.existsSync(netlifyPath)) {
   }
 
   if (netlify.includes("[deploy netlify]'")) {
-    fail(
-      "Bare [deploy netlify] marker must not be used. Preview and production must have separate explicit markers."
-    );
+    fail("Bare [deploy netlify] marker must not be used. Preview and production must have separate explicit markers.");
   }
 }
 
@@ -48,53 +46,30 @@ if (!fs.existsSync(vercelPath)) {
 
   if (vercel) {
     if (vercel?.git?.deploymentEnabled !== false) {
-      fail(
-        "Vercel Git auto-deploy must stay disabled (git.deploymentEnabled=false)."
-      );
+      fail("Vercel Git auto-deploy must stay disabled (git.deploymentEnabled=false).");
     }
-
-    const normalizedIgnoreCommand =
-      typeof vercel.ignoreCommand === "string"
-        ? vercel.ignoreCommand.replace(/\\/g, "")
-        : "";
-
-    if (!normalizedIgnoreCommand.includes("[deploy]")) {
-      fail(
-        "Vercel ignored-build guard is missing. Manual release commits must remain explicit."
-      );
+    if (Object.prototype.hasOwnProperty.call(vercel, "ignoreCommand")) {
+      fail("Legacy Vercel ignoreCommand/[deploy] gate must stay retired. deploymentEnabled=false is the single Git auto-deploy lock.");
     }
   }
 }
 
 const workflowDir = ".github/workflows";
 if (fs.existsSync(workflowDir)) {
-  const riskyPatterns = [
-    /\bnetlify\s+deploy\b/i,
-    /\bvercel\s+deploy\b/i,
-    /\bvercel\s+--prod\b/i,
-    /\bnpx\s+vercel\b/i,
-  ];
-
+  const riskyPatterns = [/\bnetlify\s+deploy\b/i, /\bvercel\s+deploy\b/i, /\bvercel\s+--prod\b/i, /\bnpx\s+vercel\b/i];
   for (const file of fs.readdirSync(workflowDir)) {
     const fullPath = `${workflowDir}/${file}`;
     if (!fs.statSync(fullPath).isFile()) continue;
-
     const body = fs.readFileSync(fullPath, "utf8");
     for (const pattern of riskyPatterns) {
-      if (pattern.test(body)) {
-        fail(
-          `Potential direct deployment command found in ${fullPath}: ${pattern}`
-        );
-      }
+      if (pattern.test(body)) fail(`Potential direct deployment command found in ${fullPath}: ${pattern}`);
     }
   }
 }
 
 if (errors.length > 0) {
   console.error("Deployment safety check FAILED:");
-  for (const error of errors) {
-    console.error(`- ${error}`);
-  }
+  for (const error of errors) console.error(`- ${error}`);
   process.exit(1);
 }
 
@@ -102,5 +77,6 @@ console.log("Deployment safety check passed.");
 console.log("- Netlify production requires [deploy netlify production].");
 console.log("- Netlify preview requires [deploy netlify preview].");
 console.log("- Netlify branch deploys remain skipped.");
-console.log("- Vercel Git auto-deploy is disabled.");
+console.log("- Vercel Git auto-deploy is disabled by git.deploymentEnabled=false.");
+console.log("- Legacy Vercel ignoreCommand/[deploy] gate is absent.");
 console.log("- No direct Netlify/Vercel deploy command exists in GitHub Actions.");
