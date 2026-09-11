@@ -422,6 +422,20 @@ export default function LeaseMaintenancePage() {
     }
   }
 
+  function rememberVehicleAndOpen(path: string) {
+    if (!vehicle) return;
+    const snapshot = JSON.stringify({
+      id: vehicle.id,
+      registration: vehicle.registration_number || "",
+      last4: vehicle.registration_number_last4 || vehicle.registration_last4 || "",
+      chassis: vehicle.chassis_number || "",
+      model: vehicle.model || "",
+    });
+    try { sessionStorage.setItem("parts-active-vehicle", snapshot); } catch {}
+    try { localStorage.setItem("parts-active-vehicle", snapshot); } catch {}
+    location.assign(path);
+  }
+
   async function openSourceDocument(contract: LeaseContract) {
     if (!contract.source_document_id) return;
     try {
@@ -478,6 +492,16 @@ export default function LeaseMaintenancePage() {
       </section>
 
       <div className="notice">{busy ? "読み込み中…" : message}</div>
+
+      {vehicle && (
+        <section className="continueCard card">
+          <b>この車両で続ける</b>
+          <div className="continueActions">
+            <button onClick={() => rememberVehicleAndOpen("/schedule/active")}>📅 次回予定登録</button>
+            <button onClick={() => rememberVehicleAndOpen("/inspection")}>🧾 記録簿</button>
+          </div>
+        </section>
+      )}
 
       <section className="card editor">
         <div className="sectionHead">
@@ -634,10 +658,10 @@ export default function LeaseMaintenancePage() {
         .leasePage{max-width:980px;margin:0 auto;padding:16px 14px 52px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.card{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:16px;margin-bottom:12px}
         .summaryTitle,.sectionHead,.historyTitle{display:flex;align-items:center;justify-content:space-between;gap:10px}.summaryTitle>div,.sectionHead>div{display:grid;gap:2px}.summaryTitle span,.sectionHead span{font-size:11px;font-weight:900;color:#2674e8}.summaryTitle h1{font-size:25px;line-height:1.2;margin:0}.summaryTitle small{color:#6b7789}
         .summaryGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:12px}.summaryGrid>div{display:grid;gap:4px;background:#f8fafc;border-radius:11px;padding:10px}.summaryGrid small{color:#6d7888}.summaryActions,.saveActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.reviewBadge,.okBadge{display:inline-flex;align-items:center;width:max-content;border-radius:999px;padding:4px 8px;font-size:12px}.reviewBadge{background:#fff0d7;color:#895d00}.okBadge{background:#e7f7ed;color:#237344}
-        .notice{background:#eef5ff;border:1px solid #d6e6fb;color:#40546e;border-radius:11px;padding:9px 11px;margin-bottom:10px;font-size:13px}.sectionHead h2{font-size:21px;margin:0}.sectionHead>b{font-size:12px;color:#657386}
+        .notice{background:#eef5ff;border:1px solid #d6e6fb;color:#40546e;border-radius:11px;padding:9px 11px;margin-bottom:10px;font-size:13px}.continueCard{display:flex;align-items:center;justify-content:space-between;gap:10px}.continueActions{display:flex;gap:8px;flex-wrap:wrap}.continueActions button{min-height:40px}.sectionHead h2{font-size:21px;margin:0}.sectionHead>b{font-size:12px;color:#657386}
         details{border-top:1px solid #e2e8f0;padding:10px 0}details:first-of-type{margin-top:10px}summary{cursor:pointer;font-weight:900;padding:3px 0}.formGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:9px}.formGrid label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#5a6677}.formGrid input,.formGrid select,.formGrid textarea{width:100%;border:1px solid #ccd7e5;background:#fff;color:#172033;border-radius:10px;padding:10px;font-size:15px}.formGrid textarea{min-height:78px;resize:vertical}.wide{grid-column:1/-1}.fieldBlock,.readonly,.reviewInfo{border:1px solid #e0e7ef;border-radius:11px;padding:10px}.fieldBlock>small,.readonly>small{display:block;color:#687587;font-weight:800;margin-bottom:7px}.checkGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.check{display:flex!important;align-items:center;gap:5px!important;background:#f8fafc;border-radius:9px;padding:8px!important}.check input{width:auto!important}.reviewInfo{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.reviewInfo>div{display:grid;gap:3px}.reviewInfo small{color:#748195}
         .historyList{display:grid;gap:8px;margin-top:10px}.history{border:1px solid #dbe3ee;border-radius:13px;padding:11px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}.history.selected{border:2px solid #2f6fe4;background:#f6f9ff}.historyMain{display:grid;gap:4px;min-width:0}.historyTitle{justify-content:flex-start}.historyTitle span{font-size:10px;background:#eef4ff;color:#2674e8;border-radius:999px;padding:4px 7px}.historyMain>small{color:#6b7789}.historyMeta{display:flex;gap:7px;flex-wrap:wrap;font-size:11px;color:#657386}.historyActions{display:flex;gap:6px;flex-wrap:wrap}.historyActions button{font-size:12px;padding:8px}.more{display:flex;justify-content:center;margin-top:10px}.empty{margin-top:10px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}.rpcNote{font-size:13px}.rpcNote p{margin:5px 0 0;color:#5f6b7a;line-height:1.55}
-        @media(max-width:650px){.leasePage{padding:7px 7px 34px}.top{margin-bottom:5px}.top button{min-height:40px;padding:7px 9px}.card{padding:10px;margin-bottom:8px;border-radius:14px}.summaryTitle{align-items:flex-start}.summaryTitle h1{font-size:19px}.summaryTitle button{font-size:11px;padding:7px;min-height:40px}.summaryGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-top:8px}.summaryGrid>div{padding:7px}.summaryGrid small{font-size:10px}.summaryGrid b{font-size:12px}.summaryActions{margin-top:7px}.summaryActions button{flex:1 1 auto;min-height:40px;padding:7px;font-size:12px}.notice{padding:7px 8px;margin-bottom:7px;font-size:12px}.sectionHead h2{font-size:18px}details{padding:8px 0}.formGrid{grid-template-columns:1fr;gap:7px}.wide{grid-column:auto}.formGrid input,.formGrid select,.formGrid textarea{padding:9px}.checkGrid{grid-template-columns:repeat(2,1fr)}.reviewInfo{grid-template-columns:1fr}.saveActions button{flex:1 1 100%;min-height:42px}.history{grid-template-columns:1fr;padding:9px}.historyActions button{flex:1 1 auto;min-height:40px}.rpcNote{padding:9px;font-size:11px}}
+        @media(max-width:650px){.continueCard{display:grid}.continueActions{display:grid;grid-template-columns:1fr 1fr}.continueActions button{width:100%;font-size:12px;padding:8px}.leasePage{padding:7px 7px 34px}.top{margin-bottom:5px}.top button{min-height:40px;padding:7px 9px}.card{padding:10px;margin-bottom:8px;border-radius:14px}.summaryTitle{align-items:flex-start}.summaryTitle h1{font-size:19px}.summaryTitle button{font-size:11px;padding:7px;min-height:40px}.summaryGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-top:8px}.summaryGrid>div{padding:7px}.summaryGrid small{font-size:10px}.summaryGrid b{font-size:12px}.summaryActions{margin-top:7px}.summaryActions button{flex:1 1 auto;min-height:40px;padding:7px;font-size:12px}.notice{padding:7px 8px;margin-bottom:7px;font-size:12px}.sectionHead h2{font-size:18px}details{padding:8px 0}.formGrid{grid-template-columns:1fr;gap:7px}.wide{grid-column:auto}.formGrid input,.formGrid select,.formGrid textarea{padding:9px}.checkGrid{grid-template-columns:repeat(2,1fr)}.reviewInfo{grid-template-columns:1fr}.saveActions button{flex:1 1 100%;min-height:42px}.history{grid-template-columns:1fr;padding:9px}.historyActions button{flex:1 1 auto;min-height:40px}.rpcNote{padding:9px;font-size:11px}}
       `}</style>
     </main>
   );
