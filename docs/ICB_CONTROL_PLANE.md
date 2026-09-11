@@ -21,6 +21,7 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 13. `未反映なし` is only allowed as a scope-bound statement after full audit.
 14. Preserve technically passed but unaccepted UX changes as Preview candidates.
 15. Small changes must not each create a Preview.
+16. A UX candidate that conflicts with an explicit confirmed parent-spec item is NOT a technical PASS even if Regression/Build/Deployment Safety pass; restore the confirmed spec first or obtain an explicit parent-spec change.
 
 ## Permanent Incident Register — MUST NOT BE OMITTED
 
@@ -62,22 +63,37 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 ### App main
 - Repo: `massaikimono-commits/vercel-parts-ocr`.
 - Branch: `preview/schedule-ux-20260903`.
-- Current technical HEAD: `7c4c6dccca4477bd01fc916ac9e35912c39e0b8c`.
-- Previous technical HEAD: `b711f46e2dfa8e9d2a75d81ff70a4ad0a14b16f7`.
+- Current branch HEAD: `803e7625134dcf3f114f8fb4b7746aac073d6289`.
+- Current accepted technical baseline: `7c4c6dccca4477bd01fc916ac9e35912c39e0b8c`.
 - PR #62: Draft / Open / unmerged; base `main`.
 - main SHA: `20a715bf46156282b686a617d6744a040bc17fb3` unchanged.
-- Full ICB-SPEC v1.3 section-by-section app-core audit: COMPLETE under current safe conditions.
-- Scope-bound result: excluding shared DB mutation, OCR tuning, review-only items, final physical print alignment, and Production reflection, immediately implementable confirmed-spec + explicit-request gaps = 0.
+- Full ICB-SPEC v1.3 section-by-section app-core audit: COMPLETE for the accepted baseline under current safe conditions.
+- Scope-bound result at accepted baseline: excluding shared DB mutation, OCR tuning, review-only items, final physical print alignment, and Production reflection, immediately implementable confirmed-spec + explicit-request gaps = 0.
+- Current branch HEAD is NOT accepted because the latest day-navigation label candidate conflicts with an explicit confirmed Section 8 parent-spec label requirement.
 - This does not classify DB-HOLD/review-only/OCR/final-coordinate items as implemented.
 - Confirmed-spec correction baseline remains `77248cb970bd040f57b21400273b920aab641248`.
 
-#### Latest UX Preview candidate: lease maintenance continuation hub
+#### Current rejected candidate: daily schedule relative-day label
+- Branch delta `7c4c6dcc... -> 803e7625...`: ahead 4 / behind 0.
+- Final net diff only:
+  - `app/schedule/page.tsx` (+1/-1)
+  - `scripts/daily-schedule-relative-day-label-regression.mjs` (new regression)
+- Runtime change replaces the right day-navigation label `明日 →` with `翌日 →`; action remains `setDay(addDay(day, 1))`.
+- Performance impact is negligible/text-only; no new query/fetch/RPC/listener/observer/storage/OCR/data-volume change.
+- Regression / Full Build run `34571253861`: SUCCESS.
+- Deployment Safety run `34571338021`: SUCCESS on final branch HEAD `803e7625134dcf3f114f8fb4b7746aac073d6289`.
+- HOWEVER, ICB-SPEC v1.3 Section 8 is confirmed and explicitly states: date navigation should make `前日 / 今日 / 明日` clear.
+- Therefore this candidate is `SPEC CONFLICT / NOT TECHNICAL PASS`; CI success does not override confirmed parent spec.
+- Required next action: restore the right label to `明日 →` and update/remove the dedicated regression so it locks the confirmed spec. If product intent is truly to use `翌日`, that requires explicit parent-spec change approval first.
+- Do not advance the accepted app-core technical baseline beyond `7c4c6dcc...` until the conflict is corrected and validation passes.
+
+#### Latest accepted UX Preview candidate: lease maintenance continuation hub
 - Classification: technical PASS and performance PASS; UX adoption HOLD pending Vercel Preview + iPhone hands-on review.
 - Delta `b711f46e... -> 7c4c6dcc...`: ahead 4 / behind 0.
 - Final net diff only:
   - `app/customer-vehicles/lease-maintenance/page.tsx`
   - `scripts/lease-maintenance-continue-actions-regression.mjs`
-- Lease maintenance screen now adds `この車両で続ける` with:
+- Lease maintenance screen adds `この車両で続ける` with:
   - `📅 次回予定登録` -> `/schedule/active`
   - `🧾 記録簿` -> `/inspection`
 - Before navigation, the already-loaded vehicle snapshot is saved to existing `parts-active-vehicle` in both sessionStorage and localStorage.
@@ -85,7 +101,7 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - No OCR execution shortcut was added.
 - No new DB query, fetch, RPC, schema, migration, RLS, listener, MutationObserver, or OCR helper was added by the continuation helper; existing lease contract loading/paging remains unchanged.
 - Dedicated regression locks the vehicle-scoped helper, both storage handoffs, both destination routes, vehicle-loaded gating, absence of OCR shortcut, and absence of new query/fetch/listener/observer coupling in the helper.
-- Regression / Full Build workflow run `34570687623`: SUCCESS. Its push SHA is an intermediate CI commit; PR metadata points to final HEAD.
+- Regression / Full Build workflow run `34570687623`: SUCCESS.
 - Deployment Safety run `34570768822`: SUCCESS on final HEAD `7c4c6dccca4477bd01fc916ac9e35912c39e0b8c`.
 - `vercel.json` at final HEAD preserves `git.deploymentEnabled=false`.
 
@@ -112,7 +128,7 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - Schedule registration/customer-vehicle/parts history keep bounded initial/search/page sizes.
 - Vehicle photos fetch only the selected vehicle; current photo page remains `PHOTO_PAGE_SIZE = 24`, metadata-only paging, original signed URL created only on explicit open.
 - Integrated history fetches only the selected vehicle and keeps bounded source paging at `SOURCE_PAGE_SIZE = 25` / display page 25.
-- Lease-maintenance continuation adds only a small vehicle snapshot write on user action and does not alter existing DB loading/paging.
+- Latest rejected day-label candidate is text-only and has no material performance regression, but spec compliance fails independently of performance.
 - Final perceived-performance confirmation remains part of iPhone Preview review.
 
 #### Retained technical-PASS Preview candidates
@@ -130,7 +146,8 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - week navigation anchor sync.
 - month mobile visible-row count consistency.
 - lease maintenance -> same vehicle next schedule / inspection.
-- These remain Preview candidates, not formally UX-adopted until user iPhone acceptance.
+- The rejected `明日 -> 翌日` day-label change is NOT included in this retained PASS list.
+- These retained items remain Preview candidates, not formally UX-adopted until user iPhone acceptance.
 
 - Vercel Preview: HOLD until explicit management GO after deployment-limit/safety clearance.
 - Existing app HOLD/review exclusions: `legal_3m`; shared-DB/RLS role separation; parent-spec review-only items; OCR-quality work; final physical print coordinates; Production reflection.
@@ -178,10 +195,11 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - No GT use in OCR runtime/control/candidate/stop/fallback/expected-count logic; GT scoring-only.
 - No declaring OCR accuracy improvement from CI/static PASS without formal real-photo evidence.
 - No declaring HOLD/review/OCR/final-coordinate items implemented merely because app-core safe-scope gaps are 0.
+- No accepting a UX candidate that contradicts an explicit confirmed parent-spec item merely because CI/build/deployment safety pass.
 
 ## Handoff requirement
 
-Every handoff must include target branch/current HEAD, GO/HOLD, last instruction, implemented vs missing vs HOLD/review, blockers/reasons, exact next action, production/DB/OCR state, technical PASS vs UX acceptance, full audit status, complete incident history (Supabase/Netlify/Vercel), HOLD matrix, and absolute prohibitions.
+Every handoff must include target branch/current HEAD, accepted technical baseline, GO/HOLD, last instruction, implemented vs missing vs HOLD/review, blockers/reasons, exact next action, production/DB/OCR state, technical PASS vs UX acceptance, full audit status, complete incident history (Supabase/Netlify/Vercel), HOLD matrix, and absolute prohibitions.
 
 ## Paste-ready/display rule
 
