@@ -73,25 +73,26 @@ These incidents are permanent project history. They are not interchangeable and 
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`.
-- Current formal branch HEAD: `18c0310dc85cb49bc3caca0c63b290f6e6126c41`.
-- Previous formal HEAD: `4f94878497614ffa288af9a2d0b2a9df939b8f95`.
+- Current formal branch HEAD: `f1742dcc65ea4170e5c8ca6d60acb00a9fbdadb3`.
+- Previous formal HEAD: `18c0310dc85cb49bc3caca0c63b290f6e6126c41`.
 - PR #62: Draft / Open / unmerged; base `main`.
 - main SHA: `20a715bf46156282b686a617d6744a040bc17fb3` unchanged.
 - Full ICB-SPEC v1.3 section-by-section audit status: COMPLETE for the app-core scope under current safe conditions.
 - Scope-bound result: with shared DB mutation, OCR tuning, review-only items, final physical print alignment, and Production reflection excluded, the count of immediately implementable confirmed-spec + explicit-request gaps is 0.
 - This does NOT classify DB-dependent HOLD, review-only items, OCR quality work, or final print coordinates as implemented.
-- The confirmed-spec correction baseline remains `77248cb970bd040f57b21400273b920aab641248`; its final full-section audit was formally PASS before speculative UX resumed.
-- Prior UX-candidate batch at `4f94878497614ffa288af9a2d0b2a9df939b8f95`: schedule detail -> selected vehicle lease-maintenance contract direct shortcut. Technical PASS only; user iPhone acceptance pending.
-- Latest UX-candidate batch: customer/vehicle search state memory for same-tab round trips.
-- `app/customer-vehicles/page.tsx` adds `SEARCH_STATE_KEY = "customer-vehicles-search-state"`; only `{query, mode}` are stored in `sessionStorage`, not `localStorage`.
-- Restore is gated by `searchStateReady`; the initial list/search load does not run until restore completes, avoiding an unnecessary initial blank fetch followed by the restored fetch.
-- Existing `parts-active-vehicle` handoff is untouched. The search-memory candidate is independently removable and does not alter DB query limits, vehicle selection, history, booking, OCR, inspection, or lease logic.
-- UI explicitly says `検索条件はこのタブ内で保持します。`; existing `検索をクリア` remains.
-- `4f948784... -> 18c0310d...`: ahead 6 / behind 0; final net diff only `app/customer-vehicles/page.tsx` and `scripts/customer-search-memory-regression.mjs`.
-- Regression / Full Build workflow run `34544767934`: SUCCESS. The workflow push SHA is an intermediate implementation commit, while PR metadata points to final head `18c0310dc85cb49bc3caca0c63b290f6e6126c41`.
-- Deployment Safety run `34544899332`: SUCCESS on final HEAD `18c0310dc85cb49bc3caca0c63b290f6e6126c41`.
-- Formal classification of the latest search-memory batch: technical PASS only; UX formal adoption remains HOLD until Vercel Preview + iPhone hands-on acceptance.
-- Retained convenience UX items remain technical-PASS Preview candidates only, pending user iPhone hands-on review.
+- Confirmed-spec correction baseline remains `77248cb970bd040f57b21400273b920aab641248`; its final full-section audit was formally PASS before speculative UX resumed.
+- Prior technical-PASS Preview candidates remain retained, including schedule-detail lease-maintenance direct shortcut and same-tab customer/vehicle search-state memory. User iPhone acceptance remains pending for all speculative UX candidates.
+- Latest UX-candidate batch: integrated vehicle history source filter in `app/customer-vehicles/history/page.tsx`.
+- Fixed filter set: `すべて / 車両操作 / 作業 / 入出庫 / 予定変更 / 記録簿 / 点検履歴`.
+- Filtering is client-side only over already-loaded unified `items` via `item.source`; no new Supabase query, RPC, schema, migration, RLS, source paging, or source sort behavior was added.
+- Existing bounded paging remains `SOURCE_PAGE_SIZE = 25` and `DISPLAY_PAGE_SIZE = 25`; changing filter resets visible count to the display page size.
+- UI uses identifiable horizontal source-filter controls with active state and explicitly states `読み込み済み履歴を種類ごとに絞り込みます。DBの再検索は行いません。`.
+- Dedicated regression `scripts/vehicle-history-source-filter-regression.mjs` locks source list, loaded-items-only filtering, visible-count reset, identifiable UI, and absence of source-filter Supabase query coupling.
+- `18c0310d... -> f1742dcc...`: ahead 6 / behind 0; final net diff only `app/customer-vehicles/history/page.tsx` and `scripts/vehicle-history-source-filter-regression.mjs`.
+- Regression / Full Build workflow run `34545793215`: SUCCESS. The workflow push SHA is an intermediate CI commit; PR metadata points to final head `f1742dcc65ea4170e5c8ca6d60acb00a9fbdadb3`.
+- Deployment Safety run `34545907928`: SUCCESS on final HEAD `f1742dcc65ea4170e5c8ca6d60acb00a9fbdadb3`.
+- `vercel.json` at final HEAD preserves `git.deploymentEnabled=false`.
+- Formal classification of this latest history-filter batch: technical PASS only; UX formal adoption remains HOLD until Vercel Preview + iPhone hands-on acceptance.
 - Vercel Preview remains HOLD until explicit management GO after deployment-limit/safety clearance; no Preview was created by this batch.
 - Existing HOLD/review exclusions remain active: `legal_3m`; shared-DB/RLS-dependent role separation; parent-spec review items; OCR-quality work; final physical print coordinates; Production reflection.
 
