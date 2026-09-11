@@ -53,14 +53,9 @@ if (!fs.existsSync(vercelPath)) {
       );
     }
 
-    const normalizedIgnoreCommand =
-      typeof vercel.ignoreCommand === "string"
-        ? vercel.ignoreCommand.replace(/\\/g, "")
-        : "";
-
-    if (!normalizedIgnoreCommand.includes("[deploy]")) {
+    if (Object.prototype.hasOwnProperty.call(vercel, "ignoreCommand")) {
       fail(
-        "Vercel ignored-build guard is missing. Manual release commits must remain explicit."
+        "Legacy Vercel ignoreCommand/[deploy] gate must stay retired. deploymentEnabled=false is the single Git auto-deploy lock."
       );
     }
   }
@@ -102,5 +97,6 @@ console.log("Deployment safety check passed.");
 console.log("- Netlify production requires [deploy netlify production].");
 console.log("- Netlify preview requires [deploy netlify preview].");
 console.log("- Netlify branch deploys remain skipped.");
-console.log("- Vercel Git auto-deploy is disabled.");
+console.log("- Vercel Git auto-deploy is disabled by git.deploymentEnabled=false.");
+console.log("- Legacy Vercel ignoreCommand/[deploy] gate is absent.");
 console.log("- No direct Netlify/Vercel deploy command exists in GitHub Actions.");
