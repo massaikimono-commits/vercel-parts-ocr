@@ -445,6 +445,18 @@ export default function WeeklySchedulePage() {
     setWeekStart(mondayOf(jumpDay));
   }
 
+  function moveWeek(delta: number) {
+    const nextStart = addDays(weekStart, delta * 7);
+    setWeekStart(nextStart);
+    setJumpDay(nextStart);
+  }
+
+  function goCurrentWeek() {
+    const today = todayJst();
+    setJumpDay(today);
+    setWeekStart(mondayOf(today));
+  }
+
   const weekStats = useMemo(() => {
     let overlapDays = 0;
     let overbookedDays = 0;
@@ -504,9 +516,9 @@ export default function WeeklySchedulePage() {
           <p>{busy ? "読み込み中…" : message}</p>
         </div>
         <div className="weekNav">
-          <button onClick={() => setWeekStart(addDays(weekStart, -7))}>← 前週</button>
-          <button onClick={() => setWeekStart(mondayOf(todayJst()))}>今週</button>
-          <button onClick={() => setWeekStart(addDays(weekStart, 7))}>翌週 →</button>
+          <button onClick={() => moveWeek(-1)}>← 前週</button>
+          <button onClick={goCurrentWeek}>今週</button>
+          <button onClick={() => moveWeek(1)}>翌週 →</button>
           <button onClick={() => { window.location.href = "/schedule/month?day=" + jumpDay; }}>月全体</button>
         </div>
       </section>
