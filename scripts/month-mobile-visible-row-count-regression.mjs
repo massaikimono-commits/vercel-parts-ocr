@@ -6,6 +6,7 @@ const checks = [
   ["old two-row mobile hiding removed", !src.includes(".monthRows .monthRow:nth-child(n+3){display:none}")],
   ["existing more count remains based on three visible rows", src.includes("rows.length > 3") && src.includes("rows.length - 3")],
   ["more button still opens selected day", src.includes("className=\"more\" onClick={() => openDay(day)}")],
+  ["no JS viewport branching added", !src.includes("window.innerWidth") && !src.includes("matchMedia(")],
 ];
 for (const [name, ok] of checks) if (!ok) throw new Error(`FAIL ${name}`);
 for (const token of ["MutationObserver", "addEventListener", "localStorage", "sessionStorage"]) {
