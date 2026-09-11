@@ -21,6 +21,28 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 13. A UX candidate that conflicts with confirmed parent spec is NOT technical PASS even if CI/build pass.
 14. Deployment Safety PASS requires measured absence of unintended Vercel Deployment records, not merely absence of an intentional Preview action.
 
+## Governance proportionality / exception policy
+
+- Governance rules exist to protect safety, correctness, privacy, cost, and reproducibility; they are not goals by themselves.
+- Rules are classified as either **hard invariants** or **default operating rules**.
+- Hard invariants must not be bypassed without an explicit new parent-spec decision. Examples include: no shared-remote destructive reset, no unauthorized Production/main/shared-DB mutation, no public PII/secret publication, no GT injection into OCR runtime/control, and no unapproved paid operation.
+- Default operating rules may be changed when following them would create disproportionate delay, duplicated work, or infrastructure burden without materially improving safety or decision quality.
+- Before changing a default operating rule, management must explain to the user: (1) why the exception is useful, (2) what changes, (3) the risk, and (4) the alternative. User approval is required when the change is material.
+- Do not accumulate HOLDs mechanically. Re-check whether the original risk still exists and whether a cheaper/simpler control provides equivalent protection.
+- If a governance step becomes self-referential busywork (for example, rebuilding infrastructure solely to re-score obsolete non-adoption experiments), management must evaluate whether the evidence can be preserved as historical diagnostic and the gate safely redefined.
+
+## OCR Architecture / Generalization Gate
+
+- Fixed regression sets are regression evidence, not proof of generalization.
+- Architecture adoption requires a declared Regression Set and an unseen Validation Set. Field failures from pilot/production are tracked separately as a Field Set.
+- GT is scoring-only and must never influence OCR runtime, candidate generation, row detection, preprocessing, thresholds, fallback, stop conditions, parser, document selection, engine selection, or expected-count logic.
+- Historical OCR stages with known GT-integrity defects or non-comparable composite assumptions may be preserved as **historical diagnostic only** and marked `NOT EVALUABLE` rather than resurrected solely to satisfy a bookkeeping flag.
+- A historical corrected re-score is mandatory only when its result can materially affect an adoption decision. If the stage is already excluded from adoption and re-running it requires disproportionate deployment/infrastructure work, management may retire the re-score requirement after documenting the rationale.
+- Architecture Bakeoff must compare currently viable candidates under one frozen evaluation contract. Candidate versions/configurations are frozen before unseen Validation evaluation; results must not be used to tune the same Validation Set.
+- CI/static PASS is never OCR accuracy PASS. Formal accuracy claims require real-image evidence under the declared evaluation contract.
+- Parts OCR: current A23 progression remains stopped until architecture comparison; A22 crop/table component may remain as a bakeoff candidate component, not an adopted architecture.
+- Vehicle OCR: QR-first is retained; Guided Live QR, Photo QR fallback, PDF-native/QR, targeted QR-less OCR, and Hybrid routing are compared as architecture components. Pure Vision may be used as shadow/adjudication evidence but is not automatically authoritative.
+
 ## Permanent Incident Register — MUST NOT BE OMITTED
 
 ### Incident 1 — Shared Supabase data-loss
