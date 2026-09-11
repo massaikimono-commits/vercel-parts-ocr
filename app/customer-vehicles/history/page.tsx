@@ -34,6 +34,7 @@ type SourcePage = {
 
 const DISPLAY_PAGE_SIZE = 25;
 const SOURCE_PAGE_SIZE = 25;
+const SOURCE_FILTERS = ["すべて", "車両操作", "作業", "入出庫", "予定変更", "記録簿", "点検履歴"] as const;
 
 function naturalLast4(value: string | null | undefined) {
   const raw = (value || "").trim();
@@ -150,6 +151,7 @@ export default function VehicleHistoryPage() {
   const [visibleCount, setVisibleCount] = useState(DISPLAY_PAGE_SIZE);
   const [sourceRound, setSourceRound] = useState(1);
   const [sourceHasMore, setSourceHasMore] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<(typeof SOURCE_FILTERS)[number]>("すべて");
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("履歴を読み込んでいます。");
 
@@ -164,8 +166,12 @@ export default function VehicleHistoryPage() {
     void loadInitial(id);
   }, []);
 
-  const visibleItems = useMemo(() => items.slice(0, visibleCount), [items, visibleCount]);
-  const canShowMore = visibleCount < items.length || sourceHasMore;
+  const filteredItems = useMemo(
+    () => sourceFilter === "すべて" ? items : items.filter((item) => item.source === sourceFilter),
+    [items, sourceFilter]
+  );
+  const visibleItems = useMemo(() => filteredItems.slice(0, visibleCount), [filteredItems, visibleCount]);
+  const canShowMore = visibleCount < filteredItems.length || sourceHasMore;
 
   async function loadInitial(id: string) {
     setBusy(true);
@@ -436,6 +442,20 @@ export default function VehicleHistoryPage() {
           <span>{visibleItems.length}件表示</span>
         </div>
 
+        <div className="sourceFilters" aria-label="履歴の種類">
+          {SOURCE_FILTERS.map((source) => (
+            <button
+              type="button"
+              key={source}
+              className={sourceFilter === source ? "active" : ""}
+              onClick={() => { setSourceFilter(source); setVisibleCount(DISPLAY_PAGE_SIZE); }}
+            >
+              {source}
+            </button>
+          ))}
+        </div>
+        <p className="filterNote">読み込み済み履歴を種類ごとに絞り込みます。DBの再検索は行いません。</p>
+
         {!busy && !visibleItems.length && (
           <div className="empty">この車両に紐付く既存履歴はまだありません。</div>
         )}
@@ -493,12 +513,12 @@ export default function VehicleHistoryPage() {
         button{font:inherit;border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 12px;font-weight:800}button:disabled{opacity:.5}
         .historyPage{max-width:920px;margin:0 auto;padding:16px 14px 52px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.card{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:16px;margin-bottom:12px}
         .vehicleCard{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.vehicleCard>div{display:grid;gap:3px}.vehicleCard span{font-size:11px;font-weight:900;color:#2674e8}.vehicleCard h1{font-size:25px;line-height:1.2;margin:0}.vehicleCard small{color:#6b7789}
-        .notice{background:#eef5ff;border:1px solid #d6e6fb;color:#40546e;border-radius:11px;padding:9px 11px;margin-bottom:10px;font-size:13px}.sectionHead{display:flex;justify-content:space-between;align-items:center;gap:10px}.sectionHead h2{font-size:21px;margin:0}.sectionHead>span{font-size:12px;background:#eef4ff;color:#2674e8;border-radius:999px;padding:5px 8px}
+        .notice{background:#eef5ff;border:1px solid #d6e6fb;color:#40546e;border-radius:11px;padding:9px 11px;margin-bottom:10px;font-size:13px}.sectionHead{display:flex;justify-content:space-between;align-items:center;gap:10px}.sectionHead h2{font-size:21px;margin:0}.sectionHead>span{font-size:12px;background:#eef4ff;color:#2674e8;border-radius:999px;padding:5px 8px}.sourceFilters{display:flex;gap:6px;overflow-x:auto;padding:9px 0 2px;scrollbar-width:none}.sourceFilters::-webkit-scrollbar{display:none}.sourceFilters button{flex:0 0 auto;padding:7px 10px;font-size:11px}.sourceFilters button.active{background:#2f6fe4;border-color:#2f6fe4;color:#fff}.filterNote{margin:5px 0 0;color:#718096;font-size:11px}
         .timeline{display:grid;margin-top:10px}.timelineItem{position:relative;display:grid;grid-template-columns:18px minmax(0,1fr);gap:7px}.timelineItem:not(:last-child):before{content:"";position:absolute;left:7px;top:16px;bottom:-1px;width:2px;background:#e1e7ef}.timelineDot{width:14px;height:14px;border:3px solid #fff;border-radius:50%;background:#2f6fe4;box-shadow:0 0 0 1px #b9c9df;margin-top:14px;z-index:1}
         .timelineBody{border:1px solid #dbe3ee;border-radius:13px;padding:11px;margin-bottom:8px;min-width:0}.timelineTop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.timelineTop>div{display:flex;align-items:center;gap:7px;min-width:0}.sourceBadge{font-size:10px;font-weight:900;padding:4px 7px;border-radius:999px;background:#eef4ff;color:#2674e8;white-space:nowrap}.timelineTop>b{font-size:14px}.timelineTop time{font-size:11px;color:#718096;white-space:nowrap}.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11px;color:#657386}
         .timelineBody details{margin-top:7px;border-top:1px solid #edf0f4;padding-top:6px}.timelineBody summary{cursor:pointer;color:#49617d;font-size:11px;font-weight:800}.detailGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:7px}.detailGrid>div{background:#f8fafc;border-radius:9px;padding:8px;min-width:0}.detailGrid .wide{grid-column:1/-1}.detailGrid small{display:block;color:#718096;margin-bottom:4px}.detailGrid pre{margin:0;white-space:pre-wrap;word-break:break-word;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:#364152}
         .more{display:flex;justify-content:center;margin-top:9px}.empty{margin-top:10px;padding:20px;text-align:center;color:#8491a3;background:#f8fafc;border-radius:12px}
-        @media(max-width:650px){.historyPage{padding:7px 7px 34px}.top{margin-bottom:5px}.top button{min-height:40px;padding:7px 9px}.card{padding:10px;margin-bottom:8px;border-radius:14px}.vehicleCard h1{font-size:19px}.vehicleCard button{min-height:40px;font-size:11px;padding:7px}.notice{font-size:12px;padding:7px 8px;margin-bottom:7px}.sectionHead h2{font-size:18px}.timeline{margin-top:7px}.timelineItem{grid-template-columns:15px minmax(0,1fr);gap:5px}.timelineItem:not(:last-child):before{left:6px}.timelineDot{width:12px;height:12px;margin-top:13px}.timelineBody{padding:9px;margin-bottom:6px;border-radius:11px}.timelineTop{display:grid;gap:4px}.timelineTop>div{align-items:flex-start}.timelineTop time{font-size:10px}.meta{display:grid;gap:3px}.detailGrid{grid-template-columns:1fr}.detailGrid .wide{grid-column:auto}.more button{width:100%;min-height:42px}}
+        @media(max-width:650px){.historyPage{padding:7px 7px 34px}.top{margin-bottom:5px}.top button{min-height:40px;padding:7px 9px}.card{padding:10px;margin-bottom:8px;border-radius:14px}.vehicleCard h1{font-size:19px}.vehicleCard button{min-height:40px;font-size:11px;padding:7px}.notice{font-size:12px;padding:7px 8px;margin-bottom:7px}.sectionHead h2{font-size:18px}.sourceFilters{margin-right:-3px}.sourceFilters button{min-height:40px;padding:7px 11px}.filterNote{font-size:10px}.timeline{margin-top:7px}.timelineItem{grid-template-columns:15px minmax(0,1fr);gap:5px}.timelineItem:not(:last-child):before{left:6px}.timelineDot{width:12px;height:12px;margin-top:13px}.timelineBody{padding:9px;margin-bottom:6px;border-radius:11px}.timelineTop{display:grid;gap:4px}.timelineTop>div{align-items:flex-start}.timelineTop time{font-size:10px}.meta{display:grid;gap:3px}.detailGrid{grid-template-columns:1fr}.detailGrid .wide{grid-column:auto}.more button{width:100%;min-height:42px}}
       `}</style>
     </main>
   );

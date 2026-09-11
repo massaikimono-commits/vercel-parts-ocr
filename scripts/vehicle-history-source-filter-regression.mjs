@@ -1,0 +1,10 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const history = fs.readFileSync("app/customer-vehicles/history/page.tsx", "utf8");
+assert.ok(history.includes('const SOURCE_FILTERS = ["すべて", "車両操作", "作業", "入出庫", "予定変更", "記録簿", "点検履歴"]'), "stable history source filters");
+assert.ok(history.includes('sourceFilter === "すべて" ? items : items.filter((item) => item.source === sourceFilter)'), "filters already-loaded unified timeline");
+assert.ok(history.includes('aria-label="履歴の種類"'), "filter control is identifiable");
+assert.ok(history.includes('setVisibleCount(DISPLAY_PAGE_SIZE)'), "switching source resets visible page size");
+assert.ok(history.includes('DBの再検索は行いません'), "preview candidate explains local-only filtering");
+assert.ok(!history.includes('sourceFilter).eq('), "filter does not alter Supabase query contract");
+console.log("vehicle history source filter regression: PASS");
