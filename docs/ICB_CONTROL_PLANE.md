@@ -73,25 +73,24 @@ These incidents are permanent project history. They are not interchangeable and 
 
 ### App main
 - Branch: `preview/schedule-ux-20260903`.
-- Current formal branch HEAD: `77248cb970bd040f57b21400273b920aab641248`.
-- Previous formal HEAD: `790f06a4d5a208d6a8e0e7d25f301abd84515a57`.
+- Current formal branch HEAD: `4f94878497614ffa288af9a2d0b2a9df939b8f95`.
+- Previous formal HEAD: `77248cb970bd040f57b21400273b920aab641248`.
 - PR #62: Draft / Open / unmerged; base `main`.
 - main SHA: `20a715bf46156282b686a617d6744a040bc17fb3` unchanged.
 - Full ICB-SPEC v1.3 section-by-section audit status: COMPLETE for the app-core scope under current safe conditions.
 - Scope-bound result: with shared DB mutation, OCR tuning, review-only items, final physical print alignment, and Production reflection excluded, the count of immediately implementable confirmed-spec + explicit-request gaps is 0.
 - This does NOT classify DB-dependent HOLD, review-only items, OCR quality work, or final print coordinates as implemented.
-- During the final audit, three remaining mismatches were corrected before UX work resumed:
-  1. Section 18 designated-maintenance-record formal print is now fail-closed until formal PDF/final coordinates are confirmed. The designated screen shows a disabled `正式印刷（確認待ち）`; `printCurrent()` refuses non-inspection mode. Draft and confirmed saves remain available.
-  2. Section 3 remote logout is now exposed from login history using existing Supabase Auth `signOut({ scope: "global" })`, with explicit confirmation, local sensitive-state cleanup, and best-effort existing `record_logout` RPC logging. No new RPC/schema/migration.
-  3. Section 15 obsolete auto-sync wording was removed. Customer/vehicle management now describes formally saved parts separately from local unconfirmed data; no auto-promotion logic was added.
-- `790f06a4... -> 77248cb9...`: ahead 7 / behind 0; final net diff is 5 files only: `app/inspection/page.tsx`, `app/settings/login-history/page.tsx`, `app/customer-vehicles/page.tsx`, `scripts/designated-print-hold-regression.mjs`, `scripts/section-audit-confirmed-fixes-regression.mjs`.
-- Regression / Full Build run `34542447527`: SUCCESS.
-- Deployment Safety run `34542538123`: SUCCESS on final HEAD `77248cb970bd040f57b21400273b920aab641248`.
-- Formal classification of this batch: PASS as confirmed-spec correction; not a speculative UX batch.
-- Earlier six convenience UX items remain technical-PASS Preview candidates only, pending user iPhone hands-on review.
-- Next app-core phase is permitted to return to a bundled UX-candidate batch because the scope-bound full section audit is complete and immediately implementable confirmed-spec/explicit-request gaps are 0.
+- The confirmed-spec correction baseline remains `77248cb970bd040f57b21400273b920aab641248`; its final full-section audit was formally PASS before speculative UX resumed.
+- Latest UX-candidate batch: schedule detail -> selected vehicle lease-maintenance contract direct shortcut.
+- UX implementation: `app/schedule/detail/page.tsx` adds `リースメンテ契約` under the existing vehicle continuation hub and calls `rememberActiveVehicle()` before routing to `/customer-vehicles/lease-maintenance?vehicle=<vehicle id>` via the existing vehicle-scoped helper. No new DB query/RPC/schema/migration.
+- The attempted direct schedule-detail -> `/ocr/auto` shortcut was removed after existing `schedule-detail-regression` correctly rejected coupling the practical detail hub to OCR execution. The final HEAD contains no `/ocr/auto` direct route from schedule detail and OCR logic is unchanged.
+- `77248cb9... -> 4f948784...`: ahead 8 / behind 0; final net diff only `app/schedule/detail/page.tsx` and `scripts/schedule-detail-vehicle-shortcuts-regression.mjs`.
+- Regression / Full Build workflow run `34544281628`: SUCCESS.
+- Deployment Safety run `34544399929`: SUCCESS on final HEAD `4f94878497614ffa288af9a2d0b2a9df939b8f95`.
+- Formal classification of this latest batch: technical PASS only; the new lease-maintenance shortcut remains a Preview candidate and is NOT formally UX-adopted until iPhone hands-on acceptance.
+- Earlier retained convenience UX items remain technical-PASS Preview candidates only, pending user iPhone hands-on review.
+- Vercel Preview remains HOLD until explicit management GO after deployment-limit/safety clearance; no Preview was created by this batch.
 - Existing HOLD/review exclusions remain active: `legal_3m`; shared-DB/RLS-dependent role separation; parent-spec review items; OCR-quality work; final physical print coordinates; Production reflection.
-- Vercel Preview remains HOLD until explicit management GO after deployment-limit/safety clearance. No new Preview was created in this batch.
 
 ### Vehicle certificate QR/OCR
 - Frozen body branch: `work/certificate-photo-ocr`, HEAD `7b421eea35154baa5b19e61e56151a8d73363bbf`; unchanged/HOLD.
