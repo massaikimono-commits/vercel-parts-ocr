@@ -1,0 +1,40 @@
+name: Parts OCR architecture bakeoff PoC v1
+
+on:
+  push:
+    branches:
+      - eval/parts-ocr-architecture-bakeoff-poc-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrity-build-and-contract:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder-key
+      NEXT_PUBLIC_EVAL_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Bakeoff contract and P2 core
+        run: node scripts/parts-ocr-bakeoff-contract-audit.mjs
+      - name: Evaluation integrity v2
+        run: node scripts/validate-ocr-evaluation-integrity-v2.mjs
+      - name: Parts regression
+        run: node scripts/parts-slip-regression.mjs
+      - name: Layout semantics
+        run: node scripts/parts-layout-semantics-regression.mjs
+      - name: A22 invariants
+        run: node scripts/stage-a22-invariant-audit.mjs
+      - name: Install dependencies
+        run: npm install
+      - name: Full Next build
+        run: npm run build
