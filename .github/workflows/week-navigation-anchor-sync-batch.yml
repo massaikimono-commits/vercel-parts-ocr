@@ -1,0 +1,46 @@
+name: Week navigation anchor sync batch
+on:
+  push:
+    branches: [preview/schedule-ux-20260903]
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview/schedule-ux-20260903
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply candidate
+        run: python3 scripts/tmp-apply-week-navigation-anchor-sync.py
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Targeted and related regression
+        run: |
+          node scripts/week-navigation-anchor-sync-regression.mjs
+          node scripts/vehicle-history-source-filter-regression.mjs
+          node scripts/customer-search-memory-regression.mjs
+          npm run test:security
+          npm run test:app-core-safety
+      - name: Full build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_dummy_ci_key_1234567890
+        run: npx next build
+      - name: Restore and commit source only
+        run: |
+          git checkout -- next-env.d.ts tsconfig.json || true
+          git clean -fd public/tesseract/core || true
+          git checkout -- public/tesseract/tessdata/jpn.traineddata public/tesseract/tessdata/eng.traineddata || true
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/schedule/week/page.tsx scripts/week-navigation-anchor-sync-regression.mjs
+          git commit -m "fix: keep weekly navigation anchor in sync"
+          git rm .github/workflows/week-navigation-anchor-sync-batch.yml scripts/tmp-apply-week-navigation-anchor-sync.py
+          git commit -m "chore: clean week navigation sync helpers"
+          git push origin HEAD:preview/schedule-ux-20260903
