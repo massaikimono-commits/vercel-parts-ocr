@@ -11,10 +11,10 @@ from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from core import FIELDS, rows_from_structure, structure_diagnostics
+from core import FIELDS, p2_safety_reasons, rows_from_structure, structure_diagnostics
 
 CONTRACT = "icb.parts-ocr.bakeoff-prediction.v1"
-CONFIG_HASH = "sha256:99fa30b32b22d28310cae161a754343423918a90a13bb80c12b64ba0c80504ae"
+CONFIG_HASH = "sha256:8bb8a7c290a28de6851ffe74b058339ebd5dedbc75a63ab768b63eaf335bbdff"
 MAX_BYTES = 16 * 1024 * 1024
 _pipeline: Any = None
 _model_load_ms: int | None = None
@@ -69,13 +69,13 @@ def create_app() -> Any:
             outputs = [result_json(item) for item in pipeline().predict(decoded)]
             rows = rows_from_structure(outputs)
             diagnostics = structure_diagnostics(outputs)
+            safety_reasons = p2_safety_reasons(outputs, rows)
             field_predictions = [{"rowId": row["rowId"], "field": field, "prediction": row["fields"][field]} for row in rows for field in FIELDS]
-            manual = not rows or any(row.get("duplicateOf") for row in rows)
             return {
                 "schema": CONTRACT,
                 "runId": runId or str(uuid.uuid4()),
                 "candidateId": "P2",
-                "candidateVersion": "ppstructurev3-ppocrv5-server.v1",
+                "candidateVersion": "ppstructurev3-ppocrv5-server.v2",
                 "configHash": CONFIG_HASH,
                 "imageId": imageId,
                 "captureId": captureId,
@@ -85,8 +85,8 @@ def create_app() -> Any:
                 "rowPredictions": rows,
                 "fieldPredictions": field_predictions,
                 "confidence": None,
-                "abstainReason": "table-structure-unresolved" if not rows else ("duplicate-row" if manual else None),
-                "manualReviewRequired": manual,
+                "abstainReason": ";".join(safety_reasons) if safety_reasons else None,
+                "manualReviewRequired": bool(safety_reasons),
                 "processingTimeMs": round((time.perf_counter() - started) * 1000),
                 "modelLoadTimeMs": _model_load_ms,
                 "memoryBytes": None,
