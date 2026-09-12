@@ -2,9 +2,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { runBrowserCandidates } from "../../../ocr/bakeoff/browser-candidates";
-import { diagnoseBrowserGeometry } from "../../../ocr/bakeoff/root-cause-diagnostics";
-import { runP2Local } from "../../../ocr/bakeoff/p2-client";
+import { runBrowserCandidates } from "../../ocr/bakeoff/browser-candidates";
+import { diagnoseBrowserGeometry } from "../../ocr/bakeoff/root-cause-diagnostics";
+import { runP2Local } from "../../ocr/bakeoff/p2-client";
 
 const DEFAULT_ENDPOINT = "http://127.0.0.1:8765";
 
