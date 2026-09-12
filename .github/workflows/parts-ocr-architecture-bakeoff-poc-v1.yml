@@ -26,6 +26,8 @@ jobs:
           python-version: "3.11"
       - name: Bakeoff contract and P2 core
         run: node scripts/parts-ocr-bakeoff-contract-audit.mjs
+      - name: Bakeoff scorer alignment self-test
+        run: node scripts/score-parts-ocr-bakeoff-v1.mjs --self-test
       - name: Evaluation integrity v2
         run: node scripts/validate-ocr-evaluation-integrity-v2.mjs
       - name: Parts regression
