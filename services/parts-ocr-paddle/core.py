@@ -149,6 +149,22 @@ def structure_diagnostics(payload: Any) -> dict[str, Any]:
     }
 
 
+def p2_safety_reasons(payload: Any, rows: list[dict[str, Any]]) -> list[str]:
+    """Fail-closed P2 safety classification without changing parsed row semantics."""
+    diagnostics = structure_diagnostics(payload)
+    reasons: list[str] = []
+    if not rows:
+        reasons.append("table-structure-unresolved")
+    candidates = diagnostics["headerCandidates"]
+    if len(candidates) != 1:
+        reasons.append("ambiguous-table-structure")
+    if candidates and any(candidate["mappedFieldCount"] < len(FIELDS) for candidate in candidates):
+        reasons.append("partial-header-mapping")
+    if any(row.get("duplicateOf") for row in rows):
+        reasons.append("duplicate-row")
+    return list(dict.fromkeys(reasons))
+
+
 def rows_from_structure(payload: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for html in find_table_html(payload):
