@@ -29,7 +29,11 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - Default operating rules may be changed when following them would create disproportionate delay, duplicated work, or infrastructure burden without materially improving safety or decision quality.
 - Before changing a default operating rule, management must explain to the user: (1) why the exception is useful, (2) what changes, (3) the risk, and (4) the alternative. User approval is required when the change is material.
 - Do not accumulate HOLDs mechanically. Re-check whether the original risk still exists and whether a cheaper/simpler control provides equivalent protection.
-- If a governance step becomes self-referential busywork (for example, rebuilding infrastructure solely to re-score obsolete non-adoption experiments), management must evaluate whether the evidence can be preserved as historical diagnostic and the gate safely redefined.
+- If a governance step becomes self-referential busywork, management must evaluate whether the evidence can be preserved as historical diagnostic and the gate safely redefined.
+- Numeric limits such as “one run only”, “one Preview only”, or a fixed retry count are default controls unless explicitly declared a hard invariant. They must not be enforced mechanically when a justified retry or additional run materially improves reliability or development speed without weakening safety.
+- Evaluation reruns are allowed for technical recovery (download/init failure, timeout, crash, interrupted run, file-selection/operator error), for reproducibility/variance checks, or for another documented engineering reason. These reruns do not by themselves constitute tuning.
+- Repeated runs that change candidate thresholds, crop/parser/OCR configuration, routing, or other accuracy-affecting behavior after observing Regression results are tuning and must be tracked as such. They are allowed only under the applicable lane GO and must not be presented as untouched Validation evidence.
+- Management should prefer the minimum number of runs needed for a reliable decision, not an arbitrary minimum or maximum count.
 
 ## ChatGPT Work / normal chat / model-selection policy
 
@@ -73,9 +77,6 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 ### Incident 3 — Vercel deployment flood / Preview blocking
 - `vercel-parts-ocr` previously exceeded 100 deployments in 24h, blocking safe Preview/OCR real-device work.
 - 2026-09-11 incident severity HIGH.
-- Root configuration history:
-  - `dff03bf4f2dc3abfb7c53c1b3767d845ebcb9469` introduced legacy `[deploy]`-marker `ignoreCommand`.
-  - `44928ded4e1d0f8ce35bd94507b3da46fdadc0c2` added `git.deploymentEnabled=false` while retaining that old gate.
 - CANCELED records count as Deployment records for management safety auditing.
 - Formal incident document: `docs/ICB_DEPLOYMENT_GOVERNANCE_INCIDENT_20260911.md`.
 
@@ -83,53 +84,12 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 
 Status: **automatic-deployment incident CONTAINED; normal GitHub development RESUMED; Preview re-enable validation remains HOLD**.
 
-### Corrected control model
 - Ordinary GitHub push -> Vercel Deployment records: **0**.
 - `git.deploymentEnabled=false` is the single repository-level Git auto-deploy lock.
 - Legacy Vercel `ignoreCommand` / `[deploy]` marker gate is retired on active lanes.
 - Deployment Safety regression rejects reintroduction of `ignoreCommand`.
-- GitHub Integration remains connected; Disconnect is not required because zero automatic deployments was measured with the integration retained.
-- Preview needed -> management GO -> exact branch/HEAD -> exactly one explicit deployment.
-- Do not use small-change Preview deployments.
-
-### 2026-09-11 live verification
-- Connected Vercel team: Hobby plan.
-- Project `vercel-parts-ocr` confirmed linked to GitHub repo `massaikimono-commits/vercel-parts-ocr`.
-- Initial preceding-24h audit: 4 Deployment records; 4 CANCELED, 0 READY, 0 ERROR, all tied to earlier OCR experiment/eval pushes.
-- Validation window beginning 2026-09-11 18:30 JST: active-lane GitHub pushes produced **0 new Vercel Deployment records**.
-- Zero-deployment push validation covered:
-  - `preview/schedule-ux-20260903`
-  - `management/icb-control-plane-20260910`
-  - `eval/certificate-qr-stage-a21-4-format-counterfactual`
-  - `experiment/parts-ocr-stage-a22-cell-crop-correction`
-  - `eval/parts-ocr-stage-a22-cell-crop-correction`
-- App Deployment Safety run `34585226425`: SUCCESS after safety regression was updated to the new single-lock policy.
-
-### Active-lane infrastructure HEADs after containment
-- App branch infrastructure HEAD: `8a5796834ac0dd43ef56e94a2a75557a57ef5d2a`.
-- Management branch deployment-policy commits include `9cc665dcef4d3bf33f1c9fa69196f77a8d6cc48e`, `e5fa617fb4b52a70ec034d59d11329238967fb8b`, addendum commit `a88707b3410c213ae24d1fefc4199ccebdd01c0a`, incident-status commit `b840dbbf5077a610c996b33b99f490a493acf57f`.
-- Vehicle OCR eval infrastructure HEAD: `6481e6216502589f5620240a0b004430d16eb366`; formal OCR logic/adoption status is unchanged.
-- Parts OCR source infrastructure HEAD: `3d83f2f0b11938bdb1184422beeec3dbb9083f2c`; formal OCR logic/adoption status is unchanged.
-- Parts OCR eval infrastructure HEAD: `3dbde887de67b568d716451542a9ac62647311f2`; formal OCR logic/adoption status is unchanged.
-
-### Mandatory management audit
-At management start and before Preview GO, inspect where tooling permits:
-- Vercel project state
-- preceding-24h Deployment count
-- READY / CANCELED / ERROR / other counts
-- source branch / commit SHA
-- Production target change
-- current `vercel.json`
-- relevant Git Integration / project settings
-- whether ordinary pushes generated any Deployment record
-
-If an unintended Deployment record appears, stop pushes in the affected lane and reopen this incident as OPEN/HIGH.
-
-### Preview re-enable condition
-Vercel Preview remains HOLD until the exact explicit deployment path and exact target HEAD are confirmed, the current 24h state is checked, and one required Preview is created once and verified without Production changes. This Preview-specific HOLD **does not block normal GitHub development**.
-
-### Parent-spec next revision
-Required text is staged at `docs/ICB_SPEC_NEXT_DEPLOYMENT_GOVERNANCE_ADDENDUM.md`. It must be integrated into the next formal ICB-SPEC revision.
+- GitHub Integration remains connected.
+- Preview needed -> management GO -> exact branch/HEAD -> controlled explicit deployment. “Exactly one” is a default anti-spam target, not an absolute cap: additional Preview attempts are permitted when technically justified (failed deployment, reproducibility/verification need, or a materially changed candidate), while unnecessary small-change Preview spam remains prohibited.
 
 ## Production/shared-resource rules
 
@@ -145,69 +105,32 @@ Required text is staged at `docs/ICB_SPEC_NEXT_DEPLOYMENT_GOVERNANCE_ADDENDUM.md
 - Branch: `preview/schedule-ux-20260903`.
 - Current branch/infrastructure HEAD: `8a5796834ac0dd43ef56e94a2a75557a57ef5d2a`.
 - Last accepted app runtime baseline: `63e15de0ae9137b6c473b42a085600605abf855c`.
-- Difference after that runtime baseline is deployment-governance infrastructure only (`vercel.json` + deployment-safety regression); no app runtime feature change from the containment batch.
 - PR #62: Draft / Open / unmerged; base `main`.
 - main SHA remains `20a715bf46156282b686a617d6744a040bc17fb3` unless independently reverified otherwise.
-- Full ICB-SPEC v1.3 section-by-section app-core audit: COMPLETE under current safe conditions.
-- Scope-bound result at runtime baseline: excluding shared DB mutation, OCR tuning, review-only items, final physical print alignment, and Production reflection, immediately implementable confirmed-spec + explicit-request gaps = 0.
-- Parent-spec day-navigation repair remains accepted: `← 前日 / 今日 / 明日 →`.
 - Normal app/UX GitHub development: RESUMED.
 - Vercel Preview/iPhone formal UX adoption: HOLD until Preview re-enable validation.
 
-### Retained technical-PASS UX Preview candidates
-- schedule detail -> next schedule registration
-- schedule detail -> customer/vehicle info
-- one-tap phone action when phone exists
-- schedule detail work-state direct update
-- schedule detail -> one-day schedule
-- schedule detail/history/photo selected-vehicle context preservation
-- customer/vehicle -> next schedule registration
-- schedule detail -> lease maintenance contract
-- customer/vehicle same-tab search-state memory
-- integrated history source filter
-- history/photo -> same vehicle next schedule / inspection
-- week navigation anchor sync
-- month mobile visible-row count consistency
-- lease maintenance -> same vehicle next schedule / inspection
-- All remain technical PASS only; UX adoption awaits one meaningful Vercel Preview + iPhone acceptance.
-
-### Performance guard — ICB-SPEC v1.3 Section 20
-- New functions must not make ordinary operation heavy at several-thousand-vehicle scale.
-- Top/one-day schedule must not preload all customers/vehicles.
-- No resident OCR observer/listener/storage patch on ordinary screens.
-- Keep bounded search/page sizes.
-- Vehicle photos: selected vehicle only, `PHOTO_PAGE_SIZE=24`, original signed URL only on explicit open.
-- Integrated history: selected vehicle only, `SOURCE_PAGE_SIZE=25`, bounded display paging.
-- Final perceived-performance confirmation remains part of iPhone Preview review.
-
 ### Vehicle certificate QR/OCR
 - Frozen body: `work/certificate-photo-ocr` HEAD `7b421eea35154baa5b19e61e56151a8d73363bbf`; HOLD.
-- Formal A21.8 logic source remains `b7230adf4acf3288c5fc3811d32309247361dcf1`; current eval branch infrastructure HEAD `6481e6216502589f5620240a0b004430d16eb366` only adds deployment-governance infrastructure after the formal logic state.
 - Formal Photo QR Decode remains 28/47; 31/47 candidate only; adopted HEAD none.
 - Fixed8 authorization remains unconsumed.
-- GitHub experiment/eval development may resume when lane-specific GO exists; Frozen body stays HOLD.
-- Real-device A21.8 run still requires the Preview-specific HOLD to be released.
 
 ### Parts OCR
 - Frozen body: `work/parts-ocr-regression` HEAD `6a31ec4b9028410e90a8dbd9c8b40d53de7742d2`; HOLD.
-- Formal source logic HEAD remains `391ffcdb31050df2afa028ca00ec0d41c55a6f8a`; source branch infrastructure HEAD is `3d83f2f0b11938bdb1184422beeec3dbb9083f2c`.
-- Formal eval baseline remains `fa8df79c3eff7cc9c100d48b357d09c930168cdf`; eval branch infrastructure HEAD is `3dbde887de67b568d716451542a9ac62647311f2`.
-- Stage A22 static/CI PASS; real-photo Formal NOT YET EVALUATED.
 - Architecture Bakeoff branch: `eval/parts-ocr-architecture-bakeoff-poc-v1`; current verified HEAD `869b1d44e6bedf084d51467fbe6b5b67597239b2`.
 - Bakeoff candidates remain fixed: P0 `frozen-control-adapter.v1`, P1 `guided-known-template-a22.v1`, P2 `ppstructurev3-ppocrv5-server.v1`, P4-L `p4-local-deterministic.v1`.
 - Bakeoff scoring is fixed at `order-preserving-weighted-v1`; scorer self-test, integrity, regression, layout semantics, A22 invariants, dependency install, and Full Next build all PASS in Actions run `34664122198`.
 - GT runtime isolation remains PASS; corrected Manifest v2 / fixture remain scoring-only.
 - P2 real-image inference is still BLOCKED only by model-weight acquisition/initialization in a local/private environment; candidate logic is not to be tuned from Regression.
-- Next heavy step: official PaddleOCR/PaddlePaddle model acquisition locally/private, P2 init, then one fixed Regression run of 12 captures across P0/P1/P2/P4-L. No Validation/tuning/Formal adoption in that Work.
-- One formal yellow12 iPhone run, auto-map IMG_0684, still requires Preview-specific HOLD release.
-- Do not advance to A23 without evidence.
+- Next heavy step: official PaddleOCR/PaddlePaddle model acquisition local/private, P2 init, then Regression measurement of the 12 captures across P0/P1/P2/P4-L. One clean run is the default; technical recovery or justified reproducibility reruns are allowed. Accuracy-driven config changes are tuning and must be tracked separately.
+- No Validation/tuning/Formal adoption is bundled into that measurement task.
 
 ## Global HOLD matrix
 
 - main: HOLD
 - Netlify Production: HOLD
 - Vercel Production: HOLD
-- Vercel Preview: HOLD until exact one-time Preview path is validated
+- Vercel Preview: HOLD until controlled Preview path is validated
 - shared Supabase: HOLD unless explicit DB GO
 - `legal_3m`: HOLD
 - Shared-DB/RLS role separation: HOLD pending review
@@ -216,9 +139,9 @@ Required text is staged at `docs/ICB_SPEC_NEXT_DEPLOYMENT_GOVERNANCE_ADDENDUM.md
 - Vehicle certificate OCR Frozen: HOLD
 - Parts OCR Frozen: HOLD
 - Parts OCR Stage B: HOLD
+- Parts OCR A23: STOP pending architecture comparison
+- Parts OCR Formal adoption: HOLD
 - PR merge/Production reflection: no implicit GO
-- Normal GitHub app/UX development: RESUMED
-- Normal GitHub OCR experiment/eval development: RESUMED subject to lane-specific GO
 
 ## Absolute prohibitions
 
@@ -227,13 +150,14 @@ Required text is staged at `docs/ICB_SPEC_NEXT_DEPLOYMENT_GOVERNANCE_ADDENDUM.md
 - No implicit main merge.
 - No implicit Netlify Production deploy.
 - No implicit Vercel Production deploy.
-- No small-change Preview spam.
+- No unnecessary small-change Preview spam.
 - No declaring Deployment Safety PASS merely because no intentional Preview was created.
 - No reintroducing Vercel `ignoreCommand` / `[deploy]` marker gate on active lanes.
 - No changing `vercel.json`, Git Integration, `deploymentEnabled`, Deploy Hooks, Git auto deployment, Production Branch, project settings, or CLI/API deployment method without management approval and measured verification.
 - No GT use in OCR runtime/control/candidate/stop/fallback/expected-count logic; GT scoring-only.
 - No declaring OCR accuracy improvement from CI/static PASS without formal real-photo evidence.
 - No accepting a UX candidate that contradicts explicit confirmed parent spec.
+- No treating a default numeric run/retry/Preview count as a hard invariant unless the parent spec explicitly declares it one.
 
 ## Handoff requirement
 
