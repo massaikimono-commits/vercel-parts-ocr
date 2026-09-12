@@ -59,7 +59,13 @@ function readParts(): Part[] {
 }
 
 function readActive(): ActiveVehicle | null {
-  try { return JSON.parse(sessionStorage.getItem(ACTIVE_KEY) || "null"); } catch { return null; }
+  try {
+    return JSON.parse(
+      sessionStorage.getItem(ACTIVE_KEY) ||
+      localStorage.getItem(ACTIVE_KEY) ||
+      "null"
+    );
+  } catch { return null; }
 }
 
 function readBeforeIds() {
@@ -91,6 +97,14 @@ export default function PartsDataPage() {
   function persist(next: Part[]) {
     setParts(next);
     localStorage.setItem(PARTS_KEY, JSON.stringify(next));
+  }
+
+  function continueWithActive(path: string) {
+    if (!activeVehicle) return;
+    const payload = JSON.stringify(activeVehicle);
+    sessionStorage.setItem(ACTIVE_KEY, payload);
+    localStorage.setItem(ACTIVE_KEY, payload);
+    location.assign(path);
   }
 
   async function loadFormalParts(
@@ -265,6 +279,17 @@ export default function PartsDataPage() {
           <button onClick={() => location.assign("/vehicle-workflow")}>車両を選び直す</button>
         </div>
 
+        {activeVehicle?.id && (
+          <div className="continueBox">
+            <b>この車両で続ける</b>
+            <div className="actions">
+              <button onClick={() => continueWithActive("/schedule/active")}>📅 次回予定登録</button>
+              <button onClick={() => continueWithActive("/inspection")}>🧾 記録簿</button>
+              <button onClick={() => continueWithActive(`/customer-vehicles/history?vehicle=${encodeURIComponent(activeVehicle.id!)}`)}>🕘 統合履歴</button>
+            </div>
+          </div>
+        )}
+
         {activeVehicle && currentOcrParts.length > 0 && (
           <div className="newParts">
             <b>今回のOCRで追加された未割り当て部品：{currentOcrParts.length}件</b>
@@ -408,7 +433,7 @@ export default function PartsDataPage() {
       </section>
 
       <style jsx global>{`
-        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:900px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button{border:1px solid #cdd7e5;border-radius:12px;background:#fff;color:#2674e8;padding:10px 13px;font-size:15px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}p{color:#5d6878;line-height:1.7}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:13px 15px;margin:14px 0}.vehicleBox{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid #dbe3ee;border-radius:14px;padding:14px}.vehicleBox small{color:#748095}.newParts{margin-top:14px;background:#fff8dd;border:1px solid #f0dc8d;border-radius:14px;padding:14px;display:grid;gap:10px}.primary{background:#2f6fe4;color:white;border-color:#2f6fe4}.filters,.actions,.rowActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.filters .selected{background:#2f6fe4;color:white;border-color:#2f6fe4}.partList{display:grid;gap:10px}.part{border:1px solid #dbe3ee;border-radius:14px;padding:14px}.partTop{display:flex;justify-content:space-between;gap:10px;align-items:center}.partTop span{font-size:13px;background:#eef4ff;color:#2f6fe4;border-radius:999px;padding:5px 9px}.formalHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.formalHead h2{margin:0}.formalHead small,.formalMeta{color:#748095}.formalHead>span{font-size:12px;background:#eef4ff;color:#2f6fe4;border-radius:999px;padding:5px 8px}.formalList{margin-top:10px}.formalPart{border-color:#bcd8c5;background:#f8fcf9}.formalMeta{display:block;margin-top:8px;font-size:11px}.numbers{display:flex;gap:18px;flex-wrap:wrap;color:#5d6878;margin-top:10px}.danger{color:#c43f3f}.empty{padding:22px;text-align:center;color:#8290a3;background:#f8fafc;border-radius:12px}@media(max-width:600px){.page{padding:8px 8px 34px}.top{margin-bottom:7px}.top button{padding:8px 10px}.card{padding:13px;margin-bottom:10px;border-radius:16px}.partsLead h1{font-size:23px;line-height:1.2;margin-bottom:5px}.partsIntro{display:none}.notice{margin:5px 0 7px;padding:8px 10px;font-size:13px}.vehicleBox,.partTop{align-items:flex-start;flex-direction:column}.vehicleBox{padding:10px;gap:7px}.vehicleBox button{min-height:40px;padding:8px 10px}.newParts{margin-top:8px;padding:10px;gap:7px}.filters,.actions{margin-top:8px;gap:5px}.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.filters button{min-width:0;padding:8px 5px;min-height:40px;font-size:12px}.partsLead>.actions button{padding:8px 10px;min-height:40px;font-size:13px}.partList{gap:7px}.part{padding:10px}.numbers{margin-top:7px;gap:10px}.rowActions{margin-top:8px;gap:5px}}
+        *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:900px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}button{border:1px solid #cdd7e5;border-radius:12px;background:#fff;color:#2674e8;padding:10px 13px;font-size:15px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}h1{font-size:32px;margin:0 0 10px}p{color:#5d6878;line-height:1.7}.notice{background:#e9f7ef;border:1px solid #bfe6ce;border-radius:12px;padding:13px 15px;margin:14px 0}.vehicleBox{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid #dbe3ee;border-radius:14px;padding:14px}.vehicleBox small{color:#748095}.continueBox{margin-top:12px;padding:12px 14px;border:1px solid #dbe3ee;border-radius:14px;background:#f8fbff}.continueBox>.actions{margin-top:8px}.newParts{margin-top:14px;background:#fff8dd;border:1px solid #f0dc8d;border-radius:14px;padding:14px;display:grid;gap:10px}.primary{background:#2f6fe4;color:white;border-color:#2f6fe4}.filters,.actions,.rowActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.filters .selected{background:#2f6fe4;color:white;border-color:#2f6fe4}.partList{display:grid;gap:10px}.part{border:1px solid #dbe3ee;border-radius:14px;padding:14px}.partTop{display:flex;justify-content:space-between;gap:10px;align-items:center}.partTop span{font-size:13px;background:#eef4ff;color:#2f6fe4;border-radius:999px;padding:5px 9px}.formalHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.formalHead h2{margin:0}.formalHead small,.formalMeta{color:#748095}.formalHead>span{font-size:12px;background:#eef4ff;color:#2f6fe4;border-radius:999px;padding:5px 8px}.formalList{margin-top:10px}.formalPart{border-color:#bcd8c5;background:#f8fcf9}.formalMeta{display:block;margin-top:8px;font-size:11px}.numbers{display:flex;gap:18px;flex-wrap:wrap;color:#5d6878;margin-top:10px}.danger{color:#c43f3f}.empty{padding:22px;text-align:center;color:#8290a3;background:#f8fafc;border-radius:12px}@media(max-width:600px){.page{padding:8px 8px 34px}.top{margin-bottom:7px}.top button{padding:8px 10px}.card{padding:13px;margin-bottom:10px;border-radius:16px}.partsLead h1{font-size:23px;line-height:1.2;margin-bottom:5px}.partsIntro{display:none}.notice{margin:5px 0 7px;padding:8px 10px;font-size:13px}.vehicleBox,.partTop{align-items:flex-start;flex-direction:column}.vehicleBox{padding:10px;gap:7px}.vehicleBox button{min-height:40px;padding:8px 10px}.continueBox{margin-top:8px;padding:10px}.continueBox .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.continueBox .actions button{min-width:0;padding:8px 5px;min-height:40px;font-size:12px}.newParts{margin-top:8px;padding:10px;gap:7px}.filters,.actions{margin-top:8px;gap:5px}.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.filters button{min-width:0;padding:8px 5px;min-height:40px;font-size:12px}.partsLead>.actions button{padding:8px 10px;min-height:40px;font-size:13px}.partList{gap:7px}.part{padding:10px}.numbers{margin-top:7px;gap:10px}.rowActions{margin-top:8px;gap:5px}}
       `}</style>
     </main>
   );
