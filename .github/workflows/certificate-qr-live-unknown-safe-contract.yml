@@ -7,6 +7,8 @@ on:
     paths:
       - "app/eval/certificate-qr-live-scan/**"
       - "scripts/certificate-qr-live-unknown-safe-contract-test.mjs"
+      - "scripts/deployment-safety-regression.mjs"
+      - "vercel.json"
       - ".github/workflows/certificate-qr-live-unknown-safe-contract.yml"
       - "package.json"
       - "next.config.mjs"
@@ -32,6 +34,9 @@ jobs:
 
       - name: Vehicle certificate regression
         run: npm run test:certificate
+
+      - name: Deployment safety regression
+        run: node scripts/deployment-safety-regression.mjs
 
       - name: Build Next.js app
         env:
