@@ -31,6 +31,20 @@ This file is the required source of truth for GO/HOLD, adoption, DB change, depl
 - Do not accumulate HOLDs mechanically. Re-check whether the original risk still exists and whether a cheaper/simpler control provides equivalent protection.
 - If a governance step becomes self-referential busywork (for example, rebuilding infrastructure solely to re-score obsolete non-adoption experiments), management must evaluate whether the evidence can be preserved as historical diagnostic and the gate safely redefined.
 
+## ChatGPT Work / normal chat / model-selection policy
+
+- Overall management chooses whether a task belongs in normal chat or ChatGPT Work. Work is not a mandatory ceremony and must not be the default when the same task can be completed safely in chat.
+- Normal chat owns management work: GitHub branch/HEAD/diff verification, Actions/CI review, spec matching, GO/HOLD decisions, Deployment Safety checks, lightweight code/doc fixes, handoff drafting, and result audits.
+- Work is reserved for materially heavier execution: large multi-file implementation, OCR architecture PoCs, long cross-codebase research, heavy multi-candidate measurement, or substantial R&D that benefits from an isolated work environment.
+- Work quota limits must not stop ICB development. Continue all chat-capable work while quota is unavailable; only the truly Work-dependent portion waits or is split into a narrower task.
+- Before using Work, management must ask: (1) can normal chat finish this safely, and (2) is Work materially more efficient for the remaining task. If the answer to the first is yes and the second is no, use chat.
+- Do not use Work for small checks, one-file fixes, routine management decisions, or tasks that can be verified directly through connected GitHub/Vercel/DB tools.
+- Do not bundle unrelated heavy stages into one giant Work instruction when they can be split. In particular, avoid combining implementation, model download/init, large inference runs, scoring, analysis, and full reporting unless the coupling is necessary.
+- Work reports should be only as detailed as needed for safety and management decisions. Report verbosity is a default operating rule and may be reduced to preserve quota when the same audit facts remain available.
+- Management also chooses model/thinking strength. Use standard/default effort for fast checks and routine audits, Medium-equivalent effort for significant design/comparison decisions, and High-equivalent effort for genuinely difficult root-cause analysis, architecture decisions, or high-risk changes.
+- Maximum thinking/heaviest mode is not a quality requirement. Use the minimum level that preserves decision quality.
+- If model or Work limits affect progress, explain what is actually limited, what can continue in chat, what truly must wait, and the available alternative. Do not tell the user to wait when useful work can continue.
+
 ## OCR Architecture / Generalization Gate
 
 - Fixed regression sets are regression evidence, not proof of generalization.
@@ -124,7 +138,7 @@ Required text is staged at `docs/ICB_SPEC_NEXT_DEPLOYMENT_GOVERNANCE_ADDENDUM.md
 - Vercel Preview must not drive shared DB schema changes while Netlify Production is behind.
 - Shared DB mutation requires explicit management GO.
 
-## Current lane ledger — verified/updated 2026-09-11 JST
+## Current lane ledger — verified/updated 2026-09-12 JST
 
 ### App main
 - Repo: `massaikimono-commits/vercel-parts-ocr`.
@@ -179,7 +193,12 @@ Required text is staged at `docs/ICB_SPEC_NEXT_DEPLOYMENT_GOVERNANCE_ADDENDUM.md
 - Formal source logic HEAD remains `391ffcdb31050df2afa028ca00ec0d41c55a6f8a`; source branch infrastructure HEAD is `3d83f2f0b11938bdb1184422beeec3dbb9083f2c`.
 - Formal eval baseline remains `fa8df79c3eff7cc9c100d48b357d09c930168cdf`; eval branch infrastructure HEAD is `3dbde887de67b568d716451542a9ac62647311f2`.
 - Stage A22 static/CI PASS; real-photo Formal NOT YET EVALUATED.
-- GitHub source/eval development may resume when lane-specific GO exists; Frozen body stays HOLD.
+- Architecture Bakeoff branch: `eval/parts-ocr-architecture-bakeoff-poc-v1`; current verified HEAD `869b1d44e6bedf084d51467fbe6b5b67597239b2`.
+- Bakeoff candidates remain fixed: P0 `frozen-control-adapter.v1`, P1 `guided-known-template-a22.v1`, P2 `ppstructurev3-ppocrv5-server.v1`, P4-L `p4-local-deterministic.v1`.
+- Bakeoff scoring is fixed at `order-preserving-weighted-v1`; scorer self-test, integrity, regression, layout semantics, A22 invariants, dependency install, and Full Next build all PASS in Actions run `34664122198`.
+- GT runtime isolation remains PASS; corrected Manifest v2 / fixture remain scoring-only.
+- P2 real-image inference is still BLOCKED only by model-weight acquisition/initialization in a local/private environment; candidate logic is not to be tuned from Regression.
+- Next heavy step: official PaddleOCR/PaddlePaddle model acquisition locally/private, P2 init, then one fixed Regression run of 12 captures across P0/P1/P2/P4-L. No Validation/tuning/Formal adoption in that Work.
 - One formal yellow12 iPhone run, auto-map IMG_0684, still requires Preview-specific HOLD release.
 - Do not advance to A23 without evidence.
 
