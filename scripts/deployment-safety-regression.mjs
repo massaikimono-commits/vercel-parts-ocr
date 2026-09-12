@@ -5,6 +5,26 @@ const fail = (message) => errors.push(message);
 
 const vercelPath = "vercel.json";
 const netlifyPath = "netlify.toml";
+const exactPreviewBranch = "eval/certificate-qr-live-unknown-safe-contract";
+
+function branchDeploymentAllowed(rules, branch) {
+  if (!rules || typeof rules !== "object" || Array.isArray(rules)) return false;
+  if (rules[branch] === true) return true;
+  if (rules[branch] === false) return false;
+  const namespaceRules = [
+    ["work/", "work/**"],
+    ["eval/", "eval/**"],
+    ["experiment/", "experiment/**"],
+    ["poc/", "poc/**"],
+    ["management/", "management/**"],
+    ["docs/", "docs/**"],
+    ["dependabot/", "dependabot/**"],
+  ];
+  for (const [prefix, rule] of namespaceRules) {
+    if (branch.startsWith(prefix) && rules[rule] === false) return false;
+  }
+  return rules["**"] === true;
+}
 
 if (!fs.existsSync(vercelPath)) {
   fail("vercel.json is missing.");
@@ -16,8 +36,42 @@ if (!fs.existsSync(vercelPath)) {
     fail(`vercel.json is not valid JSON: ${error.message}`);
   }
   if (vercel) {
-    if (vercel?.git?.deploymentEnabled !== false) {
-      fail("Vercel Git auto-deploy must stay disabled (git.deploymentEnabled=false).");
+    const rules = vercel?.git?.deploymentEnabled;
+    if (!rules || typeof rules !== "object" || Array.isArray(rules)) {
+      fail("Vercel git.deploymentEnabled must be a selective allowlist object on this Live QR preview lane.");
+    } else {
+      const requiredFalseRules = [
+        "**",
+        "main",
+        "work/**",
+        "eval/**",
+        "experiment/**",
+        "poc/**",
+        "management/**",
+        "docs/**",
+        "dependabot/**",
+      ];
+      for (const rule of requiredFalseRules) {
+        if (rules[rule] !== false) fail(`Vercel deployment rule must remain false: ${rule}`);
+      }
+      if (rules[exactPreviewBranch] !== true) {
+        fail(`Exact Live QR preview branch must be the only true Vercel rule: ${exactPreviewBranch}`);
+      }
+      const trueRules = Object.entries(rules)
+        .filter(([, value]) => value === true)
+        .map(([key]) => key)
+        .sort();
+      if (trueRules.length !== 1 || trueRules[0] !== exactPreviewBranch) {
+        fail(`Vercel true-rule allowlist must contain only ${exactPreviewBranch}; got ${JSON.stringify(trueRules)}`);
+      }
+      if (!branchDeploymentAllowed(rules, exactPreviewBranch)) {
+        fail("Exact Live QR preview branch is not deployment-enabled by the selective policy.");
+      }
+      for (const deniedBranch of ["feature/unapproved", "eval/other-diagnostic", "hotfix/foo"]) {
+        if (branchDeploymentAllowed(rules, deniedBranch)) {
+          fail(`Unapproved branch must fail closed under catch-all false: ${deniedBranch}`);
+        }
+      }
     }
     if (Object.prototype.hasOwnProperty.call(vercel, "ignoreCommand")) {
       fail("Legacy Vercel ignoreCommand/[deploy] gate must stay retired.");
@@ -26,8 +80,7 @@ if (!fs.existsSync(vercelPath)) {
 }
 
 // This Live QR eval lane is not authorized to alter Netlify governance.
-// Keep the pre-existing Netlify configuration byte-for-byte stable while
-// independently enforcing the Vercel single-lock policy above.
+// Keep the pre-existing Netlify configuration byte-for-byte stable.
 const expectedNetlify = `[build]\n  command = "npm run build"\n  publish = ".next"\n  ignore = "git log -1 --pretty=%B | grep -Fq \\'[deploy netlify]\\' && exit 1 || exit 0"\n`;
 if (!fs.existsSync(netlifyPath)) {
   fail("netlify.toml is missing.");
@@ -55,7 +108,9 @@ if (errors.length) {
 }
 
 console.log("Deployment safety check passed.");
-console.log("- Vercel Git auto-deploy disabled by git.deploymentEnabled=false.");
+console.log(`- Vercel Preview allowlist true rule: ${exactPreviewBranch}.`);
+console.log("- Catch-all, main, and all named branch namespaces remain false.");
+console.log("- Representative unapproved branches fail closed.");
 console.log("- Legacy Vercel ignoreCommand/[deploy] gate absent.");
 console.log("- Netlify configuration unchanged on this eval lane.");
 console.log("- No direct Netlify/Vercel deploy command exists in GitHub Actions.");
