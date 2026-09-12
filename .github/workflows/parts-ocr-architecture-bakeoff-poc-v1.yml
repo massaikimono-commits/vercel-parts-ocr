@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - eval/parts-ocr-architecture-bakeoff-poc-v1
+      - eval/parts-ocr-bakeoff-root-cause-audit
   workflow_dispatch:
 
 permissions:
