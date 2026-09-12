@@ -1,6 +1,6 @@
 import unittest
 
-from core import find_table_html, header_mapping, normalize, rows_from_html, rows_from_structure, structure_diagnostics
+from core import find_table_html, header_mapping, normalize, p2_safety_reasons, rows_from_html, rows_from_structure, structure_diagnostics
 
 
 class CoreTest(unittest.TestCase):
@@ -37,6 +37,28 @@ class CoreTest(unittest.TestCase):
         self.assertTrue(trace["headerCandidates"][0]["hasName"])
         self.assertNotIn("secret-a", str(trace))
         self.assertNotIn("secret-b", str(trace))
+
+    def test_partial_header_rows_require_manual_review(self):
+        html = "<table><tr><th>名称</th><th>個数</th></tr><tr><td>A</td><td>1</td></tr></table>"
+        payload = {"table_res_list": [{"pred_html": html}]}
+        rows = rows_from_structure(payload)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("partial-header-mapping", p2_safety_reasons(payload, rows))
+
+    def test_full_single_table_can_pass_safety_contract(self):
+        html = "<table><tr><th>名称</th><th>個数</th><th>定価</th><th>仕入</th></tr><tr><td>A</td><td>1</td><td>100</td><td>80</td></tr></table>"
+        payload = {"table_res_list": [{"pred_html": html}]}
+        rows = rows_from_structure(payload)
+        self.assertEqual(p2_safety_reasons(payload, rows), [])
+
+    def test_multiple_tables_are_fail_closed(self):
+        full = "<table><tr><th>名称</th><th>個数</th><th>定価</th><th>仕入</th></tr><tr><td>A</td><td>1</td><td>100</td><td>80</td></tr></table>"
+        partial = "<table><tr><th>名称</th><th>個数</th></tr><tr><td>B</td><td>2</td></tr></table>"
+        payload = {"table_res_list": [{"pred_html": full}, {"pred_html": partial}]}
+        rows = rows_from_structure(payload)
+        reasons = p2_safety_reasons(payload, rows)
+        self.assertIn("ambiguous-table-structure", reasons)
+        self.assertIn("partial-header-mapping", reasons)
 
 
 if __name__ == "__main__":
