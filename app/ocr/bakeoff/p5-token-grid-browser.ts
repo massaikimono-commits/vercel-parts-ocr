@@ -2,7 +2,8 @@
 "use client";
 
 import { orientedCanvas } from "../diagnostic/stage-a20/a19-table-crops";
-import { reconstructTokenGrid, type P5Result, type P5Token } from "./p5-token-grid-core.mjs";
+import { reconstructTokenGrid } from "./p5-token-grid-core.mjs";
+import type { P5Result, P5Token } from "./p5-token-grid-types";
 
 function canvasBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("blob failed")), "image/jpeg", .96));
@@ -44,7 +45,9 @@ export type P5BrowserResult = P5Result & {
   sourceHeight: number;
   rotated: boolean;
   ocrTokenCount: number;
+  assignedTokenCount: number;
   ocrProcessingTimeMs: number;
+  tableLocalizationStatus: "PAGE_SCOPE_ONLY";
 };
 
 export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult> {
@@ -77,13 +80,16 @@ export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult
     });
     const elapsed = Math.round(performance.now() - started);
     const tokens = parseTsv(String(recognized.data.tsv || ""));
+    const reconstructed = reconstructTokenGrid(tokens) as P5Result;
     return {
-      ...reconstructTokenGrid(tokens),
+      ...reconstructed,
       sourceWidth: source.canvas.width,
       sourceHeight: source.canvas.height,
       rotated: source.rotate,
       ocrTokenCount: tokens.length,
+      assignedTokenCount: reconstructed.rows.reduce((sum, row) => sum + row.sourceTokenCount, 0),
       ocrProcessingTimeMs: elapsed,
+      tableLocalizationStatus: "PAGE_SCOPE_ONLY",
     };
   } finally {
     await worker.terminate().catch(() => undefined);
