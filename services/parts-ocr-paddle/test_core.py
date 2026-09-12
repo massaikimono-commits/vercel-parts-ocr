@@ -1,6 +1,6 @@
 import unittest
 
-from core import find_table_html, header_mapping, normalize, rows_from_html, rows_from_structure
+from core import find_table_html, header_mapping, normalize, rows_from_html, rows_from_structure, structure_diagnostics
 
 
 class CoreTest(unittest.TestCase):
@@ -26,6 +26,17 @@ class CoreTest(unittest.TestCase):
     def test_recursive_html_discovery(self):
         self.assertEqual(len(find_table_html({"nested": [{"pred_html": "<table></table>"}]})), 1)
         self.assertEqual(normalize("￥ 1,540", "cost"), "1540")
+
+    def test_structure_diagnostics_are_count_only(self):
+        html = "<table><tr><th>名称</th><th>個数</th></tr><tr><td>A</td><td>1</td></tr></table>"
+        trace = structure_diagnostics({"table_res_list": [{"pred_html": html}], "rec_texts": ["secret-a", "secret-b"]})
+        self.assertEqual(trace["tableHtmlCount"], 1)
+        self.assertEqual(trace["htmlRowCount"], 2)
+        self.assertEqual(trace["parsedRowCount"], 1)
+        self.assertEqual(trace["textLikeValueCount"], 2)
+        self.assertTrue(trace["headerCandidates"][0]["hasName"])
+        self.assertNotIn("secret-a", str(trace))
+        self.assertNotIn("secret-b", str(trace))
 
 
 if __name__ == "__main__":
