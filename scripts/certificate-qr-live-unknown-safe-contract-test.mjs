@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   LIVE_UNKNOWN_SAFE_CONTRACT_SCHEMA,
   evaluateUnknownSafeCandidate,
@@ -22,6 +23,18 @@ function unknown(overrides = {}) {
   const result = evaluateUnknownSafeCandidate(unknown());
   assert.equal(result.eligible, true);
   assert.deepEqual(result.rejectReasons, []);
+}
+
+{
+  const result = evaluateUnknownSafeCandidate(unknown({ parserSchemaRecognized: true }));
+  assert.equal(result.eligible, false);
+  assert(result.rejectReasons.includes("recognized-schema-not-unknown-safe"));
+}
+
+{
+  const result = evaluateUnknownSafeCandidate(unknown({ decodeIntegrityPass: false }));
+  assert.equal(result.eligible, false);
+  assert(result.rejectReasons.includes("decode-integrity-fail"));
 }
 
 {
@@ -121,4 +134,18 @@ function unknown(overrides = {}) {
   assert(result.holdReasons.includes("current-confirmed-regression"));
 }
 
-console.log("Live unknown-safe contract tests passed.");
+{
+  const page = fs.readFileSync("app/eval/certificate-qr-live-scan/page.jsx", "utf8");
+  assert(page.includes('import { evaluateUnknownSafeCompletion } from "./unknown-safe-contract.mjs";'));
+  assert(page.includes('evaluationVariant: "UNKNOWN_SAFE_STRICT"'));
+  assert(page.includes("unknownSafeStrictEvaluation: unknownSafeStrictSnapshot("));
+  assert(page.includes("const unknownSafeStrictUi = useMemo(() => unknownSafeStrictSnapshot("));
+  assert(page.includes("recognizedConfirmedCount: strict.recognizedConfirmedCount ?? null"));
+  assert(page.includes("rejectReasonCounts: strict.rejectReasonCounts || {}"));
+  assert(page.includes("UNKNOWN_SAFE_STRICT"));
+  assert(page.includes("cameraStopSemanticsChanged: false"));
+  assert(page.includes("currentSemanticsChanged: false"));
+  assert(page.includes("parserSeparatedSemanticsChanged: false"));
+}
+
+console.log("Live unknown-safe contract and evaluation wiring tests passed.");
