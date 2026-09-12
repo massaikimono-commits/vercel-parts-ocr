@@ -1,0 +1,33 @@
+name: Temporary Live Unknown-Safe Wiring
+
+on:
+  push:
+    branches:
+      - eval/certificate-qr-live-unknown-safe-contract
+    paths:
+      - ".github/workflows/_tmp-live-unknown-safe-wiring.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Apply deterministic wiring patch
+        run: node scripts/_tmp-apply-live-unknown-safe-wiring.mjs
+      - name: Remove temporary patch machinery
+        run: git rm scripts/_tmp-apply-live-unknown-safe-wiring.mjs .github/workflows/_tmp-live-unknown-safe-wiring.yml
+      - name: Commit and push final wiring
+        run: |
+          git config user.name "massaikimono-commits"
+          git config user.email "massa_ikimono@icloud.com"
+          git add app/eval/certificate-qr-live-scan/page.jsx
+          git commit -m "live qr: wire unknown-safe strict evaluation only"
+          git push origin HEAD:eval/certificate-qr-live-unknown-safe-contract
