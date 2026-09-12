@@ -1,0 +1,33 @@
+name: Parts OCR P5 token-grid PoC
+
+on:
+  push:
+    branches:
+      - eval/parts-ocr-architecture-p5-token-grid-poc
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poc-and-build:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder-key
+      NEXT_PUBLIC_EVAL_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: P5 token-grid feasibility
+        run: node scripts/parts-ocr-p5-token-grid-poc-test.mjs
+      - name: Existing bakeoff safety contract
+        run: node scripts/parts-ocr-bakeoff-contract-audit.mjs
+      - name: Evaluation integrity v2
+        run: node scripts/validate-ocr-evaluation-integrity-v2.mjs
+      - name: Install dependencies
+        run: npm install
+      - name: Full Next build
+        run: npm run build
