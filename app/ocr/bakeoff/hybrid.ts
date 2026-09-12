@@ -34,20 +34,23 @@ export function buildLocalHybrid(p1: BakeoffPrediction, p2: BakeoffPrediction): 
   const p2Score = p2Reasons.length + (p2.error ? 100 : 0);
   const selected = p1Score <= p2Score ? p1 : p2;
   const reasons = [...validateRows(selected.rowPredictions)];
+  if (selected.abstainReason) reasons.push(...selected.abstainReason.split(";").filter(Boolean).map((reason) => `selected:${reason}`));
+  if (selected.manualReviewRequired && !selected.abstainReason) reasons.push("selected-manual-review");
   if (disagreement) reasons.push("candidate-disagreement");
   if (!selected.qualityMetrics.accepted) reasons.push(...selected.qualityMetrics.rejectionReasons.map((reason) => `quality:${reason}`));
   if (p1.error && p2.error) reasons.push("all-candidates-error");
+  const uniqueReasons = [...new Set(reasons)];
   return {
     ...selected,
     schema: BAKEOFF_CONTRACT_VERSION,
     candidateId: "P4-L",
-    candidateVersion: "p4-local-deterministic.v1",
-    configHash: "sha256:09e18d5dca401bf64ec8393e87f948a64f35d608d05e16b3deca41345f477e86",
+    candidateVersion: "p4-local-deterministic.v2",
+    configHash: "sha256:9209641dc295bb21e8e1b8e01aa561233fd2d5641042b79a19e269d5c5881327",
     rowPredictions: selected.rowPredictions,
     fieldPredictions: fieldsFromRows(selected.rowPredictions),
     confidence: meanConfidence(selected.rowPredictions),
-    abstainReason: reasons.length ? reasons.join(";") : null,
-    manualReviewRequired: reasons.length > 0,
+    abstainReason: uniqueReasons.length ? uniqueReasons.join(";") : null,
+    manualReviewRequired: selected.manualReviewRequired || uniqueReasons.length > 0,
     processingTimeMs: p1.processingTimeMs + p2.processingTimeMs + Math.round(performance.now() - started),
     modelLoadTimeMs: (p1.modelLoadTimeMs ?? 0) + (p2.modelLoadTimeMs ?? 0),
     timeout: p1.timeout && p2.timeout,
