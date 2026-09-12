@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { evaluateUnknownSafeCompletion } from "./unknown-safe-contract.mjs";
 
 const LIVE_SCAN_REVISION = "live-poc-v3-candidate-lock-null-semantics-1";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
@@ -948,6 +949,54 @@ function parserSeparationCounterfactualSnapshot(state, evidenceMap) {
       positionClusters: candidate.positionClusters,
     })),
     allCandidateDiagnostics: candidates,
+  };
+}
+
+function unknownSafeStrictSnapshot(state, evidenceMap) {
+  const separated = parserSeparationCounterfactualSnapshot(state, evidenceMap);
+  const allCandidates = Array.isArray(separated?.allCandidateDiagnostics)
+    ? separated.allCandidateDiagnostics
+    : [];
+  const recognizedConfirmedCount = allCandidates.filter((candidate) =>
+    candidate.genericConfirmationPass && candidate.parserSchemaRecognized
+  ).length;
+  const currentConfirmedCount = Number(separated?.currentConfirmedCount || 0);
+  const kind = separated?.currentCompletion?.kind || null;
+  const expectedQrCount = Number.isInteger(separated?.currentCompletion?.expectedQrCount)
+    ? separated.currentCompletion.expectedQrCount
+    : null;
+  const candidates = allCandidates
+    .filter((candidate) => !candidate.parserSchemaRecognized)
+    .map((candidate) => ({
+      diagnosticId: candidate.diagnosticId,
+      parserSchemaRecognized: false,
+      parserSchemaClass: candidate.parserSchemaClass || "unrecognized-safe",
+      decodeIntegrityPass: Boolean(candidate.decodeIntegrityPass),
+      frameHitCount: Number(candidate.frameHitCount || 0),
+      bothEngineFrameCount: Number(candidate.bothEngineFrameCount || 0),
+      positionClusterCount: Number(candidate.positionClusterCount || 0),
+    }));
+  const result = evaluateUnknownSafeCompletion({
+    kind,
+    expectedQrCount,
+    currentConfirmedCount,
+    recognizedConfirmedCount,
+    candidates,
+  });
+  const rejectReasonCounts = {};
+  for (const candidate of result.candidateResults || []) {
+    for (const reason of candidate.rejectReasons || []) {
+      rejectReasonCounts[reason] = Number(rejectReasonCounts[reason] || 0) + 1;
+    }
+  }
+  return {
+    ...result,
+    evaluationVariant: "UNKNOWN_SAFE_STRICT",
+    source: "same-live-run-parser-separated-evidence",
+    rejectReasonCounts,
+    cameraStopSemanticsChanged: false,
+    currentSemanticsChanged: false,
+    parserSeparatedSemanticsChanged: false,
   };
 }
 
@@ -2223,6 +2272,7 @@ function topHistogramEntry(histogram = {}) {
 function managementShortFromLiveFull(full, runtimeHead = null) {
   const counting = full?.countingIntegrityDiagnostic || {};
   const separated = full?.parserSeparatedEvaluation || full?.parserSeparationCounterfactual || {};
+  const strict = full?.unknownSafeStrictEvaluation || {};
   const completion = full?.completion || {};
   const mainFail = topHistogramEntry(counting.failReasonHistogram);
   const structuralFails = (counting.rawCandidates || [])
@@ -2474,6 +2524,21 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
       currentConfirmedMissingFromSeparatedCount: separated.currentConfirmedMissingFromSeparatedCount ?? null,
       currentConfirmedMissingFromSeparatedDiagnosticIds: separated.currentConfirmedMissingFromSeparatedDiagnosticIds || [],
       accountingIntegrityPass: separated.accountingIntegrityPass ?? null,
+    },
+    unknownSafeStrict: {
+      recognizedConfirmedCount: strict.recognizedConfirmedCount ?? null,
+      eligibleUnknownSafeCount: strict.eligibleUnknownSafeCount ?? null,
+      totalCandidateConfirmed: strict.totalCandidateConfirmed ?? null,
+      expectedQrCount: strict.expectedQrCount ?? null,
+      exactExpected: strict.exactExpected ?? null,
+      completionEligible: strict.completionEligible ?? null,
+      overflow: strict.overflow ?? null,
+      underflow: strict.underflow ?? null,
+      duplicateIntegrityPass: strict.duplicateIntegrityPass ?? null,
+      currentRegression: strict.currentRegression ?? null,
+      holdReasons: strict.holdReasons || [],
+      rejectReasonCounts: strict.rejectReasonCounts || {},
+      payloadIncluded: false,
     },
     importantCases: importantCandidates,
     evaluationPolicy: {
@@ -3202,6 +3267,11 @@ export default function CertificateQrLiveScanPoc() {
     evidenceRef.current
   ), [frameStats.processed, candidates]);
 
+  const unknownSafeStrictUi = useMemo(() => unknownSafeStrictSnapshot(
+    countingIntegrityRef.current,
+    evidenceRef.current
+  ), [frameStats.processed, candidates]);
+
   const productionShapeUi = useMemo(() => productionShapeCandidateSnapshot(
     countingIntegrityRef.current,
     evidenceRef.current,
@@ -3913,6 +3983,10 @@ export default function CertificateQrLiveScanPoc() {
         countingIntegrityRef.current,
         evidenceRef.current
       ),
+      unknownSafeStrictEvaluation: unknownSafeStrictSnapshot(
+        countingIntegrityRef.current,
+        evidenceRef.current
+      ),
       productionShapeCandidate: productionShapeCandidateSnapshot(
         countingIntegrityRef.current,
         evidenceRef.current,
@@ -4304,6 +4378,20 @@ export default function CertificateQrLiveScanPoc() {
         <summary style={{ cursor: "pointer", fontWeight: 800, padding: "10px 0" }}>診断詳細を表示</summary>
         <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
           <div style={{ fontWeight: 900 }}>CURRENT vs PARSER_SEPARATED</div>
+          <div style={{ marginTop: 8, padding: 9, borderRadius: 9, background: "#eef7ff", fontSize: 13, lineHeight: 1.6 }}>
+            <strong>UNKNOWN_SAFE_STRICT</strong>
+            {" ／ "}recognized {unknownSafeStrictUi.recognizedConfirmedCount}
+            {" ／ "}eligible unknown {unknownSafeStrictUi.eligibleUnknownSafeCount}
+            {" ／ "}total {unknownSafeStrictUi.totalCandidateConfirmed}/{unknownSafeStrictUi.expectedQrCount ?? "?"}
+            {" ／ "}exact {unknownSafeStrictUi.exactExpected ? "YES" : "NO"}
+            {" ／ "}completion {unknownSafeStrictUi.completionEligible ? "PASS" : "HOLD"}
+            {" ／ "}overflow {unknownSafeStrictUi.overflow ? "YES" : "NO"}
+            {" ／ "}underflow {unknownSafeStrictUi.underflow ? "YES" : "NO"}
+            {" ／ "}duplicate {unknownSafeStrictUi.duplicateIntegrityPass ? "PASS" : "FAIL"}
+            {" ／ "}current regression {unknownSafeStrictUi.currentRegression ? "YES" : "NO"}
+            <div>holdReasons: {(unknownSafeStrictUi.holdReasons || []).join(", ") || "none"}</div>
+            <div>rejectReasons: {JSON.stringify(unknownSafeStrictUi.rejectReasonCounts || {})}</div>
+          </div>
           <div style={{ marginTop: 4, fontSize: 13 }}>
             CURRENT {parserSeparationUi.currentConfirmedCount}/{parserSeparationUi.currentCompletion.expectedQrCount ?? "?"}
             {" ／ "}PARSER_SEPARATED {parserSeparationUi.separatedConfirmedCount}/{parserSeparationUi.separatedCompletion.expectedQrCount ?? "?"}
