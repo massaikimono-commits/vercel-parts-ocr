@@ -25,6 +25,9 @@ jobs:
       - name: Validate CI routing contract
         run: node scripts/ci-routing-regression.mjs
 
+      - name: Validate Cloudflare architecture contract
+        run: node scripts/cloudflare-architecture-regression.mjs
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
