@@ -5,6 +5,7 @@ on:
     branches:
       - eval/parts-ocr-architecture-bakeoff-poc-v1
       - eval/parts-ocr-bakeoff-root-cause-audit
+      - eval/parts-ocr-bakeoff-safety-contract-v2
   workflow_dispatch:
 
 permissions:
