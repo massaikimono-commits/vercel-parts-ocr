@@ -1,6 +1,7 @@
 import "./globals.css";
 import AuthRouteGuard from "./auth-route-guard";
 import SessionLifetimeGuard from "./session-lifetime-guard";
+import MobileQuickNav from "./mobile-quick-nav";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -26,6 +27,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <SessionLifetimeGuard />
         <AuthRouteGuard>
           {children}
+          <MobileQuickNav />
         </AuthRouteGuard>
       </body>
     </html>
