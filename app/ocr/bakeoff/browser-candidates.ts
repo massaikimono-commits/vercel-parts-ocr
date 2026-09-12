@@ -113,13 +113,14 @@ export async function runBrowserCandidates(file: File, imageId: string, captureI
     if (family.family !== "yellow-parts-slip") reasons.push("unknown-document-family");
     if (!p1Rows.length) reasons.push("no-rule-bounded-rows");
     const p1PredictedRows = await recognizeRows(worker, tess, rectified.canvas, rectified.paper, p1Rows, columnsFromMeasuredRules(rules, rectified.paper), true);
+    if (p1Rows.length > 0 && p1PredictedRows.length === 0) reasons.push("post-row-ocr-empty");
     reasons.push(...validateRows(p1PredictedRows));
     const p1: BakeoffPrediction = {
       schema: BAKEOFF_CONTRACT_VERSION,
       runId,
       candidateId: "P1",
-      candidateVersion: "guided-known-template-a22.v1",
-      configHash: "sha256:e4f2bb4fc9096f8759eb092ada7365b0fbbecb3651e2b9399dc8c6d53a4f93d7",
+      candidateVersion: "guided-known-template-a22.v2",
+      configHash: "sha256:acedfad742ae41a81d21e1bc568b7ecfa0ce435b9b918f002485761046369628",
       imageId,
       captureId,
       documentFamilyPrediction: family,
@@ -128,7 +129,7 @@ export async function runBrowserCandidates(file: File, imageId: string, captureI
       rowPredictions: p1PredictedRows,
       fieldPredictions: [],
       confidence: null,
-      abstainReason: reasons.length ? reasons.join(";") : null,
+      abstainReason: reasons.length ? [...new Set(reasons)].join(";") : null,
       manualReviewRequired: reasons.length > 0,
       processingTimeMs: Math.round(performance.now() - p1Started),
       modelLoadTimeMs,
