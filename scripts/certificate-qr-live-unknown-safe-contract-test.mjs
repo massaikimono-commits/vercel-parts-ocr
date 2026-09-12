@@ -1,0 +1,40 @@
+name: Certificate QR Live unknown-safe contract
+
+on:
+  push:
+    branches:
+      - eval/certificate-qr-live-unknown-safe-contract
+    paths:
+      - "app/eval/certificate-qr-live-scan/**"
+      - "scripts/certificate-qr-live-unknown-safe-contract-test.mjs"
+      - ".github/workflows/certificate-qr-live-unknown-safe-contract.yml"
+      - "package.json"
+      - "next.config.mjs"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Unknown-safe contract invariants
+        run: node scripts/certificate-qr-live-unknown-safe-contract-test.mjs
+
+      - name: Vehicle certificate regression
+        run: npm run test:certificate
+
+      - name: Build Next.js app
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npx next build
