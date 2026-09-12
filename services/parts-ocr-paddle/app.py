@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from core import FIELDS, rows_from_structure
+from core import FIELDS, rows_from_structure, structure_diagnostics
 
 CONTRACT = "icb.parts-ocr.bakeoff-prediction.v1"
 CONFIG_HASH = "sha256:99fa30b32b22d28310cae161a754343423918a90a13bb80c12b64ba0c80504ae"
@@ -68,6 +68,7 @@ def create_app() -> Any:
             del raw
             outputs = [result_json(item) for item in pipeline().predict(decoded)]
             rows = rows_from_structure(outputs)
+            diagnostics = structure_diagnostics(outputs)
             field_predictions = [{"rowId": row["rowId"], "field": field, "prediction": row["fields"][field]} for row in rows for field in FIELDS]
             manual = not rows or any(row.get("duplicateOf") for row in rows)
             return {
@@ -92,6 +93,7 @@ def create_app() -> Any:
                 "timeout": False,
                 "error": None,
                 "gtIncluded": False,
+                "diagnostic": diagnostics,
             }
         except HTTPException:
             raise
