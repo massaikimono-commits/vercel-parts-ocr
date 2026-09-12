@@ -1,124 +1,131 @@
-import assert from "node:assert/strict";
-import {
-  LIVE_UNKNOWN_SAFE_CONTRACT_SCHEMA,
-  evaluateUnknownSafeCandidate,
-  evaluateUnknownSafeCompletion,
-} from "../app/eval/certificate-qr-live-scan/unknown-safe-contract.mjs";
+export const LIVE_UNKNOWN_SAFE_CONTRACT_SCHEMA = "icb-certificate-qr-live-unknown-safe-contract-v1";
 
-function unknown(overrides = {}) {
+function finiteInt(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 ? n : 0;
+}
+
+function uniqueStrings(values) {
+  return [...new Set((Array.isArray(values) ? values : []).map((value) => String(value || "")).filter(Boolean))];
+}
+
+export function evaluateUnknownSafeCandidate(candidate = {}) {
+  const parserSchemaRecognized = Boolean(candidate.parserSchemaRecognized);
+  const decodeIntegrityPass = Boolean(candidate.decodeIntegrityPass);
+  const frameHitCount = finiteInt(candidate.frameHitCount);
+  const bothEngineFrameCount = finiteInt(candidate.bothEngineFrameCount);
+  const repeatedFrameSupport = frameHitCount >= 2;
+  const bothEngineAgreementSupport = bothEngineFrameCount >= 1;
+  const positionClusterCount = finiteInt(candidate.positionClusterCount);
+  const hasPositionEvidence = positionClusterCount >= 1;
+
+  const rejectReasons = [];
+  if (parserSchemaRecognized) rejectReasons.push("recognized-schema-not-unknown-safe");
+  if (!decodeIntegrityPass) rejectReasons.push("decode-integrity-fail");
+  if (!repeatedFrameSupport) rejectReasons.push("insufficient-repeated-frame-support");
+  if (!bothEngineAgreementSupport) rejectReasons.push("missing-both-engine-agreement");
+  if (!hasPositionEvidence) rejectReasons.push("missing-position-evidence");
+
   return {
-    diagnosticId: "raw-05",
-    parserSchemaRecognized: false,
-    parserSchemaClass: "unrecognized-safe",
-    decodeIntegrityPass: true,
-    frameHitCount: 26,
-    bothEngineFrameCount: 11,
-    positionClusterCount: 2,
-    ...overrides,
+    diagnosticId: candidate.diagnosticId || null,
+    parserSchemaClass: candidate.parserSchemaClass || "unrecognized-safe",
+    eligible: rejectReasons.length === 0,
+    rejectReasons,
+    evidence: {
+      decodeIntegrityPass,
+      repeatedFrameSupport,
+      bothEngineAgreementSupport,
+      hasPositionEvidence,
+      frameHitCount,
+      bothEngineFrameCount,
+      positionClusterCount,
+    },
   };
 }
 
-{
-  const result = evaluateUnknownSafeCandidate(unknown());
-  assert.equal(result.eligible, true);
-  assert.deepEqual(result.rejectReasons, []);
-}
+export function evaluateUnknownSafeCompletion(input = {}) {
+  const expectedQrCount = Number.isInteger(input.expectedQrCount) && input.expectedQrCount > 0
+    ? input.expectedQrCount
+    : null;
+  const kind = input.kind === "kei" || input.kind === "registered" ? input.kind : null;
+  const recognizedConfirmedCount = finiteInt(input.recognizedConfirmedCount);
+  const currentConfirmedCount = finiteInt(input.currentConfirmedCount);
+  const rawCandidates = Array.isArray(input.candidates) ? input.candidates : [];
 
-{
-  const result = evaluateUnknownSafeCandidate(unknown({ bothEngineFrameCount: 0 }));
-  assert.equal(result.eligible, false);
-  assert(result.rejectReasons.includes("missing-both-engine-agreement"));
-}
+  const seenDiagnosticIds = new Set();
+  const duplicateDiagnosticIds = [];
+  const candidateResults = [];
+  for (const candidate of rawCandidates) {
+    const id = String(candidate?.diagnosticId || "");
+    if (id && seenDiagnosticIds.has(id)) {
+      duplicateDiagnosticIds.push(id);
+      continue;
+    }
+    if (id) seenDiagnosticIds.add(id);
+    candidateResults.push(evaluateUnknownSafeCandidate(candidate));
+  }
 
-{
-  const result = evaluateUnknownSafeCandidate(unknown({ frameHitCount: 1 }));
-  assert.equal(result.eligible, false);
-  assert(result.rejectReasons.includes("insufficient-repeated-frame-support"));
-}
+  const eligibleUnknownSafe = candidateResults.filter((candidate) => candidate.eligible);
+  const totalCandidateConfirmed = recognizedConfirmedCount + eligibleUnknownSafe.length;
+  const kindAndExpectedKnown = Boolean(kind) && expectedQrCount != null;
+  const overflow = expectedQrCount != null && totalCandidateConfirmed > expectedQrCount;
+  const underflow = expectedQrCount != null && totalCandidateConfirmed < expectedQrCount;
+  const exactExpected = expectedQrCount != null && totalCandidateConfirmed === expectedQrCount;
+  const duplicateIntegrityPass = duplicateDiagnosticIds.length === 0;
+  const currentRegression = currentConfirmedCount > recognizedConfirmedCount;
 
-{
-  const result = evaluateUnknownSafeCandidate(unknown({ positionClusterCount: 0 }));
-  assert.equal(result.eligible, false);
-  assert(result.rejectReasons.includes("missing-position-evidence"));
-}
+  const completionEligible =
+    kindAndExpectedKnown &&
+    duplicateIntegrityPass &&
+    !currentRegression &&
+    exactExpected;
 
-{
-  const result = evaluateUnknownSafeCompletion({
-    kind: "kei",
-    expectedQrCount: 6,
-    currentConfirmedCount: 5,
-    recognizedConfirmedCount: 5,
-    candidates: [unknown()],
-  });
-  assert.equal(result.schema, LIVE_UNKNOWN_SAFE_CONTRACT_SCHEMA);
-  assert.equal(result.completionEligible, true);
-  assert.equal(result.totalCandidateConfirmed, 6);
-  assert.equal(result.eligibleUnknownSafeCount, 1);
-  assert.equal(result.unknownSafeMayInferKind, false);
-  assert.equal(result.unknownSafeMaySetExpectedQrCount, false);
-}
+  const holdReasons = [];
+  if (!kindAndExpectedKnown) holdReasons.push("recognized-kind-or-expected-count-unknown");
+  if (!duplicateIntegrityPass) holdReasons.push("duplicate-diagnostic-id");
+  if (currentRegression) holdReasons.push("current-confirmed-regression");
+  if (overflow) holdReasons.push("confirmed-count-overflow");
+  if (underflow) holdReasons.push("confirmed-count-underflow");
 
-{
-  const result = evaluateUnknownSafeCompletion({
-    kind: "kei",
-    expectedQrCount: 6,
-    currentConfirmedCount: 5,
-    recognizedConfirmedCount: 5,
-    candidates: [unknown({ diagnosticId: "raw-05" }), unknown({ diagnosticId: "raw-06" })],
-  });
-  assert.equal(result.completionEligible, false);
-  assert.equal(result.overflow, true);
-  assert(result.holdReasons.includes("confirmed-count-overflow"));
+  return {
+    schema: LIVE_UNKNOWN_SAFE_CONTRACT_SCHEMA,
+    diagnosticOnly: true,
+    runtimeChanged: false,
+    parserChanged: false,
+    decoderChanged: false,
+    completionChanged: false,
+    gtUsedInRuntimeOrControl: false,
+    payloadIncluded: false,
+    unknownSafeMayInferKind: false,
+    unknownSafeMaySetExpectedQrCount: false,
+    strictUnknownSafeAdmission: {
+      requiresDecodeIntegrityPass: true,
+      requiresRepeatedFrameSupport: true,
+      requiresBothEngineAgreement: true,
+      requiresPositionEvidence: true,
+    },
+    completionPolicyCounterfactual: {
+      expectedCountSource: "recognized-schema-only",
+      exactExpectedCountRequired: true,
+      overflowFailsClosed: true,
+      underflowIncomplete: true,
+    },
+    kind,
+    expectedQrCount,
+    currentConfirmedCount,
+    recognizedConfirmedCount,
+    unknownSafeCandidateCount: candidateResults.length,
+    eligibleUnknownSafeCount: eligibleUnknownSafe.length,
+    eligibleUnknownSafeDiagnosticIds: uniqueStrings(eligibleUnknownSafe.map((candidate) => candidate.diagnosticId)),
+    totalCandidateConfirmed,
+    duplicateDiagnosticIds: uniqueStrings(duplicateDiagnosticIds),
+    duplicateIntegrityPass,
+    currentRegression,
+    overflow,
+    underflow,
+    exactExpected,
+    completionEligible,
+    holdReasons,
+    candidateResults,
+  };
 }
-
-{
-  const result = evaluateUnknownSafeCompletion({
-    kind: null,
-    expectedQrCount: null,
-    currentConfirmedCount: 0,
-    recognizedConfirmedCount: 0,
-    candidates: [unknown()],
-  });
-  assert.equal(result.completionEligible, false);
-  assert(result.holdReasons.includes("recognized-kind-or-expected-count-unknown"));
-}
-
-{
-  const result = evaluateUnknownSafeCompletion({
-    kind: "registered",
-    expectedQrCount: 5,
-    currentConfirmedCount: 5,
-    recognizedConfirmedCount: 5,
-    candidates: [],
-  });
-  assert.equal(result.completionEligible, true);
-  assert.equal(result.exactExpected, true);
-}
-
-{
-  const result = evaluateUnknownSafeCompletion({
-    kind: "kei",
-    expectedQrCount: 6,
-    currentConfirmedCount: 5,
-    recognizedConfirmedCount: 5,
-    candidates: [unknown(), unknown()],
-  });
-  assert.equal(result.completionEligible, false);
-  assert.equal(result.duplicateIntegrityPass, false);
-  assert(result.holdReasons.includes("duplicate-diagnostic-id"));
-}
-
-{
-  const result = evaluateUnknownSafeCompletion({
-    kind: "kei",
-    expectedQrCount: 6,
-    currentConfirmedCount: 6,
-    recognizedConfirmedCount: 5,
-    candidates: [unknown()],
-  });
-  assert.equal(result.completionEligible, false);
-  assert.equal(result.currentRegression, true);
-  assert(result.holdReasons.includes("current-confirmed-regression"));
-}
-
-console.log("Live unknown-safe contract tests passed.");
