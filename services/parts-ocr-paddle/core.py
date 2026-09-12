@@ -102,6 +102,53 @@ def find_table_html(payload: Any) -> list[str]:
     return found
 
 
+def _count_text_like_values(payload: Any) -> int:
+    """Count PP-Structure text-like values without returning text/PII."""
+    total = 0
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if key in ("rec_texts", "texts") and isinstance(value, list):
+                total += sum(1 for item in value if isinstance(item, str) and item.strip())
+            elif key in ("rec_text", "text") and isinstance(value, str) and value.strip():
+                total += 1
+            total += _count_text_like_values(value)
+    elif isinstance(payload, list):
+        for value in payload:
+            total += _count_text_like_values(value)
+    return total
+
+
+def structure_diagnostics(payload: Any) -> dict[str, Any]:
+    """Return count-only diagnostics for adapter/root-cause auditing."""
+    htmls = find_table_html(payload)
+    header_candidates: list[dict[str, Any]] = []
+    parsed_rows = 0
+    html_row_count = 0
+    for html in htmls:
+        parser = TableParser()
+        parser.feed(html or "")
+        html_row_count += len(parser.rows)
+        best_mapping: dict[str, int] = {}
+        for row in parser.rows[:8]:
+            candidate = header_mapping(row)
+            if len(candidate) > len(best_mapping):
+                best_mapping = candidate
+        header_candidates.append({
+            "mappedFieldCount": len(best_mapping),
+            "hasName": "name" in best_mapping,
+            "mappedFields": sorted(best_mapping.keys()),
+            "htmlRowCount": len(parser.rows),
+        })
+        parsed_rows += len(rows_from_html(html))
+    return {
+        "tableHtmlCount": len(htmls),
+        "htmlRowCount": html_row_count,
+        "headerCandidates": header_candidates,
+        "parsedRowCount": parsed_rows,
+        "textLikeValueCount": _count_text_like_values(payload),
+    }
+
+
 def rows_from_structure(payload: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for html in find_table_html(payload):
