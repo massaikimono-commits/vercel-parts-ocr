@@ -75,7 +75,7 @@ assert(report.includes("@page{size:A3 portrait;margin:0}"), "existing A3 page de
 
 assert(scheduleNew.includes("schedule_slot_check_v2"), "registration-time warning/capacity logic must remain intact");
 assert(scheduleNew.includes("schedule_capacity"), "registration capacity logic must remain intact");
-assert(scheduleEdit.includes("schedule_time_availability"), "edit-time availability logic must remain intact");
+assert(scheduleEdit.includes("schedule_time_options") && scheduleEdit.includes("schedule_slot_check_v2"), "edit-time availability and warning logic must remain intact");
 assert(week.includes("schedule_capacity"), "weekly capacity calculation must remain intact even when repeat attention UI is hidden");
 assert(!controller.includes("insert(") && !controller.includes("update({") && !controller.includes("delete("), "UX controller must not mutate Supabase business data");
 assert(!controller.includes("/ocr/auto"), "UX density controller must not alter OCR workflow");
