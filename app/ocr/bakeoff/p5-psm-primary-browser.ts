@@ -2,7 +2,7 @@
 "use client";
 
 import { orientedCanvas } from "../diagnostic/stage-a20/a19-table-crops";
-import { reconstructTokenGrid } from "./p5-token-grid-core.mjs";
+import { diagnoseSemanticHeaderRootCause, reconstructTokenGrid } from "./p5-token-grid-core.mjs";
 import type { P5Token } from "./p5-token-grid-types";
 
 function canvasBlob(canvas: HTMLCanvasElement) {
@@ -90,11 +90,7 @@ export type P5PsmPrimaryVariant = {
   reconstructedRowCount: number;
   wrongAutoConfirm: number;
   manualReviewRequired: boolean;
-  rows: Array<{
-    rowId: string;
-    fields: { name: string; qty: string; retail: string; cost: string };
-    sourceTokenCount: number;
-  }>;
+  rows: Array<{ rowId: string; fields: { name: string; qty: string; retail: string; cost: string }; sourceTokenCount: number }>;
   error?: string;
 };
 
@@ -109,6 +105,69 @@ export type P5PsmPrimaryComparison = {
   canvasHeight: number;
   variants: P5PsmPrimaryVariant[];
 };
+
+function summarizeVariant(label: P5PsmPrimaryVariant["label"], psm: any, data: any, elapsed: number): P5PsmPrimaryVariant & { semanticRootCause: any } {
+  const tsvValue = typeof data?.tsv === "string" ? data.tsv : "";
+  const textValue = typeof data?.text === "string" ? data.text : "";
+  const tsvTokens = parseTsv(tsvValue);
+  const blockTokens = parseBlocks(data?.blocks);
+  const tokens = tsvTokens.length > 0 ? tsvTokens : blockTokens;
+  const tokenSource: "tsv" | "blocks" | "none" = tsvTokens.length > 0 ? "tsv" : blockTokens.length > 0 ? "blocks" : "none";
+  const reconstructed: any = reconstructTokenGrid(tokens);
+  const rows = Array.isArray(reconstructed?.rows) ? reconstructed.rows.map((row: any) => ({ rowId: String(row?.rowId ?? ""), fields: { name: String(row?.fields?.name ?? ""), qty: String(row?.fields?.qty ?? ""), retail: String(row?.fields?.retail ?? ""), cost: String(row?.fields?.cost ?? "") }, sourceTokenCount: Number(row?.sourceTokenCount ?? 0) })) : [];
+  return {
+    label,
+    psm: String(psm),
+    recognizeSucceeded: true,
+    recognizeElapsedMs: elapsed,
+    textLength: textValue.length,
+    tsvLength: tsvValue.length,
+    tsvParsedTokenCount: tsvTokens.length,
+    blockCount: Array.isArray(data?.blocks) ? data.blocks.length : 0,
+    blocksWordCount: blockTokens.length,
+    pageOcrTokenCount: tokens.length,
+    tokenSource,
+    mappedHeaderFieldCount: reconstructed?.stageDiagnostics?.mappedHeaderFieldCount ?? 0,
+    rowClusterCount: reconstructed?.stageDiagnostics?.clusteredRowCount ?? 0,
+    columnAssignmentCount: rows.reduce((sum: number, row: any) => sum + Number(row?.sourceTokenCount || 0), 0),
+    reconstructedRowCount: reconstructed?.stageDiagnostics?.reconstructedRowCount ?? 0,
+    wrongAutoConfirm: Number(reconstructed?.wrongAutoConfirm ?? 0),
+    manualReviewRequired: Boolean(reconstructed?.manualReviewRequired ?? true),
+    rows,
+    semanticRootCause: diagnoseSemanticHeaderRootCause(tokens),
+  };
+}
+
+export async function runP5SemanticHeaderDiagnostic(file: File, requestedPsm: "3" | "6") {
+  const source = await orientedCanvas(file, 2200);
+  const blob = await canvasBlob(source.canvas);
+  const tess: any = await import("tesseract.js");
+  const spec = requestedPsm === "6"
+    ? { label: "PSM6_SINGLE_BLOCK" as const, psm: tess.PSM?.SINGLE_BLOCK ?? "6" }
+    : { label: "PSM3_AUTO" as const, psm: tess.PSM?.AUTO ?? "3" };
+  const worker = await tess.createWorker("jpn+eng", 1);
+  try {
+    await worker.setParameters({ preserve_interword_spaces: "1", user_defined_dpi: "300", tessedit_char_whitelist: "", tessedit_pageseg_mode: spec.psm });
+    const started = performance.now();
+    const recognized = await worker.recognize(blob, {}, OUTPUT_OPTIONS);
+    const elapsed = Math.round(performance.now() - started);
+    return {
+      diagnosticOnly: true,
+      runtimePsmUnchanged: true,
+      runtimePsm: "3" as const,
+      selectedDiagnosticPsm: String(spec.psm),
+      language: "jpn+eng",
+      maxSide: 2200,
+      preprocessingUnchanged: true,
+      canvasWidth: source.canvas.width,
+      canvasHeight: source.canvas.height,
+      variant: summarizeVariant(spec.label, spec.psm, recognized?.data ?? {}, elapsed),
+    };
+  } finally {
+    await worker.setParameters({ tessedit_pageseg_mode: tess.PSM?.AUTO ?? "3" }).catch(() => undefined);
+    await worker.terminate().catch(() => undefined);
+  }
+}
 
 export async function runP5PsmPrimaryComparison(file: File): Promise<P5PsmPrimaryComparison> {
   const source = await orientedCanvas(file, 2200);
@@ -129,81 +188,16 @@ export async function runP5PsmPrimaryComparison(file: File): Promise<P5PsmPrimar
         const started = performance.now();
         const recognized = await worker.recognize(blob, {}, OUTPUT_OPTIONS);
         const elapsed = Math.round(performance.now() - started);
-        const data = recognized?.data ?? {};
-        const tsvValue = typeof data?.tsv === "string" ? data.tsv : "";
-        const textValue = typeof data?.text === "string" ? data.text : "";
-        const tsvTokens = parseTsv(tsvValue);
-        const blockTokens = parseBlocks(data?.blocks);
-        const tokens = tsvTokens.length > 0 ? tsvTokens : blockTokens;
-        const tokenSource: "tsv" | "blocks" | "none" = tsvTokens.length > 0 ? "tsv" : blockTokens.length > 0 ? "blocks" : "none";
-        const reconstructed: any = reconstructTokenGrid(tokens);
-        const rows = Array.isArray(reconstructed?.rows) ? reconstructed.rows.map((row: any) => ({
-          rowId: String(row?.rowId ?? ""),
-          fields: {
-            name: String(row?.fields?.name ?? ""),
-            qty: String(row?.fields?.qty ?? ""),
-            retail: String(row?.fields?.retail ?? ""),
-            cost: String(row?.fields?.cost ?? ""),
-          },
-          sourceTokenCount: Number(row?.sourceTokenCount ?? 0),
-        })) : [];
-        variants.push({
-          label: spec.label,
-          psm: String(spec.psm),
-          recognizeSucceeded: true,
-          recognizeElapsedMs: elapsed,
-          textLength: textValue.length,
-          tsvLength: tsvValue.length,
-          tsvParsedTokenCount: tsvTokens.length,
-          blockCount: Array.isArray(data?.blocks) ? data.blocks.length : 0,
-          blocksWordCount: blockTokens.length,
-          pageOcrTokenCount: tokens.length,
-          tokenSource,
-          mappedHeaderFieldCount: reconstructed?.stageDiagnostics?.mappedHeaderFieldCount ?? 0,
-          rowClusterCount: reconstructed?.stageDiagnostics?.clusteredRowCount ?? 0,
-          columnAssignmentCount: rows.reduce((sum: number, row: any) => sum + Number(row?.sourceTokenCount || 0), 0),
-          reconstructedRowCount: reconstructed?.stageDiagnostics?.reconstructedRowCount ?? 0,
-          wrongAutoConfirm: Number(reconstructed?.wrongAutoConfirm ?? 0),
-          manualReviewRequired: Boolean(reconstructed?.manualReviewRequired ?? true),
-          rows,
-        });
+        const summarized = summarizeVariant(spec.label, spec.psm, recognized?.data ?? {}, elapsed);
+        const { semanticRootCause: _semanticRootCause, ...legacy } = summarized;
+        variants.push(legacy);
       } catch (error) {
-        variants.push({
-          label: spec.label,
-          psm: String(spec.psm),
-          recognizeSucceeded: false,
-          recognizeElapsedMs: null,
-          textLength: 0,
-          tsvLength: 0,
-          tsvParsedTokenCount: 0,
-          blockCount: 0,
-          blocksWordCount: 0,
-          pageOcrTokenCount: 0,
-          tokenSource: "none",
-          mappedHeaderFieldCount: 0,
-          rowClusterCount: 0,
-          columnAssignmentCount: 0,
-          reconstructedRowCount: 0,
-          wrongAutoConfirm: 0,
-          manualReviewRequired: true,
-          rows: [],
-          error: error instanceof Error ? error.message : String(error),
-        });
+        variants.push({ label: spec.label, psm: String(spec.psm), recognizeSucceeded: false, recognizeElapsedMs: null, textLength: 0, tsvLength: 0, tsvParsedTokenCount: 0, blockCount: 0, blocksWordCount: 0, pageOcrTokenCount: 0, tokenSource: "none", mappedHeaderFieldCount: 0, rowClusterCount: 0, columnAssignmentCount: 0, reconstructedRowCount: 0, wrongAutoConfirm: 0, manualReviewRequired: true, rows: [], error: error instanceof Error ? error.message : String(error) });
       }
     }
   } finally {
     await worker.setParameters({ tessedit_pageseg_mode: tess.PSM?.AUTO ?? "3" }).catch(() => undefined);
     await worker.terminate().catch(() => undefined);
   }
-  return {
-    diagnosticOnly: true,
-    runtimePsmUnchanged: true,
-    runtimePsm: "3",
-    language: "jpn+eng",
-    maxSide: 2200,
-    preprocessingUnchanged: true,
-    canvasWidth: source.canvas.width,
-    canvasHeight: source.canvas.height,
-    variants,
-  };
+  return { diagnosticOnly: true, runtimePsmUnchanged: true, runtimePsm: "3", language: "jpn+eng", maxSide: 2200, preprocessingUnchanged: true, canvasWidth: source.canvas.width, canvasHeight: source.canvas.height, variants };
 }
