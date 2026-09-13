@@ -40,6 +40,36 @@ function parseTsv(tsv: string): P5Token[] {
   return out;
 }
 
+function parseBlocks(blocks: any): P5Token[] {
+  if (!Array.isArray(blocks)) return [];
+  const out: P5Token[] = [];
+  for (const block of blocks) {
+    for (const paragraph of Array.isArray(block?.paragraphs) ? block.paragraphs : []) {
+      for (const line of Array.isArray(paragraph?.lines) ? paragraph.lines : []) {
+        for (const word of Array.isArray(line?.words) ? line.words : []) {
+          const text = String(word?.text ?? "").trim();
+          const bbox = word?.bbox;
+          const x1 = Number(bbox?.x0);
+          const y1 = Number(bbox?.y0);
+          const x2 = Number(bbox?.x1);
+          const y2 = Number(bbox?.y1);
+          if (!text || ![x1, y1, x2, y2].every(Number.isFinite) || x2 <= x1 || y2 <= y1) continue;
+          const confidenceRaw = Number(word?.confidence);
+          out.push({
+            text,
+            x1,
+            y1,
+            x2,
+            y2,
+            confidence: Number.isFinite(confidenceRaw) ? confidenceRaw / 100 : null,
+          });
+        }
+      }
+    }
+  }
+  return out;
+}
+
 export type P5BrowserResult = P5Result & {
   sourceWidth: number;
   sourceHeight: number;
@@ -48,6 +78,20 @@ export type P5BrowserResult = P5Result & {
   assignedTokenCount: number;
   ocrProcessingTimeMs: number;
   tableLocalizationStatus: "PAGE_SCOPE_ONLY";
+  ocrOutputDiagnostic: {
+    recognizedDataKeys: string[];
+    tsvType: string;
+    tsvLength: number;
+    textType: string;
+    textLength: number;
+    blocksPresent: boolean;
+    blockCount: number;
+    blockWordCount: number;
+    tsvParsedTokenCount: number;
+    blockParsedTokenCount: number;
+    tokenSource: "tsv" | "blocks" | "none";
+    recognizeSucceeded: true;
+  };
 };
 
 export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult> {
@@ -63,23 +107,37 @@ export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult
     });
     const blob = await canvasBlob(source.canvas);
     const started = performance.now();
-    const recognized = await worker.recognize(blob, {}, {
-      blocks: false,
-      text: false,
-      layoutBlocks: false,
-      hocr: false,
-      tsv: true,
-      box: false,
-      unlv: false,
-      osd: false,
-      pdf: false,
-      imageColor: false,
-      imageGrey: false,
-      imageBinary: false,
-      debug: false,
-    });
+    let recognized: any;
+    try {
+      recognized = await worker.recognize(blob, {}, {
+        text: true,
+        blocks: true,
+        layoutBlocks: false,
+        hocr: false,
+        tsv: true,
+        box: false,
+        unlv: false,
+        osd: false,
+        pdf: false,
+        imageColor: false,
+        imageGrey: false,
+        imageBinary: false,
+        debug: false,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`OCR_RECOGNIZE_EXCEPTION: ${message}`);
+    }
     const elapsed = Math.round(performance.now() - started);
-    const tokens = parseTsv(String(recognized.data.tsv || ""));
+    const data = recognized?.data ?? {};
+    const tsvValue = data?.tsv;
+    const textValue = data?.text;
+    const blocksValue = data?.blocks;
+    const tsvText = typeof tsvValue === "string" ? tsvValue : "";
+    const tsvTokens = parseTsv(tsvText);
+    const blockTokens = parseBlocks(blocksValue);
+    const tokens = tsvTokens.length > 0 ? tsvTokens : blockTokens;
+    const tokenSource: "tsv" | "blocks" | "none" = tsvTokens.length > 0 ? "tsv" : blockTokens.length > 0 ? "blocks" : "none";
     const reconstructed = reconstructTokenGrid(tokens) as P5Result;
     return {
       ...reconstructed,
@@ -90,6 +148,20 @@ export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult
       assignedTokenCount: reconstructed.rows.reduce((sum, row) => sum + row.sourceTokenCount, 0),
       ocrProcessingTimeMs: elapsed,
       tableLocalizationStatus: "PAGE_SCOPE_ONLY",
+      ocrOutputDiagnostic: {
+        recognizedDataKeys: Object.keys(data).sort(),
+        tsvType: typeof tsvValue,
+        tsvLength: typeof tsvValue === "string" ? tsvValue.length : 0,
+        textType: typeof textValue,
+        textLength: typeof textValue === "string" ? textValue.length : 0,
+        blocksPresent: Array.isArray(blocksValue),
+        blockCount: Array.isArray(blocksValue) ? blocksValue.length : 0,
+        blockWordCount: blockTokens.length,
+        tsvParsedTokenCount: tsvTokens.length,
+        blockParsedTokenCount: blockTokens.length,
+        tokenSource,
+        recognizeSucceeded: true,
+      },
     };
   } finally {
     await worker.terminate().catch(() => undefined);
