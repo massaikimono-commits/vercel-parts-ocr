@@ -27,7 +27,7 @@ type CandidateResult = {
 type PersistenceState = "checking" | "ready" | "missing" | "error";
 
 const RESULT_SCHEMA = "icb.parts-ocr.p5-management-short.v1";
-const RESULT_REVISION = "p5-generalized-semantic-candidates-v1";
+const RESULT_REVISION = "p5-current-c-d-column-lattice-v1";
 const EVALUATION_HEAD = process.env.NEXT_PUBLIC_EVAL_HEAD || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "unknown";
 const FORMAL_IMAGE_IDS = Array.from({ length: 12 }, (_, index) => `IMG_${String(675 + index).padStart(4, "0")}`);
 const AUTO_TARGETS = [
@@ -217,7 +217,7 @@ export default function P5TokenGridRealPhotoPocPage() {
     setBusy(true);
     setCopyStatus("");
     setResults([]);
-    setStatus("3ケースを自動選択し、CURRENT / A / B / Cを比較中です。file pickerは開きません。");
+    setStatus("3ケースを自動選択し、CURRENT / C / Dを比較中です。file pickerは開きません。");
     const collected: CandidateResult[] = [];
     try {
       for (const { spec, item } of targets as Array<{ spec: typeof AUTO_TARGETS[number]; item: RegisteredImage }>) {
@@ -229,7 +229,7 @@ export default function P5TokenGridRealPhotoPocPage() {
         }
         setResults([...collected]);
       }
-      setStatus("Generalized Candidate比較完了。『総合管理用結果をコピー』でshort JSONを提出できます。");
+      setStatus("CURRENT / C / D比較完了。『総合管理用結果をコピー』でshort JSONを提出できます。");
     } finally {
       setBusy(false);
     }
@@ -248,9 +248,10 @@ export default function P5TokenGridRealPhotoPocPage() {
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 12px 60px", color: "#172033", background: "#f7f9fc" }}>
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
-        <h1 style={{ marginTop: 0 }}>P5 Generalized Semantic Candidate比較</h1>
-        <p><b>CURRENT / A Split-Token / B Generalized Fuzzy / C Soft Header-Bandを同一OCR tokenで比較します。</b></p>
-        <p>画像別alias・固定px・GT runtime・PSM runtime変更はありません。</p>
+        <h1 style={{ marginTop: 0 }}>P5 Candidate D Column Lattice比較</h1>
+        <p><b>CURRENT / C Soft Header-Band / D Partial Header Column Latticeを同一OCR tokenで比較します。</b></p>
+        <p>Dはpartial header・normalized relative column geometry・row token distributionを組み合わせ、confidence不足時はmanual reviewへfail closedします。</p>
+        <p>画像別alias・固定px・GT runtime・expected row runtime・PSM runtime変更はありません。</p>
       </section>
 
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
@@ -264,7 +265,7 @@ export default function P5TokenGridRealPhotoPocPage() {
       </section>
 
       {results.length > 0 ? <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>Candidate比較結果</h2>
+        <h2 style={{ marginTop: 0, fontSize: 18 }}>CURRENT / C / D 比較結果</h2>
         <button onClick={() => void copyManagementShort()} disabled={busy} style={{ width: "100%", border: 0, borderRadius: 12, padding: 13, background: "#176b34", color: "white", fontWeight: 900 }}>総合管理用結果をコピー</button>
         {copyStatus ? <div role="status" aria-live="polite" style={{ marginTop: 8, fontWeight: 900, color: copyStatus === "コピーしました" ? "#176b34" : "#a11" }}>{copyStatus}</div> : null}
         {results.map((item) => <div key={item.id} style={{ marginTop: 14, borderTop: "1px solid #dbe2ec", paddingTop: 10 }}>
