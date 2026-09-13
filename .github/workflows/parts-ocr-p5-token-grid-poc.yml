@@ -25,6 +25,8 @@ jobs:
         run: node scripts/deployment-safety-p5-selective-preview.mjs
       - name: P5 token-grid feasibility
         run: node scripts/parts-ocr-p5-token-grid-poc-test.mjs
+      - name: P5 semantic candidate synthetic safety
+        run: node scripts/parts-ocr-p5-semantic-candidates-safety.mjs
       - name: Existing bakeoff safety contract
         run: node scripts/parts-ocr-bakeoff-contract-audit.mjs
       - name: Evaluation integrity v2
