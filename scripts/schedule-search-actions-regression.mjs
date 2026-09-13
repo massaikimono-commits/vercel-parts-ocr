@@ -5,10 +5,12 @@ const search = fs.readFileSync(new URL("../app/schedule/search/page.tsx", import
 const edit = fs.readFileSync(new URL("../app/schedule/edit/page.tsx", import.meta.url), "utf8");
 
 assert.match(search, /<div className="resultActions">/, "search result has a dedicated action group");
-assert.match(search, />予約変更<\/button>/, "search result exposes edit action");
+assert.match(search, />予定詳細<\/button>/, "search result exposes the schedule detail action directly in React source");
+assert.match(search, /\/schedule\/detail\?entry="\+set\.primary\.entry\.id/, "schedule detail action opens the operational detail hub");
+assert.doesNotMatch(search, />予約変更<\/button>/, "search result no longer depends on DOM copy rewriting for its primary action");
 assert.match(search, />予約取消<\/button>/, "search result exposes cancel action");
 assert.match(search, /\/schedule\/edit\?id="\+set\.primary\.entry\.id\+"\&mode=cancel"/, "cancel action opens direct cancellation mode");
-assert.match(search, /\.resultActions\{display:grid;grid-template-columns:1fr 1fr;/, "edit/cancel actions are side-by-side");
+assert.match(search, /\.resultActions\{display:grid;grid-template-columns:1fr 1fr;/, "detail/cancel actions are side-by-side");
 assert.match(search, /\.cancelBtn\{color:#b42318;border-color:/, "cancel action is visually distinct in red");
 assert.match(search, /@media\(max-width:720px\)[\s\S]*\.resultActions\{width:100%;min-width:0\}[\s\S]*\.editBtn,\.cancelBtn\{min-height:44px;/s, "mobile actions remain easy to tap");
 

@@ -477,7 +477,7 @@ export default function ScheduleSearchPage() {
                     </div>
                     <div className="state">{work?.work_completed || work?.status === "completed" ? "作業完了" : work?.status === "in_progress" ? "作業中" : "作業未実施"}</div>
                     <div className="resultActions">
-                      <button className="editBtn" onClick={() => location.assign("/schedule/edit?id="+set.primary.entry.id)}>予約変更</button>
+                      <button className="editBtn" onClick={() => location.assign("/schedule/detail?entry="+set.primary.entry.id)}>予定詳細</button>
                       <button className="cancelBtn" onClick={() => location.assign("/schedule/edit?id="+set.primary.entry.id+"&mode=cancel")}>予約取消</button>
                     </div>
                   </div>
