@@ -6,7 +6,7 @@ function t(text, x1, y1, x2, y2) {
 }
 
 const splitHeaders = [
-  t("部品", 10, 10, 40, 24), t("名称", 42, 10, 72, 24),
+  t("商", 10, 10, 22, 24), t("品", 24, 10, 36, 24), t("名", 38, 10, 50, 24),
   t("数", 120, 10, 132, 24), t("量", 134, 10, 146, 24),
   t("定", 210, 10, 222, 24), t("価", 224, 10, 236, 24),
   t("仕", 300, 10, 312, 24), t("入", 314, 10, 326, 24),
@@ -22,6 +22,7 @@ assert.equal(current.wrongAutoConfirm, 0);
 assert.equal(a.wrongAutoConfirm, 0);
 assert.equal(b.wrongAutoConfirm, 0);
 assert.equal(c.wrongAutoConfirm, 0);
+assert.equal(current.mappedHeaderFieldCount, 0, "CURRENT should not recover isolated single-character fragments");
 assert.ok(a.mappedHeaderFieldCount >= 4, "A should compose split headers");
 assert.ok(a.reconstructedRowCount > current.reconstructedRowCount, "A should improve reconstruction over CURRENT on split headers");
 assert.ok(a.nonBlankNameCount > 0 && a.nonBlankQtyCount > 0 && a.nonBlankRetailCount > 0 && a.nonBlankCostCount > 0, "A should populate four fields");
@@ -36,7 +37,7 @@ const fuzzyHeaders = [
 const fuzzy = compareSemanticMappingCandidates(fuzzyHeaders);
 const fuzzyA = fuzzy.find((v) => v.variantId === "A_SPLIT_TOKEN_COMPOSITION");
 const fuzzyB = fuzzy.find((v) => v.variantId === "B_GENERALIZED_FUZZY");
-assert.ok(fuzzyB.mappedHeaderFieldCount >= fuzzyA.mappedHeaderFieldCount, "B must not map fewer headers than A on generalized OCR confusion case");
+assert.ok(fuzzyB.mappedHeaderFieldCount > fuzzyA.mappedHeaderFieldCount, "B should recover generalized fuzzy OCR confusion beyond A");
 assert.equal(fuzzyB.wrongAutoConfirm, 0);
 
 const noise = [
