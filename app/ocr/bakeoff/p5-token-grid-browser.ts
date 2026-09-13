@@ -182,9 +182,11 @@ function summarizeRecognition(recognized: any, elapsed: number, canvas: HTMLCanv
       canvasHeight: canvas.height,
       blobBytes: blob.size,
       recognizeElapsedMs: elapsed,
+      recognizeSucceeded: true,
       textLength: typeof textValue === "string" ? textValue.length : 0,
       tsvLength: typeof tsvValue === "string" ? tsvValue.length : 0,
       tsvParsedTokenCount: tsvTokens.length,
+      blockCount: Array.isArray(blocksValue) ? blocksValue.length : 0,
       blocksWordCount: blockTokens.length,
       pageOcrTokenCount: tokens.length,
       tokenSource,
@@ -224,6 +226,7 @@ export type P5BrowserResult = P5Result & {
     acquisitionDiagnostic: any;
     headerDiagnostic: any;
     orientationCounterfactual: any;
+    psmCounterfactual: any;
   };
 };
 
@@ -274,36 +277,26 @@ export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult
     };
 
     const currentDegrees: 0 | -90 = source.rotate ? -90 : 0;
-    const variants: Array<{ label: string; degrees: 0 | 90 | 180 | -90; current: boolean; reusedCurrent?: boolean } & Record<string, any>> = [
+    const orientationVariants: Array<{ label: string; degrees: 0 | 90 | 180 | -90; current: boolean; reusedCurrent?: boolean } & Record<string, any>> = [
       { label: "CURRENT", degrees: currentDegrees, current: true, reusedCurrent: true, ...current.diagnostic },
     ];
 
     for (const degrees of [0, 90, 180, -90] as const) {
       if (degrees === currentDegrees) {
-        variants.push({ label: `${degrees}deg`, degrees, current: false, reusedCurrent: true, ...current.diagnostic });
+        orientationVariants.push({ label: `${degrees}deg`, degrees, current: false, reusedCurrent: true, ...current.diagnostic });
         continue;
       }
       const cfCanvas = renderOrientationCanvas(inputImage, degrees, 2200);
       try {
         const cf = await recognizeCanvas(worker, cfCanvas);
-        variants.push({ label: `${degrees}deg`, degrees, current: false, reusedCurrent: false, ...cf.diagnostic });
+        orientationVariants.push({ label: `${degrees}deg`, degrees, current: false, reusedCurrent: false, ...cf.diagnostic });
       } catch (error) {
-        variants.push({
-          label: `${degrees}deg`,
-          degrees,
-          current: false,
-          reusedCurrent: false,
+        orientationVariants.push({
+          label: `${degrees}deg`, degrees, current: false, reusedCurrent: false,
+          recognizeSucceeded: false,
           recognizeError: error instanceof Error ? error.message : String(error),
-          canvasWidth: cfCanvas.width,
-          canvasHeight: cfCanvas.height,
-          blobBytes: null,
-          recognizeElapsedMs: null,
-          textLength: 0,
-          tsvLength: 0,
-          tsvParsedTokenCount: 0,
-          blocksWordCount: 0,
-          pageOcrTokenCount: 0,
-          tokenSource: "none",
+          canvasWidth: cfCanvas.width, canvasHeight: cfCanvas.height, blobBytes: null, recognizeElapsedMs: null,
+          textLength: 0, tsvLength: 0, tsvParsedTokenCount: 0, blockCount: 0, blocksWordCount: 0, pageOcrTokenCount: 0, tokenSource: "none",
         });
       }
     }
@@ -315,12 +308,65 @@ export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult
       language: "jpn+eng",
       maxSide: 2200,
       successMetric: "text/token/word-count-not-confidence",
-      variants,
+      variants: orientationVariants,
+    };
+
+    const psmSpecs = [
+      { label: "CURRENT_AUTO", psm: tess.PSM?.AUTO ?? "3", expectedValue: "3", current: true },
+      { label: "SINGLE_BLOCK", psm: tess.PSM?.SINGLE_BLOCK ?? "6", expectedValue: "6", current: false },
+      { label: "SPARSE_TEXT", psm: tess.PSM?.SPARSE_TEXT ?? "11", expectedValue: "11", current: false },
+      { label: "SPARSE_TEXT_OSD", psm: tess.PSM?.SPARSE_TEXT_OSD ?? "12", expectedValue: "12", current: false },
+    ];
+    const psmVariants: Array<Record<string, any>> = [];
+    for (const spec of psmSpecs) {
+      if (spec.current) {
+        psmVariants.push({ label: spec.label, psm: String(spec.psm), expectedValue: spec.expectedValue, current: true, reusedCurrent: true, ...current.diagnostic });
+        continue;
+      }
+      try {
+        await worker.setParameters({ tessedit_pageseg_mode: spec.psm });
+        const cf = await recognizeCanvas(worker, source.canvas);
+        psmVariants.push({ label: spec.label, psm: String(spec.psm), expectedValue: spec.expectedValue, current: false, reusedCurrent: false, ...cf.diagnostic });
+      } catch (error) {
+        psmVariants.push({
+          label: spec.label,
+          psm: String(spec.psm),
+          expectedValue: spec.expectedValue,
+          current: false,
+          reusedCurrent: false,
+          recognizeSucceeded: false,
+          recognizeError: error instanceof Error ? error.message : String(error),
+          canvasWidth: source.canvas.width,
+          canvasHeight: source.canvas.height,
+          blobBytes: null,
+          recognizeElapsedMs: null,
+          textLength: 0,
+          tsvLength: 0,
+          tsvParsedTokenCount: 0,
+          blockCount: 0,
+          blocksWordCount: 0,
+          pageOcrTokenCount: 0,
+          tokenSource: "none",
+        });
+      }
+    }
+    await worker.setParameters({ tessedit_pageseg_mode: psm });
+
+    const psmCounterfactual = {
+      diagnosticOnly: true,
+      runtimePsmUnchanged: true,
+      runtimePsm: String(psm),
+      orientation: source.rotate ? "rotated-90ccw" : "as-loaded",
+      language: "jpn+eng",
+      maxSide: 2200,
+      preprocessingUnchanged: true,
+      successMetric: "text/token/word-count-not-confidence",
+      variants: psmVariants,
     };
 
     return {
       ...reconstructed,
-      stageDiagnostics: { ...reconstructed.stageDiagnostics, acquisitionDiagnostic, headerDiagnostic, orientationCounterfactual } as any,
+      stageDiagnostics: { ...reconstructed.stageDiagnostics, acquisitionDiagnostic, headerDiagnostic, orientationCounterfactual, psmCounterfactual } as any,
       sourceWidth: source.canvas.width,
       sourceHeight: source.canvas.height,
       rotated: source.rotate,
@@ -344,6 +390,7 @@ export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult
         acquisitionDiagnostic,
         headerDiagnostic,
         orientationCounterfactual,
+        psmCounterfactual,
       },
     };
   } finally {
