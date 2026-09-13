@@ -73,7 +73,7 @@ const OUTPUT_OPTIONS = {
 };
 
 export type P5SemanticCandidateSummary = {
-  variantId: "CURRENT" | "A_SPLIT_TOKEN_COMPOSITION" | "B_GENERALIZED_FUZZY" | "C_SOFT_HEADER_BAND";
+  variantId: "CURRENT" | "A_SPLIT_TOKEN_COMPOSITION" | "B_GENERALIZED_FUZZY" | "C_SOFT_HEADER_BAND" | "D_PARTIAL_HEADER_COLUMN_LATTICE";
   mappedHeaderFieldCount: number;
   rowClusterCount: number;
   columnAssignmentCount: number;
@@ -86,6 +86,8 @@ export type P5SemanticCandidateSummary = {
   manualReviewRequired: boolean;
   processingTimeMs: number;
 };
+
+const MANAGEMENT_VARIANTS = new Set(["CURRENT", "C_SOFT_HEADER_BAND", "D_PARTIAL_HEADER_COLUMN_LATTICE"]);
 
 export async function runP5SemanticCandidateComparison(file: File, requestedPsm: "3" | "6") {
   const source = await orientedCanvas(file, 2200);
@@ -103,20 +105,22 @@ export async function runP5SemanticCandidateComparison(file: File, requestedPsm:
     const blockTokens = parseBlocks(data.blocks);
     const tokens = tsvTokens.length ? tsvTokens : blockTokens;
     const mappingStarted = performance.now();
-    const variants = compareSemanticMappingCandidates(tokens).map((variant: any) => ({
-      variantId: variant.variantId,
-      mappedHeaderFieldCount: Number(variant.mappedHeaderFieldCount ?? 0),
-      rowClusterCount: Number(variant.rowClusterCount ?? 0),
-      columnAssignmentCount: Number(variant.columnAssignmentCount ?? 0),
-      reconstructedRowCount: Number(variant.reconstructedRowCount ?? 0),
-      nonBlankNameCount: Number(variant.nonBlankNameCount ?? 0),
-      nonBlankQtyCount: Number(variant.nonBlankQtyCount ?? 0),
-      nonBlankRetailCount: Number(variant.nonBlankRetailCount ?? 0),
-      nonBlankCostCount: Number(variant.nonBlankCostCount ?? 0),
-      wrongAutoConfirm: Number(variant.wrongAutoConfirm ?? 0),
-      manualReviewRequired: Boolean(variant.manualReviewRequired ?? true),
-      processingTimeMs: recognizeElapsedMs + Math.round(performance.now() - mappingStarted),
-    })) as P5SemanticCandidateSummary[];
+    const variants = compareSemanticMappingCandidates(tokens)
+      .filter((variant: any) => MANAGEMENT_VARIANTS.has(String(variant.variantId)))
+      .map((variant: any) => ({
+        variantId: variant.variantId,
+        mappedHeaderFieldCount: Number(variant.mappedHeaderFieldCount ?? 0),
+        rowClusterCount: Number(variant.rowClusterCount ?? 0),
+        columnAssignmentCount: Number(variant.columnAssignmentCount ?? 0),
+        reconstructedRowCount: Number(variant.reconstructedRowCount ?? 0),
+        nonBlankNameCount: Number(variant.nonBlankNameCount ?? 0),
+        nonBlankQtyCount: Number(variant.nonBlankQtyCount ?? 0),
+        nonBlankRetailCount: Number(variant.nonBlankRetailCount ?? 0),
+        nonBlankCostCount: Number(variant.nonBlankCostCount ?? 0),
+        wrongAutoConfirm: Number(variant.wrongAutoConfirm ?? 0),
+        manualReviewRequired: Boolean(variant.manualReviewRequired ?? true),
+        processingTimeMs: recognizeElapsedMs + Math.round(performance.now() - mappingStarted),
+      })) as P5SemanticCandidateSummary[];
     return {
       diagnosticOnly: true,
       runtimePsmUnchanged: true,
