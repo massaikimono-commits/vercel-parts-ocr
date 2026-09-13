@@ -12,9 +12,9 @@ assert.match(search, /digits\.padStart\(4, "0"\)/, "10 can match stored 0010");
 assert.match(search, /String\(Number\(digits\)\)/, "0010 can match natural 10");
 
 assert.match(search, /const key = row\.entry\.work_order_id \? `work:\$\{row\.entry\.work_order_id\}` : `entry:\$\{row\.entry\.id\}`/, "search results group by work_order_id");
-assert.match(search, /const inbound = sorted\.find\(\(row\) => row\.entry\.entry_type !== "delivery"\)/, "group edit target prefers inbound entry");
+assert.match(search, /const inbound = sorted\.find\(\(row\) => row\.entry\.entry_type !== "delivery"\)/, "group detail target prefers inbound entry");
 assert.match(search, /deliveryRows = set\.rows\.filter\(\(row\) => row\.entry\.entry_type === "delivery"\)/, "delivery is rendered inside the same work-order card");
-assert.match(search, /location\.assign\("\/schedule\/edit\?id="\+set\.primary\.entry\.id\)/, "one edit button opens the grouped work order through its inbound entry");
+assert.match(search, /location\.assign\("\/schedule\/detail\?entry="\+set\.primary\.entry\.id\)/, "one detail button opens the grouped work order through its inbound entry");
 assert.doesNotMatch(search, /dayRows\.map\(\(\{entry,work,vehicle,customer\}\)/, "legacy one-card-per-schedule-entry rendering is removed");
 
 assert.match(edit, /\.eq\("work_order_id",e\.work_order_id\)[\s\S]*\.eq\("entry_type","delivery"\)/s, "edit screen loads related delivery by work_order_id");
