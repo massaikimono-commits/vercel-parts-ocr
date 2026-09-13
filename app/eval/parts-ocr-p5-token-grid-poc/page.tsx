@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { runP5SemanticHeaderDiagnostic } from "../../ocr/bakeoff/p5-psm-primary-browser";
+import { runP5SemanticCandidateComparison, type P5SemanticCandidateSummary } from "../../ocr/bakeoff/p5-semantic-candidates-browser";
 import { clearFormalSet, loadFormalSet, P5_FORMAL_SET_MANIFEST_VERSION, saveFormalSet } from "../../ocr/bakeoff/p5-formal-set-idb";
 
 type RegisteredImage = {
@@ -16,29 +16,18 @@ type RegisteredImage = {
   fingerprint: string;
 };
 
-type SemanticResult = {
+type CandidateResult = {
   id: string;
   diagnosticPsm: "3" | "6";
-  fingerprint: string;
-  imageWidth: number | null;
-  imageHeight: number | null;
-  diagnostic: any;
+  pageOcrTokenCount: number;
+  variants: P5SemanticCandidateSummary[];
   error: string | null;
 };
-
-type RootCauseClass =
-  | "A_TOKEN_FRAGMENTATION"
-  | "B_LEXICON_FUZZY"
-  | "C_HEADER_BAND_GEOMETRY"
-  | "D_COLUMN_ASSOCIATION"
-  | "E_OCR_TEXT_QUALITY"
-  | "F_COMPOSITE"
-  | "NOT_EVALUABLE";
 
 type PersistenceState = "checking" | "ready" | "missing" | "error";
 
 const RESULT_SCHEMA = "icb.parts-ocr.p5-management-short.v1";
-const RESULT_REVISION = "p5-management-short-semantic-root-cause-v1";
+const RESULT_REVISION = "p5-generalized-semantic-candidates-v1";
 const EVALUATION_HEAD = process.env.NEXT_PUBLIC_EVAL_HEAD || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "unknown";
 const FORMAL_IMAGE_IDS = Array.from({ length: 12 }, (_, index) => `IMG_${String(675 + index).padStart(4, "0")}`);
 const AUTO_TARGETS = [
@@ -85,95 +74,41 @@ async function copyText(text: string) {
   if (!ok) throw new Error("clipboard copy failed");
 }
 
-function classifyRootCause(item: SemanticResult): { rootCauseClass: RootCauseClass; rootCauseEvidence: string[] } {
-  if (item.error || !item.diagnostic?.variant) return { rootCauseClass: "NOT_EVALUABLE", rootCauseEvidence: ["diagnostic unavailable"] };
-  const variant = item.diagnostic.variant;
-  const semantic = variant.semanticRootCause ?? {};
-  const candidates = Array.isArray(semantic.candidates) ? semantic.candidates : [];
-  const mapped = Number(variant.mappedHeaderFieldCount ?? 0);
-  const tokens = Number(variant.pageOcrTokenCount ?? 0);
-  const assigned = Number(variant.columnAssignmentCount ?? 0);
-  const rows = Number(variant.reconstructedRowCount ?? 0);
-  if (!tokens) return { rootCauseClass: "E_OCR_TEXT_QUALITY", rootCauseEvidence: ["page OCR tokens 0", `mapped fields ${mapped}/4`] };
-
-  const split = candidates.filter((candidate: any) => candidate?.rejectReason === "possible-split-token-fragmentation").length;
-  const near = candidates.filter((candidate: any) => candidate?.rejectReason === "near-lexicon-but-current-exact-alias-reject").length;
-  const outside = candidates.filter((candidate: any) => candidate?.rejectReason === "outside-observed-header-band").length;
-  const poor = candidates.filter((candidate: any) => candidate?.rejectReason === "ocr-or-lexicon-distance-too-large").length;
-  const signals = [split > 0, near > 0, outside > 0, poor > 0, mapped > 0 && assigned === 0].filter(Boolean).length;
-  const evidence: string[] = [];
-  let rootCauseClass: RootCauseClass;
-
-  if (signals >= 2 && mapped < 4) {
-    rootCauseClass = "F_COMPOSITE";
-    if (split) evidence.push("split adjacency observed");
-    if (near) evidence.push("near-lexicon rejects observed");
-    if (outside) evidence.push("header-band rejects observed");
-    if (poor) evidence.push("OCR/lexicon distance rejects observed");
-  } else if (split > 0) {
-    rootCauseClass = "A_TOKEN_FRAGMENTATION";
-    evidence.push("split adjacency observed");
-  } else if (near > 0) {
-    rootCauseClass = "B_LEXICON_FUZZY";
-    evidence.push("header candidates exist but lexicon reject");
-  } else if (outside > 0) {
-    rootCauseClass = "C_HEADER_BAND_GEOMETRY";
-    evidence.push("header candidates outside observed band");
-  } else if (mapped > 0 && assigned === 0) {
-    rootCauseClass = "D_COLUMN_ASSOCIATION";
-    evidence.push("mapped header exists but column assignment 0");
-  } else if (poor > 0 || (candidates.length > 0 && mapped === 0)) {
-    rootCauseClass = "E_OCR_TEXT_QUALITY";
-    evidence.push("header candidates exist but OCR/lexicon distance large");
-  } else {
-    rootCauseClass = "NOT_EVALUABLE";
-    evidence.push("insufficient discriminating evidence");
-  }
-  if (mapped < 4) evidence.push(`mapped fields ${mapped}/4`);
-  if (rows === 0) evidence.push("reconstructed rows 0");
-  return { rootCauseClass, rootCauseEvidence: [...new Set(evidence)].slice(0, 3) };
+function validateFormalRegistry(items: RegisteredImage[]) {
+  const ids = items.map((item) => item.id);
+  return items.length === 12 && FORMAL_IMAGE_IDS.every((id) => ids.includes(id)) && new Set(ids).size === 12;
 }
 
-function buildManagementShort(results: SemanticResult[], registryReady: boolean, registrySize: number) {
+function buildManagementShort(results: CandidateResult[], registryReady: boolean, registrySize: number) {
   return {
     schema: RESULT_SCHEMA,
     revision: RESULT_REVISION,
     evaluationHead: EVALUATION_HEAD,
     registryReady,
     registrySize,
-    targets: results.map((item) => {
-      const variant = item.diagnostic?.variant;
-      const semantic = variant?.semanticRootCause;
-      const classified = classifyRootCause(item);
-      return {
-        imageId: item.id,
-        psm: item.diagnosticPsm,
-        pageOcrTokenCount: Number(variant?.pageOcrTokenCount ?? 0),
-        headerCandidateCount: Array.isArray(semantic?.candidates) ? semantic.candidates.length : 0,
-        mappedHeaderFieldCount: Number(variant?.mappedHeaderFieldCount ?? 0),
-        rowClusterCount: Number(variant?.rowClusterCount ?? 0),
-        columnAssignmentCount: Number(variant?.columnAssignmentCount ?? 0),
-        reconstructedRowCount: Number(variant?.reconstructedRowCount ?? 0),
-        rootCauseClass: classified.rootCauseClass,
-        rootCauseEvidence: classified.rootCauseEvidence,
-        wrongAutoConfirm: Number(variant?.wrongAutoConfirm ?? 0),
-        manualReviewRequired: Boolean(variant?.manualReviewRequired ?? true),
-        processingTimeMs: variant?.recognizeElapsedMs ?? null,
-      };
-    }),
+    targets: results.flatMap((item) => item.variants.map((variant) => ({
+      imageId: item.id,
+      psm: item.diagnosticPsm,
+      variant: variant.variantId,
+      mappedHeaderFieldCount: variant.mappedHeaderFieldCount,
+      columnAssignmentCount: variant.columnAssignmentCount,
+      reconstructedRowCount: variant.reconstructedRowCount,
+      nonBlankNameCount: variant.nonBlankNameCount,
+      nonBlankQtyCount: variant.nonBlankQtyCount,
+      nonBlankRetailCount: variant.nonBlankRetailCount,
+      nonBlankCostCount: variant.nonBlankCostCount,
+      wrongAutoConfirm: variant.wrongAutoConfirm,
+      manualReviewRequired: variant.manualReviewRequired,
+      processingTimeMs: variant.processingTimeMs,
+    })),
   };
-}
-
-function validateFormalRegistry(items: RegisteredImage[]) {
-  const ids = items.map((item) => item.id);
-  return items.length === 12 && FORMAL_IMAGE_IDS.every((id) => ids.includes(id)) && new Set(ids).size === 12;
 }
 
 export default function P5TokenGridRealPhotoPocPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const registryRef = useRef<Map<string, RegisteredImage>>(new Map());
   const [registered, setRegistered] = useState<RegisteredImage[]>([]);
-  const [results, setResults] = useState<SemanticResult[]>([]);
+  const [results, setResults] = useState<CandidateResult[]>([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("端末内の正式セットを確認中です…");
   const [copyStatus, setCopyStatus] = useState("");
@@ -217,7 +152,7 @@ export default function P5TokenGridRealPhotoPocPage() {
         for (const item of restored) registryRef.current.set(item.id, item);
         setRegistered(restored.sort((a, b) => a.selectionOrder - b.selectionOrder));
         setPersistenceState("ready");
-        setStatus("正式セット READY 12/12。端末内保存から自動復元しました。再選択なしで診断できます。");
+        setStatus("正式セット READY 12/12。端末内保存から自動復元しました。再選択なしで比較できます。");
       } catch {
         await clearFormalSet().catch(() => undefined);
         if (!cancelled) {
@@ -248,27 +183,16 @@ export default function P5TokenGridRealPhotoPocPage() {
       ]);
       const next: RegisteredImage[] = base.map((item, index) => ({ ...item, imageWidth: sizes[index].width || null, imageHeight: sizes[index].height || null, fingerprint: fingerprints[index] }));
       if (!validateFormalRegistry(next)) {
-        registryRef.current.clear();
         setRegistered(next);
         setPersistenceState("missing");
         setStatus("正式セット不整合です。IMG_0675〜IMG_0686の正式12枚をまとめて再登録してください。");
         return;
       }
-      await saveFormalSet(next.map((item) => ({
-        manifestVersion: P5_FORMAL_SET_MANIFEST_VERSION,
-        imageId: item.id,
-        safeImageFingerprint: item.fingerprint,
-        filename: item.name,
-        width: item.imageWidth,
-        height: item.imageHeight,
-        mimeType: item.file.type || "image/jpeg",
-        blob: item.file,
-        selectionOrder: item.selectionOrder,
-      })));
+      await saveFormalSet(next.map((item) => ({ manifestVersion: P5_FORMAL_SET_MANIFEST_VERSION, imageId: item.id, safeImageFingerprint: item.fingerprint, filename: item.name, width: item.imageWidth, height: item.imageHeight, mimeType: item.file.type || "image/jpeg", blob: item.file, selectionOrder: item.selectionOrder })));
       for (const item of next) registryRef.current.set(item.id, item);
       setRegistered(next);
       setPersistenceState("ready");
-      setStatus("正式セット READY 12/12。端末内IndexedDBへ保存済みです。今後は同じ固定Preview URLで再選択不要です。");
+      setStatus("正式セット READY 12/12。端末内IndexedDBへ保存済みです。");
     } catch {
       registryRef.current.clear();
       setPersistenceState("error");
@@ -282,30 +206,30 @@ export default function P5TokenGridRealPhotoPocPage() {
   async function runAutoDiagnostic() {
     if (busy) return;
     if (!formalReady || registryRef.current.size !== 12) {
-      setStatus("正式12枚が端末内にありません。個別画像ではなく、正式12枚を再登録してください。");
+      setStatus("正式12枚が端末内にありません。正式12枚を再登録してください。");
       return;
     }
     const targets = AUTO_TARGETS.map((spec) => ({ spec, item: registryRef.current.get(spec.id) }));
     if (targets.some(({ item }) => !item)) {
-      setStatus("診断対象を端末内registryから解決できません。正式12枚を再登録してください。");
+      setStatus("比較対象を端末内registryから解決できません。正式12枚を再登録してください。");
       return;
     }
     setBusy(true);
     setCopyStatus("");
     setResults([]);
-    setStatus("3ケースを端末内registryから自動選択し、semantic mapping root causeを診断中です。file pickerは開きません。");
-    const collected: SemanticResult[] = [];
+    setStatus("3ケースを自動選択し、CURRENT / A / B / Cを比較中です。file pickerは開きません。");
+    const collected: CandidateResult[] = [];
     try {
       for (const { spec, item } of targets as Array<{ spec: typeof AUTO_TARGETS[number]; item: RegisteredImage }>) {
         try {
-          const diagnostic = await runP5SemanticHeaderDiagnostic(item.file, spec.psm);
-          collected.push({ id: item.id, diagnosticPsm: spec.psm, fingerprint: item.fingerprint, imageWidth: item.imageWidth, imageHeight: item.imageHeight, diagnostic, error: null });
+          const comparison = await runP5SemanticCandidateComparison(item.file, spec.psm);
+          collected.push({ id: item.id, diagnosticPsm: spec.psm, pageOcrTokenCount: Number(comparison.pageOcrTokenCount ?? 0), variants: comparison.variants, error: null });
         } catch (error) {
-          collected.push({ id: item.id, diagnosticPsm: spec.psm, fingerprint: item.fingerprint, imageWidth: item.imageWidth, imageHeight: item.imageHeight, diagnostic: null, error: error instanceof Error ? error.message : String(error) });
+          collected.push({ id: item.id, diagnosticPsm: spec.psm, pageOcrTokenCount: 0, variants: [], error: error instanceof Error ? error.message : String(error) });
         }
         setResults([...collected]);
       }
-      setStatus("Semantic mapping診断完了。『総合管理用結果をコピー』で短縮JSONだけ提出できます。");
+      setStatus("Generalized Candidate比較完了。『総合管理用結果をコピー』でshort JSONを提出できます。");
     } finally {
       setBusy(false);
     }
@@ -324,9 +248,9 @@ export default function P5TokenGridRealPhotoPocPage() {
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 12px 60px", color: "#172033", background: "#f7f9fc" }}>
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
-        <h1 style={{ marginTop: 0 }}>P5 Semantic Mapping Root Cause診断</h1>
-        <p><b>正式12枚は端末内IndexedDBへ保存し、同じ固定Preview URLならreloadや新commit後も自動復元します。</b></p>
-        <p>画像はブラウザ端末内だけに保持し、server / Supabase / GitHub / Vercel bundleへ送信・保存しません。</p>
+        <h1 style={{ marginTop: 0 }}>P5 Generalized Semantic Candidate比較</h1>
+        <p><b>CURRENT / A Split-Token / B Generalized Fuzzy / C Soft Header-Bandを同一OCR tokenで比較します。</b></p>
+        <p>画像別alias・固定px・GT runtime・PSM runtime変更はありません。</p>
       </section>
 
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
@@ -336,35 +260,18 @@ export default function P5TokenGridRealPhotoPocPage() {
         <div role="status" aria-live="polite" style={{ marginTop: 8 }}>{status}</div>
         {persistenceState !== "checking" && !formalReady ? <button disabled={busy} onClick={() => inputRef.current?.click()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, marginTop: 12, background: busy ? "#94a3b8" : "#245fce", color: "white", fontWeight: 900 }}>正式12枚を登録</button> : null}
         {formalReady ? <button disabled={busy} onClick={() => inputRef.current?.click()} style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 12, padding: 10, marginTop: 10, background: "white", color: "#334155", fontWeight: 800 }}>正式セットを再登録</button> : null}
-        <button disabled={!formalReady || busy} onClick={() => void runAutoDiagnostic()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, marginTop: 12, background: !formalReady || busy ? "#94a3b8" : "#176b34", color: "white", fontWeight: 900 }}>{busy ? "Semantic診断中…" : "自動診断開始"}</button>
+        <button disabled={!formalReady || busy} onClick={() => void runAutoDiagnostic()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, marginTop: 12, background: !formalReady || busy ? "#94a3b8" : "#176b34", color: "white", fontWeight: 900 }}>{busy ? "候補比較中…" : "自動診断開始"}</button>
       </section>
 
-      {registered.length > 0 ? <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>登録済み正式セット</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 10 }}>
-          {registered.map((item) => <div key={`${item.selectionOrder}-${item.fingerprint}`} style={{ border: "1px solid #dbe2ec", borderRadius: 12, padding: 8 }}>
-            <div style={{ fontWeight: 900 }}>登録 #{item.selectionOrder}</div>
-            <img src={item.previewUrl} alt={`登録${item.selectionOrder}`} style={{ width: "100%", height: 100, objectFit: "contain", background: "#eef2f7", borderRadius: 8, margin: "6px 0" }} />
-            <div style={{ fontSize: 12, overflowWrap: "anywhere" }}>{item.name}</div>
-            <div style={{ fontSize: 12 }}>{item.imageWidth && item.imageHeight ? `${item.imageWidth} × ${item.imageHeight}px` : "size unavailable"}</div>
-            <div style={{ fontSize: 12 }}>識別: {item.id === "UNMATCHED" ? "未照合" : "登録済み"}</div>
-          </div>)}
-        </div>
-      </section> : null}
-
       {results.length > 0 ? <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>Semantic診断結果</h2>
+        <h2 style={{ marginTop: 0, fontSize: 18 }}>Candidate比較結果</h2>
         <button onClick={() => void copyManagementShort()} disabled={busy} style={{ width: "100%", border: 0, borderRadius: 12, padding: 13, background: "#176b34", color: "white", fontWeight: 900 }}>総合管理用結果をコピー</button>
         {copyStatus ? <div role="status" aria-live="polite" style={{ marginTop: 8, fontWeight: 900, color: copyStatus === "コピーしました" ? "#176b34" : "#a11" }}>{copyStatus}</div> : null}
-        {results.map((item) => {
-          const short = buildManagementShort([item], formalReady, registryRef.current.size).targets[0];
-          return <div key={item.id} style={{ marginTop: 14, borderTop: "1px solid #dbe2ec", paddingTop: 10 }}>
-            <div style={{ fontWeight: 900 }}>{item.id} / PSM {item.diagnosticPsm}</div>
-            {item.error ? <div style={{ color: "#a11" }}>ERROR: {item.error}</div> : null}
-            <div style={{ fontSize: 13, marginTop: 6 }}>tokens: {short.pageOcrTokenCount} / headers: {short.mappedHeaderFieldCount}/4 / rows: {short.reconstructedRowCount} / root: {short.rootCauseClass}</div>
-            {item.diagnostic ? <details style={{ marginTop: 8 }}><summary>詳細診断を表示</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 420, overflow: "auto", fontSize: 11 }}>{JSON.stringify(item.diagnostic, null, 2)}</pre></details> : null}
-          </div>;
-        })}
+        {results.map((item) => <div key={item.id} style={{ marginTop: 14, borderTop: "1px solid #dbe2ec", paddingTop: 10 }}>
+          <div style={{ fontWeight: 900 }}>{item.id} / PSM {item.diagnosticPsm} / tokens {item.pageOcrTokenCount}</div>
+          {item.error ? <div style={{ color: "#a11" }}>ERROR: {item.error}</div> : null}
+          {item.variants.map((variant) => <div key={variant.variantId} style={{ fontSize: 13, marginTop: 6 }}>{variant.variantId}: headers {variant.mappedHeaderFieldCount}/4 / rows {variant.reconstructedRowCount} / name {variant.nonBlankNameCount} / qty {variant.nonBlankQtyCount} / retail {variant.nonBlankRetailCount} / cost {variant.nonBlankCostCount}</div>)}
+        </div>)}
       </section> : null}
     </main>
   );
