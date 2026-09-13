@@ -47,6 +47,34 @@ assert(controller.includes('/schedule?day=${addDays(mondayOf(todayJst()), index)
 assert(controller.includes('replaceAll("予約変更", "予定詳細")'), "reservation-change entry wording must normalize to 予定詳細");
 assert(controller.includes('replaceAll("かんたん予約変更", "予定詳細")'), "easy-change heading must normalize to 予定詳細");
 
+// /schedule/week must never starve its async load via a self-triggering MutationObserver loop.
+assert(controller.includes("const WEEK_HINT ="), "weekly hint text must have a stable target value");
+assert(controller.includes("hint && hint.textContent !== WEEK_HINT"), "weekly hint mutation must be idempotent");
+assert(controller.includes("new MutationObserver(requestApplyUx)"), "DOM observer must use the guarded scheduler");
+assert(controller.includes("window.requestAnimationFrame"), "DOM observer updates must be coalesced per animation frame");
+assert(controller.includes("if (disposed || applyFrame) return"), "observer scheduler must block re-entrant frame storms");
+assert(controller.includes("window.cancelAnimationFrame(applyFrame)"), "observer frame must be cleaned up on route change");
+
+// Loading lifecycle contract: start busy, both success/empty resolve through finally, failure reports an error and also resolves busy.
+assert(week.includes("setBusy(true)"), "weekly load must enter loading state");
+assert(week.includes("setEntries(nextEntries)"), "weekly success/empty result must commit entries");
+assert(week.includes('setMessage(safeActionError("週間予定の読み込み", error))'), "weekly query failure must transition to an error message");
+assert(/finally\s*\{[\s\S]*?setBusy\(false\)/.test(week), "weekly load must always leave loading state in finally");
+const loadingCases = ["data-success", "empty-success", "query-failure"];
+for (const scenario of loadingCases) {
+  let busy = true;
+  try {
+    if (scenario === "query-failure") throw new Error("fixture query failure");
+    const rows = scenario === "empty-success" ? [] : [{ id: "fixture" }];
+    assert(Array.isArray(rows), `${scenario}: fixture result must resolve`);
+  } catch {
+    assert(scenario === "query-failure", `${scenario}: only failure fixture may throw`);
+  } finally {
+    busy = false;
+  }
+  assert(busy === false, `${scenario}: weekly loading must not remain infinite`);
+}
+
 assert(controller.includes('body[data-ux-route="/schedule/new"]'), "schedule registration must have dedicated compact density rules");
 assert(controller.includes(".capacity"), "schedule registration capacity must become a compact summary strip");
 assert(controller.includes('body[data-ux-route="/schedule/edit"]'), "schedule detail/edit must have compact density rules");
@@ -81,3 +109,4 @@ assert(!controller.includes("insert(") && !controller.includes("update({") && !c
 assert(!controller.includes("/ocr/auto"), "UX density controller must not alter OCR workflow");
 
 console.log("Integrated device UX feedback regression: PASS");
+console.log("Schedule week loading regression: PASS");
