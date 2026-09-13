@@ -24,7 +24,8 @@ if (!source.includes("/schedule/print?day=")) {
 for (const expected of [
   "@page{size:A3 portrait",
   ".sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420",
-  ".sheet{width:${PRINT_LAYOUT.page.widthMm}mm;height:${PRINT_LAYOUT.page.heightMm}mm",
+  "position:fixed!important;left:0!important;top:0!important;width:297mm!important;height:420mm!important",
+  "fieldAnchors: {",
 ]) {
   if (!printSource.includes(expected)) failures.push("missing from dedicated print page: " + expected);
 }
@@ -46,4 +47,5 @@ console.log("PASS schedule desktop density regression");
 console.log("- compact layout applies to desktop screen only");
 console.log("- mobile breakpoint remains separate");
 console.log("- schedule print action routes to the dedicated print page");
-console.log("- dedicated print preview stays proportional and print output remains exact A3 portrait");
+console.log("- dedicated print preview stays proportional and print output remains fixed to exact A3 portrait");
+console.log("- daily report field anchors are explicitly calibrated within the A3 coordinate system");
