@@ -6,6 +6,7 @@ import { supabase } from "./supabase";
 
 const SECURITY_ACK_KEY = "icb-security-alert-ack-v1";
 const SECURITY_PENDING_KEY = "icb-security-alert-pending-v1";
+const WEEK_HINT = "横にスクロールすると1週間を続けて確認できます。予定カードから予定詳細を開けます。";
 
 type SecurityAlert = {
   severity: "warning" | "high";
@@ -76,6 +77,7 @@ export default function ResponsiveUxController() {
     document.body.dataset.uxRoute = pathname;
     let latestAlert: SecurityAlert | null = null;
     let disposed = false;
+    let applyFrame = 0;
 
     async function loadLatestSecurityAlert() {
       if (pathname !== "/" && pathname !== "/settings/login-history") return;
@@ -123,8 +125,9 @@ export default function ResponsiveUxController() {
           .find((element) => element.textContent?.includes("セキュリティ確認"));
         if (!notice) return;
         const acknowledged = localStorage.getItem(SECURITY_ACK_KEY) || "";
-        notice.style.display = acknowledged === current ? "none" : "";
-        notice.dataset.securityFingerprint = current;
+        const nextDisplay = acknowledged === current ? "none" : "";
+        if (notice.style.display !== nextDisplay) notice.style.display = nextDisplay;
+        if (notice.dataset.securityFingerprint !== current) notice.dataset.securityFingerprint = current;
       }
       if (pathname === "/settings/login-history") {
         const alertCard = Array.from(document.querySelectorAll<HTMLElement>(".notice"))
@@ -151,8 +154,16 @@ export default function ResponsiveUxController() {
       applySecurityAcknowledgement();
       if (pathname === "/schedule/week") {
         const hint = document.querySelector<HTMLElement>(".hint");
-        if (hint) hint.textContent = "横にスクロールすると1週間を続けて確認できます。予定カードから予定詳細を開けます。";
+        if (hint && hint.textContent !== WEEK_HINT) hint.textContent = WEEK_HINT;
       }
+    }
+
+    function requestApplyUx() {
+      if (disposed || applyFrame) return;
+      applyFrame = window.requestAnimationFrame(() => {
+        applyFrame = 0;
+        if (!disposed) applyUx();
+      });
     }
 
     function captureClick(event: MouseEvent) {
@@ -180,7 +191,7 @@ export default function ResponsiveUxController() {
     }
 
     document.addEventListener("click", captureClick, true);
-    const observer = new MutationObserver(() => applyUx());
+    const observer = new MutationObserver(requestApplyUx);
     observer.observe(document.body, { childList: true, subtree: true });
     applyUx();
     void loadLatestSecurityAlert();
@@ -188,6 +199,7 @@ export default function ResponsiveUxController() {
     return () => {
       disposed = true;
       observer.disconnect();
+      if (applyFrame) window.cancelAnimationFrame(applyFrame);
       document.removeEventListener("click", captureClick, true);
       delete document.body.dataset.uxRoute;
     };
