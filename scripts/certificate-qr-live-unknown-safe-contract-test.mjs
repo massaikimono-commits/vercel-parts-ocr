@@ -149,3 +149,15 @@ function unknown(overrides = {}) {
 }
 
 console.log("Live unknown-safe contract and evaluation wiring tests passed.");
+{
+  const page = fs.readFileSync("app/eval/certificate-qr-live-scan/page.jsx", "utf8");
+  assert(page.includes('const CANDIDATE_LOCK_VARIANT = "TEMP_LOCK_12";'));
+  assert(page.includes('const CANDIDATE_LOCK_HOLD_RESCUE_FRAMES = 12;'));
+  assert(page.includes('completionBeforeRescue.kind === "registered"'));
+  assert(page.includes('candidateLockTargetFromEvidence(evidenceRef.current)'));
+  assert(page.includes('rescueState.rescueFrameCount < CANDIDATE_LOCK_HOLD_RESCUE_FRAMES'));
+  assert(page.includes('candidateLockReleaseReason = "hold-window-complete"'));
+  assert(page.includes('candidateLockReleaseReason = "confirmed-during-lock"'));
+}
+
+console.log("Registered remaining-one Candidate-Lock PoC wiring tests passed.");

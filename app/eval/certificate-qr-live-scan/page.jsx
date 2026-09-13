@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluateUnknownSafeCompletion } from "./unknown-safe-contract.mjs";
 
-const LIVE_SCAN_REVISION = "live-poc-v3-candidate-lock-null-semantics-1";
+const LIVE_SCAN_REVISION = "live-poc-v4-registered-remaining-one-candidate-lock-12";
 const COUNTING_INTEGRITY_SCHEMA = "icb-certificate-qr-live-counting-integrity-v1";
 const PARSER_SEPARATION_SCHEMA = "icb-certificate-qr-live-parser-separated-eval-v1";
 const MANAGEMENT_SHORT_SCHEMA = "icb-ocr-management-short-summary-v1";
@@ -20,6 +20,8 @@ const PHYSICAL_LOCATOR_DECODE_MATCH_WINDOW_FRAMES = 12;
 const LOCAL_RESCUE_STALL_FRAMES = 16;
 const LOCAL_RESCUE_VARIANTS_PER_FRAME = 2;
 const LOCAL_RESCUE_RETARGET_EVERY_FRAMES = 6;
+const CANDIDATE_LOCK_VARIANT = "TEMP_LOCK_12";
+const CANDIDATE_LOCK_HOLD_RESCUE_FRAMES = 12;
 const GUIDE_ROI = Object.freeze({ x: .04, y: .43, w: .92, h: .44 });
 const SUB_ROIS_PER_FRAME = 3;
 const SUB_ROIS = Object.freeze([
@@ -2201,6 +2203,14 @@ function remainingOneLatencyDiagnostic(state, separated, rescueState) {
     remainingOneRescueActivatedFrame: rescueActivatedFrame,
     remainingOneRescueAttemptCount: Number(rescueState?.zxingAttemptCount || 0),
     remainingOneRescueFrameCount: Number(rescueState?.rescueFrameCount || 0),
+    candidateLockVariant: rescueState?.candidateLockVariant || "CURRENT",
+    candidateLockApplied: Boolean(rescueState?.candidateLockApplied),
+    candidateLockTargetRoiId: rescueState?.candidateLockTargetRoiId || null,
+    candidateLockDiagnosticId: rescueState?.candidateLockDiagnosticId || null,
+    candidateLockStartFrame: Number.isFinite(rescueState?.candidateLockStartFrame) ? rescueState.candidateLockStartFrame : null,
+    candidateLockEndFrame: Number.isFinite(rescueState?.candidateLockEndFrame) ? rescueState.candidateLockEndFrame : null,
+    candidateLockReleaseReason: rescueState?.candidateLockReleaseReason || null,
+    candidateLockHoldRescueFrames: Number(rescueState?.candidateLockHoldRescueFrames || CANDIDATE_LOCK_HOLD_RESCUE_FRAMES),
     rescueAttemptDiagnostic: {
       diagnosticOnly: true,
       decoderChanged: false,
@@ -2337,6 +2347,13 @@ function managementShortFromLiveFull(full, runtimeHead = null) {
     remainingOneRescueActivatedFrame: latencyFull.remainingOneRescueActivatedFrame,
     remainingOneRescueAttemptCount: latencyFull.remainingOneRescueAttemptCount,
     remainingOneRescueFrameCount: latencyFull.remainingOneRescueFrameCount,
+    candidateLockVariant: latencyFull.candidateLockVariant || "CURRENT",
+    candidateLockApplied: Boolean(latencyFull.candidateLockApplied),
+    candidateLockTargetRoiId: latencyFull.candidateLockTargetRoiId || null,
+    candidateLockStartFrame: latencyFull.candidateLockStartFrame ?? null,
+    candidateLockEndFrame: latencyFull.candidateLockEndFrame ?? null,
+    candidateLockReleaseReason: latencyFull.candidateLockReleaseReason || null,
+    candidateLockHoldRescueFrames: latencyFull.candidateLockHoldRescueFrames ?? null,
     candidateRescueHitFrameCount: latencyFull.candidateRescueHitFrameCount,
     candidateNormalHitFrameCount: latencyFull.candidateNormalHitFrameCount,
     rescueStartToFinalConfirmationFrames: latencyFull.rescueStartToFinalConfirmationFrames,
@@ -2628,6 +2645,14 @@ function createLocalRescueState() {
     attemptLog: [],
     targetHistory: [],
     retargetCount: 0,
+    candidateLockVariant: "CURRENT",
+    candidateLockApplied: false,
+    candidateLockTargetRoiId: null,
+    candidateLockDiagnosticId: null,
+    candidateLockStartFrame: null,
+    candidateLockEndFrame: null,
+    candidateLockReleaseReason: null,
+    candidateLockHoldRescueFrames: CANDIDATE_LOCK_HOLD_RESCUE_FRAMES,
     variantStats: Object.fromEntries(LOCAL_RESCUE_VARIANTS.map((variant) => [
       variant.id,
       { attempts: 0, rawSuccesses: 0, structuralSuccesses: 0, novelCanonicalCount: 0 },
@@ -2651,6 +2676,14 @@ function localRescueSnapshot(state) {
     attemptLogCount: Array.isArray(state?.attemptLog) ? state.attemptLog.length : 0,
     targetHistory: Array.isArray(state?.targetHistory) ? state.targetHistory.slice(-24) : [],
     retargetCount: Number(state?.retargetCount || 0),
+    candidateLockVariant: state?.candidateLockVariant || "CURRENT",
+    candidateLockApplied: Boolean(state?.candidateLockApplied),
+    candidateLockTargetRoiId: state?.candidateLockTargetRoiId || null,
+    candidateLockDiagnosticId: state?.candidateLockDiagnosticId || null,
+    candidateLockStartFrame: Number.isFinite(state?.candidateLockStartFrame) ? state.candidateLockStartFrame : null,
+    candidateLockEndFrame: Number.isFinite(state?.candidateLockEndFrame) ? state.candidateLockEndFrame : null,
+    candidateLockReleaseReason: state?.candidateLockReleaseReason || null,
+    candidateLockHoldRescueFrames: Number(state?.candidateLockHoldRescueFrames || CANDIDATE_LOCK_HOLD_RESCUE_FRAMES),
     variantStats: state?.variantStats || {},
   };
 }
@@ -2661,6 +2694,48 @@ function lastNovelCanonicalFrame(evidenceMap) {
     last = Math.max(last, Number(entry?.firstSeenFrame || 0));
   }
   return last;
+}
+
+function candidateLockTargetFromEvidence(evidenceMap) {
+  const candidate = [...evidenceMap.values()]
+    .filter((entry) =>
+      !entry?.confirmed &&
+      entry?.parserSchemaClass === "registered-slash" &&
+      Array.isArray(entry?.guidePositions) &&
+      entry.guidePositions.length > 0
+    )
+    .sort((a, b) =>
+      Number(b?.lastSeenFrame || 0) - Number(a?.lastSeenFrame || 0) ||
+      Number(b?.frameIds?.size || 0) - Number(a?.frameIds?.size || 0)
+    )[0] || null;
+  if (!candidate) return null;
+
+  const positions = candidate.guidePositions
+    .slice(-12)
+    .map((position) => ({ x: Number(position?.nx), y: Number(position?.ny) }))
+    .filter((position) => Number.isFinite(position.x) && Number.isFinite(position.y));
+  if (!positions.length) return null;
+  const x = medianNumber(positions.map((position) => position.x));
+  const y = medianNumber(positions.map((position) => position.y));
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
+  const containing = SUB_ROIS
+    .filter((roi) => x >= roi.x && x <= roi.x + roi.w && y >= roi.y && y <= roi.y + roi.h)
+    .sort((a, b) => {
+      const da = Math.abs(x - (a.x + a.w / 2)) + Math.abs(y - (a.y + a.h / 2));
+      const db = Math.abs(x - (b.x + b.w / 2)) + Math.abs(y - (b.y + b.h / 2));
+      return da - db;
+    });
+  const roi = containing[0] || null;
+  if (!roi) return null;
+  return {
+    roi,
+    diagnosticId: candidate.diagnosticId || null,
+    firstSeenFrame: Number.isFinite(candidate.firstSeenFrame) ? candidate.firstSeenFrame : null,
+    lastSeenFrame: Number.isFinite(candidate.lastSeenFrame) ? candidate.lastSeenFrame : null,
+    x: Number(x.toFixed(4)),
+    y: Number(y.toFixed(4)),
+  };
 }
 
 function createSubRoiStats() {
@@ -3668,24 +3743,60 @@ export default function CertificateQrLiveScanPoc() {
         !normalNovelStructural &&
         stalledFrames >= LOCAL_RESCUE_STALL_FRAMES
       ) {
-        const target = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
+        const scheduledTarget = selectSubRois(frameId, evidenceRef.current, subRoiStatsRef.current)[0] || null;
+        const candidateLock = completionBeforeRescue.kind === "registered"
+          ? candidateLockTargetFromEvidence(evidenceRef.current)
+          : null;
+        const target = candidateLock?.roi || scheduledTarget;
         if (target) {
           rescueState.active = true;
           rescueState.activatedFrame = frameId;
           rescueState.targetRoiId = target.id;
           rescueState.triggerCount += 1;
           rescueState.variantCursor = 0;
+          rescueState.candidateLockVariant = completionBeforeRescue.kind === "registered"
+            ? CANDIDATE_LOCK_VARIANT
+            : "CURRENT";
+          rescueState.candidateLockApplied = Boolean(candidateLock);
+          rescueState.candidateLockTargetRoiId = candidateLock?.roi?.id || null;
+          rescueState.candidateLockDiagnosticId = candidateLock?.diagnosticId || null;
+          rescueState.candidateLockStartFrame = candidateLock ? frameId : null;
+          rescueState.candidateLockEndFrame = null;
+          rescueState.candidateLockReleaseReason = candidateLock ? null : "no-containing-candidate-at-activation";
+          rescueState.candidateLockHoldRescueFrames = CANDIDATE_LOCK_HOLD_RESCUE_FRAMES;
           if (!Array.isArray(rescueState.targetHistory)) rescueState.targetHistory = [];
           rescueState.targetHistory.push({
             frameId,
             targetRoiId: target.id,
-            reason: "activation",
+            reason: candidateLock ? "candidate-lock-activation" : "activation",
           });
         }
       }
 
       if (rescueState.active && remainingOne) {
+        const candidateLockActive =
+          rescueState.candidateLockApplied &&
+          rescueState.candidateLockVariant === CANDIDATE_LOCK_VARIANT &&
+          rescueState.rescueFrameCount < CANDIDATE_LOCK_HOLD_RESCUE_FRAMES;
         if (
+          rescueState.candidateLockApplied &&
+          !candidateLockActive &&
+          !Number.isFinite(rescueState.candidateLockEndFrame)
+        ) {
+          rescueState.candidateLockEndFrame = Math.max(
+            Number(rescueState.candidateLockStartFrame || frameId),
+            frameId - 1
+          );
+          rescueState.candidateLockReleaseReason = "hold-window-complete";
+          if (!Array.isArray(rescueState.targetHistory)) rescueState.targetHistory = [];
+          rescueState.targetHistory.push({
+            frameId,
+            targetRoiId: rescueState.targetRoiId,
+            reason: "candidate-lock-release",
+          });
+        }
+        if (
+          !candidateLockActive &&
           rescueState.rescueFrameCount > 0 &&
           rescueState.rescueFrameCount % LOCAL_RESCUE_RETARGET_EVERY_FRAMES === 0
         ) {
@@ -3822,6 +3933,14 @@ export default function CertificateQrLiveScanPoc() {
       setLocalRescueUi(localRescueSnapshot(rescueState));
 
       const evidenceUpdate = updateEvidence(frameId, grouped, q, selectedRois);
+      if (
+        evidenceUpdate.completion.complete &&
+        rescueState.candidateLockApplied &&
+        !Number.isFinite(rescueState.candidateLockEndFrame)
+      ) {
+        rescueState.candidateLockEndFrame = frameId;
+        rescueState.candidateLockReleaseReason = "confirmed-during-lock";
+      }
 
       for (const [canonical, group] of grouped.entries()) {
         const evidence = evidenceRef.current.get(canonical);
