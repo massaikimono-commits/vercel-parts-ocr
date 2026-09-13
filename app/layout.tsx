@@ -4,6 +4,7 @@ import SessionLifetimeGuard from "./session-lifetime-guard";
 import MobileQuickNav from "./mobile-quick-nav";
 import ResponsiveUxController from "./responsive-ux-controller";
 import LayoutDensityCalibration from "./layout-density-calibration";
+import DailyReportVisualAlignment from "./daily-report-visual-alignment";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -31,6 +32,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
           {children}
           <ResponsiveUxController />
           <LayoutDensityCalibration />
+          <DailyReportVisualAlignment />
           <MobileQuickNav />
         </AuthRouteGuard>
       </body>

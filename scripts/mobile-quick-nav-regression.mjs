@@ -4,6 +4,7 @@ const shell = fs.readFileSync("app/layout.tsx", "utf8");
 const nav = fs.readFileSync("app/mobile-quick-nav.tsx", "utf8");
 const controller = fs.readFileSync("app/responsive-ux-controller.tsx", "utf8");
 const calibration = fs.readFileSync("app/layout-density-calibration.tsx", "utf8");
+const visualAlignment = fs.readFileSync("app/daily-report-visual-alignment.tsx", "utf8");
 const week = fs.readFileSync("app/schedule/week/page.tsx", "utf8");
 const scheduleNew = fs.readFileSync("app/schedule/new/page.tsx", "utf8");
 const scheduleEdit = fs.readFileSync("app/schedule/edit/page.tsx", "utf8");
@@ -18,9 +19,12 @@ function assert(condition, message) {
 assert(shell.includes('import MobileQuickNav from "./mobile-quick-nav";'), "app shell must import MobileQuickNav");
 assert(shell.includes('import ResponsiveUxController from "./responsive-ux-controller";'), "app shell must import shared responsive UX controller");
 assert(shell.includes('import LayoutDensityCalibration from "./layout-density-calibration";'), "app shell must import final responsive/print calibration layer");
+assert(shell.includes('import DailyReportVisualAlignment from "./daily-report-visual-alignment";'), "app shell must import handwritten-sample report alignment layer");
 assert(shell.includes("<ResponsiveUxController />"), "shared UX controller must run inside authenticated app shell");
 assert(shell.includes("<LayoutDensityCalibration />"), "final density/print calibration must run inside authenticated app shell");
+assert(shell.includes("<DailyReportVisualAlignment />"), "daily report visual alignment layer must render");
 assert(shell.indexOf("<ResponsiveUxController />") < shell.indexOf("<LayoutDensityCalibration />"), "final calibration layer must render after responsive controller");
+assert(shell.indexOf("<LayoutDensityCalibration />") < shell.indexOf("<DailyReportVisualAlignment />"), "handwritten alignment must render after physical A3 calibration");
 assert(shell.includes("<MobileQuickNav />"), "app shell must render MobileQuickNav inside the guarded app");
 
 assert(nav.includes('href: "/schedule/new"'), "mobile quick nav must include schedule registration");
@@ -124,6 +128,32 @@ assert(!calibration.includes("scale("), "print calibration must not apply viewpo
 assert(!calibration.includes("translateZ("), "print calibration must remove Safari transform/rasterization drift");
 assert(calibration.includes("transform:none!important") && calibration.includes("-webkit-transform:none!important"), "all report overlays must print without transforms");
 
+// Handwritten-sample visual contract: keep same-row relationships and lower-section columns stable.
+for (const token of [
+  '.deliveryEntry .reportWorkCode',
+  'top:39%!important',
+  '.inboundEntry .reportWorkCode',
+  '.inboundEntry .dueDayValue',
+  '.inboundEntry .dueBroadValue',
+  'left:80.2%!important',
+  'left:88.2%!important',
+  'top:3%!important',
+  '.inboundEntry .dueHourValue',
+  '.inboundEntry .dueMinuteValue',
+  'top:51%!important',
+  '.stayingRow{',
+  'grid-template-columns:10% 30% 40% 10% 10%!important',
+  '.bodyShopRow{',
+  'grid-template-columns:12.5% 37.5% 25% 12.5% 12.5%!important',
+  '.plannedRow{',
+  'grid-template-columns:42% 32% 26%!important',
+]) {
+  assert(visualAlignment.includes(token), `daily-report visual alignment drifted: ${token}`);
+}
+assert(!visualAlignment.includes("scale("), "visual alignment must not compensate using page scaling");
+assert(!visualAlignment.includes("supabase") && !visualAlignment.includes("fetch("), "visual alignment must be pure layout with zero data/network changes");
+assert(visualAlignment.includes("transform:none!important") && visualAlignment.includes("-webkit-transform:none!important"), "visual alignment must remain transform-free for print");
+
 assert(scheduleNew.includes("schedule_slot_check_v2"), "registration-time warning/capacity logic must remain intact");
 assert(scheduleNew.includes("schedule_capacity"), "registration capacity logic must remain intact");
 assert(scheduleEdit.includes("schedule_time_options") && scheduleEdit.includes("schedule_slot_check_v2"), "edit-time availability and warning logic must remain intact");
@@ -135,4 +165,5 @@ assert(!calibration.includes("supabase") && !calibration.includes("fetch("), "fi
 console.log("Integrated device UX feedback regression: PASS");
 console.log("Schedule week loading regression: PASS");
 console.log("A3 report geometry regression: PASS");
+console.log("Daily report handwritten visual-alignment regression: PASS");
 console.log("Tablet/desktop compact density regression: PASS");

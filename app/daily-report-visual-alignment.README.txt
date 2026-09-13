@@ -1,1 +1,0 @@
-Handwritten-sample visual alignment calibration for the daily A3 report. Runtime component: app/daily-report-visual-alignment.tsx
