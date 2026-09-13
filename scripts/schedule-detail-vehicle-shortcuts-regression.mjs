@@ -1,0 +1,10 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const detail = fs.readFileSync("app/schedule/detail/page.tsx", "utf8");
+assert.ok(detail.includes('openVehicleScopedTool("/customer-vehicles/lease-maintenance")'), "lease shortcut");
+assert.ok(detail.includes('rememberActiveVehicle();'), "selected vehicle handoff");
+assert.ok(!detail.includes('openVehicleTool("/ocr/auto")'), "practical detail hub stays decoupled from OCR execution");
+assert.ok(detail.includes('次回予定登録'), "keep next booking candidate");
+assert.ok(detail.includes('顧客・車両情報'), "keep customer vehicle candidate");
+assert.ok(detail.includes('電話する'), "keep phone candidate");
+console.log("schedule detail vehicle shortcuts regression: PASS");

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import "./vercel-selective-deploy-regression.mjs";
 
 const errors = [];
 
@@ -46,23 +47,10 @@ if (!fs.existsSync(vercelPath)) {
     fail(`vercel.json is not valid JSON: ${error.message}`);
   }
 
-  if (vercel) {
-    if (vercel?.git?.deploymentEnabled !== false) {
-      fail(
-        "Vercel Git auto-deploy must stay disabled (git.deploymentEnabled=false)."
-      );
-    }
-
-    const normalizedIgnoreCommand =
-      typeof vercel.ignoreCommand === "string"
-        ? vercel.ignoreCommand.replace(/\\/g, "")
-        : "";
-
-    if (!normalizedIgnoreCommand.includes("[deploy]")) {
-      fail(
-        "Vercel ignored-build guard is missing. Manual release commits must remain explicit."
-      );
-    }
+  if (vercel && Object.prototype.hasOwnProperty.call(vercel, "ignoreCommand")) {
+    fail(
+      "Legacy Vercel ignoreCommand/[deploy] gate must stay retired. Selective git.deploymentEnabled branch rules are the only Git auto-deploy gate."
+    );
   }
 }
 
@@ -102,5 +90,7 @@ console.log("Deployment safety check passed.");
 console.log("- Netlify production requires [deploy netlify production].");
 console.log("- Netlify preview requires [deploy netlify preview].");
 console.log("- Netlify branch deploys remain skipped.");
-console.log("- Vercel Git auto-deploy is disabled.");
+console.log("- Vercel Git auto-deploy is allowlisted to preview/schedule-ux-20260903 only.");
+console.log("- Vercel main and unknown/unapproved branches are blocked.");
+console.log("- Legacy Vercel ignoreCommand/[deploy] gate is absent.");
 console.log("- No direct Netlify/Vercel deploy command exists in GitHub Actions.");

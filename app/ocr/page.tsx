@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { consumeOCRTransferImage } from "./transfer";
 import { validateDocumentFile } from "../lib/file-security";
+import { stagePartsForReview } from "./stage-parts-review";
 
 type Part = { id: string; name: string; qty: string; retail: string; cost: string; source?: string };
 type CropBox = { x: number; y: number; w: number; h: number };
@@ -227,9 +228,11 @@ export default function HighAccuracyOCRPage() {
 
   function updatePart(index: number, key: keyof Part, value: string) { setParts((old) => old.map((p, i) => i === index ? { ...p, [key]: value } : p)); }
   function saveParts() {
-    if (!parts.length) return; let current: Part[] = [];
-    try { current = JSON.parse(localStorage.getItem("parts-data") || "[]"); if (!Array.isArray(current)) current = []; } catch { current = []; }
-    localStorage.setItem("parts-data", JSON.stringify([...parts, ...current])); setMessage(`${parts.length}件をメインの部品データへ保存しました。`);
+    if (!parts.length) return;
+    stagePartsForReview(parts, {
+      recognitionRoute: "dedicated",
+      rawOcrText: debugText,
+    });
   }
 
   return (
@@ -248,7 +251,7 @@ export default function HighAccuracyOCRPage() {
       <section style={styles.card}>
         <h2 style={{ marginTop: 0 }}>抽出データ</h2>
         {!parts.length && <p style={styles.text}>まだ抽出できた部品はありません。</p>}
-        {parts.length > 0 && <><div style={{ overflowX: "auto" }}><div style={{ minWidth: 560 }}><div style={{ ...styles.row, fontWeight: 800, padding: "0 2px" }}><div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div></div>{parts.map((p, i) => <div style={styles.row} key={p.id}><input style={styles.input} value={p.name} onChange={(e) => updatePart(i, "name", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.qty} onChange={(e) => updatePart(i, "qty", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.retail} onChange={(e) => updatePart(i, "retail", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.cost} onChange={(e) => updatePart(i, "cost", e.target.value)} /></div>)}</div></div><button style={styles.primary} onClick={saveParts}>✓ この内容を部品データへ保存</button></>}
+        {parts.length > 0 && <><div style={{ overflowX: "auto" }}><div style={{ minWidth: 560 }}><div style={{ ...styles.row, fontWeight: 800, padding: "0 2px" }}><div>部品名称</div><div>個数</div><div>定価</div><div>仕入れ</div></div>{parts.map((p, i) => <div style={styles.row} key={p.id}><input style={styles.input} value={p.name} onChange={(e) => updatePart(i, "name", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.qty} onChange={(e) => updatePart(i, "qty", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.retail} onChange={(e) => updatePart(i, "retail", e.target.value)} /><input style={styles.input} inputMode="numeric" value={p.cost} onChange={(e) => updatePart(i, "cost", e.target.value)} /></div>)}</div></div><button style={styles.primary} onClick={saveParts}>✓ 内容を確認して正式保存へ</button></>}
       </section>
       <section style={styles.card}><details><summary style={{ fontWeight: 700, cursor: "pointer" }}>OCR詳細（調整用）</summary><p style={styles.text}>名称候補、品番候補、辞書一致の有無、数字の読み取り結果を表示します。</p><textarea readOnly value={debugText} style={styles.debug} /></details></section>
     </main>

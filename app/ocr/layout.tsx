@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import PartsOcrBatchLinker from "./parts-ocr-batch-linker";
 
 const linkStyle = {
   display: "block",
@@ -15,6 +16,7 @@ const linkStyle = {
 export default function OCRLayout({ children }: { children: ReactNode }) {
   return (
     <>
+      <PartsOcrBatchLinker />
       <div style={{ maxWidth: 980, margin: "14px auto 0", padding: "0 14px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
           <a href="/ocr/auto" style={{ ...linkStyle, background: "#2f6fe4", color: "#fff", borderColor: "#2f6fe4" }}>

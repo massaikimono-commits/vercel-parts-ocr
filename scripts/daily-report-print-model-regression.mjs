@@ -5,8 +5,8 @@ const model = fs.readFileSync(new URL("../app/schedule/daily-report-print-model.
 const allocation = fs.readFileSync(new URL("../app/schedule/daily-report-allocation.ts", import.meta.url), "utf8");
 const template = fs.readFileSync(new URL("../app/schedule/daily-report-template.ts", import.meta.url), "utf8");
 
-assert.match(model, /allocateDailyReportPeriod\(morningRows, "morning"\)/, "午前の既存23行割り当てを再利用する");
-assert.match(model, /allocateDailyReportPeriod\(afternoonRows, "afternoon"\)/, "午後の下詰め割り当てを再利用する");
+assert.match(model, /allocateDailyReportDay\(morningRows, afternoonRows\)/, "午前上詰め・午後下詰めを同じ23行で割り当てる");
+assert.match(allocation, /slots\.slice\(slots\.length - afternoonCapacity\)/, "午後は既存23行の下側へ詰める");
 assert.match(model, /DAILY_REPORT_TEMPLATE\.rows\.count/, "既存日報の行数をテンプレート定義から使う");
 assert.match(model, /deliveryBySlot/, "納車欄を独立したセルとして保持する");
 assert.match(model, /inboundBySlot/, "引取系欄を独立したセルとして保持する");

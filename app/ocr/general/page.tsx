@@ -6,6 +6,7 @@ import { safeActionError } from "../../lib/client-security";
 import { useEffect, useRef, useState } from "react";
 import { consumeOCRTransferImage } from "../transfer";
 import { validateDocumentFile } from "../../lib/file-security";
+import { stagePartsForReview } from "../stage-parts-review";
 
 type Part = {
   id: string;
@@ -383,6 +384,14 @@ export default function GeneralOCRPage() {
     }
   }
 
+  function saveParts() {
+    if (!parts.length) return;
+    stagePartsForReview(parts, {
+      recognitionRoute: "general",
+      rawOcrText: rawText,
+    });
+  }
+
   return (
     <main style={styles.page}>
       <section style={styles.card}>
@@ -406,6 +415,7 @@ export default function GeneralOCRPage() {
           <input style={styles.input} value={part.cost} onChange={(e) => setParts((old) => old.map((x) => x.id === part.id ? { ...x, cost: e.target.value } : x))} />
         </div>)}
         {!parts.length && <div style={styles.text}>まだ結果はありません。</div>}
+        {!!parts.length && <button style={styles.primary} onClick={saveParts}>✓ 内容を確認して正式保存へ</button>}
       </section>
 
       <section style={styles.card}>

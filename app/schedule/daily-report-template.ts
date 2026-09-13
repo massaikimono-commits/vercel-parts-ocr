@@ -59,5 +59,5 @@ export function dailyReportPeriodSlotIndexes(period: "morning" | "afternoon") {
   const slots = dailyReportRowSlots();
   const midpoint = Math.ceil(slots.length / 2);
   if (period === "morning") return slots.slice(0, midpoint).map((slot) => slot.index);
-  return slots.slice(midpoint).map((slot) => slot.index).reverse();
+  return slots.slice(midpoint).map((slot) => slot.index);
 }

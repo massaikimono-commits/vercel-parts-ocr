@@ -595,43 +595,6 @@ export default function Home() {
   useEffect(() => localStorage.setItem("parts-data", JSON.stringify(parts)), [parts]);
   useEffect(() => localStorage.setItem("parts-template", JSON.stringify(template)), [template]);
 
-  useEffect(() => {
-    if (!session) return;
-    (async () => {
-      const [{ data: cs }, { data: vs }] = await Promise.all([
-        supabase.from("customers").select("*").order("created_at", { ascending: false }),
-        supabase.from("vehicles").select("*").order("created_at", { ascending: false }),
-      ]);
-      if (cs) {
-        setCustomers(cs.map((c: any) => ({
-          id: c.id,
-          type: c.customer_type,
-          name: c.name,
-          companyName: c.company_name || "",
-          phone: c.phone || "",
-          email: c.email || "",
-          postalCode: c.postal_code || "",
-          address: c.address || "",
-          notes: c.notes || "",
-        })));
-      }
-      if (vs) {
-        setVehicles(vs.map((v: any) => ({
-          number: v.vehicle_number,
-          model: v.model || "",
-          type: (v.fuel_type || "その他") as Vehicle["type"],
-          weight: v.vehicle_weight == null ? "" : String(v.vehicle_weight),
-          registration: v.registration_number || "",
-          last4: v.registration_number_last4 || "",
-          chassis: v.chassis_number || "",
-          firstRegistration: v.first_registration || "",
-          customerId: v.customer_id || "",
-          id: v.id,
-        }) as any));
-      }
-    })();
-  }, [session]);
-
   const filtered = useMemo(
     () => vehicles.filter((v) => !vehicleSearch || v.number.includes(vehicleSearch) || v.model.includes(vehicleSearch)),
     [vehicles, vehicleSearch]

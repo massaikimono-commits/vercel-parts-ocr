@@ -11,6 +11,6 @@ assert.match(source, /count:\s*23/, "既存日報の予定欄23行を維持す�
 assert.match(source, /publicAssetPath:\s*null/, "個人名を含み得る日報原本を公開GitHubへ直接置かない");
 assert.match(source, /commitToPublicRepo:\s*false/, "日報原本は公開リポジトリにコミットしない");
 assert.match(source, /period === "morning"/, "午前用の上詰めスロットを持つ");
-assert.match(source, /\.reverse\(\)/, "午後用の下詰めスロットを持つ");
+assert.match(source, /return slots\.slice\(midpoint\)/, "午後用の下側スロットを持つ");
 
 console.log("daily report template regression: ok");

@@ -44,7 +44,16 @@ function moneyText(value: string) {
 
 function readParts(): Part[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem("parts-data") || "[]");
+    const formal = JSON.parse(
+      sessionStorage.getItem("parts-print-data") || "[]"
+    );
+    if (Array.isArray(formal) && formal.length) return formal;
+  } catch {}
+
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem("parts-data") || "[]"
+    );
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];

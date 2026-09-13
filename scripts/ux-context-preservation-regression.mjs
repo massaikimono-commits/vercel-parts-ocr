@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const detail=fs.readFileSync("app/schedule/detail/page.tsx","utf8");
+const customer=fs.readFileSync("app/customer-vehicles/page.tsx","utf8");
+assert.ok(detail.includes('function openVehicleHistory(kind:"history"|"photos"){'));
+assert.ok(detail.includes('rememberActiveVehicle();\n    location.assign(`/customer-vehicles/${kind}?vehicle=${encodeURIComponent(vehicle.id)}`);'));
+assert.ok(customer.includes('location.assign("/schedule/active")}>📅 次回予定登録</button>'));
+assert.ok(detail.includes('function openOneDaySchedule()'));
+assert.ok(detail.includes('location.assign(`/schedule?day=${day}`)'));
+assert.ok(detail.includes('>1日の予定</button>'));
+for (const source of [detail,customer]) assert.doesNotMatch(source,/create table|alter table|create policy|create or replace function/i);
+console.log("ux context-preservation regression: ok");

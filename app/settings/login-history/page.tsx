@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
-import { safeActionError } from "../../lib/client-security";
+import { clearSensitiveLocalState, safeActionError } from "../../lib/client-security";
 
 type LoginEvent = {
   occurred_at: string;
@@ -61,6 +61,7 @@ export default function LoginHistoryPage() {
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
   const [alerts, setAlerts] = useState<SecurityAlert[]>([]);
+  const [remoteSigningOut, setRemoteSigningOut] = useState(false);
 
   async function load() {
     setBusy(true);
@@ -83,6 +84,26 @@ export default function LoginHistoryPage() {
     void load();
   }, []);
 
+  async function signOutAllDevices() {
+    if (remoteSigningOut) return;
+    const ok = window.confirm(
+      "このIDをすべての端末からログアウトしますか？\n\n他端末のセッションも再認証が必要になります。"
+    );
+    if (!ok) return;
+    setRemoteSigningOut(true);
+    setMessage("");
+    try {
+      try { await supabase.rpc("record_logout"); } catch {}
+      const { error } = await supabase.auth.signOut({ scope: "global" });
+      if (error) throw error;
+      clearSensitiveLocalState();
+      location.replace("/");
+    } catch (error: any) {
+      setMessage(safeActionError("全端末ログアウト", error));
+      setRemoteSigningOut(false);
+    }
+  }
+
   const failedCount = useMemo(
     () => rows.filter((x) => x.event_type === "login_failure").length,
     [rows]
@@ -93,7 +114,12 @@ export default function LoginHistoryPage() {
       <section className="card">
         <div className="actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <button onClick={() => history.back()}>← 戻る</button>
-          <button onClick={() => void load()} disabled={busy}>更新</button>
+          <div className="actions">
+            <button onClick={() => void load()} disabled={busy || remoteSigningOut}>更新</button>
+            <button onClick={() => void signOutAllDevices()} disabled={remoteSigningOut}>
+              {remoteSigningOut ? "ログアウト処理中…" : "全端末からログアウト"}
+            </button>
+          </div>
         </div>
 
         <h1>ログイン履歴</h1>

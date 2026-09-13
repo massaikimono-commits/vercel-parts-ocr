@@ -1,0 +1,44 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const helper = fs.readFileSync(new URL("../app/schedule/daily-report-work-code.ts", import.meta.url), "utf8");
+const printPage = fs.readFileSync(new URL("../app/schedule/print/page.tsx", import.meta.url), "utf8");
+const newPage = fs.readFileSync(new URL("../app/schedule/new/page.tsx", import.meta.url), "utf8");
+const businessState = fs.readFileSync(new URL("../app/schedule/business-vehicle-state.ts", import.meta.url), "utf8");
+
+assert.match(helper, /normalized === "車検"\) return "S"/, "車検はS");
+assert.match(helper, /normalized === "一般整備"\) return "Q"/, "一般整備はQ");
+assert.match(helper, /return "B\/P"/, "板金系はB/P");
+assert.match(helper, /inspectionScheduleType === "schedule"\) return "スケ"/, "scheduleはスケ");
+assert.match(helper, /inspectionScheduleType === "legal_3m"\) return "3"/, "legal_3mは3");
+assert.match(helper, /inspectionScheduleType === "legal_6m"\) return "6"/, "legal_6mは6");
+assert.match(helper, /inspectionScheduleType === "legal_12m"\) return "12"/, "legal_12mは12");
+assert.match(helper, /return "";\s*\n}/, "未指定点検は空欄");
+
+assert.match(newPage, /<option value="schedule">スケジュール点検<\/option>/, "通常予定をスケジュール点検へ名称変更");
+assert.doesNotMatch(newPage, />通常予定</, "通常予定の表示を残さない");
+assert.doesNotMatch(newPage, /legal_3m/, "DB GO前は予定登録へlegal_3mを追加しない");
+
+const codeUses = printPage.match(/dailyReportWorkCode\(/g) || [];
+assert.equal(codeUses.length, 4, "上部2箇所・滞留・納車予定へ日報専用コードを適用");
+assert.match(printPage, /inspection_schedule_type/, "日報は既存inspection_schedule_typeを読み込む");
+assert.doesNotMatch(printPage, /legal_3m/, "DB GO前は日報ページの保存型定義をまだ拡張しない");
+assert.match(printPage, /fieldAnchors:\s*\{/, "日報はfield単位anchorを使用する");
+assert.match(printPage, /workCode:\s*\{[^}]*align:\s*"right"/, "上部の入庫要因コードは専用anchorへ配置する");
+assert.match(printPage, /className="anchoredField reportWorkCode"/, "上部の入庫要因コードはgeneric vehicleセルへ混在させない");
+assert.match(printPage, /\.reportWorkCode\{font-size:\.64em;font-weight:700\}/, "上部コードの補助文字サイズは専用styleで管理する");
+assert.match(printPage, /className="secVehicle"><b>\{last4ForVehicle\(work\.vehicle_id\)\}<\/b><small>\{dailyReportWorkCode/, "下部は車番とコードを同じ専用車両欄に出す");
+assert.match(printPage, /\.stayingRow \.secVehicle\{left:40%;width:40%;justify-content:center\}/, "滞留車両の車番・コード欄を帳票座標内に固定する");
+assert.match(printPage, /\.plannedRow \.secVehicle\{left:41\.8%;width:32\.2%;justify-content:center\}/, "納車予定の車番・コード欄を帳票座標内に固定する");
+assert.match(printPage, /\.secVehicle small,\.secDue small\{font-size:\.78em;font-weight:700\}/, "下部補助コードは専用補助文字styleで管理する");
+assert.doesNotMatch(printPage, /[（(]\s*\{dailyReportWorkCode|dailyReportWorkCode\([^)]*\)\}\s*[）)]/, "コード文字列へ新しい括弧を追加しない");
+assert.match(printPage, /entry\.isWaitingService \? "来社待ち" : "来社"/, "通常来社は来社、作業待ちは来社待ちと同じ専用位置へ表示");
+assert.match(printPage, /entry\.entry_type === "onsite_repair" &&/, "出張の既存時間側ラベルは維持");
+assert.match(newPage, /isWaitingService/, "予定登録は専用作業待ちフラグを使用する");
+assert.match(printPage, /来社待ち/, "日報は作業待ち来社を来社待ちと表示する");
+assert.match(businessState, /is_waiting_service/, "滞留判定は専用作業待ちフラグを使用する");
+assert.doesNotMatch(businessState, /stay_reason.*作業待ち|notes.*作業待ち/, "滞留判定はstay_reasonやnotesから作業待ちを推測しない");
+assert.match(printPage, /className="secDue"><b>\{deliveryDay\}<\/b><small>\{deliveryTimeLabel\(state\.deliveryEntry\)\}<\/small><\/span>/, "納車予定の納期は専用納期欄の同一行に日付と時間区分を保持する");
+assert.match(printPage, /\.plannedRow \.secDue\{left:74%;width:26%;justify-content:center\}/, "納車予定の納期欄を帳票座標内に固定する");
+
+console.log("daily report work-code regression: ok");

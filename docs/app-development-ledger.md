@@ -1,6 +1,6 @@
 # App Development Ledger
 
-Last updated: 2026-09-02
+Last updated: 2026-09-07
 Shared baseline: see `docs/shared-project-state.md`
 
 ## Purpose
@@ -39,11 +39,12 @@ Business rules include:
 - no registration 12:00-13:00,
 - business hours 08:30-17:30,
 - one-hour visit slots,
-- overlap warning with explicit override,
+- ICB-SPEC v1.2 overlap warning: only when both entries are 点検 + customer visit + 作業待ち + exact-time and `starts_at` is identical; all other combinations do not use this duplicate warning,
 - combined AM cap 15 / PM cap 10 for pickup/visit/mobile,
 - vehicle-inspection AM cap 4, warn on 5th; PM uncapped,
 - annual business-calendar input,
 - delivery date/time can be registered together with intake and changed later.
+- 点検 + customer visit may use the dedicated `is_waiting_service` flag when the customer waits for the inspection work to finish; this mode has no delivery plan, is excluded from staying vehicles, and prints as `来社待ち`. 車検の作業待ちは通常仕様ではない。
 - morning pickup has its own limit of 10 entries; exact pickup deadlines and A中 both count toward the same 10 (for example, one 9時まで pickup plus one A中 pickup counts as 2).
 - pickup choices include 9時まで / 10時まで / 11時まで / A中 in the morning and an afternoon period option.
 - exact pickup and delivery times are operational deadlines, so user-facing labels use 「〜時まで」 / 「〜時〜分まで」 rather than plain clock-time wording.
@@ -122,6 +123,7 @@ Staff confirmation precedes print.
 - Save source photos/history.
 - Print onto designated blank areas of forms.
 - Do not print total amount.
+- The formal OCR review screen supports editing/deleting recognized rows and adding a blank manual row with 部品名称 / 個数 / 定価 / 仕入れ before explicit formal save.
 
 ## Recent integrated source work
 
@@ -186,6 +188,12 @@ Important practical rule:
 Major framework/toolchain dependency upgrades are not "missing app fixes".
 Do not mix major Next/TypeScript/PDF/Tesseract/ZXing/GitHub Action upgrades into the practical-test release without a dedicated compatibility/regression pass.
 
+## Chat handoff rule
+
+- Before an app-development chat becomes too long or unstable, prepare a handoff before switching chats.
+- The handoff must include: current branch/commit, what was changed, what is preview-live vs source-only, current Vercel preview URL if any, pending-fix ledger items, unresolved questions, and the next concrete action.
+- Do not rely on the next chat to rediscover project state from scratch; `docs/app-development-ledger.md` and `docs/pending-fix-ledger.md` are the shared handoff baseline.
+
 ## Workstream completion rule
 
 Before an app-development chat finishes a batch:
@@ -232,3 +240,193 @@ Before an app-development chat finishes a batch:
 - Exact full build passed in GitHub before final deployment.
 - Vercel Preview READY: `dpl_DeQ2s7Nu5GzBAjZoqPBBLvhimu73`, source `1f50b4e4e2c27ed6b13aa6883aae83c436f2b1cb`.
 - Preview root returned HTTP 200. Netlify was not changed.
+
+
+### 2026-09-05 — DBを触らない先行修正バッチ
+- Netlify本番が再デプロイ不可の間は、共有Supabase DBを変更せずに進められる修正を優先する運用へ整理。
+- 予定登録の点検区分表示を「スケジュール点検 / 法定6ヶ月点検 / 法定12ヶ月点検」に統一。法定3ヶ月点検はDB制約変更が必要なため保留 #001。
+- 点検区分は `reason=点検` の時だけ表示し、車検では不要な点検区分値を保持しないよう整理。
+- 点検の納車予定初期値は当日「中」、車検は既存 `business_calendar` を読み取って翌営業日「中」を優先するよう変更。DB変更なし。
+- 予定登録成功後に1日の予定へ強制遷移せず、そのまま連続登録できるよう変更。
+- トップページの独立した「今日の予定 / 1日の予定」導線を削除し、1週間スケジュールを主導線として維持。日別詳細は週/月/日付検索から開く。
+- 廃止済みの appointment completion（`schedule_entries.completed`）を1日の予定UIの状態判定から除外。作業状態は work_order の「未実施 → 作業中 → 作業完了」に一本化。
+- 予定検索と登録済み車両ピッカーの下4桁表示を自然表示（例: 0010 → 10）へ統一。
+- 入庫区分表示「引き取り」を「引取」に統一。
+- 現在の共有DB `schedule_slot_check_v2` が exact の同一entry_type全般で重複警告を出すことを確認。確定仕様「時間指定の来社×来社のみ警告」と不一致のため保留 #003 を追加。DBは未変更。
+- #003用SQLソースは将来適用できるよう customer_visit exact のみに限定する形へ準備済みだが、ライブSupabaseには未適用。
+- Vercel / Netlifyへの新規デプロイはまだ実施していない。次回は複数修正をまとめて1回のVercel Previewで確認する。
+
+### 2026-09-05 — Post-v1.1 DB-free confirmation pass
+- Reviewed the confirmed post-v1.1 schedule/report changes against `preview/schedule-ux-20260903`.
+- Confirmed the shared `schedule_entries.delivery` business-state source, staying/body-shop/planned-delivery rules, schedule/6m/12m inspection labels and report codes, delivery-plan editing, natural plate display, pickup label cleanup, and deprecated appointment-completion removal are already present.
+- Hardened schedule registration so `inspection_schedule_type` is sent only when `reason=点検`; changing to 車検/一般整備/板金 cannot submit a stale inspection subtype even if UI state has not finished clearing.
+- Added regression coverage for the single-vehicle and batch registration paths.
+- Deferred items remain #001 legal_3m, #002 来社「作業待ち」, #003 来社以外の exact-time 重複警告停止; shared Supabase DB was not changed.
+
+
+### 2026-09-05 — Schedule duplicate rule split
+- Confirmed schedule-registration operation: normally select an already-registered customer/vehicle and reflect it into the schedule.
+- Added a separate schedule duplicate warning: same vehicle ID + same JST calendar day warns regardless of time or work reason; user may explicitly choose to register anyway.
+- Vehicle identity/deduplication is not inferred from plate last4 or score. The current manual schedule form has no chassis input, so it is information-insufficient and must not assert that a provisional/manual entry is the same vehicle.
+- Customer candidate reuse remains a separate customer-only confirmation.
+- Full registration number differences (including area/class/hiragana/serial) are therefore never collapsed by schedule duplicate logic; schedule duplicate uses the selected existing vehicle ID only.
+- No Supabase schema/function change. main/Netlify untouched.
+
+### 2026-09-06 — Schedule search / edit / cancellation preview handoff
+- User verified on iPhone/Vercel Preview:
+  - schedule registration reset/defaults/top-success flow,
+  - iPhone Safari scroll-to-top after successful registration,
+  - cross-customer multi-vehicle batch registration,
+  - unified inbound time selector in schedule registration,
+  - unified inbound time selector in schedule edit,
+  - schedule search short numeric last4 behavior,
+  - work_order-based schedule search grouping and combined inbound+delivery edit,
+  - work_order-based cancellation including a successful real cancellation test.
+- Current schedule model is explicitly `1 work_order = 1入庫予定一式` for search/edit/cancel:
+  - schedule search groups inbound + delivery by `work_order_id`,
+  - edit loads related delivery by the same `work_order_id`,
+  - existing `cancel_schedule_entry_v1` already deletes all `schedule_entries` for the work order and keeps existing loaner/rental-company safety behavior.
+- Cancellation confirmation now shows customer name, natural last4, reason, inbound plan, and delivery plan, with “この入庫予定一式を取消します”.
+- Latest cancellation practical-test Preview that passed: https://vercel-parts-7878q7o48-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=vcbRHad07CYo0cd76myGyDRY6OfK8zp1
+- Current source head before this ledger update: `e0ec8663f20834fa1b986380bc644540c77a4631`.
+- PR #62 remains Draft/unmerged. main / Netlify / shared Supabase schema/functions were not changed by these UI updates.
+- Deferred DB items remain unchanged: #001 legal_3m, #002 来社「作業待ち」, #003 exact-time overlap warning scope.
+- Next requested action: simplify schedule-search result cards so each work-order set has side-by-side `予約変更` / `予約取消` actions; cancellation should open the existing two-step work-order cancellation confirmation directly from search without weakening safety.
+
+### 2026-09-06 — One-day schedule practical final-pass preview
+- User verified the prior schedule-search card actions and direct cancellation flow.
+- Reviewed the existing one-day schedule implementation against shop-floor requirements instead of rebuilding it.
+- Already present and preserved:
+  - whole schedule card tap opens the linked vehicle via the active-vehicle flow,
+  - no separate “車両を開く” button,
+  - pickup label is blank while 来社 / 出張 are displayed,
+  - card information order is customer → natural last4 + reason → type/time,
+  - work-state control is 未実施 → 作業中 → 作業完了.
+- Fixed only missing/inconsistent behavior:
+  - one-day board header now says “入庫” instead of “引取・来社・出張” so normal pickup wording is not surfaced,
+  - one-day board cards now receive reason colors directly,
+  - 一般整備 is always yellow even when an outsource vendor is set,
+  - 板金 / 板金塗装 remain white,
+  - work state is always visible on the one-day board regardless of the optional card-layout preference,
+  - iPhone daily-board rows/fonts were tightened to show more schedules without oversized text.
+- Added `schedule-one-day-practical-regression.mjs` and wired it into the full build.
+- GitHub OCR regression and Deployment safety guard both GREEN; full Vercel-equivalent build passed.
+- Vercel Preview READY: https://vercel-parts-hvgi4pje2-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=qv3qKPihdW1EuZS1c39gaM4lEvm8xiA8
+- Preview includes `/schedule` and `/customer-vehicles` so card-tap navigation can be tested.
+- Source head before this ledger entry: `e5d7aa856175a18a7c67898ed5dd3f6145d73756`.
+- No DB change. main / Netlify untouched. PR #62 remains Draft/unmerged.
+
+### 2026-09-06 — One-day schedule direct detail + mobile top compression
+- User requested two practical fixes after iPhone verification:
+  1. one-day schedule cards must open the exact schedule/work-order + vehicle detail, not the generic `/customer-vehicles` list;
+  2. the mobile top area must be substantially shorter so the day board appears almost immediately.
+- No DB/schema/RPC change was required. Existing `schedule_entries`, `work_orders`, `vehicles`, and `customers` columns already provide the requested detail fields.
+- Added `/schedule/detail?entry=...`:
+  - resolves the selected schedule entry and its `work_order_id`,
+  - loads the full work-order schedule set so inbound and delivery are shown together,
+  - shows customer, registration/last4, vehicle/model/model-code/chassis, inbound date/time/type, reason, delivery date/time, worker, work state, and notes,
+  - provides direct `予約変更` and `予約取消` actions using the existing edit/cancel flow,
+  - does not route through the generic customer/vehicle list.
+- One-day schedule planned cards now open `/schedule/detail` directly. Staying-vehicle cards retain their existing vehicle-management behavior.
+- Mobile-only top compression:
+  - compact one-line date + total count,
+  - compact AM / PM / AM-inspection counters,
+  - compact previous/today/next row,
+  - shorter date picker/state row,
+  - compact 4-button row for week / month / new schedule / daily report,
+  - reduced day-board title/header padding.
+- Desktop layout and print CSS were left intact.
+- Added/updated regressions:
+  - `schedule-one-day-practical-regression.mjs`,
+  - `schedule-detail-regression.mjs`,
+  - updated schedule workflow UX regression for the compact button label.
+- GitHub OCR regression GREEN, Deployment safety guard GREEN, full Vercel-equivalent build GREEN.
+- Tested source commit for preview: `dadb178b7214e9eba28314f858a72db7e65e7aaa`.
+- Vercel Preview READY: https://vercel-parts-kreihx3o0-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=BdNLSgnKeBmKGMY6QaDyFF47xgA98BbC
+- main / Netlify / shared Supabase remain unchanged. PR #62 remains Draft/unmerged.
+
+### 2026-09-06 — One-day mobile simplification: fixed work state + compact staying/workload
+- User requested one more iPhone-focused cleanup while preserving existing functionality and desktop/print behavior.
+- No DB/schema/RPC change was required.
+- Removed the one-day schedule completion-position selector entirely:
+  - no more “状態 / 名前横 / 詳細欄” UI,
+  - work state is fixed beside the customer name in schedule cards,
+  - the one-day board continues to show work state at all times.
+- Mobile top area is further simplified:
+  - compact date picker only in the secondary row,
+  - previous/today/next and week/month/new/report controls remain compact.
+- Staying vehicles are now a compact mobile list rather than large cards:
+  - each row shows customer, natural last4, reason, work state,
+  - second line shows stay day count, stay reason, delivery status,
+  - worker/outsource/vehicle info remains available in a small extra line when present,
+  - “滞留情報を編集” remains available as a compact disclosure,
+  - tapping the staying row opens the exact `/schedule/detail?entry=...` screen for that work order.
+- Desktop staying-card body remains unchanged through mobile-only show/hide CSS.
+- Mobile workload section now uses one-line compact rows for staff / unfinished / running / urgent counts.
+- Mobile “次の機能へ” buttons use reduced height, padding, and gaps; information/routes remain unchanged.
+- Updated `schedule-one-day-practical-regression.mjs` to guard the fixed state position, removed selector, compact staying list, workload list, and quick actions.
+- First full-build attempt caught a type mismatch for `BusinessScheduleEntry`; fixed the detail opener to accept an entry-id shape without changing runtime behavior.
+- GitHub OCR regression GREEN; Deployment safety guard GREEN; full Vercel-equivalent build GREEN.
+- Tested source commit: `8a3042f7265c00c80d7c547098a8e1cb477d2791`.
+- Vercel Preview READY: https://vercel-parts-kscytczdf-massa-ikimono-8427s-projects.vercel.app/?_vercel_share=GzUyExwggpLjYMUZac8b1rw4mbLr8v1N
+- main / Netlify / shared Supabase unchanged. PR #62 remains Draft/unmerged.
+
+
+
+### 2026-09-06 — Performance pass ①: scoped top / one-day data loading
+- Performance-only change on `preview/schedule-ux-20260903`; UI, labels, navigation and practical-test behavior were intentionally left unchanged.
+- Removed the legacy root-page authenticated preload of `customers.select("*")` and `vehicles.select("*")`; the visible root is `HomeDashboard`, so those rows were duplicate/unconsumed reads.
+- Home dashboard and `/schedule` now fetch the visible week/day schedule first, then restrict related work orders, schedule state rows, vehicles and customers to the operational IDs actually needed.
+- Staying-vehicle candidates are filtered server-side using the existing `work_orders -> schedule_entries` relationship: qualifying pickup/customer-visit inbound before the report boundary plus an anti-join for absence of any delivery entry. This preserves long-running stays without imposing an arbitrary lookback window.
+- Workload reads now push the existing unfinished predicates to the database (`status != cancelled/completed`, `work_completed=false`, `checked_out_at is null`) instead of loading all non-cancelled work orders and filtering them in the browser.
+- State-entry reads are constrained by relevant `work_order_id`; vehicle/customer reads are constrained by the derived IDs. Query count remains fixed/batched; no N+1 loop was introduced.
+- Added app-core regression guards so root all-master preloads and unscoped top/day related-data reads do not return unnoticed.
+- Shared Supabase schema/RPC/data were not changed. OCR files were not changed. main / Netlify were not changed and no Vercel deployment was triggered.
+- CI on source commit `be9f5cb260daa85e66dbeaebe40c957269813557`: Deployment safety guard GREEN; OCR regression GREEN; one-day practical regression GREEN; app-core safety regression GREEN; full Vercel-equivalent `npm run build` GREEN.
+
+
+### 2026-09-06 — Performance pass ②: route-scope OCR runtime
+- Performance-only change on `preview/schedule-ux-20260903`; UI and OCR recognition behavior were intentionally left unchanged.
+- Removed all 15 vehicle-certificate helper imports from the root layout. The common certificate enhancement stack now lives in `app/vehicle-certificate-route-enhancers.tsx` and is mounted only by `/vehicle-workflow`, `/vehicle-workflow-fast`, `/vehicle-workflow-v2`, and `/vehicle-workflow-v3` route layouts.
+- Kept the existing v2 specialized certificate layout order and mounted the moved common stack after its existing helpers, matching the former root-layout ordering.
+- Removed the root `photoPickerEnhancer` inline runtime. This eliminates its global `MutationObserver`, three document-level pointer/touch/click listeners, and root-level `Storage.prototype.setItem` patch from normal routes.
+- Preserved the parts OCR batch-to-active-vehicle linking behavior with `app/ocr/parts-ocr-batch-linker.tsx`, mounted only under `/ocr/**`. It temporarily patches storage only while OCR routes are mounted and restores the original method on unmount; it does not add a MutationObserver or document event listener.
+- Root layout still mounts `SessionLifetimeGuard` and `AuthRouteGuard`; authentication/session/security common behavior remains global.
+- Existing Tesseract, PDF.js and ZXing dynamic-import behavior remains unchanged; OCR algorithm/preprocessing/extraction files were not edited.
+- Added app-core regression guards to prevent certificate helpers or OCR DOM/storage runtime from returning to RootLayout and to require all vehicle-workflow route layouts to mount the scoped helper stack.
+- Updated security regression to reflect the safer architecture: temporary vehicle context remains sessionStorage-based and runtime `dangerouslySetInnerHTML` is now required to be zero instead of allowing the old root inline enhancer.
+- Shared Supabase schema/RPC/data were not changed. main / Netlify were not changed. Performance pass ③ was not started.
+
+
+### 2026-09-06 — Performance pass ③: on-demand customer / vehicle loading
+- Performance-only change on `preview/schedule-ux-20260903`; no photo-storage/new-feature work was started.
+- `/schedule/new`: removed the initial `customers limit 1000 + vehicles limit 1000` preload. Initial registered-vehicle candidates are now the 20 most recently updated vehicles plus only their related customer rows. Search is debounced (300ms), server-side, and bounded to 20 displayed vehicles; customer-name/company/phone matches and vehicle registration/last4/chassis/maker/model matches are combined with fixed batched queries, not N+1.
+- Multi-vehicle schedule selection now keeps selected vehicle records separately from the current search-result page, so users can search again and add another customer/vehicle without losing already selected rows.
+- `/customer-vehicles`: removed all-customer/all-vehicle startup reads and the global newest-500-parts startup read. Initial list is the 30 most recently updated vehicles plus only their related customers; an active session vehicle may add one explicit ID lookup when it is outside that page.
+- Customer/vehicle search is debounced (300ms), server-side, and returns at most 30 displayed vehicles. Customer-name/company/phone/address and vehicle number/registration/last4/chassis/model/maker searches remain supported.
+- The normal customer/vehicle list uses incremental paging: 30 vehicles at a time. Search results are capped instead of paging an unbounded result set.
+- Parts history is no longer fetched at page open. Selecting a vehicle loads only that vehicle's cloud history, 50 rows at a time, with an incremental “more” action. Local-to-cloud part synchronization is also scoped to the selected vehicle; its marker check is bounded and reads only `source_text`.
+- Existing-customer reassignment no longer depends on an all-customer dropdown. The selected-vehicle detail now searches customer candidates on demand, capped at 20.
+- Customer deletion confirmation now gets the linked-vehicle count from a database count query at action time, so the count stays correct even though only one vehicle page is loaded.
+- Other normal screens were reviewed: week/month schedule, workload, loaner assignment, inspection/select/detail flows already use date/ID/active-vehicle scoped customer/vehicle reads. The daily-report print route still has broad print-only reads and was intentionally left out of performance pass ③.
+- Added app-core performance guards against the former 1000-row schedule preload, all-customer/all-vehicle customer-management preload, global 500-part preload, missing search limits, and loss of paging/debounce.
+- Shared Supabase schema/RPC/data were not changed. OCR logic, main, Netlify and photo-storage features were not changed.
+
+
+### 2026-09-07 — ICB-SPEC v1.2 app-core gap batch
+- Branch: `preview/schedule-ux-20260903`; started from `6885320e1995fe3c18d7b80ddc1009e2c233e4f5`.
+- One-day schedule reason color now follows the already-established shared rule: 車検=red, 点検=blue, normal 一般整備=yellow, 板金=white, and 一般整備 with `outsource_vendor_name`=white. Ordering, work-state display, visit counts, and waiting-service classification were not changed.
+- Parts OCR formal review now has `＋ 部品行を追加`. A manual row starts blank with 部品名称 / 個数 / 定価 / 仕入れ, uses the same edit/delete UI, and is included in the existing explicit `parts_ocr_documents -> parts_ocr_items -> parts` formal-save flow. OCR execution still does not formal-save anything by itself.
+- ICB-SPEC v1.2 waiting-service state is already database-live through migration `add_waiting_service_visit_rules_v12`: `work_orders.is_waiting_service boolean NOT NULL DEFAULT false`, no inferred backfill, valid for 点検 + 来社 only, no delivery plan, excluded from staying vehicles, daily report label `来社待ち`.
+- The v1.2 duplicate warning is already database-live: both sides must be 点検 + 来社 + `is_waiting_service=true` + `print_time_mode=exact` and have identical `starts_at`. 車検来社, normal 点検来社, 引取, 納車, 出張, and broad-time choices do not use this warning.
+- The schedule mutation SECURITY DEFINER RPC active-app-user hardening remains live via `harden_schedule_rpcs_active_app_user`; this batch does not change DB/RLS/RPC.
+- Pending ledger #002 and #003 are reclassified as implemented history; #001 `legal_3m` remains pending and untouched.
+- OCR recognition/preprocessing/engine code, shared Supabase schema/RLS/RPC, main, Netlify, and Vercel Preview are not changed by this batch.
+
+### 2026-09-08 — Waiting-service v1.3 formal override
+- This section supersedes the v1.2 reason-limited waiting-service rule.
+- `is_waiting_service=true` is valid for every `customer_visit` regardless of reason: 点検 / 車検 / 一般整備 / 板金塗装.
+- Pickup, onsite repair, and delivery cannot use waiting-service. Leaving customer_visit clears the UI flag.
+- Waiting-service has no delivery plan/entry, is excluded from staying vehicles, body-shop vehicles, and planned deliveries, and remains labeled `来社待ち` in the daily report.
+- Exact-time duplicate warning is reason-independent: both entries must be customer_visit + waiting-service + exact + identical start time. Warning text: `来社・作業待ちが同じ時刻に重複しています`.
+- No new column and no backfill. Migration source: `database/waiting-service-customer-visit-v13.sql`.

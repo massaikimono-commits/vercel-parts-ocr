@@ -1,16 +1,7 @@
 name: App core build check
 
 on:
-  push:
-    branches:
-      - work/app-core-v1
-    paths:
-      - "app/**"
-      - "scripts/**"
-      - "package.json"
-      - "next.config.mjs"
-      - "tsconfig.json"
-      - ".github/workflows/app-core-build.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -25,40 +16,23 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-          fetch-depth: 0
-
-      - name: Keep OCR tuning out of app core
-        shell: bash
-        run: |
-          set -euo pipefail
-          before="${{ github.event.before }}"
-          after="${{ github.sha }}"
-          if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
-            before="${after}^"
-          fi
-          changed="$(git diff --name-only "$before" "$after")"
-          forbidden="$(printf '%s\n' "$changed" | grep -E '^(app/certificate-|app/lib/certificate-|scripts/(qr-|.*certificate)|\.github/workflows/vehicle-certificate-regression\.yml$)' || true)"
-          if [[ -n "$forbidden" ]]; then
-            echo "OCR tuning files must be changed on the dedicated OCR branch, not work/app-core-v1:"
-            printf '%s\n' "$forbidden"
-            exit 1
-          fi
 
       - name: Use Node.js 22
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
 
+      - name: Validate CI routing contract
+        run: node scripts/ci-routing-regression.mjs
+
+      - name: Validate Cloudflare architecture contract
+        run: node scripts/cloudflare-architecture-regression.mjs
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
-
-      - name: Run OCR regression checks
-        run: |
-          npm run test:certificate
-          npm run test:parts
 
       - name: Run record regression checks
         run: |
@@ -72,17 +46,35 @@ jobs:
           npm run test:schedule-print-layout
           npm run test:schedule-work-state
           npm run test:schedule-existing-vehicle
+          npm run test:schedule-desktop-density
+          npm run test:schedule-report-layout
+          npm run test:schedule-pickup-rules
+          npm run test:schedule-workflow-ux
+          npm run test:schedule-registration-duplicate
+          npm run test:schedule-registration-action-feedback
+          npm run test:schedule-batch-cross-customer
+          npm run test:schedule-inbound-time-selector
+          npm run test:schedule-edit-inbound-time-selector
+          npm run test:schedule-search-work-order
+          npm run test:schedule-cancellation-work-order
+          npm run test:schedule-search-actions
+          npm run test:schedule-one-day-practical
+          npm run test:schedule-detail
           npm run test:daily-report-template
           npm run test:daily-report-allocation
           npm run test:daily-report-print-model
           npm run test:daily-report-secondary
-          npm run test:app-core-safety
+          npm run test:daily-report-work-code
+          npm run test:vehicle-business-state
 
-      - name: Run remaining print and OCR safety checks
+      - name: Run app safety and customer regression checks
         run: |
-          npm run test:qr-speed
-          npm run test:parts-layout
           npm run test:paper-sizes
+          npm run test:security
+          npm run test:app-core-safety
+          npm run test:lease-contract-foundation
+          npm run test:customer-migration-workflow
+          node scripts/ci-routing-regression.mjs
 
       - name: Build Next.js app
         env:

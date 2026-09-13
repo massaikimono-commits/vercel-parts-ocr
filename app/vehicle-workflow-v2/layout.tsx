@@ -9,6 +9,7 @@ import CertificateRegistrationDateGuard from "../certificate-registration-date-g
 import CertificatePdfRowCorrector from "../certificate-pdf-row-corrector";
 import CertificatePdfNativeReaderV2 from "../certificate-pdf-native-reader-v2";
 import CertificatePdfStructuredReaderV3 from "../certificate-pdf-structured-reader-v3";
+import VehicleCertificateRouteEnhancers from "../vehicle-certificate-route-enhancers";
 
 // Vehicle certificate post-processing for /vehicle-workflow-v2.
 // Structured PDF v3 gets the first chance: QR-less PDFs with a healthy text layer are
@@ -29,6 +30,7 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
       <CertificateEngineModelQrGuard />
       <CertificateRecordDateGuard />
       <CertificateRegistrationDateGuard />
+      <VehicleCertificateRouteEnhancers />
     </>
   );
 }
