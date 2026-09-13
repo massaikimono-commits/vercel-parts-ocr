@@ -441,7 +441,12 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
                       ? ENTRY_LABEL[entry.entry_type]
                       : "";
                     return (
-                    <button key={entry.id} className={`homeWeekRow ${reasonClass}`} onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(entry.id))}>
+                    <button
+                      key={entry.id}
+                      className={`homeWeekRow ${reasonClass}`}
+                      onClick={() => openDay(day)}
+                      aria-label={`${customerName(customer)}の${shortDayLabel(day)}の1日の予定を開く`}
+                    >
                       <span className="homeWeekCustomer">{customerName(customer)}</span>
                       <span className="homeWeekIdentity">
                         <span className="homeWeekVehicle"><b>{last4(vehicle)}</b><small>{work?.reason || ""}</small></span>
