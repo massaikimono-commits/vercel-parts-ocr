@@ -90,6 +90,11 @@ export type P5PsmPrimaryVariant = {
   reconstructedRowCount: number;
   wrongAutoConfirm: number;
   manualReviewRequired: boolean;
+  rows: Array<{
+    rowId: string;
+    fields: { name: string; qty: string; retail: string; cost: string };
+    sourceTokenCount: number;
+  }>;
   error?: string;
 };
 
@@ -132,6 +137,16 @@ export async function runP5PsmPrimaryComparison(file: File): Promise<P5PsmPrimar
         const tokens = tsvTokens.length > 0 ? tsvTokens : blockTokens;
         const tokenSource: "tsv" | "blocks" | "none" = tsvTokens.length > 0 ? "tsv" : blockTokens.length > 0 ? "blocks" : "none";
         const reconstructed: any = reconstructTokenGrid(tokens);
+        const rows = Array.isArray(reconstructed?.rows) ? reconstructed.rows.map((row: any) => ({
+          rowId: String(row?.rowId ?? ""),
+          fields: {
+            name: String(row?.fields?.name ?? ""),
+            qty: String(row?.fields?.qty ?? ""),
+            retail: String(row?.fields?.retail ?? ""),
+            cost: String(row?.fields?.cost ?? ""),
+          },
+          sourceTokenCount: Number(row?.sourceTokenCount ?? 0),
+        })) : [];
         variants.push({
           label: spec.label,
           psm: String(spec.psm),
@@ -146,10 +161,11 @@ export async function runP5PsmPrimaryComparison(file: File): Promise<P5PsmPrimar
           tokenSource,
           mappedHeaderFieldCount: reconstructed?.stageDiagnostics?.mappedHeaderFieldCount ?? 0,
           rowClusterCount: reconstructed?.stageDiagnostics?.clusteredRowCount ?? 0,
-          columnAssignmentCount: Array.isArray(reconstructed?.rows) ? reconstructed.rows.reduce((sum: number, row: any) => sum + Number(row?.sourceTokenCount || 0), 0) : 0,
+          columnAssignmentCount: rows.reduce((sum: number, row: any) => sum + Number(row?.sourceTokenCount || 0), 0),
           reconstructedRowCount: reconstructed?.stageDiagnostics?.reconstructedRowCount ?? 0,
           wrongAutoConfirm: Number(reconstructed?.wrongAutoConfirm ?? 0),
           manualReviewRequired: Boolean(reconstructed?.manualReviewRequired ?? true),
+          rows,
         });
       } catch (error) {
         variants.push({
@@ -170,6 +186,7 @@ export async function runP5PsmPrimaryComparison(file: File): Promise<P5PsmPrimar
           reconstructedRowCount: 0,
           wrongAutoConfirm: 0,
           manualReviewRequired: true,
+          rows: [],
           error: error instanceof Error ? error.message : String(error),
         });
       }
