@@ -53,7 +53,7 @@ export default function P5TokenGridRealPhotoPocPage() {
           setCaptures((current) => current.map((capture, captureIndex) => captureIndex === index ? { ...capture, result: null, error: message } : capture));
         }
       }
-      setStatus("完了。実伝票画像とP5出力を画面上で比較してください。これはfeasibility確認で、Formal採点ではありません。");
+      setStatus("完了。まずBrowser OCR Output Contractを確認し、token count > 0 の場合のみP5 architecture段階を評価してください。");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -67,6 +67,7 @@ export default function P5TokenGridRealPhotoPocPage() {
         <p>Page OCRのtext + bounding boxを保持し、header anchor → row clustering → column assignment → 4-field reconstructionを観測します。</p>
         <p><b>画像はGitHub・Supabase・server・artifactへ保存/送信しません。GTはruntimeで使用しません。</b></p>
         <p>Stage 1のtable localizationは現P5 v0では独立実装せず、ページ全体をscopeとするため <b>PAGE_SCOPE_ONLY</b> と表示します。</p>
+        <p><b>Browser OCR Output Contract診断：</b> 認識本文は表示せず、data key・型・length・件数だけを表示します。</p>
       </section>
 
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
@@ -80,6 +81,7 @@ export default function P5TokenGridRealPhotoPocPage() {
       {captures.map((capture) => {
         const result = capture.result;
         const headerComplete = result ? result.stageDiagnostics.mappedHeaderFieldCount === 4 : false;
+        const diagnostic = result?.ocrOutputDiagnostic;
         return (
           <section key={`${capture.id}-${capture.name}`} style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
             <h2 style={{ marginTop: 0 }}>{capture.id}</h2>
@@ -101,6 +103,22 @@ export default function P5TokenGridRealPhotoPocPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {diagnostic ? <div style={{ overflowX: "auto" }}>
+                  <b>Browser OCR Output Contract（非PII）</b>
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 6 }}>
+                    <tbody>
+                      <tr><th align="left">recognize succeeded</th><td>{String(diagnostic.recognizeSucceeded)}</td></tr>
+                      <tr><th align="left">recognized.data keys</th><td>{diagnostic.recognizedDataKeys.join(", ") || "(none)"}</td></tr>
+                      <tr><th align="left">typeof data.tsv / length</th><td>{diagnostic.tsvType} / {diagnostic.tsvLength}</td></tr>
+                      <tr><th align="left">TSV parsed token count</th><td>{diagnostic.tsvParsedTokenCount}</td></tr>
+                      <tr><th align="left">typeof data.text / length</th><td>{diagnostic.textType} / {diagnostic.textLength}</td></tr>
+                      <tr><th align="left">blocks present / block count</th><td>{String(diagnostic.blocksPresent)} / {diagnostic.blockCount}</td></tr>
+                      <tr><th align="left">blocks word count</th><td>{diagnostic.blockWordCount}</td></tr>
+                      <tr><th align="left">selected token source</th><td>{diagnostic.tokenSource}</td></tr>
+                    </tbody>
+                  </table>
+                </div> : null}
 
                 <div style={{ display: "grid", gap: 8 }}>
                   <b>Stage diagnostics</b>
@@ -137,6 +155,7 @@ export default function P5TokenGridRealPhotoPocPage() {
                   wrongAutoConfirm: result.wrongAutoConfirm,
                   gtIncluded: result.gtIncluded,
                   ocrProcessingTimeMs: result.ocrProcessingTimeMs,
+                  ocrOutputDiagnostic: result.ocrOutputDiagnostic,
                   rows: result.rows,
                 }, null, 2)}</pre></details>
               </> : null}
