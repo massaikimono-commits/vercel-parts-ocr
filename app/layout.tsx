@@ -5,6 +5,7 @@ import MobileQuickNav from "./mobile-quick-nav";
 import ResponsiveUxController from "./responsive-ux-controller";
 import LayoutDensityCalibration from "./layout-density-calibration";
 import DailyReportVisualAlignment from "./daily-report-visual-alignment";
+import OperationalRecoveryGuard from "./operational-recovery-guard";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -33,6 +34,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
           <ResponsiveUxController />
           <LayoutDensityCalibration />
           <DailyReportVisualAlignment />
+          <OperationalRecoveryGuard />
           <MobileQuickNav />
         </AuthRouteGuard>
       </body>

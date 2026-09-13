@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 const HIDDEN_PREFIXES = [
@@ -32,6 +33,16 @@ function todayJst() {
 
 export default function MobileQuickNav() {
   const pathname = usePathname() || "/";
+  const [todayActive, setTodayActive] = useState(false);
+
+  useEffect(() => {
+    if (pathname !== "/schedule") {
+      setTodayActive(false);
+      return;
+    }
+    const selectedDay = new URLSearchParams(location.search).get("day");
+    setTodayActive(!selectedDay || selectedDay === todayJst());
+  }, [pathname]);
 
   if (HIDDEN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
     return null;
@@ -55,7 +66,12 @@ export default function MobileQuickNav() {
           </a>
         );
       })}
-      <a href={todayHref} className="todayShortcut" aria-label="今日の1日の予定を開く">
+      <a
+        href={todayHref}
+        className={todayActive ? "todayShortcut active" : "todayShortcut"}
+        aria-current={todayActive ? "page" : undefined}
+        aria-label="今日の1日の予定を開く"
+      >
         <span aria-hidden="true">日</span>
         <b>今日</b>
       </a>
@@ -69,6 +85,7 @@ export default function MobileQuickNav() {
           .mobileQuickNav a>b{font-size:10px;line-height:1.2;white-space:nowrap}
           .mobileQuickNav a.active{background:#eef4ff;color:#245fae}
           .mobileQuickNav a.todayShortcut{background:#f7f9fc;color:#315f98}
+          .mobileQuickNav a.todayShortcut.active{background:#e6f0ff;color:#164f9d}
           .mobileQuickNav a:focus-visible{outline:3px solid #72a7ed;outline-offset:1px}
         }
         @media(max-width:360px){.mobileQuickNav a>b{font-size:9px}}
