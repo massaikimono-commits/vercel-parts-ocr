@@ -1,8 +1,19 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { runP5TokenGridBrowser, type P5BrowserResult } from "../../ocr/bakeoff/p5-token-grid-browser";
+
+type RegisteredImage = {
+  id: string;
+  file: File;
+  name: string;
+  previewUrl: string;
+  selectionOrder: number;
+  imageWidth: number | null;
+  imageHeight: number | null;
+  fingerprint: string;
+};
 
 type CaptureResult = {
   id: string;
@@ -11,17 +22,20 @@ type CaptureResult = {
   selectionOrder: number;
   imageWidth: number | null;
   imageHeight: number | null;
+  fingerprint: string;
   result: P5BrowserResult | null;
   error: string | null;
 };
 
 const RESULT_SCHEMA = "icb.parts-ocr.p5-real-photo-poc.v1";
-const RESULT_REVISION = "p5-browser-output-contract-copy-v1";
+const RESULT_REVISION = "p5-formal-12-auto-target-v1";
 const EVALUATION_HEAD = process.env.NEXT_PUBLIC_EVAL_HEAD || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "unknown";
+const FORMAL_IMAGE_IDS = Array.from({ length: 12 }, (_, index) => `IMG_${String(675 + index).padStart(4, "0")}`);
+const DEFAULT_TARGET_IMAGE_ID = "IMG_0678";
 
 function canonicalId(name: string) {
   const match = name.match(/IMG[_-]?(\d{4})/i);
-  return match?.[1] ? `IMG_${match[1]}` : name.replace(/\.[^.]+$/, "").replace(/[^A-Za-z0-9_-]/g, "_");
+  return match?.[1] ? `IMG_${match[1]}` : "UNMATCHED";
 }
 
 function loadImageSize(url: string) {
@@ -31,6 +45,12 @@ function loadImageSize(url: string) {
     image.onerror = () => resolve({ width: 0, height: 0 });
     image.src = url;
   });
+}
+
+async function safeFingerprint(file: File) {
+  const bytes = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).slice(0, 10).map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 function buildPrivacySafeResult(capture: CaptureResult) {
@@ -45,6 +65,7 @@ function buildPrivacySafeResult(capture: CaptureResult) {
     candidateId: result.candidateId,
     candidateVersion: result.candidateVersion,
     imageId: capture.id,
+    safeImageFingerprint: capture.fingerprint,
     sourceWidth: result.sourceWidth,
     sourceHeight: result.sourceHeight,
     rotated: result.rotated,
@@ -85,7 +106,6 @@ async function copyText(text: string) {
   textarea.setAttribute("readonly", "");
   textarea.style.position = "fixed";
   textarea.style.opacity = "0";
-  textarea.style.pointerEvents = "none";
   document.body.appendChild(textarea);
   textarea.focus();
   textarea.select();
@@ -96,177 +116,173 @@ async function copyText(text: string) {
 
 export default function P5TokenGridRealPhotoPocPage() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [captures, setCaptures] = useState<CaptureResult[]>([]);
+  const [registered, setRegistered] = useState<RegisteredImage[]>([]);
+  const [capture, setCapture] = useState<CaptureResult | null>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("まずは『黄色伝票が1枚主体の写真』を1枚選んでTechnical Gateを確認してください。IMG番号の厳密一致は不要です。");
+  const [status, setStatus] = useState("正式12枚を一度登録してください。画像番号を探す必要はありません。");
   const [copyStatus, setCopyStatus] = useState("");
+  const [targetImageId, setTargetImageId] = useState(DEFAULT_TARGET_IMAGE_ID);
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("targetImageId");
+    if (requested && FORMAL_IMAGE_IDS.includes(requested)) setTargetImageId(requested);
+  }, []);
 
   useEffect(() => () => {
-    for (const capture of captures) URL.revokeObjectURL(capture.previewUrl);
-  }, [captures]);
+    for (const item of registered) URL.revokeObjectURL(item.previewUrl);
+  }, [registered]);
 
-  async function copyPayload(payload: unknown, label: string) {
-    try {
-      await copyText(JSON.stringify(payload, null, 2));
-      setCopyStatus(`${label}：コピーしました`);
-    } catch {
-      setCopyStatus(`${label}：コピーできませんでした`);
-    }
-  }
+  const registeredIds = useMemo(() => new Set(registered.map((item) => item.id)), [registered]);
+  const missingIds = FORMAL_IMAGE_IDS.filter((id) => !registeredIds.has(id));
+  const duplicateIds = registered.map((item) => item.id).filter((id, index, all) => id !== "UNMATCHED" && all.indexOf(id) !== index);
+  const unmatchedCount = registered.filter((item) => item.id === "UNMATCHED").length;
+  const formalReady = registered.length === 12 && missingIds.length === 0 && duplicateIds.length === 0 && unmatchedCount === 0;
 
-  async function run(files: FileList | null) {
+  async function registerFormalSet(files: FileList | null) {
     if (!files?.length || busy) return;
-    const selected = Array.from(files).slice(0, 3);
+    const selected = Array.from(files).slice(0, 12);
     setBusy(true);
     setCopyStatus("");
-    for (const capture of captures) URL.revokeObjectURL(capture.previewUrl);
-
-    const prepared = selected.map((file, index) => ({
-      file,
-      id: canonicalId(file.name),
-      name: file.name,
-      previewUrl: URL.createObjectURL(file),
-      selectionOrder: index + 1,
-    }));
-    const sizes = await Promise.all(prepared.map((item) => loadImageSize(item.previewUrl)));
-    const initial: CaptureResult[] = prepared.map((item, index) => ({
-      id: item.id,
-      name: item.name,
-      previewUrl: item.previewUrl,
-      selectionOrder: item.selectionOrder,
-      imageWidth: sizes[index].width || null,
-      imageHeight: sizes[index].height || null,
-      result: null,
-      error: null,
-    }));
-    setCaptures(initial);
-
+    setCapture(null);
+    for (const item of registered) URL.revokeObjectURL(item.previewUrl);
     try {
-      for (let index = 0; index < selected.length; index += 1) {
-        const file = selected[index];
-        const label = `選択${index + 1}`;
-        setStatus(`${label}: page-level OCR → token-grid reconstruction 実行中 (${index + 1}/${selected.length})`);
-        try {
-          const result = await runP5TokenGridBrowser(file);
-          setCaptures((current) => current.map((capture, captureIndex) => captureIndex === index ? { ...capture, result, error: null } : capture));
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          setCaptures((current) => current.map((capture, captureIndex) => captureIndex === index ? { ...capture, result: null, error: message } : capture));
-        }
+      const base = selected.map((file, index) => ({
+        file,
+        id: canonicalId(file.name),
+        name: file.name,
+        previewUrl: URL.createObjectURL(file),
+        selectionOrder: index + 1,
+      }));
+      const [sizes, fingerprints] = await Promise.all([
+        Promise.all(base.map((item) => loadImageSize(item.previewUrl))),
+        Promise.all(base.map((item) => safeFingerprint(item.file))),
+      ]);
+      const next = base.map((item, index) => ({
+        ...item,
+        imageWidth: sizes[index].width || null,
+        imageHeight: sizes[index].height || null,
+        fingerprint: fingerprints[index],
+      }));
+      setRegistered(next);
+      const ids = new Set(next.map((item) => item.id));
+      const missing = FORMAL_IMAGE_IDS.filter((id) => !ids.has(id));
+      const duplicates = next.map((item) => item.id).filter((id, index, all) => id !== "UNMATCHED" && all.indexOf(id) !== index);
+      const unmatched = next.filter((item) => item.id === "UNMATCHED").length;
+      if (next.length === 12 && missing.length === 0 && duplicates.length === 0 && unmatched === 0) {
+        setStatus("正式セット READY。『自動診断開始』を押してください。対象写真は画面が自動選択します。");
+      } else {
+        setStatus(`正式セット未完了：登録${next.length}/12、不足${missing.length}、未照合${unmatched}、重複${duplicates.length}。12枚をまとめて選び直してください。`);
       }
-      setStatus("完了。『診断結果をコピー』を押して、そのままChatGPTへ貼り付けてください。");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
     }
   }
 
-  const copyableResults = captures.map(buildPrivacySafeResult).filter((value): value is NonNullable<typeof value> => value !== null);
+  async function runAutoDiagnostic() {
+    if (!formalReady || busy) return;
+    const target = registered.find((item) => item.id === targetImageId);
+    if (!target) {
+      setStatus("対象画像を登録済みmanifestから解決できませんでした。正式12枚を再登録してください。");
+      return;
+    }
+    setBusy(true);
+    setCopyStatus("");
+    setStatus("OCR 0ケースを自動診断中です。写真を探す操作は不要です。");
+    const initial: CaptureResult = { ...target, result: null, error: null };
+    setCapture(initial);
+    try {
+      const result = await runP5TokenGridBrowser(target.file);
+      setCapture({ ...initial, result, error: null });
+      setStatus("自動診断完了。『診断結果をコピー』を1回押して、そのまま総合管理へ貼り付けてください。");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setCapture({ ...initial, result: null, error: message });
+      setStatus(`自動診断エラー：${message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyDiagnostic() {
+    if (!capture) return;
+    const payload = buildPrivacySafeResult(capture);
+    if (!payload) return;
+    try {
+      await copyText(JSON.stringify(payload, null, 2));
+      setCopyStatus("コピーしました");
+    } catch {
+      setCopyStatus("コピーできませんでした");
+    }
+  }
+
+  const result = capture?.result ?? null;
+  const diagnostic = result?.ocrOutputDiagnostic;
+  const headerComplete = result ? result.stageDiagnostics.mappedHeaderFieldCount === 4 : false;
 
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 12px 60px", color: "#172033", background: "#f7f9fc" }}>
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
-        <h1 style={{ marginTop: 0 }}>P5 Token-Grid 実写真Feasibility</h1>
-        <p>Page OCRのtext + bounding boxを保持し、header anchor → row clustering → column assignment → 4-field reconstructionを観測します。</p>
-        <p><b>画像はGitHub・Supabase・server・artifactへ保存/送信しません。GTはruntimeで使用しません。</b></p>
-        <p>Stage 1のtable localizationは現P5 v0では独立実装せず、ページ全体をscopeとするため <b>PAGE_SCOPE_ONLY</b> と表示します。</p>
-        <p><b>Browser OCR Output Contract診断：</b> 認識本文・TSV本文・raw OCR payloadはコピー対象に含めません。</p>
-      </section>
-
-      <section style={{ background: "#fff8df", border: "1px solid #f0cf70", borderRadius: 16, padding: 16, marginBottom: 12 }}>
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>写真の選び方</h2>
-        <p style={{ marginBottom: 8 }}><b>今回のTechnical Gateは、まず「黄色伝票が1枚主体の写真」を1枚だけ選んでください。</b></p>
-        <p style={{ margin: "6px 0" }}>IMG番号を覚えたり、以前と同じ番号へ厳密固定する必要はありません。</p>
-        <p style={{ margin: "6px 0" }}>結果が出たら「診断結果をコピー」→そのままChatGPTへ貼り付ければ完了です。</p>
+        <h1 style={{ marginTop: 0 }}>P5 正式12枚 自動診断</h1>
+        <p><b>12枚を一度登録すれば、対象写真は画面が自動選択します。IMG番号を覚えたり探したりする必要はありません。</b></p>
+        <p>画像本体はブラウザ内の評価セッションだけで保持し、server・GitHub・Supabase・artifactへ送信/保存しません。</p>
+        <p>正式row数GTはこのruntimeの画像選択・OCR・停止条件・再構成制御には使用しません。</p>
       </section>
 
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
-        <input ref={inputRef} hidden type="file" accept="image/*" multiple onChange={(event) => void run(event.target.files)} />
+        <input ref={inputRef} hidden type="file" accept="image/*" multiple onChange={(event) => void registerFormalSet(event.target.files)} />
         <button disabled={busy} onClick={() => inputRef.current?.click()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, background: busy ? "#94a3b8" : "#245fce", color: "white", fontWeight: 900 }}>
-          {busy ? "P5実行中…" : "写真を選択（Technical Gateはまず1枚）"}
+          正式12枚を登録
         </button>
-        <div role="status" aria-live="polite" style={{ marginTop: 10 }}>{status}</div>
-        {copyableResults.length > 1 ? <button onClick={() => void copyPayload({ schema: `${RESULT_SCHEMA}.batch`, revision: RESULT_REVISION, evaluationHead: EVALUATION_HEAD, results: copyableResults }, "全結果")} style={{ width: "100%", border: "1px solid #245fce", borderRadius: 12, padding: 12, marginTop: 10, background: "white", color: "#245fce", fontWeight: 900 }}>
-          全結果をコピー
-        </button> : null}
-        {copyStatus ? <div role="status" aria-live="polite" style={{ marginTop: 8, fontWeight: 900, color: copyStatus.includes("コピーしました") ? "#176b34" : "#a11" }}>{copyStatus}</div> : null}
+        <div style={{ marginTop: 10, fontWeight: 900, color: formalReady ? "#176b34" : "#8a5a00" }}>
+          {formalReady ? "正式セット READY（12/12）" : `登録 ${registered.length}/12`}
+        </div>
+        <div role="status" aria-live="polite" style={{ marginTop: 8 }}>{status}</div>
+        <button disabled={!formalReady || busy} onClick={() => void runAutoDiagnostic()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, marginTop: 12, background: !formalReady || busy ? "#94a3b8" : "#176b34", color: "white", fontWeight: 900 }}>
+          {busy ? "処理中…" : "自動診断開始"}
+        </button>
       </section>
 
-      {captures.map((capture) => {
-        const result = capture.result;
-        const headerComplete = result ? result.stageDiagnostics.mappedHeaderFieldCount === 4 : false;
-        const diagnostic = result?.ocrOutputDiagnostic;
-        const privacySafeResult = buildPrivacySafeResult(capture);
-        return (
-          <section key={`${capture.id}-${capture.name}-${capture.selectionOrder}`} style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
-              <span style={{ display: "inline-block", background: "#245fce", color: "white", borderRadius: 999, padding: "5px 10px", fontWeight: 900 }}>選択{capture.selectionOrder}</span>
-              <strong style={{ overflowWrap: "anywhere" }}>{capture.name}</strong>
-              <span style={{ color: "#5f6b7a" }}>{capture.imageWidth && capture.imageHeight ? `${capture.imageWidth} × ${capture.imageHeight}px` : "画像サイズ取得不可"}</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12 }}>
-              <img src={capture.previewUrl} alt={`選択${capture.selectionOrder} ${capture.name}`} style={{ width: "100%", maxHeight: 460, objectFit: "contain", background: "#eef2f7", borderRadius: 10, border: "2px solid #dbe2ec" }} />
-              {capture.error ? <div style={{ color: "#a11" }}>ERROR: {capture.error}</div> : null}
-              {result ? <>
-                {privacySafeResult ? <button onClick={() => void copyPayload(privacySafeResult, `選択${capture.selectionOrder}`)} style={{ width: "100%", border: 0, borderRadius: 12, padding: 13, background: "#176b34", color: "white", fontWeight: 900 }}>
-                  診断結果をコピー
-                </button> : null}
+      {registered.length > 0 ? <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
+        <h2 style={{ marginTop: 0, fontSize: 18 }}>登録済み正式セット</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+          {registered.map((item) => <div key={`${item.selectionOrder}-${item.fingerprint}`} style={{ border: "1px solid #dbe2ec", borderRadius: 12, padding: 8 }}>
+            <div style={{ fontWeight: 900 }}>登録 #{item.selectionOrder}</div>
+            <img src={item.previewUrl} alt={`登録${item.selectionOrder}`} style={{ width: "100%", height: 110, objectFit: "contain", background: "#eef2f7", borderRadius: 8, margin: "6px 0" }} />
+            <div style={{ fontSize: 12, overflowWrap: "anywhere" }}>{item.name}</div>
+            <div style={{ fontSize: 12 }}>{item.imageWidth && item.imageHeight ? `${item.imageWidth} × ${item.imageHeight}px` : "size unavailable"}</div>
+            <div style={{ fontSize: 12 }}>識別: {item.id === "UNMATCHED" ? "未照合" : "登録済み"}</div>
+            <div style={{ fontSize: 11, color: "#667085" }}>fp: {item.fingerprint}</div>
+          </div>)}
+        </div>
+        {!formalReady ? <div style={{ marginTop: 10, color: "#8a1c1c" }}>不足: {missingIds.length} / 未照合: {unmatchedCount} / 重複: {duplicateIds.length}</div> : null}
+      </section> : null}
 
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <tbody>
-                      <tr><th align="left">Page OCR token count</th><td><b>{result.ocrTokenCount}</b></td></tr>
-                      <tr><th align="left">Header anchor status</th><td>{headerComplete ? "COMPLETE" : `INCOMPLETE (${result.stageDiagnostics.mappedHeaderFieldCount}/4)`}</td></tr>
-                      <tr><th align="left">Row cluster count</th><td>{result.stageDiagnostics.clusteredRowCount}</td></tr>
-                      <tr><th align="left">Column assignment count</th><td>{result.assignedTokenCount}</td></tr>
-                      <tr><th align="left">Reconstructed row count</th><td>{result.stageDiagnostics.reconstructedRowCount}</td></tr>
-                      <tr><th align="left">manualReviewRequired</th><td>{String(result.manualReviewRequired)}</td></tr>
-                      <tr><th align="left">abstain reason</th><td>{result.abstainReason}</td></tr>
-                      <tr><th align="left">OCR processing time</th><td>{result.ocrProcessingTimeMs} ms</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {diagnostic ? <div style={{ overflowX: "auto" }}>
-                  <b>Browser OCR Output Contract（非PII）</b>
-                  <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 6 }}>
-                    <tbody>
-                      <tr><th align="left">recognize succeeded</th><td>{String(diagnostic.recognizeSucceeded)}</td></tr>
-                      <tr><th align="left">recognized.data keys</th><td>{diagnostic.recognizedDataKeys.join(", ") || "(none)"}</td></tr>
-                      <tr><th align="left">typeof data.tsv / length</th><td>{diagnostic.tsvType} / {diagnostic.tsvLength}</td></tr>
-                      <tr><th align="left">TSV parsed token count</th><td>{diagnostic.tsvParsedTokenCount}</td></tr>
-                      <tr><th align="left">typeof data.text / length</th><td>{diagnostic.textType} / {diagnostic.textLength}</td></tr>
-                      <tr><th align="left">blocks present / block count</th><td>{String(diagnostic.blocksPresent)} / {diagnostic.blockCount}</td></tr>
-                      <tr><th align="left">blocks word count</th><td>{diagnostic.blockWordCount}</td></tr>
-                      <tr><th align="left">selected token source</th><td>{diagnostic.tokenSource}</td></tr>
-                    </tbody>
-                  </table>
-                </div> : null}
-
-                <div style={{ display: "grid", gap: 8 }}>
-                  <b>Stage diagnostics</b>
-                  <div>Stage 1 document/table localization: {result.tableLocalizationStatus}</div>
-                  <div>Stage 2 row clustering: {result.stageDiagnostics.clusteredRowCount} clusters</div>
-                  <div>Stage 3 column assignment: {result.assignedTokenCount} assigned tokens</div>
-                  <div>Stage 4 token OCR: {result.ocrTokenCount} page tokens</div>
-                  <div>Stage 5 4-field reconstructed row: {result.stageDiagnostics.reconstructedRowCount} rows</div>
-                </div>
-
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr><th>row</th><th>name</th><th>qty</th><th>retail</th><th>cost</th><th>source tokens</th></tr></thead>
-                    <tbody>
-                      {result.rows.map((row) => <tr key={row.rowId}>
-                        <td>{row.rowId}</td><td>{row.fields.name}</td><td>{row.fields.qty}</td><td>{row.fields.retail}</td><td>{row.fields.cost}</td><td>{row.sourceTokenCount}</td>
-                      </tr>)}
-                    </tbody>
-                  </table>
-                </div>
-              </> : null}
-            </div>
-          </section>
-        );
-      })}
+      {capture ? <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
+        <h2 style={{ marginTop: 0, fontSize: 18 }}>自動選択された診断対象</h2>
+        <p style={{ marginTop: 0 }}>OCR 0ケースをmanifestから自動選択済みです。ユーザーによる画像番号指定は不要です。</p>
+        <img src={capture.previewUrl} alt="自動診断対象" style={{ width: "100%", maxHeight: 460, objectFit: "contain", background: "#eef2f7", borderRadius: 10, border: "2px solid #dbe2ec" }} />
+        <div style={{ marginTop: 8, fontSize: 12 }}>{capture.name} / {capture.imageWidth && capture.imageHeight ? `${capture.imageWidth} × ${capture.imageHeight}px` : "size unavailable"}</div>
+        {capture.error ? <div style={{ color: "#a11", marginTop: 10 }}>ERROR: {capture.error}</div> : null}
+        {result ? <>
+          <button onClick={() => void copyDiagnostic()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 13, marginTop: 12, background: "#176b34", color: "white", fontWeight: 900 }}>診断結果をコピー</button>
+          {copyStatus ? <div role="status" aria-live="polite" style={{ marginTop: 8, fontWeight: 900, color: copyStatus === "コピーしました" ? "#176b34" : "#a11" }}>{copyStatus}</div> : null}
+          <div style={{ overflowX: "auto", marginTop: 12 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}><tbody>
+              <tr><th align="left">Page OCR token count</th><td><b>{result.ocrTokenCount}</b></td></tr>
+              <tr><th align="left">Header anchor status</th><td>{headerComplete ? "COMPLETE" : `INCOMPLETE (${result.stageDiagnostics.mappedHeaderFieldCount}/4)`}</td></tr>
+              <tr><th align="left">Row cluster count</th><td>{result.stageDiagnostics.clusteredRowCount}</td></tr>
+              <tr><th align="left">Column assignment count</th><td>{result.assignedTokenCount}</td></tr>
+              <tr><th align="left">Reconstructed row count</th><td>{result.stageDiagnostics.reconstructedRowCount}</td></tr>
+              <tr><th align="left">manualReviewRequired</th><td>{String(result.manualReviewRequired)}</td></tr>
+              <tr><th align="left">wrongAutoConfirm</th><td>{result.wrongAutoConfirm}</td></tr>
+              <tr><th align="left">gtIncluded</th><td>{String(result.gtIncluded)}</td></tr>
+              <tr><th align="left">OCR processing time</th><td>{result.ocrProcessingTimeMs} ms</td></tr>
+            </tbody></table>
+          </div>
+          {diagnostic ? <details style={{ marginTop: 12 }}><summary>Privacy-safe diagnostic metadata</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 420, overflow: "auto", fontSize: 11 }}>{JSON.stringify(buildPrivacySafeResult(capture), null, 2)}</pre></details> : null}
+        </> : null}
+      </section> : null}
     </main>
   );
 }
