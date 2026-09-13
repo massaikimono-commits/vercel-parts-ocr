@@ -25,14 +25,23 @@ type SemanticResult = {
   error: string | null;
 };
 
-const RESULT_SCHEMA = "icb.parts-ocr.p5-semantic-mapping-root-cause.v1";
-const RESULT_REVISION = "p5-semantic-root-cause-0675-0678-0684-v1";
+type RootCauseClass =
+  | "A_TOKEN_FRAGMENTATION"
+  | "B_LEXICON_FUZZY"
+  | "C_HEADER_BAND_GEOMETRY"
+  | "D_COLUMN_ASSOCIATION"
+  | "E_OCR_TEXT_QUALITY"
+  | "F_COMPOSITE"
+  | "NOT_EVALUABLE";
+
+const RESULT_SCHEMA = "icb.parts-ocr.p5-management-short.v1";
+const RESULT_REVISION = "p5-management-short-semantic-root-cause-v1";
 const EVALUATION_HEAD = process.env.NEXT_PUBLIC_EVAL_HEAD || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "unknown";
 const FORMAL_IMAGE_IDS = Array.from({ length: 12 }, (_, index) => `IMG_${String(675 + index).padStart(4, "0")}`);
 const AUTO_TARGETS = [
-  { id: "IMG_0675", psm: "3" as const, role: "existing-success-token-case" },
-  { id: "IMG_0678", psm: "6" as const, role: "zero-token-rescue-diagnostic" },
-  { id: "IMG_0684", psm: "3" as const, role: "existing-success-reconstruction-case" },
+  { id: "IMG_0675", psm: "3" as const },
+  { id: "IMG_0678", psm: "6" as const },
+  { id: "IMG_0684", psm: "3" as const },
 ];
 
 function canonicalId(name: string) {
@@ -73,6 +82,90 @@ async function copyText(text: string) {
   if (!ok) throw new Error("clipboard copy failed");
 }
 
+function classifyRootCause(item: SemanticResult): { rootCauseClass: RootCauseClass; rootCauseEvidence: string[] } {
+  if (item.error || !item.diagnostic?.variant) {
+    return { rootCauseClass: "NOT_EVALUABLE", rootCauseEvidence: ["diagnostic unavailable"].slice(0, 3) };
+  }
+  const variant = item.diagnostic.variant;
+  const semantic = variant.semanticRootCause ?? {};
+  const candidates = Array.isArray(semantic.candidates) ? semantic.candidates : [];
+  const mapped = Number(variant.mappedHeaderFieldCount ?? 0);
+  const tokens = Number(variant.pageOcrTokenCount ?? 0);
+  const assigned = Number(variant.columnAssignmentCount ?? 0);
+  const rows = Number(variant.reconstructedRowCount ?? 0);
+  if (!tokens) {
+    return { rootCauseClass: "E_OCR_TEXT_QUALITY", rootCauseEvidence: ["page OCR tokens 0", `mapped fields ${mapped}/4`] };
+  }
+
+  const split = candidates.filter((candidate: any) => candidate?.rejectReason === "possible-split-token-fragmentation").length;
+  const near = candidates.filter((candidate: any) => candidate?.rejectReason === "near-lexicon-but-current-exact-alias-reject").length;
+  const outside = candidates.filter((candidate: any) => candidate?.rejectReason === "outside-observed-header-band").length;
+  const poor = candidates.filter((candidate: any) => candidate?.rejectReason === "ocr-or-lexicon-distance-too-large").length;
+  const signals = [split > 0, near > 0, outside > 0, poor > 0, mapped > 0 && assigned === 0].filter(Boolean).length;
+  const evidence: string[] = [];
+  let rootCauseClass: RootCauseClass;
+
+  if (signals >= 2 && mapped < 4) {
+    rootCauseClass = "F_COMPOSITE";
+    if (split) evidence.push("split adjacency observed");
+    if (near) evidence.push("near-lexicon rejects observed");
+    if (outside) evidence.push("header-band rejects observed");
+    if (poor) evidence.push("OCR/lexicon distance rejects observed");
+  } else if (split > 0) {
+    rootCauseClass = "A_TOKEN_FRAGMENTATION";
+    evidence.push("split adjacency observed");
+  } else if (near > 0) {
+    rootCauseClass = "B_LEXICON_FUZZY";
+    evidence.push("header candidates exist but lexicon reject");
+  } else if (outside > 0) {
+    rootCauseClass = "C_HEADER_BAND_GEOMETRY";
+    evidence.push("header candidates outside observed band");
+  } else if (mapped > 0 && assigned === 0) {
+    rootCauseClass = "D_COLUMN_ASSOCIATION";
+    evidence.push("mapped header exists but column assignment 0");
+  } else if (poor > 0 || (candidates.length > 0 && mapped === 0)) {
+    rootCauseClass = "E_OCR_TEXT_QUALITY";
+    evidence.push("header candidates exist but OCR/lexicon distance large");
+  } else {
+    rootCauseClass = "NOT_EVALUABLE";
+    evidence.push("insufficient discriminating evidence");
+  }
+
+  if (mapped < 4) evidence.push(`mapped fields ${mapped}/4`);
+  if (rows === 0) evidence.push("reconstructed rows 0");
+  return { rootCauseClass, rootCauseEvidence: [...new Set(evidence)].slice(0, 3) };
+}
+
+function buildManagementShort(results: SemanticResult[], registryReady: boolean, registrySize: number) {
+  return {
+    schema: RESULT_SCHEMA,
+    revision: RESULT_REVISION,
+    evaluationHead: EVALUATION_HEAD,
+    registryReady,
+    registrySize,
+    targets: results.map((item) => {
+      const variant = item.diagnostic?.variant;
+      const semantic = variant?.semanticRootCause;
+      const classified = classifyRootCause(item);
+      return {
+        imageId: item.id,
+        psm: item.diagnosticPsm,
+        pageOcrTokenCount: Number(variant?.pageOcrTokenCount ?? 0),
+        headerCandidateCount: Array.isArray(semantic?.candidates) ? semantic.candidates.length : 0,
+        mappedHeaderFieldCount: Number(variant?.mappedHeaderFieldCount ?? 0),
+        rowClusterCount: Number(variant?.rowClusterCount ?? 0),
+        columnAssignmentCount: Number(variant?.columnAssignmentCount ?? 0),
+        reconstructedRowCount: Number(variant?.reconstructedRowCount ?? 0),
+        rootCauseClass: classified.rootCauseClass,
+        rootCauseEvidence: classified.rootCauseEvidence,
+        wrongAutoConfirm: Number(variant?.wrongAutoConfirm ?? 0),
+        manualReviewRequired: Boolean(variant?.manualReviewRequired ?? true),
+        processingTimeMs: variant?.recognizeElapsedMs ?? null,
+      };
+    }),
+  };
+}
+
 export default function P5TokenGridRealPhotoPocPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const registryRef = useRef<Map<string, RegisteredImage>>(new Map());
@@ -110,7 +203,7 @@ export default function P5TokenGridRealPhotoPocPage() {
       const duplicates = next.map((item) => item.id).filter((id, index, all) => id !== "UNMATCHED" && all.indexOf(id) !== index);
       const unmatched = next.filter((item) => item.id === "UNMATCHED").length;
       if (next.length === 12 && missing.length === 0 && duplicates.length === 0 && unmatched === 0) {
-        setStatus("正式セット READY 12/12。『自動診断開始』で3ケースを自動選択し、semantic mapping原因を診断します。");
+        setStatus("正式セット READY 12/12。『自動診断開始』で3ケースを自動診断します。");
       } else {
         registryRef.current.clear();
         setStatus(`正式セット不整合：登録${next.length}/12、不足${missing.length}、未照合${unmatched}、重複${duplicates.length}。正式12枚を再登録してください。`);
@@ -148,29 +241,15 @@ export default function P5TokenGridRealPhotoPocPage() {
         }
         setResults([...collected]);
       }
-      setStatus("Semantic mapping診断完了。『診断結果をコピー』を1回押して、そのまま総合管理へ貼り付けてください。");
+      setStatus("Semantic mapping診断完了。『総合管理用結果をコピー』で短縮JSONだけ提出できます。");
     } finally {
       setBusy(false);
     }
   }
 
-  async function copyDiagnostic() {
+  async function copyManagementShort() {
     if (!results.length) return;
-    const payload = {
-      schema: RESULT_SCHEMA,
-      revision: RESULT_REVISION,
-      evaluationHead: EVALUATION_HEAD,
-      registryReady: formalReady,
-      registrySize: registryRef.current.size,
-      runtimePsmUnchanged: true,
-      runtimePsm: "3",
-      psm11ExcludedFromLane: true,
-      targets: results.map((item) => ({ imageId: item.id, diagnosticPsm: item.diagnosticPsm, safeImageFingerprint: item.fingerprint, width: item.imageWidth, height: item.imageHeight, error: item.error, diagnostic: item.diagnostic })),
-      privacy: { rawRecognizedTextIncluded: false, rawTsvIncluded: false, imageIncluded: false },
-      tuningChanged: false,
-      productionChanged: false,
-      gtRuntimeUsed: false,
-    };
+    const payload = buildManagementShort(results, formalReady, registryRef.current.size);
     try {
       await copyText(JSON.stringify(payload, null, 2));
       setCopyStatus("コピーしました");
@@ -183,9 +262,8 @@ export default function P5TokenGridRealPhotoPocPage() {
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 12px 60px", color: "#172033", background: "#f7f9fc" }}>
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
         <h1 style={{ marginTop: 0 }}>P5 Semantic Mapping Root Cause診断</h1>
-        <p><b>正式12枚を一度登録後、0675/0678/0684相当はregistryから自動選択します。個別画像の再選択はありません。</b></p>
-        <p>0675/0684はPSM3、0678はPSM6 diagnostic rescueのみ。runtime PSM3は変更しません。</p>
-        <p>JSONにはOCR本文を出さず、hash・文字種・normalized geometry・lexicon距離・隣接証拠・reject reasonだけを出します。</p>
+        <p><b>正式12枚を一度登録後、3ケースはregistryから自動選択します。個別画像の再選択はありません。</b></p>
+        <p>詳細diagnosticは画面内部に保持し、通常コピーはmanagement short JSONだけです。</p>
       </section>
 
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
@@ -212,13 +290,17 @@ export default function P5TokenGridRealPhotoPocPage() {
 
       {results.length > 0 ? <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
         <h2 style={{ marginTop: 0, fontSize: 18 }}>Semantic診断結果</h2>
-        <button onClick={() => void copyDiagnostic()} disabled={busy} style={{ width: "100%", border: 0, borderRadius: 12, padding: 13, background: "#176b34", color: "white", fontWeight: 900 }}>診断結果をコピー</button>
+        <button onClick={() => void copyManagementShort()} disabled={busy} style={{ width: "100%", border: 0, borderRadius: 12, padding: 13, background: "#176b34", color: "white", fontWeight: 900 }}>総合管理用結果をコピー</button>
         {copyStatus ? <div role="status" aria-live="polite" style={{ marginTop: 8, fontWeight: 900, color: copyStatus === "コピーしました" ? "#176b34" : "#a11" }}>{copyStatus}</div> : null}
-        {results.map((item) => <div key={item.id} style={{ marginTop: 14, borderTop: "1px solid #dbe2ec", paddingTop: 10 }}>
-          <div style={{ fontWeight: 900 }}>{item.id} / diagnostic PSM {item.diagnosticPsm}</div>
-          {item.error ? <div style={{ color: "#a11" }}>ERROR: {item.error}</div> : null}
-          {item.diagnostic ? <div style={{ fontSize: 13, marginTop: 6 }}>tokens: {item.diagnostic.variant.pageOcrTokenCount} / mapped headers: {item.diagnostic.variant.mappedHeaderFieldCount} / rows: {item.diagnostic.variant.reconstructedRowCount} / candidates: {item.diagnostic.variant.semanticRootCause?.candidates?.length ?? 0}</div> : null}
-        </div>)}
+        {results.map((item) => {
+          const short = buildManagementShort([item], formalReady, registryRef.current.size).targets[0];
+          return <div key={item.id} style={{ marginTop: 14, borderTop: "1px solid #dbe2ec", paddingTop: 10 }}>
+            <div style={{ fontWeight: 900 }}>{item.id} / PSM {item.diagnosticPsm}</div>
+            {item.error ? <div style={{ color: "#a11" }}>ERROR: {item.error}</div> : null}
+            <div style={{ fontSize: 13, marginTop: 6 }}>tokens: {short.pageOcrTokenCount} / headers: {short.mappedHeaderFieldCount}/4 / rows: {short.reconstructedRowCount} / root: {short.rootCauseClass}</div>
+            {item.diagnostic ? <details style={{ marginTop: 8 }}><summary>詳細診断を表示</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 420, overflow: "auto", fontSize: 11 }}>{JSON.stringify(item.diagnostic, null, 2)}</pre></details> : null}
+          </div>;
+        })}
       </section> : null}
     </main>
   );
