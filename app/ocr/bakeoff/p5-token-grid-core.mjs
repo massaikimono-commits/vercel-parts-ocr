@@ -24,6 +24,32 @@ function median(values) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+function fnv1a(text) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function textClass(text) {
+  const value = String(text ?? "");
+  let han = 0;
+  let kana = 0;
+  let digit = 0;
+  let latin = 0;
+  let other = 0;
+  for (const char of value) {
+    if (/\p{Script=Han}/u.test(char)) han += 1;
+    else if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(char)) kana += 1;
+    else if (/\d/u.test(char)) digit += 1;
+    else if (/[A-Za-z]/u.test(char)) latin += 1;
+    else if (!/\s/u.test(char)) other += 1;
+  }
+  return { han, kana, digit, latin, other };
+}
+
 export function inferHeaderAnchors(tokens) {
   const anchors = {};
   for (const token of tokens) {
@@ -36,6 +62,43 @@ export function inferHeaderAnchors(tokens) {
     }
   }
   return anchors;
+}
+
+export function diagnoseHeaderCandidates(tokens) {
+  const anchors = inferHeaderAnchors(tokens);
+  const mappedFields = FIELDS.filter((field) => anchors[field]);
+  const ys = tokens.map((token) => (token.y1 + token.y2) / 2).filter(Number.isFinite);
+  const minY = ys.length ? Math.min(...ys) : 0;
+  const maxY = ys.length ? Math.max(...ys) : 0;
+  const headerZoneMaxY = minY + (maxY - minY) * 0.45;
+  const candidates = tokens
+    .map((token, index) => {
+      const normalized = compact(token.text);
+      const matches = FIELDS.filter((field) => HEADER_ALIASES[field].some((alias) => normalized.includes(compact(alias))));
+      const xCenter = (token.x1 + token.x2) / 2;
+      const yCenter = (token.y1 + token.y2) / 2;
+      return {
+        tokenIndex: index,
+        textHash: `fnv1a:${fnv1a(normalized)}`,
+        normalizedLength: normalized.length,
+        textClass: textClass(normalized),
+        xCenter,
+        yCenter,
+        confidence: token.confidence ?? null,
+        headerCandidateReason: matches.length ? "alias-match" : (yCenter <= headerZoneMaxY ? "header-zone-observation" : "not-header-zone"),
+        semanticLabelCandidates: matches,
+        labelConfidence: matches.length ? 1 : 0,
+      };
+    })
+    .filter((candidate) => candidate.headerCandidateReason !== "not-header-zone")
+    .sort((a, b) => a.yCenter - b.yCenter || a.xCenter - b.xCenter)
+    .slice(0, 48);
+  return {
+    mappedFields,
+    columnCenterEstimate: Object.fromEntries(mappedFields.map((field) => [field, anchors[field].x])),
+    observedHeaderZoneTokenCount: candidates.length,
+    candidates,
+  };
 }
 
 export function clusterRows(tokens) {
