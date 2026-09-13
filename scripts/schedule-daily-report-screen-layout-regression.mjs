@@ -24,7 +24,8 @@ if (!day.includes("/schedule/print?day=")) {
 for (const expected of [
   "@page{size:A3 portrait",
   ".sheet{position:relative;width:min(96vw,1400px);aspect-ratio:297/420",
-  ".sheet{width:${PRINT_LAYOUT.page.widthMm}mm;height:${PRINT_LAYOUT.page.heightMm}mm",
+  "position:fixed!important;left:0!important;top:0!important;width:297mm!important;height:420mm!important",
+  "fieldAnchors: {",
 ]) {
   if (!printPage.includes(expected)) failures.push("dedicated print page missing: " + expected);
 }
@@ -53,4 +54,5 @@ console.log("PASS daily-report screen layout regression");
 console.log("- one-day schedule keeps the accepted daily-report board: delivery left, inbound right");
 console.log("- weekly days use morning/afternoon daily-report sections");
 console.log("- day schedule routes printing to the dedicated print page");
-console.log("- print preview stays proportional and physical print remains exact A3 portrait");
+console.log("- print preview stays proportional and physical print remains fixed to exact A3 portrait");
+console.log("- print fields use explicit handwritten-reference anchors inside the A3 coordinate system");
