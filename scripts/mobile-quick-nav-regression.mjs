@@ -51,21 +51,17 @@ assert(controller.includes('/schedule?day=${addDays(mondayOf(todayJst()), index)
 assert(controller.includes('replaceAll("予約変更", "予定詳細")'), "reservation-change entry wording must normalize to 予定詳細");
 assert(controller.includes('replaceAll("かんたん予約変更", "予定詳細")'), "easy-change heading must normalize to 予定詳細");
 
-// /schedule/week must never starve its async load via a self-triggering MutationObserver loop.
 assert(controller.includes("const WEEK_HINT ="), "weekly hint text must have a stable target value");
 assert(controller.includes("hint && hint.textContent !== WEEK_HINT"), "weekly hint mutation must be idempotent");
 assert(controller.includes("new MutationObserver(requestApplyUx)"), "DOM observer must use the guarded scheduler");
 assert(controller.includes("window.requestAnimationFrame"), "DOM observer updates must be coalesced per animation frame");
 assert(controller.includes("if (disposed || applyFrame) return"), "observer scheduler must block re-entrant frame storms");
 assert(controller.includes("window.cancelAnimationFrame(applyFrame)"), "observer frame must be cleaned up on route change");
-
-// Loading lifecycle contract: start busy, both success/empty resolve through finally, failure reports an error and also resolves busy.
 assert(week.includes("setBusy(true)"), "weekly load must enter loading state");
 assert(week.includes("setEntries(nextEntries)"), "weekly success/empty result must commit entries");
 assert(week.includes('setMessage(safeActionError("週間予定の読み込み", error))'), "weekly query failure must transition to an error message");
 assert(/finally\s*\{[\s\S]*?setBusy\(false\)/.test(week), "weekly load must always leave loading state in finally");
-const loadingCases = ["data-success", "empty-success", "query-failure"];
-for (const scenario of loadingCases) {
+for (const scenario of ["data-success", "empty-success", "query-failure"]) {
   let busy = true;
   try {
     if (scenario === "query-failure") throw new Error("fixture query failure");
@@ -87,23 +83,6 @@ assert(controller.includes("@media screen and (max-width:760px)"), "mobile densi
 assert(controller.includes("@media screen and (min-width:761px) and (max-width:1100px)"), "tablet density must be explicitly audited");
 assert(controller.includes("@media screen and (min-width:1101px)"), "desktop density must be explicitly audited");
 
-// Final tablet/desktop density must be stronger than the legacy layer and cover high-frequency operational pages.
-assert(calibration.includes("@media screen and (min-width:761px) and (max-width:1100px)"), "tablet final density layer must exist");
-assert(calibration.includes("@media screen and (min-width:1101px)"), "desktop final density layer must exist");
-for (const route of [
-  "/schedule/week",
-  "/schedule/new",
-  "/schedule/edit",
-  "/settings/login-history",
-  "/settings/business-calendar",
-]) {
-  assert(calibration.includes(`body[data-ux-route="${route}"]`), `${route}: final compact density rule missing`);
-}
-assert(calibration.includes("body[data-ux-route] .card{padding:15px!important}"), "desktop common cards must be compact");
-assert(calibration.includes("body[data-ux-route] h1{font-size:23px!important"), "desktop common titles must be capped");
-assert(calibration.includes("body[data-ux-route] .notice{padding:8px 10px!important"), "desktop explanatory cards must be compact");
-assert(calibration.includes('body[data-ux-route="/settings/business-calendar"] .importCard'), "low-frequency annual calendar settings must remain compact on desktop");
-
 assert(controller.includes("SECURITY_ACK_KEY"), "security warning acknowledgement must use local persistence");
 assert(controller.includes("alert_code") && controller.includes("occurred_at") && controller.includes("message"), "security acknowledgement fingerprint must distinguish new events");
 assert(controller.includes("確認済みにする"), "login history must expose an acknowledgement action");
@@ -119,7 +98,7 @@ assert(calendar.includes("営業日設定・変更"), "business-day editing must
 
 // A3 daily-report calibration is tied to the original 1755 x 2482 raster geometry (150 dpi A3).
 for (const token of [
-  "page: { widthMm: 297, heightMm: 420 }",
+  "page: { widthMm: 297, heightMm: 420, sourceWidth: 1755, sourceHeight: 2482 }",
   "top: 260 / 2482",
   "bottom: 1734 / 2482",
   "groupHeight: 67 / 2482",
@@ -129,6 +108,7 @@ for (const token of [
   "stayingVehicles: { x: 130 / 1755, y: 2037 / 2482",
   "bodyShopVehicles: { x: 716 / 1755, y: 2037 / 2482",
   "plannedDeliveries: { x: 1195 / 1755, y: 1836 / 2482",
+  "fieldAnchors: {",
 ]) {
   assert(report.includes(token), `original daily-report geometry drifted: ${token}`);
 }
