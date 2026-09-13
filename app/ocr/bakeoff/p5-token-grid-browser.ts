@@ -2,11 +2,64 @@
 "use client";
 
 import { orientedCanvas } from "../diagnostic/stage-a20/a19-table-crops";
-import { reconstructTokenGrid } from "./p5-token-grid-core.mjs";
+import { diagnoseHeaderCandidates, reconstructTokenGrid } from "./p5-token-grid-core.mjs";
 import type { P5Result, P5Token } from "./p5-token-grid-types";
 
 function canvasBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("blob failed")), "image/jpeg", .96));
+}
+
+function loadInputDimensions(file: File) {
+  return new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image decode failed"));
+    };
+    image.src = url;
+  });
+}
+
+function pixelStatistics(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return { meanLuminance: null, lumaStddev: null, minLuma: null, maxLuma: null, nonblankPixelRatio: null, sampledPixels: 0 };
+  const { width, height } = canvas;
+  const image = ctx.getImageData(0, 0, width, height).data;
+  const totalPixels = width * height;
+  const step = Math.max(1, Math.ceil(Math.sqrt(totalPixels / 180000)));
+  let n = 0;
+  let sum = 0;
+  let sumSq = 0;
+  let min = 255;
+  let max = 0;
+  let nonblank = 0;
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      const i = (y * width + x) * 4;
+      const luma = image[i] * 0.2126 + image[i + 1] * 0.7152 + image[i + 2] * 0.0722;
+      n += 1;
+      sum += luma;
+      sumSq += luma * luma;
+      min = Math.min(min, luma);
+      max = Math.max(max, luma);
+      if (luma < 248) nonblank += 1;
+    }
+  }
+  const mean = n ? sum / n : 0;
+  const variance = n ? Math.max(0, sumSq / n - mean * mean) : 0;
+  return {
+    meanLuminance: Number(mean.toFixed(2)),
+    lumaStddev: Number(Math.sqrt(variance).toFixed(2)),
+    minLuma: n ? Number(min.toFixed(2)) : null,
+    maxLuma: n ? Number(max.toFixed(2)) : null,
+    nonblankPixelRatio: n ? Number((nonblank / n).toFixed(6)) : null,
+    sampledPixels: n,
+  };
 }
 
 function parseTsv(tsv: string): P5Token[] {
@@ -91,17 +144,22 @@ export type P5BrowserResult = P5Result & {
     blockParsedTokenCount: number;
     tokenSource: "tsv" | "blocks" | "none";
     recognizeSucceeded: true;
+    acquisitionDiagnostic: any;
+    headerDiagnostic: any;
   };
 };
 
 export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult> {
+  const inputDimensions = await loadInputDimensions(file);
   const source = await orientedCanvas(file, 2200);
+  const pixels = pixelStatistics(source.canvas);
   const tess: any = await import("tesseract.js");
+  const psm = tess.PSM?.AUTO ?? "3";
   const worker = await tess.createWorker("jpn+eng", 1);
   try {
     await worker.setParameters({
       preserve_interword_spaces: "1",
-      tessedit_pageseg_mode: tess.PSM?.AUTO ?? "3",
+      tessedit_pageseg_mode: psm,
       user_defined_dpi: "300",
       tessedit_char_whitelist: "",
     });
@@ -139,8 +197,38 @@ export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult
     const tokens = tsvTokens.length > 0 ? tsvTokens : blockTokens;
     const tokenSource: "tsv" | "blocks" | "none" = tsvTokens.length > 0 ? "tsv" : blockTokens.length > 0 ? "blocks" : "none";
     const reconstructed = reconstructTokenGrid(tokens) as P5Result;
+    const headerDiagnostic = diagnoseHeaderCandidates(tokens);
+    const acquisitionDiagnostic = {
+      imageLoadDecodeSucceeded: true,
+      inputImageWidth: inputDimensions.width,
+      inputImageHeight: inputDimensions.height,
+      canvasWidth: source.canvas.width,
+      canvasHeight: source.canvas.height,
+      orientation: source.rotate ? "rotated-90ccw" : "as-loaded",
+      rotated: source.rotate,
+      rotateRadians: source.rotate ? -Math.PI / 2 : 0,
+      canvasBlobSizeBytes: blob.size,
+      recognizeElapsedMs: elapsed,
+      ocrConfidence: Number.isFinite(Number(data?.confidence)) ? Number(data.confidence) : null,
+      psm: String(psm),
+      workerOutputCounts: {
+        recognizedDataKeyCount: Object.keys(data).length,
+        textLength: typeof textValue === "string" ? textValue.length : 0,
+        tsvLength: typeof tsvValue === "string" ? tsvValue.length : 0,
+        tsvParsedTokenCount: tsvTokens.length,
+        blockCount: Array.isArray(blocksValue) ? blocksValue.length : 0,
+        blocksWordCount: blockTokens.length,
+        selectedTokenCount: tokens.length,
+      },
+      pixelStatistics: pixels,
+    };
     return {
       ...reconstructed,
+      stageDiagnostics: {
+        ...reconstructed.stageDiagnostics,
+        acquisitionDiagnostic,
+        headerDiagnostic,
+      } as any,
       sourceWidth: source.canvas.width,
       sourceHeight: source.canvas.height,
       rotated: source.rotate,
@@ -161,6 +249,8 @@ export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult
         blockParsedTokenCount: blockTokens.length,
         tokenSource,
         recognizeSucceeded: true,
+        acquisitionDiagnostic,
+        headerDiagnostic,
       },
     };
   } finally {
