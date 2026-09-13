@@ -1,3 +1,5 @@
+"use client";
+
 export default function DailyReportVisualAlignment() {
   return (
     <style jsx global>{`
