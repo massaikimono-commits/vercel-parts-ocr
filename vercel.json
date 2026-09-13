@@ -1,6 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
-    "deploymentEnabled": false
+    "deploymentEnabled": {
+      "**": false,
+      "main": false,
+      "work/**": false,
+      "eval/**": false,
+      "experiment/**": false,
+      "poc/**": false,
+      "management/**": false,
+      "docs/**": false,
+      "dependabot/**": false,
+      "eval/parts-ocr-architecture-p5-token-grid-poc": true
+    }
   }
 }
