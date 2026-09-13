@@ -19,6 +19,16 @@ jobs:
         run: |
           sed -i 's/decodeIntegrityPass!==false/decodeIntegrityPass===true/g' scripts/_tmp_candidate_lock_v2_patch.py
           python3 scripts/_tmp_candidate_lock_v2_patch.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/eval/certificate-qr-live-scan/page.jsx')
+          s=p.read_text()
+          s=s.replace('const completion = full?.completion || full?.parserSeparatedEvaluation?.currentCompletion || {};','const compactCompletion = full?.completion || full?.parserSeparatedEvaluation?.currentCompletion || {};',1)
+          s=s.replace('const expected = completion?.expectedQrCount ?? completion?.expected ?? full?.parserSeparatedEvaluation?.currentCompletion?.expectedQrCount ?? null;','const expected = compactCompletion?.expectedQrCount ?? compactCompletion?.expected ?? full?.parserSeparatedEvaluation?.currentCompletion?.expectedQrCount ?? null;',1)
+          s=s.replace('const complete = Boolean(completion?.complete ?? full?.parserSeparatedEvaluation?.currentCompletion?.complete);','const complete = Boolean(compactCompletion?.complete ?? full?.parserSeparatedEvaluation?.currentCompletion?.complete);',1)
+          s=s.replace('const vehicleKind = completion?.kind ?? full?.parserSeparatedEvaluation?.currentCompletion?.kind ?? "unknown";','const vehicleKind = compactCompletion?.kind ?? full?.parserSeparatedEvaluation?.currentCompletion?.kind ?? "unknown";',1)
+          p.write_text(s)
+          PY
       - name: Remove temporary build machinery
         run: rm -f .github/workflows/_tmp-candidate-lock-v2.yml scripts/_tmp_candidate_lock_v2_patch.py
       - name: Install dependencies
