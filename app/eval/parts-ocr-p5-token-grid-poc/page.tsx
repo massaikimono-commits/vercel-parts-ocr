@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { runP5PsmPrimaryComparison, type P5PsmPrimaryComparison } from "../../ocr/bakeoff/p5-psm-primary-browser";
+import { runP5SemanticHeaderDiagnostic } from "../../ocr/bakeoff/p5-psm-primary-browser";
 
 type RegisteredImage = {
   id: string;
@@ -15,22 +15,25 @@ type RegisteredImage = {
   fingerprint: string;
 };
 
-type CompareResult = {
+type SemanticResult = {
   id: string;
-  name: string;
+  diagnosticPsm: "3" | "6";
   fingerprint: string;
   imageWidth: number | null;
   imageHeight: number | null;
-  previewUrl: string;
-  comparison: P5PsmPrimaryComparison | null;
+  diagnostic: any;
   error: string | null;
 };
 
-const RESULT_SCHEMA = "icb.parts-ocr.p5-zero-token-rescue-full-pipeline.v1";
-const RESULT_REVISION = "p5-registry-zero-token-rescue-psm-3-6-11-v1";
+const RESULT_SCHEMA = "icb.parts-ocr.p5-semantic-mapping-root-cause.v1";
+const RESULT_REVISION = "p5-semantic-root-cause-0675-0678-0684-v1";
 const EVALUATION_HEAD = process.env.NEXT_PUBLIC_EVAL_HEAD || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "unknown";
 const FORMAL_IMAGE_IDS = Array.from({ length: 12 }, (_, index) => `IMG_${String(675 + index).padStart(4, "0")}`);
-const AUTO_TARGET = "IMG_0678";
+const AUTO_TARGETS = [
+  { id: "IMG_0675", psm: "3" as const, role: "existing-success-token-case" },
+  { id: "IMG_0678", psm: "6" as const, role: "zero-token-rescue-diagnostic" },
+  { id: "IMG_0684", psm: "3" as const, role: "existing-success-reconstruction-case" },
+];
 
 function canonicalId(name: string) {
   const match = name.match(/IMG[_-]?(\d{4})/i);
@@ -74,7 +77,7 @@ export default function P5TokenGridRealPhotoPocPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const registryRef = useRef<Map<string, RegisteredImage>>(new Map());
   const [registered, setRegistered] = useState<RegisteredImage[]>([]);
-  const [results, setResults] = useState<CompareResult[]>([]);
+  const [results, setResults] = useState<SemanticResult[]>([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("正式12枚を一度登録してください。以後、同じページを開いたままなら写真の再選択は不要です。");
   const [copyStatus, setCopyStatus] = useState("");
@@ -94,23 +97,12 @@ export default function P5TokenGridRealPhotoPocPage() {
     for (const item of registered) URL.revokeObjectURL(item.previewUrl);
     registryRef.current.clear();
     try {
-      const base = selected.map((file, index) => ({
-        file,
-        id: canonicalId(file.name),
-        name: file.name,
-        previewUrl: URL.createObjectURL(file),
-        selectionOrder: index + 1,
-      }));
+      const base = selected.map((file, index) => ({ file, id: canonicalId(file.name), name: file.name, previewUrl: URL.createObjectURL(file), selectionOrder: index + 1 }));
       const [sizes, fingerprints] = await Promise.all([
         Promise.all(base.map((item) => loadImageSize(item.previewUrl))),
         Promise.all(base.map((item) => safeFingerprint(item.file))),
       ]);
-      const next: RegisteredImage[] = base.map((item, index) => ({
-        ...item,
-        imageWidth: sizes[index].width || null,
-        imageHeight: sizes[index].height || null,
-        fingerprint: fingerprints[index],
-      }));
+      const next: RegisteredImage[] = base.map((item, index) => ({ ...item, imageWidth: sizes[index].width || null, imageHeight: sizes[index].height || null, fingerprint: fingerprints[index] }));
       for (const item of next) registryRef.current.set(item.id, item);
       setRegistered(next);
       const ids = new Set(next.map((item) => item.id));
@@ -118,7 +110,7 @@ export default function P5TokenGridRealPhotoPocPage() {
       const duplicates = next.map((item) => item.id).filter((id, index, all) => id !== "UNMATCHED" && all.indexOf(id) !== index);
       const unmatched = next.filter((item) => item.id === "UNMATCHED").length;
       if (next.length === 12 && missing.length === 0 && duplicates.length === 0 && unmatched === 0) {
-        setStatus("正式セット READY 12/12。『自動診断開始』でOCR 0ケースを自動選択し、PSM3 / PSM6 / PSM11をFull P5 Pipeline比較します。");
+        setStatus("正式セット READY 12/12。『自動診断開始』で3ケースを自動選択し、semantic mapping原因を診断します。");
       } else {
         registryRef.current.clear();
         setStatus(`正式セット不整合：登録${next.length}/12、不足${missing.length}、未照合${unmatched}、重複${duplicates.length}。正式12枚を再登録してください。`);
@@ -132,11 +124,11 @@ export default function P5TokenGridRealPhotoPocPage() {
   async function runAutoDiagnostic() {
     if (busy) return;
     if (!formalReady || registryRef.current.size !== 12) {
-      setStatus("正式12枚registryがありません。対象写真1枚ではなく、正式12枚を再登録してください。");
+      setStatus("正式12枚registryがありません。個別画像ではなく、正式12枚を再登録してください。");
       return;
     }
-    const target = registryRef.current.get(AUTO_TARGET);
-    if (!target) {
+    const targets = AUTO_TARGETS.map((spec) => ({ spec, item: registryRef.current.get(spec.id) }));
+    if (targets.some(({ item }) => !item)) {
       setStatus("診断対象をregistryから解決できません。正式12枚を再登録してください。");
       return;
     }
@@ -144,32 +136,19 @@ export default function P5TokenGridRealPhotoPocPage() {
     setBusy(true);
     setCopyStatus("");
     setResults([]);
-    setStatus("OCR 0ケースをregistryから自動選択し、PSM3 / PSM6 / PSM11をFull P5 Pipeline比較中です。file pickerは開きません。");
+    setStatus("3ケースをregistryから自動選択し、semantic mapping root causeを診断中です。file pickerは開きません。");
+    const collected: SemanticResult[] = [];
     try {
-      const comparison = await runP5PsmPrimaryComparison(target.file);
-      setResults([{
-        id: target.id,
-        name: target.name,
-        fingerprint: target.fingerprint,
-        imageWidth: target.imageWidth,
-        imageHeight: target.imageHeight,
-        previewUrl: target.previewUrl,
-        comparison,
-        error: null,
-      }]);
-      setStatus("Full P5 Pipeline比較完了。『診断結果をコピー』を1回押して、そのまま総合管理へ貼り付けてください。");
-    } catch (error) {
-      setResults([{
-        id: target.id,
-        name: target.name,
-        fingerprint: target.fingerprint,
-        imageWidth: target.imageWidth,
-        imageHeight: target.imageHeight,
-        previewUrl: target.previewUrl,
-        comparison: null,
-        error: error instanceof Error ? error.message : String(error),
-      }]);
-      setStatus("自動診断でエラーが発生しました。診断結果を確認してください。");
+      for (const { spec, item } of targets as Array<{ spec: typeof AUTO_TARGETS[number]; item: RegisteredImage }>) {
+        try {
+          const diagnostic = await runP5SemanticHeaderDiagnostic(item.file, spec.psm);
+          collected.push({ id: item.id, diagnosticPsm: spec.psm, fingerprint: item.fingerprint, imageWidth: item.imageWidth, imageHeight: item.imageHeight, diagnostic, error: null });
+        } catch (error) {
+          collected.push({ id: item.id, diagnosticPsm: spec.psm, fingerprint: item.fingerprint, imageWidth: item.imageWidth, imageHeight: item.imageHeight, diagnostic: null, error: error instanceof Error ? error.message : String(error) });
+        }
+        setResults([...collected]);
+      }
+      setStatus("Semantic mapping診断完了。『診断結果をコピー』を1回押して、そのまま総合管理へ貼り付けてください。");
     } finally {
       setBusy(false);
     }
@@ -183,19 +162,12 @@ export default function P5TokenGridRealPhotoPocPage() {
       evaluationHead: EVALUATION_HEAD,
       registryReady: formalReady,
       registrySize: registryRef.current.size,
-      targetMode: "registry-auto-target",
-      targetPurpose: "zero-token-rescue-full-pipeline",
       runtimePsmUnchanged: true,
       runtimePsm: "3",
-      comparedPsms: ["3", "6", "11"],
-      targets: results.map((item) => ({
-        imageId: item.id,
-        safeImageFingerprint: item.fingerprint,
-        width: item.imageWidth,
-        height: item.imageHeight,
-        error: item.error,
-        comparison: item.comparison,
-      })),
+      psm11ExcludedFromLane: true,
+      targets: results.map((item) => ({ imageId: item.id, diagnosticPsm: item.diagnosticPsm, safeImageFingerprint: item.fingerprint, width: item.imageWidth, height: item.imageHeight, error: item.error, diagnostic: item.diagnostic })),
+      privacy: { rawRecognizedTextIncluded: false, rawTsvIncluded: false, imageIncluded: false },
+      tuningChanged: false,
       productionChanged: false,
       gtRuntimeUsed: false,
     };
@@ -210,25 +182,18 @@ export default function P5TokenGridRealPhotoPocPage() {
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 12px 60px", color: "#172033", background: "#f7f9fc" }}>
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
-        <h1 style={{ marginTop: 0 }}>P5 Zero-Token Rescue Full Pipeline診断</h1>
-        <p><b>正式12枚を一度登録した後は、同一ページセッション中の診断で写真を選び直しません。</b></p>
-        <p>OCR 0ケースはregistryから自動選択し、CURRENT PSM3 / PSM6 rescue / PSM11 rescueを同一画像・同一前処理で比較します。</p>
-        <p>File objectはブラウザ内memory registryだけに保持し、画像本体はserver・GitHub・Supabase・Vercel bundle・artifactへ送信/保存しません。</p>
-        <p>GT row数はruntimeの画像選択・OCR・停止条件・再構成制御には使用しません。</p>
+        <h1 style={{ marginTop: 0 }}>P5 Semantic Mapping Root Cause診断</h1>
+        <p><b>正式12枚を一度登録後、0675/0678/0684相当はregistryから自動選択します。個別画像の再選択はありません。</b></p>
+        <p>0675/0684はPSM3、0678はPSM6 diagnostic rescueのみ。runtime PSM3は変更しません。</p>
+        <p>JSONにはOCR本文を出さず、hash・文字種・normalized geometry・lexicon距離・隣接証拠・reject reasonだけを出します。</p>
       </section>
 
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
         <input ref={inputRef} hidden type="file" accept="image/*" multiple onChange={(event) => void registerFormalSet(event.target.files)} />
-        {!formalReady ? <button disabled={busy} onClick={() => inputRef.current?.click()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, background: busy ? "#94a3b8" : "#245fce", color: "white", fontWeight: 900 }}>
-          正式12枚を登録
-        </button> : null}
-        <div style={{ marginTop: 10, fontWeight: 900, color: formalReady ? "#176b34" : "#8a5a00" }}>
-          {formalReady ? "正式セット READY 12/12" : `登録 ${registered.length}/12`}
-        </div>
+        {!formalReady ? <button disabled={busy} onClick={() => inputRef.current?.click()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, background: busy ? "#94a3b8" : "#245fce", color: "white", fontWeight: 900 }}>正式12枚を登録</button> : null}
+        <div style={{ marginTop: 10, fontWeight: 900, color: formalReady ? "#176b34" : "#8a5a00" }}>{formalReady ? "正式セット READY 12/12" : `登録 ${registered.length}/12`}</div>
         <div role="status" aria-live="polite" style={{ marginTop: 8 }}>{status}</div>
-        <button disabled={!formalReady || busy} onClick={() => void runAutoDiagnostic()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, marginTop: 12, background: !formalReady || busy ? "#94a3b8" : "#176b34", color: "white", fontWeight: 900 }}>
-          {busy ? "Full Pipeline比較中…" : "自動診断開始"}
-        </button>
+        <button disabled={!formalReady || busy} onClick={() => void runAutoDiagnostic()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, marginTop: 12, background: !formalReady || busy ? "#94a3b8" : "#176b34", color: "white", fontWeight: 900 }}>{busy ? "Semantic診断中…" : "自動診断開始"}</button>
       </section>
 
       {registered.length > 0 ? <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
@@ -240,25 +205,19 @@ export default function P5TokenGridRealPhotoPocPage() {
             <div style={{ fontSize: 12, overflowWrap: "anywhere" }}>{item.name}</div>
             <div style={{ fontSize: 12 }}>{item.imageWidth && item.imageHeight ? `${item.imageWidth} × ${item.imageHeight}px` : "size unavailable"}</div>
             <div style={{ fontSize: 12 }}>識別: {item.id === "UNMATCHED" ? "未照合" : "登録済み"}</div>
-            <div style={{ fontSize: 11, color: "#667085" }}>fp: {item.fingerprint}</div>
           </div>)}
         </div>
         {!formalReady ? <div style={{ marginTop: 10, color: "#8a1c1c" }}>不足: {missingIds.length} / 未照合: {unmatchedCount} / 重複: {duplicateIds.length}</div> : null}
       </section> : null}
 
       {results.length > 0 ? <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>自動比較結果</h2>
-        <p>OCR 0ケースをregistryから自動選択済み。ユーザーによる対象画像探索・個別選択はありません。</p>
+        <h2 style={{ marginTop: 0, fontSize: 18 }}>Semantic診断結果</h2>
         <button onClick={() => void copyDiagnostic()} disabled={busy} style={{ width: "100%", border: 0, borderRadius: 12, padding: 13, background: "#176b34", color: "white", fontWeight: 900 }}>診断結果をコピー</button>
         {copyStatus ? <div role="status" aria-live="polite" style={{ marginTop: 8, fontWeight: 900, color: copyStatus === "コピーしました" ? "#176b34" : "#a11" }}>{copyStatus}</div> : null}
-        {results.map((item) => <div key={item.id} style={{ marginTop: 16, borderTop: "1px solid #dbe2ec", paddingTop: 12 }}>
+        {results.map((item) => <div key={item.id} style={{ marginTop: 14, borderTop: "1px solid #dbe2ec", paddingTop: 10 }}>
+          <div style={{ fontWeight: 900 }}>{item.id} / diagnostic PSM {item.diagnosticPsm}</div>
           {item.error ? <div style={{ color: "#a11" }}>ERROR: {item.error}</div> : null}
-          {item.comparison ? <div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><th align="left">PSM</th><th>tokens</th><th>headers</th><th>clusters</th><th>assigned</th><th>rows</th><th>ms</th><th>manual</th><th>wrong</th></tr></thead>
-            <tbody>{item.comparison.variants.map((variant) => <tr key={variant.label}>
-              <td>{variant.label}</td><td align="center">{variant.pageOcrTokenCount}</td><td align="center">{variant.mappedHeaderFieldCount}</td><td align="center">{variant.rowClusterCount}</td><td align="center">{variant.columnAssignmentCount}</td><td align="center">{variant.reconstructedRowCount}</td><td align="center">{variant.recognizeElapsedMs ?? "-"}</td><td align="center">{String(variant.manualReviewRequired)}</td><td align="center">{variant.wrongAutoConfirm}</td>
-            </tr>)}</tbody>
-          </table></div> : null}
+          {item.diagnostic ? <div style={{ fontSize: 13, marginTop: 6 }}>tokens: {item.diagnostic.variant.pageOcrTokenCount} / mapped headers: {item.diagnostic.variant.mappedHeaderFieldCount} / rows: {item.diagnostic.variant.reconstructedRowCount} / candidates: {item.diagnostic.variant.semanticRootCause?.candidates?.length ?? 0}</div> : null}
         </div>)}
       </section> : null}
     </main>
