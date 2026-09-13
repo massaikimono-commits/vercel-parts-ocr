@@ -151,13 +151,19 @@ function unknown(overrides = {}) {
 console.log("Live unknown-safe contract and evaluation wiring tests passed.");
 {
   const page = fs.readFileSync("app/eval/certificate-qr-live-scan/page.jsx", "utf8");
-  assert(page.includes('const CANDIDATE_LOCK_VARIANT = "TEMP_LOCK_12";'));
-  assert(page.includes('const CANDIDATE_LOCK_HOLD_RESCUE_FRAMES = 12;'));
-  assert(page.includes('completionBeforeRescue.kind === "registered"'));
-  assert(page.includes('candidateLockTargetFromEvidence(evidenceRef.current)'));
-  assert(page.includes('rescueState.rescueFrameCount < CANDIDATE_LOCK_HOLD_RESCUE_FRAMES'));
+  assert(page.includes('const CANDIDATE_LOCK_VARIANT_HOLD_12 = "HOLD_FIRST_CONTAINING_12";'));
+  assert(page.includes('const CANDIDATE_LOCK_VARIANT_CONTAINING_ONLY = "CONTAINING_TARGETS_ONLY";'));
+  assert(page.includes('const CANDIDATE_LOCK_HOLD_FRAMES = 12;'));
+  assert(page.includes('candidateLockTargetFromSafeObservation(countingIntegrityRef.current, evidenceRef.current, frameId)'));
+  assert(page.includes('reason:"candidate-safe-spatial-first-observed"'));
+  assert(page.includes('decodeIntegrityPass: Boolean(hit.decodeIntegrityPass)'));
+  assert(page.includes('rescueState.candidateLockVariant === CANDIDATE_LOCK_VARIANT_CONTAINING_ONLY'));
+  assert(page.includes('"candidate-lock-containing-only-follow"'));
+  assert(page.includes('"candidate-lock-hold-follow"'));
   assert(page.includes('candidateLockReleaseReason = "hold-window-complete"'));
-  assert(page.includes('candidateLockReleaseReason = "confirmed-during-lock"'));
+  assert(page.includes('candidateLockReleaseReason = "confirmed-after-spatial-lock"'));
+  assert(page.includes('schema: "icb-live-candidate-lock-management-short-v2"'));
+  assert(page.includes('productionChanged: false'));
 }
 
-console.log("Registered remaining-one Candidate-Lock PoC wiring tests passed.");
+console.log("Remaining-one spatial Candidate-Lock v2 and MANAGEMENT_SHORT wiring tests passed.");
