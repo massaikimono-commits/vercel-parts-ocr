@@ -100,7 +100,7 @@ function buildManagementShort(results: CandidateResult[], registryReady: boolean
       wrongAutoConfirm: variant.wrongAutoConfirm,
       manualReviewRequired: variant.manualReviewRequired,
       processingTimeMs: variant.processingTimeMs,
-    })),
+    }))),
   };
 }
 
