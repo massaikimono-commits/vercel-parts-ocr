@@ -11,7 +11,7 @@
       "management/**": false,
       "docs/**": false,
       "dependabot/**": false,
-      "eval/parts-ocr-architecture-p5-token-grid-poc": true
+      "eval/parts-ocr-architecture-p5-token-grid-poc": false
     }
   }
 }
