@@ -9,13 +9,13 @@ function canvasBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("blob failed")), "image/jpeg", .96));
 }
 
-function loadInputDimensions(file: File) {
-  return new Promise<{ width: number; height: number }>((resolve, reject) => {
+function loadInputImage(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const image = new Image();
     image.onload = () => {
       URL.revokeObjectURL(url);
-      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      resolve(image);
     };
     image.onerror = () => {
       URL.revokeObjectURL(url);
@@ -23,6 +23,40 @@ function loadInputDimensions(file: File) {
     };
     image.src = url;
   });
+}
+
+function renderOrientationCanvas(image: HTMLImageElement, degrees: 0 | 90 | 180 | -90, maxSide = 2200) {
+  const quarterTurn = Math.abs(degrees) === 90;
+  const rawWidth = quarterTurn ? image.naturalHeight : image.naturalWidth;
+  const rawHeight = quarterTurn ? image.naturalWidth : image.naturalHeight;
+  const scale = Math.min(1, maxSide / Math.max(rawWidth, rawHeight));
+  const width = Math.max(1, Math.round(rawWidth * scale));
+  const height = Math.max(1, Math.round(rawHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("canvas unavailable");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.save();
+  if (degrees === 0) {
+    ctx.drawImage(image, 0, 0, width, height);
+  } else if (degrees === 90) {
+    ctx.translate(width, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(image, 0, 0, height, width);
+  } else if (degrees === -90) {
+    ctx.translate(0, height);
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(image, 0, 0, height, width);
+  } else {
+    ctx.translate(width, height);
+    ctx.rotate(Math.PI);
+    ctx.drawImage(image, 0, 0, width, height);
+  }
+  ctx.restore();
+  return canvas;
 }
 
 function pixelStatistics(canvas: HTMLCanvasElement) {
@@ -81,14 +115,7 @@ function parseTsv(tsv: string): P5Token[] {
     const height = Number(cells[index.height]);
     if (![left, top, width, height].every(Number.isFinite) || width <= 0 || height <= 0) continue;
     const confidenceRaw = Number(cells[index.conf]);
-    out.push({
-      text,
-      x1: left,
-      y1: top,
-      x2: left + width,
-      y2: top + height,
-      confidence: Number.isFinite(confidenceRaw) ? confidenceRaw / 100 : null,
-    });
+    out.push({ text, x1: left, y1: top, x2: left + width, y2: top + height, confidence: Number.isFinite(confidenceRaw) ? confidenceRaw / 100 : null });
   }
   return out;
 }
@@ -108,19 +135,69 @@ function parseBlocks(blocks: any): P5Token[] {
           const y2 = Number(bbox?.y1);
           if (!text || ![x1, y1, x2, y2].every(Number.isFinite) || x2 <= x1 || y2 <= y1) continue;
           const confidenceRaw = Number(word?.confidence);
-          out.push({
-            text,
-            x1,
-            y1,
-            x2,
-            y2,
-            confidence: Number.isFinite(confidenceRaw) ? confidenceRaw / 100 : null,
-          });
+          out.push({ text, x1, y1, x2, y2, confidence: Number.isFinite(confidenceRaw) ? confidenceRaw / 100 : null });
         }
       }
     }
   }
   return out;
+}
+
+const OUTPUT_OPTIONS = {
+  text: true,
+  blocks: true,
+  layoutBlocks: false,
+  hocr: false,
+  tsv: true,
+  box: false,
+  unlv: false,
+  osd: false,
+  pdf: false,
+  imageColor: false,
+  imageGrey: false,
+  imageBinary: false,
+  debug: false,
+};
+
+function summarizeRecognition(recognized: any, elapsed: number, canvas: HTMLCanvasElement, blob: Blob) {
+  const data = recognized?.data ?? {};
+  const tsvValue = data?.tsv;
+  const textValue = data?.text;
+  const blocksValue = data?.blocks;
+  const tsvTokens = parseTsv(typeof tsvValue === "string" ? tsvValue : "");
+  const blockTokens = parseBlocks(blocksValue);
+  const tokens = tsvTokens.length > 0 ? tsvTokens : blockTokens;
+  const tokenSource: "tsv" | "blocks" | "none" = tsvTokens.length > 0 ? "tsv" : blockTokens.length > 0 ? "blocks" : "none";
+  return {
+    data,
+    tsvValue,
+    textValue,
+    blocksValue,
+    tsvTokens,
+    blockTokens,
+    tokens,
+    tokenSource,
+    diagnostic: {
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
+      blobBytes: blob.size,
+      recognizeElapsedMs: elapsed,
+      textLength: typeof textValue === "string" ? textValue.length : 0,
+      tsvLength: typeof tsvValue === "string" ? tsvValue.length : 0,
+      tsvParsedTokenCount: tsvTokens.length,
+      blocksWordCount: blockTokens.length,
+      pageOcrTokenCount: tokens.length,
+      tokenSource,
+    },
+  };
+}
+
+async function recognizeCanvas(worker: any, canvas: HTMLCanvasElement) {
+  const blob = await canvasBlob(canvas);
+  const started = performance.now();
+  const recognized = await worker.recognize(blob, {}, OUTPUT_OPTIONS);
+  const elapsed = Math.round(performance.now() - started);
+  return summarizeRecognition(recognized, elapsed, canvas, blob);
 }
 
 export type P5BrowserResult = P5Result & {
@@ -146,58 +223,31 @@ export type P5BrowserResult = P5Result & {
     recognizeSucceeded: true;
     acquisitionDiagnostic: any;
     headerDiagnostic: any;
+    orientationCounterfactual: any;
   };
 };
 
 export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult> {
-  const inputDimensions = await loadInputDimensions(file);
+  const inputImage = await loadInputImage(file);
+  const inputDimensions = { width: inputImage.naturalWidth, height: inputImage.naturalHeight };
   const source = await orientedCanvas(file, 2200);
   const pixels = pixelStatistics(source.canvas);
   const tess: any = await import("tesseract.js");
   const psm = tess.PSM?.AUTO ?? "3";
   const worker = await tess.createWorker("jpn+eng", 1);
   try {
-    await worker.setParameters({
-      preserve_interword_spaces: "1",
-      tessedit_pageseg_mode: psm,
-      user_defined_dpi: "300",
-      tessedit_char_whitelist: "",
-    });
-    const blob = await canvasBlob(source.canvas);
-    const started = performance.now();
-    let recognized: any;
+    await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: psm, user_defined_dpi: "300", tessedit_char_whitelist: "" });
+
+    let current: Awaited<ReturnType<typeof recognizeCanvas>>;
     try {
-      recognized = await worker.recognize(blob, {}, {
-        text: true,
-        blocks: true,
-        layoutBlocks: false,
-        hocr: false,
-        tsv: true,
-        box: false,
-        unlv: false,
-        osd: false,
-        pdf: false,
-        imageColor: false,
-        imageGrey: false,
-        imageBinary: false,
-        debug: false,
-      });
+      current = await recognizeCanvas(worker, source.canvas);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`OCR_RECOGNIZE_EXCEPTION: ${message}`);
     }
-    const elapsed = Math.round(performance.now() - started);
-    const data = recognized?.data ?? {};
-    const tsvValue = data?.tsv;
-    const textValue = data?.text;
-    const blocksValue = data?.blocks;
-    const tsvText = typeof tsvValue === "string" ? tsvValue : "";
-    const tsvTokens = parseTsv(tsvText);
-    const blockTokens = parseBlocks(blocksValue);
-    const tokens = tsvTokens.length > 0 ? tsvTokens : blockTokens;
-    const tokenSource: "tsv" | "blocks" | "none" = tsvTokens.length > 0 ? "tsv" : blockTokens.length > 0 ? "blocks" : "none";
-    const reconstructed = reconstructTokenGrid(tokens) as P5Result;
-    const headerDiagnostic = diagnoseHeaderCandidates(tokens);
+
+    const reconstructed = reconstructTokenGrid(current.tokens) as P5Result;
+    const headerDiagnostic = diagnoseHeaderCandidates(current.tokens);
     const acquisitionDiagnostic = {
       imageLoadDecodeSucceeded: true,
       inputImageWidth: inputDimensions.width,
@@ -207,50 +257,93 @@ export async function runP5TokenGridBrowser(file: File): Promise<P5BrowserResult
       orientation: source.rotate ? "rotated-90ccw" : "as-loaded",
       rotated: source.rotate,
       rotateRadians: source.rotate ? -Math.PI / 2 : 0,
-      canvasBlobSizeBytes: blob.size,
-      recognizeElapsedMs: elapsed,
-      ocrConfidence: Number.isFinite(Number(data?.confidence)) ? Number(data.confidence) : null,
+      canvasBlobSizeBytes: current.diagnostic.blobBytes,
+      recognizeElapsedMs: current.diagnostic.recognizeElapsedMs,
+      ocrConfidence: Number.isFinite(Number(current.data?.confidence)) ? Number(current.data.confidence) : null,
       psm: String(psm),
       workerOutputCounts: {
-        recognizedDataKeyCount: Object.keys(data).length,
-        textLength: typeof textValue === "string" ? textValue.length : 0,
-        tsvLength: typeof tsvValue === "string" ? tsvValue.length : 0,
-        tsvParsedTokenCount: tsvTokens.length,
-        blockCount: Array.isArray(blocksValue) ? blocksValue.length : 0,
-        blocksWordCount: blockTokens.length,
-        selectedTokenCount: tokens.length,
+        recognizedDataKeyCount: Object.keys(current.data).length,
+        textLength: current.diagnostic.textLength,
+        tsvLength: current.diagnostic.tsvLength,
+        tsvParsedTokenCount: current.tsvTokens.length,
+        blockCount: Array.isArray(current.blocksValue) ? current.blocksValue.length : 0,
+        blocksWordCount: current.blockTokens.length,
+        selectedTokenCount: current.tokens.length,
       },
       pixelStatistics: pixels,
     };
+
+    const currentDegrees: 0 | -90 = source.rotate ? -90 : 0;
+    const variants: Array<{ label: string; degrees: 0 | 90 | 180 | -90; current: boolean; reusedCurrent?: boolean } & Record<string, any>> = [
+      { label: "CURRENT", degrees: currentDegrees, current: true, reusedCurrent: true, ...current.diagnostic },
+    ];
+
+    for (const degrees of [0, 90, 180, -90] as const) {
+      if (degrees === currentDegrees) {
+        variants.push({ label: `${degrees}deg`, degrees, current: false, reusedCurrent: true, ...current.diagnostic });
+        continue;
+      }
+      const cfCanvas = renderOrientationCanvas(inputImage, degrees, 2200);
+      try {
+        const cf = await recognizeCanvas(worker, cfCanvas);
+        variants.push({ label: `${degrees}deg`, degrees, current: false, reusedCurrent: false, ...cf.diagnostic });
+      } catch (error) {
+        variants.push({
+          label: `${degrees}deg`,
+          degrees,
+          current: false,
+          reusedCurrent: false,
+          recognizeError: error instanceof Error ? error.message : String(error),
+          canvasWidth: cfCanvas.width,
+          canvasHeight: cfCanvas.height,
+          blobBytes: null,
+          recognizeElapsedMs: null,
+          textLength: 0,
+          tsvLength: 0,
+          tsvParsedTokenCount: 0,
+          blocksWordCount: 0,
+          pageOcrTokenCount: 0,
+          tokenSource: "none",
+        });
+      }
+    }
+
+    const orientationCounterfactual = {
+      diagnosticOnly: true,
+      runtimeOrientationUnchanged: true,
+      psm: String(psm),
+      language: "jpn+eng",
+      maxSide: 2200,
+      successMetric: "text/token/word-count-not-confidence",
+      variants,
+    };
+
     return {
       ...reconstructed,
-      stageDiagnostics: {
-        ...reconstructed.stageDiagnostics,
-        acquisitionDiagnostic,
-        headerDiagnostic,
-      } as any,
+      stageDiagnostics: { ...reconstructed.stageDiagnostics, acquisitionDiagnostic, headerDiagnostic, orientationCounterfactual } as any,
       sourceWidth: source.canvas.width,
       sourceHeight: source.canvas.height,
       rotated: source.rotate,
-      ocrTokenCount: tokens.length,
+      ocrTokenCount: current.tokens.length,
       assignedTokenCount: reconstructed.rows.reduce((sum, row) => sum + row.sourceTokenCount, 0),
-      ocrProcessingTimeMs: elapsed,
+      ocrProcessingTimeMs: current.diagnostic.recognizeElapsedMs,
       tableLocalizationStatus: "PAGE_SCOPE_ONLY",
       ocrOutputDiagnostic: {
-        recognizedDataKeys: Object.keys(data).sort(),
-        tsvType: typeof tsvValue,
-        tsvLength: typeof tsvValue === "string" ? tsvValue.length : 0,
-        textType: typeof textValue,
-        textLength: typeof textValue === "string" ? textValue.length : 0,
-        blocksPresent: Array.isArray(blocksValue),
-        blockCount: Array.isArray(blocksValue) ? blocksValue.length : 0,
-        blockWordCount: blockTokens.length,
-        tsvParsedTokenCount: tsvTokens.length,
-        blockParsedTokenCount: blockTokens.length,
-        tokenSource,
+        recognizedDataKeys: Object.keys(current.data).sort(),
+        tsvType: typeof current.tsvValue,
+        tsvLength: current.diagnostic.tsvLength,
+        textType: typeof current.textValue,
+        textLength: current.diagnostic.textLength,
+        blocksPresent: Array.isArray(current.blocksValue),
+        blockCount: Array.isArray(current.blocksValue) ? current.blocksValue.length : 0,
+        blockWordCount: current.blockTokens.length,
+        tsvParsedTokenCount: current.tsvTokens.length,
+        blockParsedTokenCount: current.blockTokens.length,
+        tokenSource: current.tokenSource,
         recognizeSucceeded: true,
         acquisitionDiagnostic,
         headerDiagnostic,
+        orientationCounterfactual,
       },
     };
   } finally {
