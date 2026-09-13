@@ -8,6 +8,9 @@ type CaptureResult = {
   id: string;
   name: string;
   previewUrl: string;
+  selectionOrder: number;
+  imageWidth: number | null;
+  imageHeight: number | null;
   result: P5BrowserResult | null;
   error: string | null;
 };
@@ -17,11 +20,20 @@ function canonicalId(name: string) {
   return match?.[1] ? `IMG_${match[1]}` : name.replace(/\.[^.]+$/, "").replace(/[^A-Za-z0-9_-]/g, "_");
 }
 
+function loadImageSize(url: string) {
+  return new Promise<{ width: number; height: number }>((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => resolve({ width: 0, height: 0 });
+    image.src = url;
+  });
+}
+
 export default function P5TokenGridRealPhotoPocPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [captures, setCaptures] = useState<CaptureResult[]>([]);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("既存の部品伝票写真を最大3枚選択してください。画像はbrowser memory内だけで処理し、保存・送信しません。");
+  const [status, setStatus] = useState("まずは『黄色伝票が1枚主体の写真』を1枚選んでTechnical Gateを確認してください。IMG番号の厳密一致は不要です。");
 
   useEffect(() => () => {
     for (const capture of captures) URL.revokeObjectURL(capture.previewUrl);
@@ -32,19 +44,32 @@ export default function P5TokenGridRealPhotoPocPage() {
     const selected = Array.from(files).slice(0, 3);
     setBusy(true);
     for (const capture of captures) URL.revokeObjectURL(capture.previewUrl);
-    const initial = selected.map((file) => ({
+
+    const prepared = selected.map((file, index) => ({
+      file,
       id: canonicalId(file.name),
       name: file.name,
       previewUrl: URL.createObjectURL(file),
+      selectionOrder: index + 1,
+    }));
+    const sizes = await Promise.all(prepared.map((item) => loadImageSize(item.previewUrl)));
+    const initial: CaptureResult[] = prepared.map((item, index) => ({
+      id: item.id,
+      name: item.name,
+      previewUrl: item.previewUrl,
+      selectionOrder: item.selectionOrder,
+      imageWidth: sizes[index].width || null,
+      imageHeight: sizes[index].height || null,
       result: null,
       error: null,
     }));
     setCaptures(initial);
+
     try {
       for (let index = 0; index < selected.length; index += 1) {
         const file = selected[index];
-        const id = canonicalId(file.name);
-        setStatus(`${id}: page-level OCR → token-grid reconstruction 実行中 (${index + 1}/${selected.length})`);
+        const label = `選択${index + 1}`;
+        setStatus(`${label}: page-level OCR → token-grid reconstruction 実行中 (${index + 1}/${selected.length})`);
         try {
           const result = await runP5TokenGridBrowser(file);
           setCaptures((current) => current.map((capture, captureIndex) => captureIndex === index ? { ...capture, result, error: null } : capture));
@@ -53,7 +78,7 @@ export default function P5TokenGridRealPhotoPocPage() {
           setCaptures((current) => current.map((capture, captureIndex) => captureIndex === index ? { ...capture, result: null, error: message } : capture));
         }
       }
-      setStatus("完了。まずBrowser OCR Output Contractを確認し、token count > 0 の場合のみP5 architecture段階を評価してください。");
+      setStatus("完了。まずBrowser OCR Output Contractを確認し、Page OCR token count > 0 の場合のみP5 architecture段階を評価してください。");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -70,10 +95,18 @@ export default function P5TokenGridRealPhotoPocPage() {
         <p><b>Browser OCR Output Contract診断：</b> 認識本文は表示せず、data key・型・length・件数だけを表示します。</p>
       </section>
 
+      <section style={{ background: "#fff8df", border: "1px solid #f0cf70", borderRadius: 16, padding: 16, marginBottom: 12 }}>
+        <h2 style={{ marginTop: 0, fontSize: 18 }}>写真の選び方</h2>
+        <p style={{ marginBottom: 8 }}><b>今回のTechnical Gateは、まず「黄色伝票が1枚主体の写真」を1枚だけ選んでください。</b></p>
+        <p style={{ margin: "6px 0" }}>IMG番号を覚えたり、以前と同じ番号へ厳密固定する必要はありません。</p>
+        <p style={{ margin: "6px 0" }}>次にArchitecture確認へ進む場合は、見た目で「複数伝票写真」「難ケース写真」を追加できます。</p>
+        <p style={{ margin: "6px 0" }}>選択後は、サムネイル・ファイル名・画像サイズ・選択順を常時表示するので、再テスト時は見た目で同じ写真を確認できます。</p>
+      </section>
+
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
         <input ref={inputRef} hidden type="file" accept="image/*" multiple onChange={(event) => void run(event.target.files)} />
         <button disabled={busy} onClick={() => inputRef.current?.click()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, background: busy ? "#94a3b8" : "#245fce", color: "white", fontWeight: 900 }}>
-          {busy ? "P5実行中…" : "既存写真を選択（最大3枚）"}
+          {busy ? "P5実行中…" : "写真を選択（Technical Gateはまず1枚）"}
         </button>
         <div role="status" aria-live="polite" style={{ marginTop: 10 }}>{status}</div>
       </section>
@@ -83,16 +116,20 @@ export default function P5TokenGridRealPhotoPocPage() {
         const headerComplete = result ? result.stageDiagnostics.mappedHeaderFieldCount === 4 : false;
         const diagnostic = result?.ocrOutputDiagnostic;
         return (
-          <section key={`${capture.id}-${capture.name}`} style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
-            <h2 style={{ marginTop: 0 }}>{capture.id}</h2>
+          <section key={`${capture.id}-${capture.name}-${capture.selectionOrder}`} style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+              <span style={{ display: "inline-block", background: "#245fce", color: "white", borderRadius: 999, padding: "5px 10px", fontWeight: 900 }}>選択{capture.selectionOrder}</span>
+              <strong style={{ overflowWrap: "anywhere" }}>{capture.name}</strong>
+              <span style={{ color: "#5f6b7a" }}>{capture.imageWidth && capture.imageHeight ? `${capture.imageWidth} × ${capture.imageHeight}px` : "画像サイズ取得不可"}</span>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12 }}>
-              <img src={capture.previewUrl} alt={`${capture.id} selected source`} style={{ width: "100%", maxHeight: 460, objectFit: "contain", background: "#eef2f7", borderRadius: 10 }} />
+              <img src={capture.previewUrl} alt={`選択${capture.selectionOrder} ${capture.name}`} style={{ width: "100%", maxHeight: 460, objectFit: "contain", background: "#eef2f7", borderRadius: 10, border: "2px solid #dbe2ec" }} />
               {capture.error ? <div style={{ color: "#a11" }}>ERROR: {capture.error}</div> : null}
               {result ? <>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <tbody>
-                      <tr><th align="left">Page OCR token count</th><td>{result.ocrTokenCount}</td></tr>
+                      <tr><th align="left">Page OCR token count</th><td><b>{result.ocrTokenCount}</b></td></tr>
                       <tr><th align="left">Header anchor status</th><td>{headerComplete ? "COMPLETE" : `INCOMPLETE (${result.stageDiagnostics.mappedHeaderFieldCount}/4)`}</td></tr>
                       <tr><th align="left">Row cluster count</th><td>{result.stageDiagnostics.clusteredRowCount}</td></tr>
                       <tr><th align="left">Column assignment count</th><td>{result.assignedTokenCount}</td></tr>
@@ -141,6 +178,10 @@ export default function P5TokenGridRealPhotoPocPage() {
                 </div>
 
                 <details><summary>Non-image diagnostic JSON</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 420, overflow: "auto", fontSize: 11 }}>{JSON.stringify({
+                  selectionOrder: capture.selectionOrder,
+                  fileName: capture.name,
+                  sourceImageWidth: capture.imageWidth,
+                  sourceImageHeight: capture.imageHeight,
                   imageId: capture.id,
                   candidateId: result.candidateId,
                   candidateVersion: result.candidateVersion,
