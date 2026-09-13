@@ -7,6 +7,7 @@ const layout = read("app/layout.tsx");
 const guard = read("app/operational-recovery-guard.tsx");
 const nav = read("app/mobile-quick-nav.tsx");
 const errorBoundary = read("app/error.tsx");
+const home = read("app/home-dashboard.tsx");
 const week = read("app/schedule/week/page.tsx");
 const day = read("app/schedule/page.tsx");
 const search = read("app/schedule/search/page.tsx");
@@ -40,6 +41,11 @@ assert(errorBoundary.includes('role="alert"'), "unexpected route failure must ha
 assert(errorBoundary.includes("reset()") && errorBoundary.includes('location.assign("/")'), "unexpected route failure must allow retry and escape");
 assert(!errorBoundary.includes("error.message"), "unexpected error UI must not expose internal error details");
 
+assert(home.includes('className={`homeWeekRow ${reasonClass}`}') && home.includes('onClick={() => openDay(day)}'), "home weekly rows must navigate from React source to the one-day schedule");
+assert(home.includes('aria-label={`${customerName(customer)}の${shortDayLabel(day)}の1日の予定を開く`}'), "home weekly rows must expose a descriptive accessible label");
+assert(!home.includes('className={`homeWeekRow ${reasonClass}`} onClick={() => location.assign("/schedule/edit?id="'), "home weekly rows must not retain the old edit-route source contract");
+assert(home.includes("予定なし") && home.includes("＋ この日に登録"), "home weekly empty state must retain a clear next action");
+
 for (const [name, source] of [["week", week], ["day", day], ["search", search], ["detail", detail], ["history", history], ["parts", parts], ["customer-vehicles", customerVehicles]]) {
   assert(source.includes("try"), `${name} must have guarded data work`);
   assert(source.includes("catch"), `${name} must surface a failure path`);
@@ -62,6 +68,7 @@ assert(controller.includes("new MutationObserver(requestApplyUx)") && controller
 console.log("Operational readiness regression: PASS");
 console.log("- slow/offline recovery: PASS");
 console.log("- mobile quick-nav current state: PASS");
+console.log("- home weekly source navigation / accessible label: PASS");
 console.log("- loading termination contracts: PASS");
 console.log("- bounded history/search contracts: PASS");
 console.log("- operational hub / business wording preservation: PASS");
