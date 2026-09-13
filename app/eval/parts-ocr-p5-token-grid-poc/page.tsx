@@ -26,11 +26,11 @@ type CompareResult = {
   error: string | null;
 };
 
-const RESULT_SCHEMA = "icb.parts-ocr.p5-psm-success-crosscheck.v1";
-const RESULT_REVISION = "p5-registry-no-reselect-psm-3-6-11-v1";
+const RESULT_SCHEMA = "icb.parts-ocr.p5-zero-token-rescue-full-pipeline.v1";
+const RESULT_REVISION = "p5-registry-zero-token-rescue-psm-3-6-11-v1";
 const EVALUATION_HEAD = process.env.NEXT_PUBLIC_EVAL_HEAD || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "unknown";
 const FORMAL_IMAGE_IDS = Array.from({ length: 12 }, (_, index) => `IMG_${String(675 + index).padStart(4, "0")}`);
-const AUTO_COMPARE_TARGETS = ["IMG_0675", "IMG_0684"] as const;
+const AUTO_TARGET = "IMG_0678";
 
 function canonicalId(name: string) {
   const match = name.match(/IMG[_-]?(\d{4})/i);
@@ -118,7 +118,7 @@ export default function P5TokenGridRealPhotoPocPage() {
       const duplicates = next.map((item) => item.id).filter((id, index, all) => id !== "UNMATCHED" && all.indexOf(id) !== index);
       const unmatched = next.filter((item) => item.id === "UNMATCHED").length;
       if (next.length === 12 && missing.length === 0 && duplicates.length === 0 && unmatched === 0) {
-        setStatus("正式セット READY 12/12。以後は『自動診断開始』だけで、登録済みFileを自動取得して比較します。");
+        setStatus("正式セット READY 12/12。『自動診断開始』でOCR 0ケースを自動選択し、PSM3 / PSM6 / PSM11をFull P5 Pipeline比較します。");
       } else {
         registryRef.current.clear();
         setStatus(`正式セット不整合：登録${next.length}/12、不足${missing.length}、未照合${unmatched}、重複${duplicates.length}。正式12枚を再登録してください。`);
@@ -135,8 +135,8 @@ export default function P5TokenGridRealPhotoPocPage() {
       setStatus("正式12枚registryがありません。対象写真1枚ではなく、正式12枚を再登録してください。");
       return;
     }
-    const targets = AUTO_COMPARE_TARGETS.map((id) => registryRef.current.get(id));
-    if (targets.some((item) => !item)) {
+    const target = registryRef.current.get(AUTO_TARGET);
+    if (!target) {
       setStatus("診断対象をregistryから解決できません。正式12枚を再登録してください。");
       return;
     }
@@ -144,40 +144,32 @@ export default function P5TokenGridRealPhotoPocPage() {
     setBusy(true);
     setCopyStatus("");
     setResults([]);
-    setStatus("既存成功ケース2枚をregistryから自動選択し、PSM3 / PSM6 / PSM11を比較中です。file pickerは開きません。");
-    const collected: CompareResult[] = [];
+    setStatus("OCR 0ケースをregistryから自動選択し、PSM3 / PSM6 / PSM11をFull P5 Pipeline比較中です。file pickerは開きません。");
     try {
-      for (const target of targets as RegisteredImage[]) {
-        try {
-          const comparison = await runP5PsmPrimaryComparison(target.file);
-          const item: CompareResult = {
-            id: target.id,
-            name: target.name,
-            fingerprint: target.fingerprint,
-            imageWidth: target.imageWidth,
-            imageHeight: target.imageHeight,
-            previewUrl: target.previewUrl,
-            comparison,
-            error: null,
-          };
-          collected.push(item);
-          setResults([...collected]);
-        } catch (error) {
-          const item: CompareResult = {
-            id: target.id,
-            name: target.name,
-            fingerprint: target.fingerprint,
-            imageWidth: target.imageWidth,
-            imageHeight: target.imageHeight,
-            previewUrl: target.previewUrl,
-            comparison: null,
-            error: error instanceof Error ? error.message : String(error),
-          };
-          collected.push(item);
-          setResults([...collected]);
-        }
-      }
-      setStatus("自動比較完了。『診断結果をコピー』を1回押して、そのまま総合管理へ貼り付けてください。");
+      const comparison = await runP5PsmPrimaryComparison(target.file);
+      setResults([{
+        id: target.id,
+        name: target.name,
+        fingerprint: target.fingerprint,
+        imageWidth: target.imageWidth,
+        imageHeight: target.imageHeight,
+        previewUrl: target.previewUrl,
+        comparison,
+        error: null,
+      }]);
+      setStatus("Full P5 Pipeline比較完了。『診断結果をコピー』を1回押して、そのまま総合管理へ貼り付けてください。");
+    } catch (error) {
+      setResults([{
+        id: target.id,
+        name: target.name,
+        fingerprint: target.fingerprint,
+        imageWidth: target.imageWidth,
+        imageHeight: target.imageHeight,
+        previewUrl: target.previewUrl,
+        comparison: null,
+        error: error instanceof Error ? error.message : String(error),
+      }]);
+      setStatus("自動診断でエラーが発生しました。診断結果を確認してください。");
     } finally {
       setBusy(false);
     }
@@ -191,6 +183,8 @@ export default function P5TokenGridRealPhotoPocPage() {
       evaluationHead: EVALUATION_HEAD,
       registryReady: formalReady,
       registrySize: registryRef.current.size,
+      targetMode: "registry-auto-target",
+      targetPurpose: "zero-token-rescue-full-pipeline",
       runtimePsmUnchanged: true,
       runtimePsm: "3",
       comparedPsms: ["3", "6", "11"],
@@ -216,8 +210,9 @@ export default function P5TokenGridRealPhotoPocPage() {
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "18px 12px 60px", color: "#172033", background: "#f7f9fc" }}>
       <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 12 }}>
-        <h1 style={{ marginTop: 0 }}>P5 正式12枚 Auto Target診断</h1>
+        <h1 style={{ marginTop: 0 }}>P5 Zero-Token Rescue Full Pipeline診断</h1>
         <p><b>正式12枚を一度登録した後は、同一ページセッション中の診断で写真を選び直しません。</b></p>
+        <p>OCR 0ケースはregistryから自動選択し、CURRENT PSM3 / PSM6 rescue / PSM11 rescueを同一画像・同一前処理で比較します。</p>
         <p>File objectはブラウザ内memory registryだけに保持し、画像本体はserver・GitHub・Supabase・Vercel bundle・artifactへ送信/保存しません。</p>
         <p>GT row数はruntimeの画像選択・OCR・停止条件・再構成制御には使用しません。</p>
       </section>
@@ -232,7 +227,7 @@ export default function P5TokenGridRealPhotoPocPage() {
         </div>
         <div role="status" aria-live="polite" style={{ marginTop: 8 }}>{status}</div>
         <button disabled={!formalReady || busy} onClick={() => void runAutoDiagnostic()} style={{ width: "100%", border: 0, borderRadius: 12, padding: 14, marginTop: 12, background: !formalReady || busy ? "#94a3b8" : "#176b34", color: "white", fontWeight: 900 }}>
-          {busy ? "自動比較中…" : "自動診断開始"}
+          {busy ? "Full Pipeline比較中…" : "自動診断開始"}
         </button>
       </section>
 
@@ -253,16 +248,15 @@ export default function P5TokenGridRealPhotoPocPage() {
 
       {results.length > 0 ? <section style={{ background: "white", border: "1px solid #dbe2ec", borderRadius: 16, padding: 16, marginBottom: 14 }}>
         <h2 style={{ marginTop: 0, fontSize: 18 }}>自動比較結果</h2>
-        <p>既存成功ケース2枚をregistryから自動選択済み。ユーザーによる対象画像探索・個別選択はありません。</p>
+        <p>OCR 0ケースをregistryから自動選択済み。ユーザーによる対象画像探索・個別選択はありません。</p>
         <button onClick={() => void copyDiagnostic()} disabled={busy} style={{ width: "100%", border: 0, borderRadius: 12, padding: 13, background: "#176b34", color: "white", fontWeight: 900 }}>診断結果をコピー</button>
         {copyStatus ? <div role="status" aria-live="polite" style={{ marginTop: 8, fontWeight: 900, color: copyStatus === "コピーしました" ? "#176b34" : "#a11" }}>{copyStatus}</div> : null}
         {results.map((item) => <div key={item.id} style={{ marginTop: 16, borderTop: "1px solid #dbe2ec", paddingTop: 12 }}>
-          <div style={{ fontWeight: 900 }}>自動対象 #{item.id.replace("IMG_", "")}</div>
           {item.error ? <div style={{ color: "#a11" }}>ERROR: {item.error}</div> : null}
           {item.comparison ? <div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><th align="left">PSM</th><th>tokens</th><th>headers</th><th>clusters</th><th>assigned</th><th>rows</th><th>ms</th><th>wrong</th></tr></thead>
+            <thead><tr><th align="left">PSM</th><th>tokens</th><th>headers</th><th>clusters</th><th>assigned</th><th>rows</th><th>ms</th><th>manual</th><th>wrong</th></tr></thead>
             <tbody>{item.comparison.variants.map((variant) => <tr key={variant.label}>
-              <td>{variant.label}</td><td align="center">{variant.pageOcrTokenCount}</td><td align="center">{variant.mappedHeaderFieldCount}</td><td align="center">{variant.rowClusterCount}</td><td align="center">{variant.columnAssignmentCount}</td><td align="center">{variant.reconstructedRowCount}</td><td align="center">{variant.recognizeElapsedMs ?? "-"}</td><td align="center">{variant.wrongAutoConfirm}</td>
+              <td>{variant.label}</td><td align="center">{variant.pageOcrTokenCount}</td><td align="center">{variant.mappedHeaderFieldCount}</td><td align="center">{variant.rowClusterCount}</td><td align="center">{variant.columnAssignmentCount}</td><td align="center">{variant.reconstructedRowCount}</td><td align="center">{variant.recognizeElapsedMs ?? "-"}</td><td align="center">{String(variant.manualReviewRequired)}</td><td align="center">{variant.wrongAutoConfirm}</td>
             </tr>)}</tbody>
           </table></div> : null}
         </div>)}
