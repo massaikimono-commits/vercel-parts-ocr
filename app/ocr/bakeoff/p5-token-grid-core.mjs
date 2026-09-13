@@ -50,6 +50,41 @@ function textClass(text) {
   return { han, kana, digit, latin, other };
 }
 
+function levenshtein(a, b) {
+  const x = [...a];
+  const y = [...b];
+  const row = Array.from({ length: y.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= x.length; i += 1) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= y.length; j += 1) {
+      const saved = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (x[i - 1] === y[j - 1] ? 0 : 1));
+      prev = saved;
+    }
+  }
+  return row[y.length];
+}
+
+function lexiconEvidence(normalized) {
+  const evidence = [];
+  for (const field of FIELDS) {
+    let best = null;
+    for (const alias of HEADER_ALIASES[field]) {
+      const normalizedAlias = compact(alias);
+      const rawDistance = levenshtein(normalized, normalizedAlias);
+      const normalizedEditDistance = normalized.length || normalizedAlias.length ? rawDistance / Math.max(normalized.length, normalizedAlias.length) : 0;
+      const substring = normalized.includes(normalizedAlias) || normalizedAlias.includes(normalized);
+      const prefix = normalized.startsWith(normalizedAlias) || normalizedAlias.startsWith(normalized);
+      const suffix = normalized.endsWith(normalizedAlias) || normalizedAlias.endsWith(normalized);
+      const item = { aliasHash: `fnv1a:${fnv1a(normalizedAlias)}`, aliasLength: normalizedAlias.length, normalizedEditDistance: Number(normalizedEditDistance.toFixed(4)), substring, prefix, suffix };
+      if (!best || item.normalizedEditDistance < best.normalizedEditDistance || (item.substring && !best.substring)) best = item;
+    }
+    evidence.push({ field, ...best });
+  }
+  return evidence;
+}
+
 export function inferHeaderAnchors(tokens) {
   const anchors = {};
   for (const token of tokens) {
@@ -97,6 +132,70 @@ export function diagnoseHeaderCandidates(tokens) {
     mappedFields,
     columnCenterEstimate: Object.fromEntries(mappedFields.map((field) => [field, anchors[field].x])),
     observedHeaderZoneTokenCount: candidates.length,
+    candidates,
+  };
+}
+
+export function diagnoseSemanticHeaderRootCause(tokens) {
+  if (!tokens.length) return { diagnosticOnly: true, mappedFields: [], headerBand: null, columnCentersNormalized: {}, tokenXDistribution: [], rowTokenXDistribution: [], candidates: [] };
+  const anchors = inferHeaderAnchors(tokens);
+  const mappedFields = FIELDS.filter((field) => anchors[field]);
+  const minX = Math.min(...tokens.map((token) => token.x1));
+  const maxX = Math.max(...tokens.map((token) => token.x2));
+  const minY = Math.min(...tokens.map((token) => token.y1));
+  const maxY = Math.max(...tokens.map((token) => token.y2));
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  const headerBandMaxY = minY + height * 0.45;
+  const medianHeight = median(tokens.map((token) => Math.max(1, token.y2 - token.y1))) || 12;
+  const lineTolerance = Math.max(3, medianHeight * 0.75);
+  const candidates = tokens.map((token, index) => {
+    const normalized = compact(token.text);
+    const cx = (token.x1 + token.x2) / 2;
+    const cy = (token.y1 + token.y2) / 2;
+    const neighbors = tokens.map((other, otherIndex) => ({ other, otherIndex, cy: (other.y1 + other.y2) / 2, cx: (other.x1 + other.x2) / 2 })).filter((item) => item.otherIndex !== index && Math.abs(item.cy - cy) <= lineTolerance).sort((a, b) => Math.abs(a.cx - cx) - Math.abs(b.cx - cx));
+    const adjacent = neighbors.filter((item) => Math.abs(item.cx - cx) <= Math.max(token.x2 - token.x1, medianHeight) * 3).slice(0, 4);
+    const splitEvidence = adjacent.flatMap((item) => {
+      const pairA = compact(token.text) + compact(item.other.text);
+      const pairB = compact(item.other.text) + compact(token.text);
+      return [pairA, pairB].map((pair) => ({ pairHash: `fnv1a:${fnv1a(pair)}`, pairLength: pair.length, evidence: lexiconEvidence(pair).filter((entry) => entry.substring || entry.normalizedEditDistance <= 0.5) })).filter((item) => item.evidence.length);
+    });
+    const lexical = lexiconEvidence(normalized);
+    const exactFields = FIELDS.filter((field) => HEADER_ALIASES[field].some((alias) => normalized.includes(compact(alias))));
+    const best = [...lexical].sort((a, b) => a.normalizedEditDistance - b.normalizedEditDistance || Number(b.substring) - Number(a.substring))[0];
+    const inHeaderBand = cy <= headerBandMaxY;
+    let rejectReason = "none";
+    if (!inHeaderBand && !exactFields.length) rejectReason = "outside-observed-header-band";
+    else if (!exactFields.length && splitEvidence.length) rejectReason = "possible-split-token-fragmentation";
+    else if (!exactFields.length && best?.normalizedEditDistance <= 0.5) rejectReason = "near-lexicon-but-current-exact-alias-reject";
+    else if (!exactFields.length) rejectReason = "ocr-or-lexicon-distance-too-large";
+    return {
+      tokenIndex: index,
+      textHash: `fnv1a:${fnv1a(normalized)}`,
+      bboxNormalized: { x: Number(((token.x1 - minX) / width).toFixed(5)), y: Number(((token.y1 - minY) / height).toFixed(5)), w: Number(((token.x2 - token.x1) / width).toFixed(5)), h: Number(((token.y2 - token.y1) / height).toFixed(5)) },
+      centerNormalized: { x: Number(((cx - minX) / width).toFixed(5)), y: Number(((cy - minY) / height).toFixed(5)) },
+      confidence: token.confidence ?? null,
+      normalizedCharCount: normalized.length,
+      characterClassPattern: textClass(normalized),
+      lexiconEvidence: lexical,
+      sameLineNeighborCount: neighbors.length,
+      adjacentTokenEvidence: adjacent.map((item) => ({ tokenIndex: item.otherIndex, textHash: `fnv1a:${fnv1a(compact(item.other.text))}`, normalizedDx: Number((Math.abs(item.cx - cx) / width).toFixed(5)) })),
+      splitTokenAdjacencyEvidence: splitEvidence,
+      candidateHeaderBandMembership: inHeaderBand,
+      candidateSemanticLabel: exactFields[0] ?? best?.field ?? null,
+      semanticScore: exactFields.length ? 1 : best ? Number((1 - best.normalizedEditDistance).toFixed(4)) : 0,
+      rejectReason,
+    };
+  }).filter((candidate) => candidate.candidateHeaderBandMembership || candidate.semanticScore >= 0.5 || candidate.splitTokenAdjacencyEvidence.length).sort((a, b) => a.centerNormalized.y - b.centerNormalized.y || a.centerNormalized.x - b.centerNormalized.x).slice(0, 96);
+  const clustered = clusterRows(tokens);
+  return {
+    diagnosticOnly: true,
+    mappedFields,
+    headerBand: { normalizedMinY: 0, normalizedMaxY: 0.45, source: "observed-token-y-range" },
+    columnCentersNormalized: Object.fromEntries(mappedFields.map((field) => [field, Number(((anchors[field].x - minX) / width).toFixed(5))])),
+    interColumnDistancesNormalized: mappedFields.slice(1).map((field, index) => ({ left: mappedFields[index], right: field, distance: Number((Math.abs(anchors[field].x - anchors[mappedFields[index]].x) / width).toFixed(5)) })),
+    tokenXDistribution: tokens.map((token) => Number((((token.x1 + token.x2) / 2 - minX) / width).toFixed(5))).sort((a, b) => a - b),
+    rowTokenXDistribution: clustered.slice(0, 20).map((row) => ({ rowId: row.rowId, cyNormalized: Number(((row.cy - minY) / height).toFixed(5)), x: row.tokens.map((token) => Number((((token.x1 + token.x2) / 2 - minX) / width).toFixed(5))) })),
     candidates,
   };
 }
