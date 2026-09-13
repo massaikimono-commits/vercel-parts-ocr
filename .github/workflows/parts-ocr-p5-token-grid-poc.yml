@@ -21,6 +21,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Deployment Safety selective preview
+        run: node scripts/deployment-safety-p5-selective-preview.mjs
       - name: P5 token-grid feasibility
         run: node scripts/parts-ocr-p5-token-grid-poc-test.mjs
       - name: Existing bakeoff safety contract
