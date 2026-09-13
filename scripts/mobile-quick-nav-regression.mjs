@@ -2,31 +2,82 @@ import fs from "node:fs";
 
 const shell = fs.readFileSync("app/layout.tsx", "utf8");
 const nav = fs.readFileSync("app/mobile-quick-nav.tsx", "utf8");
+const controller = fs.readFileSync("app/responsive-ux-controller.tsx", "utf8");
+const week = fs.readFileSync("app/schedule/week/page.tsx", "utf8");
+const scheduleNew = fs.readFileSync("app/schedule/new/page.tsx", "utf8");
+const scheduleEdit = fs.readFileSync("app/schedule/edit/page.tsx", "utf8");
+const report = fs.readFileSync("app/schedule/print/page.tsx", "utf8");
+const loginHistory = fs.readFileSync("app/settings/login-history/page.tsx", "utf8");
+const calendar = fs.readFileSync("app/settings/business-calendar/page.tsx", "utf8");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
 assert(shell.includes('import MobileQuickNav from "./mobile-quick-nav";'), "app shell must import MobileQuickNav");
+assert(shell.includes('import ResponsiveUxController from "./responsive-ux-controller";'), "app shell must import shared responsive UX controller");
+assert(shell.includes("<ResponsiveUxController />"), "shared UX controller must run inside authenticated app shell");
 assert(shell.includes("<MobileQuickNav />"), "app shell must render MobileQuickNav inside the guarded app");
+
 assert(nav.includes('href: "/schedule/new"'), "mobile quick nav must include schedule registration");
 assert(nav.includes('href: "/schedule/search"'), "mobile quick nav must include schedule search");
 assert(nav.includes('href: "/customer-vehicles"'), "mobile quick nav must include customer/vehicle management");
 assert(nav.includes('href: "/"'), "mobile quick nav must include home");
+assert(nav.includes('`/schedule?day=${todayJst()}`'), "Today shortcut must always target today's daily schedule");
+assert(nav.includes('timeZone: "Asia/Tokyo"'), "Today shortcut must use JST day semantics");
+assert(!nav.includes("scheduleContext &&"), "Today shortcut must no longer be schedule-context-only");
+assert(nav.includes("repeat(5,minmax(0,1fr))"), "mobile quick nav must be five columns on every normal route");
 assert(nav.includes('"/parts-print"'), "parts print route must suppress quick nav");
 assert(nav.includes('"/inspection/print"'), "inspection print route must suppress quick nav");
 assert(nav.includes('"/schedule/print"'), "schedule print route must suppress quick nav");
-assert(nav.includes("@media(max-width:760px)"), "quick nav must be mobile-only");
 assert(nav.includes("env(safe-area-inset-bottom)"), "quick nav must respect iPhone safe area");
 assert(nav.includes("@media print"), "quick nav must be hidden for printing");
-assert(nav.includes('pathname === "/schedule" || pathname.startsWith("/schedule/")'), "schedule routes must enable context navigation");
-assert(nav.includes('timeZone: "Asia/Tokyo"'), "Today shortcut must use JST day semantics");
-assert(nav.includes('`/schedule?day=${todayJst()}`'), "schedule context must provide one-tap Today daily schedule");
-assert(nav.includes('className="todayShortcut"'), "Today action must remain visually distinct from current-route active state");
-assert(nav.includes("repeat(5,minmax(0,1fr))"), "schedule context must fit the additional Today action without overlaying existing actions");
-assert(nav.includes("@media(max-width:360px)"), "narrow iPhone widths must keep schedule-context labels compact");
 assert(!nav.includes("supabase"), "quick nav must not add database traffic");
 assert(!nav.includes("fetch("), "quick nav must not add network fetches");
 assert(!nav.includes("/ocr/auto"), "quick nav must not couple global navigation to OCR execution");
 
-console.log("Mobile quick nav regression: PASS");
+assert(controller.includes('body[data-ux-route="/schedule/week"] .attentionBar{display:none!important}'), "post-registration attention-day UI must be removed from weekly view");
+assert(controller.includes("週間のスケジュール") || week.includes("週間予定"), "weekly schedule must remain available");
+assert(controller.includes(".weekSummary{display:flex!important"), "weekly oversized summary cards must become a compact strip");
+assert(controller.includes(".jumpBar"), "weekly date jump must be compacted rather than removed");
+assert(controller.includes("uxDailyReportShortcut"), "daily report must receive a high-frequency shortcut");
+assert(controller.includes('/schedule/print?day=${encodeURIComponent(reportDay())}'), "daily report shortcut must preserve selected/JST day");
+assert(controller.includes(".homeWeekRow"), "home weekly rows must be intercepted for whole-day navigation");
+assert(controller.includes('/schedule?day=${addDays(mondayOf(todayJst()), index)}'), "home weekly row/customer taps must open that day, not customer/edit directly");
+assert(controller.includes('replaceAll("予約変更", "予定詳細")'), "reservation-change entry wording must normalize to 予定詳細");
+assert(controller.includes('replaceAll("かんたん予約変更", "予定詳細")'), "easy-change heading must normalize to 予定詳細");
+
+assert(controller.includes('body[data-ux-route="/schedule/new"]'), "schedule registration must have dedicated compact density rules");
+assert(controller.includes(".capacity"), "schedule registration capacity must become a compact summary strip");
+assert(controller.includes('body[data-ux-route="/schedule/edit"]'), "schedule detail/edit must have compact density rules");
+assert(controller.includes('body[data-ux-route="/schedule/detail"]'), "schedule detail must have compact density rules");
+assert(controller.includes("@media screen and (max-width:760px)"), "mobile density rules must be shared");
+assert(controller.includes("@media screen and (min-width:761px) and (max-width:1100px)"), "tablet density must be explicitly audited");
+assert(controller.includes("@media screen and (min-width:1101px)"), "desktop density must be explicitly audited");
+
+assert(controller.includes("SECURITY_ACK_KEY"), "security warning acknowledgement must use local persistence");
+assert(controller.includes("alert_code") && controller.includes("occurred_at") && controller.includes("message"), "security acknowledgement fingerprint must distinguish new events");
+assert(controller.includes("確認済みにする"), "login history must expose an acknowledgement action");
+assert(controller.includes('body[data-ux-route="/settings/login-history"]'), "login history must have compact density rules");
+assert(loginHistory.includes('my_login_security_alerts'), "existing security detection must remain active");
+assert(loginHistory.includes('signOut({ scope: "global" })'), "global sign-out must remain available");
+
+assert(controller.includes('body[data-ux-route="/settings/business-calendar"] .calendarHead{order:1}'), "current business calendar must be prioritized above annual upload settings");
+assert(controller.includes('body[data-ux-route="/settings/business-calendar"] .monthsGrid{order:2}'), "current calendar must remain immediately visible");
+assert(controller.includes('body[data-ux-route="/settings/business-calendar"] .importCard{order:4'), "annual upload must be demoted below daily-use calendar");
+assert(controller.includes('content:"年間カレンダー設定"'), "low-frequency annual upload must be labelled as settings");
+assert(calendar.includes("営業日設定・変更"), "business-day editing must remain available");
+
+assert(controller.includes('@media print') && controller.includes('body[data-ux-route="/schedule/print"] .sheet'), "A3 report must have isolated print calibration rules");
+assert(controller.includes("width:297mm!important") && controller.includes("height:420mm!important"), "A3 report must print at exact A3 dimensions");
+assert(controller.includes("left:0!important") && controller.includes("top:0!important") && controller.includes("margin:0!important"), "A3 report must neutralize browser/Safari print offset");
+assert(report.includes("@page{size:A3 portrait;margin:0}"), "existing A3 page definition must remain unchanged");
+
+assert(scheduleNew.includes("schedule_slot_check_v2"), "registration-time warning/capacity logic must remain intact");
+assert(scheduleNew.includes("schedule_capacity"), "registration capacity logic must remain intact");
+assert(scheduleEdit.includes("schedule_time_availability"), "edit-time availability logic must remain intact");
+assert(week.includes("schedule_capacity"), "weekly capacity calculation must remain intact even when repeat attention UI is hidden");
+assert(!controller.includes("insert(") && !controller.includes("update({") && !controller.includes("delete("), "UX controller must not mutate Supabase business data");
+assert(!controller.includes("/ocr/auto"), "UX density controller must not alter OCR workflow");
+
+console.log("Integrated device UX feedback regression: PASS");
