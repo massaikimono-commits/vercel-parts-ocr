@@ -1,3 +1,4 @@
+// Final candidate gate: internal SPA navigation must not regress to native full reloads.
 import fs from "node:fs";
 import path from "node:path";
 
