@@ -1,0 +1,89 @@
+name: Cloudflare vinext staging prepare
+
+on:
+  push:
+    branches:
+      - infra/cloudflare-staging-20260914
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout formal Cloudflare branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install existing dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Initialize vinext non-destructively when needed
+        run: |
+          if [ ! -f vite.config.ts ] || [ ! -f wrangler.jsonc ]; then
+            npx --yes vinext@latest init \
+              --platform=cloudflare \
+              --cdn-cache=workers-cache \
+              --data-cache=none \
+              --image-optimization=none \
+              --no-prerender \
+              --no-experimental-warm-cdn-cache
+          else
+            echo "vinext staging config already present; init skipped"
+          fi
+
+      - name: Guard protected application areas
+        run: |
+          changed="$(git diff --name-only HEAD)"
+          echo "$changed"
+          if echo "$changed" | grep -E '^(app/|database/|supabase/|public/tesseract/)' >/dev/null; then
+            echo "Protected application/runtime area changed by vinext init"
+            exit 1
+          fi
+
+      - name: Verify Cloudflare architecture
+        run: npm run test:cloudflare-architecture
+
+      - name: Verify vinext build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build:vinext
+
+      - name: Verify normal Next.js build and regressions
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build
+
+      - name: Verify extended full-regression fixtures
+        run: |
+          node scripts/qr-photo-contrast-regression.mjs
+          node scripts/qr-photo-distractor-regression.mjs
+          node scripts/qr-density-performance.mjs
+          node scripts/parts-photo-fixture-regression.mjs
+
+      - name: Commit vinext staging setup once
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No vinext setup changes to commit"
+            exit 0
+          fi
+          git config user.name "massaikimono-commits"
+          git config user.email "massa_ikimono@icloud.com"
+          git add package.json package-lock.json vite.config.ts wrangler.jsonc .gitignore 2>/dev/null || true
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "No expected vinext files changed"
+            exit 0
+          fi
+          git commit -m "infra: prepare vinext Cloudflare staging"
+          git push origin HEAD:infra/cloudflare-staging-20260914
