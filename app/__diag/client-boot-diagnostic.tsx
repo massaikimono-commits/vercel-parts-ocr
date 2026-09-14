@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 const ENDPOINT = "/__diag/client-boot";
+const OVERLAY_ID = "icb-client-boot-stage";
 const ALLOWED = new Set([
   "BOOT_1_EFFECT",
   "BOOT_2_MICROTASK",
@@ -21,8 +22,18 @@ const ALLOWED = new Set([
   "BOOT_VIS_VISIBLE",
 ]);
 
+function show(step: string) {
+  try {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) overlay.textContent = step;
+  } catch {
+    // Diagnostic-only. Never interfere with app runtime.
+  }
+}
+
 function emit(step: string) {
   if (!ALLOWED.has(step)) return;
+  show(step);
   try {
     const blob = new Blob([step], { type: "text/plain;charset=UTF-8" });
     navigator.sendBeacon(ENDPOINT, blob);
@@ -93,5 +104,26 @@ export default function ClientBootDiagnostic() {
     };
   }, []);
 
-  return null;
+  return (
+    <div
+      id={OVERLAY_ID}
+      aria-hidden="true"
+      style={{
+        position: "fixed",
+        top: "max(8px, env(safe-area-inset-top))",
+        left: "8px",
+        zIndex: 2147483647,
+        padding: "6px 8px",
+        borderRadius: "6px",
+        background: "rgba(0, 0, 0, 0.82)",
+        color: "#fff",
+        fontFamily: "monospace",
+        fontSize: "12px",
+        lineHeight: 1.2,
+        pointerEvents: "none",
+      }}
+    >
+      BOOT_MOUNTED
+    </div>
+  );
 }
