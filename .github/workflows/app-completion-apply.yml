@@ -18,8 +18,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Preserve patch script
-        run: cp scripts/apply-app-completion-batch.py /tmp/apply-app-completion-batch.py
+      - name: Preserve patch scripts
+        run: |
+          cp scripts/apply-app-completion-batch.py /tmp/apply-app-completion-batch.py
+          cp scripts/align-app-completion-regressions.py /tmp/align-app-completion-regressions.py
 
       - name: Switch to formal app branch
         run: |
@@ -28,7 +30,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "4cfa9949ecff674d5b96a25f29fe2f4eb88cc60a"
 
       - name: Apply completion patch
-        run: python /tmp/apply-app-completion-batch.py
+        run: |
+          python /tmp/apply-app-completion-batch.py
+          python /tmp/align-app-completion-regressions.py
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -77,7 +81,7 @@ jobs:
         run: |
           git config user.name "massaikimono-commits"
           git config user.email "massa_ikimono@icloud.com"
-          git add app/home-dashboard.tsx app/responsive-ux-controller.tsx app/schedule/search/page.tsx app/customer-vehicles/page.tsx app/page.tsx scripts/app-completion-regression.mjs package.json
+          git add app/home-dashboard.tsx app/responsive-ux-controller.tsx app/schedule/search/page.tsx app/customer-vehicles/page.tsx app/page.tsx scripts/app-completion-regression.mjs scripts/mobile-quick-nav-regression.mjs package.json
           git diff --cached --check
           git commit -m "ux: finish app readiness source and empty-state cleanup"
           git push origin HEAD:preview/schedule-ux-20260903
