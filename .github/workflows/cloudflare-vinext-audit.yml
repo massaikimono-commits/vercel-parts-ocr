@@ -1,0 +1,41 @@
+name: Cloudflare vinext audit
+
+on:
+  push:
+    branches:
+      - infra/cloudflare-staging-20260914
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install existing dependencies
+        run: npm ci
+
+      - name: Existing Cloudflare architecture regression
+        run: npm run test:cloudflare-architecture
+
+      - name: vinext compatibility check
+        id: vinext_check
+        continue-on-error: true
+        run: npx --yes vinext@latest check
+
+      - name: Existing Next.js full build
+        run: npm run build
+
+      - name: Record vinext check outcome
+        if: always()
+        run: echo "vinext_check_outcome=${{ steps.vinext_check.outcome }}"
