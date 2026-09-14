@@ -18,7 +18,10 @@ export default function OCRLayout({ children }: { children: ReactNode }) {
     <>
       <PartsOcrBatchLinker />
       <div style={{ maxWidth: 980, margin: "14px auto 0", padding: "0 14px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
+          <a href="/guided-capture?mode=parts" style={{ ...linkStyle, background: "#eef5ff", borderColor: "#b9cdef" }}>
+            📷 Guided Parts Capture PoC
+          </a>
           <a href="/ocr/auto" style={{ ...linkStyle, background: "#2f6fe4", color: "#fff", borderColor: "#2f6fe4" }}>
             ✨ 自動判定OCR
           </a>
