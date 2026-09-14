@@ -1,0 +1,51 @@
+name: App completion source audit
+
+on:
+  push:
+    branches:
+      - infra/app-completion-audit-20260914
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout application baseline
+        uses: actions/checkout@v4
+        with:
+          ref: preview/schedule-ux-20260903
+          fetch-depth: 0
+
+      - name: Source audit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          targets = [
+            'app/schedule/page.tsx','app/schedule/week/page.tsx','app/schedule/month/page.tsx',
+            'app/schedule/search/page.tsx','app/schedule/detail/page.tsx',
+            'app/customer-vehicles/page.tsx','app/customer-vehicles/history/page.tsx',
+            'app/customer-vehicles/photos/page.tsx','app/parts-data/page.tsx',
+            'app/responsive-ux-controller.tsx','app/operational-recovery-guard.tsx','app/globals.css'
+          ]
+          needles = ['予定なし','見つかりません','0件','読み込み','loading','setBusy','finally','catch','aria-label','disabled','focus-visible','MutationObserver','requestAnimationFrame','@media','location.assign','window.location','empty']
+          for f in targets:
+            p=Path(f)
+            print('\n###',f)
+            lines=p.read_text().splitlines()
+            for i,line in enumerate(lines,1):
+              if any(n.lower() in line.lower() for n in needles):
+                print(f'{i}: {line[:220]}')
+          PY
+
+      - name: Controller mutation classification
+        run: |
+          grep -nE 'createElement|querySelector|appendChild|insertBefore|MutationObserver|addEventListener|textContent|style\.|dataset\.|replaceAll|innerHTML' app/responsive-ux-controller.tsx || true
+
+      - name: Query and fetch audit
+        run: |
+          for f in app/schedule/page.tsx app/schedule/week/page.tsx app/schedule/month/page.tsx app/schedule/search/page.tsx app/schedule/detail/page.tsx app/customer-vehicles/page.tsx app/customer-vehicles/history/page.tsx app/customer-vehicles/photos/page.tsx app/parts-data/page.tsx; do
+            echo "### $f"
+            grep -nE 'supabase\.|fetch\(|Promise\.all|useEffect|setBusy\(false\)|setLoading\(false\)' "$f" || true
+          done
