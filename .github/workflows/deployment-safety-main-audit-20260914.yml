@@ -1,0 +1,36 @@
+name: Deployment safety main audit 20260914
+
+on:
+  push:
+    branches:
+      - infra/deployment-safety-main-audit-20260914
+
+permissions:
+  contents: read
+
+jobs:
+  deployment-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact promoted candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 9343982582059861fa096792c1ccc02e6b4b12f0
+          fetch-depth: 0
+
+      - name: Verify exact HEAD
+        run: |
+          test "$(git rev-parse HEAD)" = "9343982582059861fa096792c1ccc02e6b4b12f0"
+
+      - name: Validate Netlify TOML syntax
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+          with pathlib.Path("netlify.toml").open("rb") as f:
+              tomllib.load(f)
+          print("netlify.toml syntax is valid.")
+          PY
+
+      - name: Verify deployment locks
+        run: node scripts/deployment-safety-regression.mjs
