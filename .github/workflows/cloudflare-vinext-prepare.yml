@@ -29,10 +29,17 @@ jobs:
       - name: Initialize vinext non-destructively when needed
         run: |
           if [ ! -f vite.config.ts ] || [ ! -f wrangler.jsonc ]; then
-            # vinext beta.9 currently asks npm for an unpinned react-server-dom-webpack.
-            # The app is on React 19.2.8 and vinext supports ^19.2.6, so allow init to
-            # finish, then immediately pin the transport to the matching React release.
-            npm_config_legacy_peer_deps=true npx --yes vinext@latest init \
+            # Bootstrap the exact RSC transport that matches this app's React release.
+            # vinext beta.9's init currently asks npm for an unpinned transport and can
+            # otherwise resolve React Server DOM 19.3 against React 19.2.8.
+            npm install --legacy-peer-deps \
+              vinext@1.0.0-beta.9 \
+              @vinext/cloudflare \
+              react-server-dom-webpack@19.2.8 \
+              vite@^8 \
+              @vitejs/plugin-react \
+              @vitejs/plugin-rsc
+            npx vinext init \
               --platform=cloudflare \
               --cdn-cache=workers-cache \
               --data-cache=none \
@@ -40,7 +47,7 @@ jobs:
               --no-prerender \
               --no-experimental-warm-cdn-cache
             npm install --save-exact react-server-dom-webpack@19.2.8
-            npm ls react react-dom react-server-dom-webpack
+            npm ls react react-dom react-server-dom-webpack vinext vite
           else
             echo "vinext staging config already present; init skipped"
           fi
