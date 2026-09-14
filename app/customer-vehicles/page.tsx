@@ -817,7 +817,7 @@ export default function CustomerVehiclesPage() {
           <h2>車両一覧</h2>
           <span>{filteredVehicles.length}台</span>
         </div>
-        {!filteredVehicles.length && <div className="empty">該当する車両がありません。</div>}
+        {!filteredVehicles.length && <div className="empty">該当する車両がありません。<div className="actions"><button type="button" onClick={() => location.assign("/vehicle-workflow")}>車両を登録・読取</button></div></div>}
         <div className="vehicleList">
           {filteredVehicles.map((v) => {
             const c = customerMap.get(v.customerId);

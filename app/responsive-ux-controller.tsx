@@ -14,24 +14,6 @@ type SecurityAlert = {
   message: string;
 };
 
-function todayJst() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(new Date());
-}
-
-function addDays(day: string, delta: number) {
-  const d = new Date(`${day}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString().slice(0, 10);
-}
-
-function mondayOf(day: string) {
-  const d = new Date(`${day}T00:00:00Z`);
-  const dow = d.getUTCDay();
-  return addDays(day, dow === 0 ? -6 : 1 - dow);
-}
-
 function fingerprint(alert: SecurityAlert | null) {
   if (!alert) return "";
   return [alert.alert_code, alert.occurred_at || "", alert.message].join("|");
@@ -61,36 +43,6 @@ export default function ResponsiveUxController() {
       if (disposed || error) return;
       latestAlert = ((data || [])[0] || null) as SecurityAlert | null;
       applyUx();
-    }
-
-    function reportDay() {
-      const params = new URLSearchParams(location.search);
-      return /^\d{4}-\d{2}-\d{2}$/.test(params.get("day") || "") ? params.get("day")! : todayJst();
-    }
-
-    function addDailyReportShortcuts() {
-      const go = () => location.assign(`/schedule/print?day=${encodeURIComponent(reportDay())}`);
-      if (pathname === "/") {
-        const mobile = document.querySelector<HTMLElement>(".mobileActions");
-        if (mobile && !mobile.querySelector(".uxDailyReportShortcut")) {
-          const button = makeButton("日報", "uxDailyReportShortcut", go);
-          mobile.insertBefore(button, mobile.children[1] || null);
-        }
-        const desktop = document.querySelector<HTMLElement>(".desktopTools");
-        if (desktop && !desktop.querySelector(".uxDailyReportShortcut")) {
-          const button = makeButton("日報を開く", "uxDailyReportShortcut", go);
-          const small = document.createElement("small");
-          small.textContent = "今日の日報・A3印刷";
-          button.appendChild(small);
-          desktop.insertBefore(button, desktop.firstChild);
-        }
-      }
-      if (pathname === "/schedule") {
-        const top = document.querySelector<HTMLElement>("main .top");
-        if (top && !top.querySelector(".uxDailyReportShortcut")) {
-          top.appendChild(makeButton("日報", "uxDailyReportShortcut", go));
-        }
-      }
     }
 
     function applySecurityAcknowledgement() {
@@ -125,7 +77,6 @@ export default function ResponsiveUxController() {
     }
 
     function applyUx() {
-      addDailyReportShortcuts();
       applySecurityAcknowledgement();
     }
 
@@ -150,15 +101,16 @@ export default function ResponsiveUxController() {
       }
     }
 
+    const observeSecurityDom = pathname === "/" || pathname === "/settings/login-history";
     document.addEventListener("click", captureClick, true);
-    const observer = new MutationObserver(requestApplyUx);
-    observer.observe(document.body, { childList: true, subtree: true });
+    const observer = observeSecurityDom ? new MutationObserver(requestApplyUx) : null;
+    observer?.observe(document.body, { childList: true, subtree: true });
     applyUx();
     void loadLatestSecurityAlert();
 
     return () => {
       disposed = true;
-      observer.disconnect();
+      observer?.disconnect();
       if (applyFrame) window.cancelAnimationFrame(applyFrame);
       document.removeEventListener("click", captureClick, true);
       delete document.body.dataset.uxRoute;

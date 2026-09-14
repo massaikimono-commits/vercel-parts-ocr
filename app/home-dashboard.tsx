@@ -392,6 +392,16 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         </section>
       )}
 
+      {loadError && (
+        <div className="notice" role="alert">
+          <b>{loadError}</b>
+          <div className="actions">
+            <button type="button" onClick={() => void loadToday()}>再読み込み</button>
+            <button type="button" onClick={() => openDay(todayJst())}>今日の予定を開く</button>
+          </div>
+        </div>
+      )}
+
       <section className="homeWeek" aria-label="今週のスケジュール">
         <div className="homeWeekHead">
           <div>
@@ -502,6 +512,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       <section className="mobileToday">
         <div className="mobileActions">
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
+          <button className="uxDailyReportShortcut" onClick={() => location.assign(`/schedule/print?day=${todayJst()}`)}>日報</button>
           <button onClick={() => location.assign("/schedule/search")}>名前・電話・下4桁で予定検索</button>
           <button onClick={() => location.assign("/schedule/week")}>1週間のスケジュール</button>
           <button onClick={() => location.assign("/settings/business-calendar")}>営業日カレンダー</button>
@@ -546,6 +557,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         </div>
 
         <div className="desktopTools">
+          <button className="uxDailyReportShortcut" onClick={() => location.assign(`/schedule/print?day=${todayJst()}`)}><b>日報を開く</b><small>今日の日報・A3印刷</small></button>
           <button onClick={() => location.assign("/schedule/search")}><b>予定即検索</b><small>名前・電話・下4桁</small></button>
           <button onClick={() => location.assign("/settings/business-calendar")}><b>営業日カレンダー</b><small>営業日・休業日を管理</small></button>
           <button onClick={() => location.assign("/loaners")}><b>代車管理</b><small>空き・貸出・返却予定</small></button>

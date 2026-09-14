@@ -486,7 +486,7 @@ export default function ScheduleSearchPage() {
             </div>
           </article>
         ))}
-        {!busy && rows.length === 0 && <div className="empty">検索結果はここに表示されます。</div>}
+        {!busy && rows.length === 0 && <div className="empty">検索結果はここに表示されます。<div className="actions"><button type="button" onClick={() => location.assign("/schedule/new")}>＋ 予定登録</button></div></div>}
       </section>
 
       <style jsx global>{`
