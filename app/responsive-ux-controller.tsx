@@ -6,7 +6,6 @@ import { supabase } from "./supabase";
 
 const SECURITY_ACK_KEY = "icb-security-alert-ack-v1";
 const SECURITY_PENDING_KEY = "icb-security-alert-pending-v1";
-const WEEK_HINT = "横にスクロールすると1週間を続けて確認できます。予定カードから予定詳細を開けます。";
 
 type SecurityAlert = {
   severity: "warning" | "high";
@@ -45,29 +44,6 @@ function makeButton(label: string, className: string, onClick: () => void) {
   button.textContent = label;
   button.addEventListener("click", onClick);
   return button;
-}
-
-function replaceSchedulingCopy(root: ParentNode) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes: Text[] = [];
-  let node = walker.nextNode();
-  while (node) {
-    nodes.push(node as Text);
-    node = walker.nextNode();
-  }
-  for (const textNode of nodes) {
-    const value = textNode.nodeValue || "";
-    if (!value.includes("予約変更") && !value.includes("かんたん予約変更")) continue;
-    textNode.nodeValue = value
-      .replaceAll("かんたん予約変更", "予定詳細")
-      .replaceAll("予約変更", "予定詳細");
-  }
-  document.querySelectorAll<HTMLElement>("[aria-label]").forEach((element) => {
-    const label = element.getAttribute("aria-label") || "";
-    if (label.includes("予約を変更")) {
-      element.setAttribute("aria-label", label.replaceAll("予約を変更", "予定詳細を開く"));
-    }
-  });
 }
 
 export default function ResponsiveUxController() {
@@ -149,13 +125,8 @@ export default function ResponsiveUxController() {
     }
 
     function applyUx() {
-      replaceSchedulingCopy(document.body);
       addDailyReportShortcuts();
       applySecurityAcknowledgement();
-      if (pathname === "/schedule/week") {
-        const hint = document.querySelector<HTMLElement>(".hint");
-        if (hint && hint.textContent !== WEEK_HINT) hint.textContent = WEEK_HINT;
-      }
     }
 
     function requestApplyUx() {
@@ -176,17 +147,6 @@ export default function ResponsiveUxController() {
           sessionStorage.setItem(SECURITY_PENDING_KEY, fingerprint(latestAlert));
         }
 
-        const scheduleRow = target.closest<HTMLElement>(".homeWeekRow");
-        if (scheduleRow) {
-          const dayCard = scheduleRow.closest<HTMLElement>(".homeWeekDay");
-          const cards = Array.from(document.querySelectorAll<HTMLElement>(".homeWeekDay"));
-          const index = dayCard ? cards.indexOf(dayCard) : -1;
-          if (index >= 0) {
-            event.preventDefault();
-            event.stopPropagation();
-            location.assign(`/schedule?day=${addDays(mondayOf(todayJst()), index)}`);
-          }
-        }
       }
     }
 

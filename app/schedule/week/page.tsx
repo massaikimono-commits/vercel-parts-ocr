@@ -336,8 +336,8 @@ export default function WeeklySchedulePage() {
         type="button"
         className={`miniRow ${reasonClass} ${work?.is_urgent ? "urgent" : ""} ${overlapIds.has(entry.id) ? "overlapping" : ""}`}
         key={entry.id}
-        onClick={() => editEntry(entry.id)}
-        aria-label={`${customerName(customer)}の予約を変更`}
+        onClick={() => openDetail(entry.id)}
+        aria-label={`${customerName(customer)}の予定詳細を開く`}
       >
         <div className="miniCustomer">{customerName(customer)}</div>
         <div className="miniIdentity">
@@ -436,8 +436,8 @@ export default function WeeklySchedulePage() {
     location.assign("/schedule/new?day=" + day);
   }
 
-  function editEntry(id: string) {
-    location.assign("/schedule/edit?id=" + encodeURIComponent(id));
+  function openDetail(id: string) {
+    location.assign("/schedule/detail?entry=" + encodeURIComponent(id));
   }
 
   function jumpToWeek() {
@@ -637,7 +637,7 @@ export default function WeeklySchedulePage() {
         })}
       </section>
 
-      <div className="hint">横にスクロールすると1週間を続けて確認できます。上部サマリーと「要確認日のみ表示」で問題日を先に確認でき、予約カードをタップすると空き確認付きの予約変更へ直接進めます。</div>
+      <div className="hint">横にスクロールすると1週間を続けて確認できます。予定カードから予定詳細を開けます。</div>
 
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}

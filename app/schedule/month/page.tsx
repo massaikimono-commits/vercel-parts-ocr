@@ -343,7 +343,8 @@ export default function MonthlySchedulePage() {
                     <button
                       key={entry.id}
                       className={"monthRow " + reasonClass(work) + (overlaps.has(entry.id) ? " overlapping" : "")}
-                      onClick={() => { window.location.href = "/schedule/edit?id=" + encodeURIComponent(entry.id); }}
+                      aria-label={`${customerName(customer)}の予定詳細を開く`}
+                      onClick={() => { window.location.href = "/schedule/detail?entry=" + encodeURIComponent(entry.id); }}
                     >
                       <span className="customer">{customerName(customer)}</span>
                       <span className="identity">
