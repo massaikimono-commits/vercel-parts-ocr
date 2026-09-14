@@ -1,0 +1,43 @@
+name: Cloudflare runtime env diagnostic verify
+
+on:
+  push:
+    branches:
+      - diag/cloudflare-runtime-env-presence-20260914
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: diagnostic-placeholder-only
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify diagnostic scope
+        run: |
+          test "$(git diff --name-only 9343982582059861fa096792c1ccc02e6b4b12f0...HEAD | grep -v '^app/supabase.ts$' | grep -v '^.github/workflows/cloudflare-runtime-env-diagnostic.yml$' | wc -l)" -eq 0
+          grep -Fq 'CF_DIAG_A' app/supabase.ts
+          grep -Fq 'CF_DIAG_B' app/supabase.ts
+          grep -Fq 'CF_DIAG_C' app/supabase.ts
+          grep -Fq 'hasSupabaseUrl' app/supabase.ts
+          grep -Fq 'hasSupabasePublishableKey' app/supabase.ts
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Cloudflare architecture
+        run: npm run test:cloudflare-architecture
+
+      - name: Vinext build
+        run: npm run build:vinext
