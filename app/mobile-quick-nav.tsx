@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const HIDDEN_PREFIXES = [
@@ -55,7 +56,7 @@ export default function MobileQuickNav() {
       {ITEMS.map((item) => {
         const active = isActive(pathname, item.href);
         return (
-          <a
+          <Link
             key={item.href}
             href={item.href}
             className={active ? "active" : ""}
@@ -63,10 +64,10 @@ export default function MobileQuickNav() {
           >
             <span aria-hidden="true">{item.icon}</span>
             <b>{item.label}</b>
-          </a>
+          </Link>
         );
       })}
-      <a
+      <Link
         href={todayHref}
         className={todayActive ? "todayShortcut active" : "todayShortcut"}
         aria-current={todayActive ? "page" : undefined}
@@ -74,7 +75,7 @@ export default function MobileQuickNav() {
       >
         <span aria-hidden="true">日</span>
         <b>今日</b>
-      </a>
+      </Link>
       <style jsx global>{`
         .mobileQuickNav{display:none}
         @media(max-width:760px){
