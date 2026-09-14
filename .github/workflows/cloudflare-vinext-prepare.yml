@@ -29,9 +29,6 @@ jobs:
       - name: Initialize vinext non-destructively when needed
         run: |
           if [ ! -f vite.config.ts ] || [ ! -f wrangler.jsonc ]; then
-            # Bootstrap the exact RSC transport that matches this app's React release.
-            # vinext beta.9's init currently asks npm for an unpinned transport and can
-            # otherwise resolve React Server DOM 19.3 against React 19.2.8.
             npm install --legacy-peer-deps \
               vinext@1.0.0-beta.9 \
               @vinext/cloudflare \
@@ -52,8 +49,11 @@ jobs:
             echo "vinext staging config already present; init skipped"
           fi
 
-      - name: Guard protected application areas
+      - name: Restore frozen OCR assets and guard protected application areas
         run: |
+          # npm postinstall regenerates the vendored language files. They are outside
+          # this migration lane, so restore the tracked frozen bytes before auditing.
+          git checkout -- public/tesseract
           changed="$(git diff --name-only HEAD)"
           echo "$changed"
           if echo "$changed" | grep -E '^(app/|database/|supabase/|public/tesseract/)' >/dev/null; then
