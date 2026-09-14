@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const HIDDEN_PREFIXES = [
   "/parts-print",
@@ -34,7 +34,18 @@ function todayJst() {
 
 export default function MobileQuickNav() {
   const pathname = usePathname() || "/";
+  const router = useRouter();
   const [todayActive, setTodayActive] = useState(false);
+
+  const todayHref = `/schedule?day=${todayJst()}`;
+
+  useEffect(() => {
+    // vinext/Cloudflareでは未訪問routeの初回遷移時にroute asset取得が間に合わず、
+    // root client treeが再構築されるケースがあるため、主要routeを明示的にwarm-upする。
+    // Next.js Linkの自動prefetch任せにせず、初回表示直後に主要導線を先読みする。
+    for (const item of ITEMS) router.prefetch(item.href);
+    router.prefetch(todayHref);
+  }, [router, todayHref]);
 
   useEffect(() => {
     if (pathname !== "/schedule") {
@@ -49,8 +60,6 @@ export default function MobileQuickNav() {
     return null;
   }
 
-  const todayHref = `/schedule?day=${todayJst()}`;
-
   return (
     <nav className="mobileQuickNav" aria-label="スマホ共通ショートカット">
       {ITEMS.map((item) => {
@@ -59,6 +68,7 @@ export default function MobileQuickNav() {
           <Link
             key={item.href}
             href={item.href}
+            prefetch={true}
             className={active ? "active" : ""}
             aria-current={active ? "page" : undefined}
           >
@@ -69,6 +79,7 @@ export default function MobileQuickNav() {
       })}
       <Link
         href={todayHref}
+        prefetch={true}
         className={todayActive ? "todayShortcut active" : "todayShortcut"}
         aria-current={todayActive ? "page" : undefined}
         aria-label="今日の1日の予定を開く"
