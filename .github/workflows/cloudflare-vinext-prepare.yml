@@ -46,7 +46,7 @@ jobs:
             npm install --save-exact react-server-dom-webpack@19.2.8
             npm ls react react-dom react-server-dom-webpack vinext vite
           else
-            echo "vinext staging config already present; init skipped"
+            echo "vinext staging config already present; verifying committed configuration"
           fi
 
       - name: Restore frozen OCR assets and guard protected application areas
