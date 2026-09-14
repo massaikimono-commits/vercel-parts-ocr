@@ -1,0 +1,31 @@
+name: Preview deployment safety audit
+
+on:
+  push:
+    branches:
+      - infra/deployment-safety-audit-20260914
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview target
+        uses: actions/checkout@v4
+        with:
+          ref: preview/schedule-ux-20260903
+
+      - name: Validate Netlify TOML syntax
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+          with pathlib.Path("netlify.toml").open("rb") as f:
+              tomllib.load(f)
+          print("netlify.toml syntax is valid.")
+          PY
+
+      - name: Verify deployment locks
+        run: node scripts/deployment-safety-regression.mjs
