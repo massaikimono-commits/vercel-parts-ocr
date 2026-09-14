@@ -125,14 +125,14 @@ jobs:
       - name: Install browser diagnostic runtime
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.55.0
-          npx playwright install chromium webkit
+          npx playwright install --with-deps chromium webkit
 
       - name: Production post-hydration browser smoke
         env:
           PRODUCTION_URL: https://vercel-parts-ocr.massa-ikimono.workers.dev/
         run: |
-          node <<'NODE'
-          const { chromium, webkit, devices } = require('playwright');
+          node --input-type=module <<'NODE'
+          import { chromium, webkit, devices } from 'playwright';
 
           const url = process.env.PRODUCTION_URL;
           const cases = [
