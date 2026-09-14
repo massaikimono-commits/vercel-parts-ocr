@@ -27,8 +27,9 @@ export default function AuthRouteGuard({ children }: { children: React.ReactNode
       };
     }
 
-    setReady(false);
-
+    // 直接アクセス時は ready=false のまま認証確認を待つ。
+    // すでに認証済みでアプリ内遷移している場合は ready=true を維持し、
+    // 画面を「ログイン確認中…」へ戻さずバックグラウンドで再確認する。
     void supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       if (!data.session || !(await isActiveAppSession(data.session))) {
