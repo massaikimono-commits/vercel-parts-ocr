@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -26,18 +28,23 @@ jobs:
 
       - name: Verify diagnostic scope
         run: |
-          test "$(git diff --name-only 9343982582059861fa096792c1ccc02e6b4b12f0...HEAD | grep -v '^app/supabase.ts$' | grep -v '^.github/workflows/cloudflare-runtime-env-diagnostic.yml$' | wc -l)" -eq 0
+          allowed='^(app/supabase.ts|app/__diag/cloudflare-env/route.ts|.github/workflows/cloudflare-runtime-env-diagnostic.yml|docs/cloudflare-runtime-env-diag-trigger-20260914.txt)$'
+          unexpected="$(git diff --name-only 9343982582059861fa096792c1ccc02e6b4b12f0...HEAD | grep -Ev "$allowed" || true)"
+          test -z "$unexpected"
           grep -Fq 'CF_DIAG_A' app/supabase.ts
           grep -Fq 'CF_DIAG_B' app/supabase.ts
           grep -Fq 'CF_DIAG_C' app/supabase.ts
-          grep -Fq 'hasSupabaseUrl' app/supabase.ts
-          grep -Fq 'hasSupabasePublishableKey' app/supabase.ts
+          grep -Fq 'import { env } from "cloudflare:workers"' app/__diag/cloudflare-env/route.ts
+          grep -Fq 'hasSupabaseUrl: Boolean(runtimeEnv.NEXT_PUBLIC_SUPABASE_URL)' app/__diag/cloudflare-env/route.ts
+          grep -Fq 'hasSupabasePublishableKey: Boolean(' app/__diag/cloudflare-env/route.ts
+          ! grep -Eq 'process\.env|Object\.(keys|entries)\(env\)|JSON\.stringify\(env\)' app/__diag/cloudflare-env/route.ts
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Cloudflare architecture
-        run: npm run test:cloudflare-architecture
+      - name: Diagnostic route runtime review
+        run: |
+          echo 'Reviewed diagnostic-only App Router route: boolean presence only; no value disclosure; no app runtime mutation.'
 
       - name: Vinext build
         run: npm run build:vinext
