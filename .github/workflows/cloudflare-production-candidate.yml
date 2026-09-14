@@ -1,0 +1,78 @@
+name: Cloudflare production candidate verify
+
+on:
+  push:
+    branches:
+      - candidate/cloudflare-production-20260914
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enforce integration boundary
+        shell: bash
+        run: |
+          base=4ff3fc8fb66beab1e46f992399c5954153816e9d
+          changed="$(git diff --name-only "$base"...HEAD)"
+          echo "$changed"
+          unexpected="$(echo "$changed" | grep -Ev '^(\.github/workflows/cloudflare-production-candidate\.yml|\.gitignore|package\.json|package-lock\.json|vite\.config\.ts|wrangler\.jsonc)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected production-candidate changes:"
+            echo "$unexpected"
+            exit 1
+          fi
+          git diff --exit-code "$base"...HEAD -- app database supabase public/tesseract netlify.toml
+
+      - name: Verify Cloudflare command contract
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const pkg = require('./package.json');
+          if (pkg.scripts['build:vinext'] !== 'vinext build') throw new Error('build:vinext contract mismatch');
+          if (pkg.scripts['deploy:vinext'] !== 'npx @vinext/cloudflare deploy') throw new Error('deploy:vinext contract mismatch');
+          if (pkg.scripts.build !== pkg.scripts.build || !pkg.scripts.build.includes('test:app-completion')) throw new Error('latest app regression chain missing');
+          NODE
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify Cloudflare architecture
+        run: npm run test:cloudflare-architecture
+
+      - name: Verify vinext build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build:vinext
+
+      - name: Verify normal Next.js build and full regression chain
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build
+
+      - name: Verify extended regression fixtures
+        run: |
+          node scripts/qr-photo-contrast-regression.mjs
+          node scripts/qr-photo-distractor-regression.mjs
+          node scripts/qr-density-performance.mjs
+          node scripts/parts-photo-fixture-regression.mjs
+
+      - name: Recheck protected trees after build
+        run: |
+          git checkout -- public/tesseract
+          git diff --exit-code HEAD -- app database supabase public/tesseract netlify.toml
