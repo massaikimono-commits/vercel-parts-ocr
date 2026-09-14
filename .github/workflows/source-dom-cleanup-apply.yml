@@ -15,25 +15,49 @@ jobs:
       - name: Checkout automation branch
         uses: actions/checkout@v4
 
-      - name: Save patch script
-        run: cp scripts/apply-source-dom-cleanup.py /tmp/apply-source-dom-cleanup.py
-
       - name: Switch to preview branch
         run: |
           git fetch origin preview/schedule-ux-20260903
           git checkout -B preview/schedule-ux-20260903 origin/preview/schedule-ux-20260903
 
-      - name: Apply source cleanup
-        run: python /tmp/apply-source-dom-cleanup.py
+      - name: Align stale regression contract
+        shell: python
+        run: |
+          from pathlib import Path
 
-      - name: Verify targeted regression
-        run: npm run test:schedule-source-dom-cleanup
+          p = Path("scripts/mobile-quick-nav-regression.mjs")
+          text = p.read_text()
+          old = '''assert(controller.includes(".homeWeekRow"), "home weekly rows must be intercepted for whole-day navigation");
+          assert(controller.includes('/schedule?day=${addDays(mondayOf(todayJst()), index)}'), "home weekly row/customer taps must open that day, not customer/edit directly");
+          assert(controller.includes('replaceAll("予約変更", "予定詳細")'), "reservation-change entry wording must normalize to 予定詳細");
+          assert(controller.includes('replaceAll("かんたん予約変更", "予定詳細")'), "easy-change heading must normalize to 予定詳細");
 
-      - name: Commit once to preview branch
+          assert(controller.includes("const WEEK_HINT ="), "weekly hint text must have a stable target value");
+          assert(controller.includes("hint && hint.textContent !== WEEK_HINT"), "weekly hint mutation must be idempotent");
+          '''
+          new = '''assert(!controller.includes(".homeWeekRow"), "home weekly navigation must no longer depend on controller click interception");
+          assert(!controller.includes('replaceAll("予約変更", "予定詳細")'), "global 予約変更 label replacement must stay removed");
+          assert(!controller.includes('replaceAll("かんたん予約変更", "予定詳細")'), "global easy-change label replacement must stay removed");
+          assert(!controller.includes("const WEEK_HINT ="), "weekly hint must no longer depend on controller constant replacement");
+          assert(!controller.includes("hint && hint.textContent !== WEEK_HINT"), "weekly hint DOM mutation must stay removed");
+          assert(week.includes("予定カードから予定詳細を開けます。"), "weekly hint must be source-defined");
+          assert(week.includes('/schedule/detail?entry='), "weekly cards must open schedule detail from source");
+          '''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"expected stale regression block once, got {count}")
+          p.write_text(text.replace(old, new, 1))
+
+      - name: Verify affected regressions
+        run: |
+          npm run test:schedule-source-dom-cleanup
+          npm run test:mobile-quick-nav
+
+      - name: Commit corrective regression once
         run: |
           git config user.name "massaikimono-commits"
           git config user.email "massa_ikimono@icloud.com"
-          git add app/schedule/week/page.tsx app/schedule/month/page.tsx app/responsive-ux-controller.tsx scripts/schedule-source-dom-cleanup-regression.mjs package.json
+          git add scripts/mobile-quick-nav-regression.mjs
           git diff --cached --check
-          git commit -m "ux: move schedule detail semantics into source"
+          git commit -m "test: align mobile regression with source navigation"
           git push origin HEAD:preview/schedule-ux-20260903
