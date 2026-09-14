@@ -1,3 +1,4 @@
+import { appLocation as location } from "../../lib/internal-navigation";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -286,13 +287,13 @@ export default function MonthlySchedulePage() {
   }, [monthStart]);
 
   function openDay(day: string) {
-    window.location.href = "/schedule?day=" + day;
+    location.assign("/schedule?day=" + day);
   }
 
   return (
     <main className="monthPage">
       <header className="top">
-        <button onClick={() => { window.location.href = "/"; }}>← メインへ</button>
+        <button onClick={() => { location.assign("/"); }}>← メインへ</button>
         <div><b>スケジュール</b><span>月間表示</span></div>
         <strong>icb</strong>
       </header>
@@ -307,7 +308,7 @@ export default function MonthlySchedulePage() {
           <button onClick={() => setMonthStart(addMonths(monthStart, -1))}>← 前月</button>
           <button onClick={() => setMonthStart(firstOfMonth(todayJst()))}>今月</button>
           <button onClick={() => setMonthStart(addMonths(monthStart, 1))}>翌月 →</button>
-          <button onClick={() => { window.location.href = "/schedule/week?day=" + monthStart; }}>週間</button>
+          <button onClick={() => { location.assign("/schedule/week?day=" + monthStart); }}>週間</button>
         </div>
       </section>
 
@@ -344,7 +345,7 @@ export default function MonthlySchedulePage() {
                       key={entry.id}
                       className={"monthRow " + reasonClass(work) + (overlaps.has(entry.id) ? " overlapping" : "")}
                       aria-label={`${customerName(customer)}の予定詳細を開く`}
-                      onClick={() => { window.location.href = "/schedule/detail?entry=" + encodeURIComponent(entry.id); }}
+                      onClick={() => { location.assign("/schedule/detail?entry=" + encodeURIComponent(entry.id)); }}
                     >
                       <span className="customer">{customerName(customer)}</span>
                       <span className="identity">

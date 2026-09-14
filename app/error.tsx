@@ -1,5 +1,6 @@
 "use client";
 
+import { appLocation as location } from "./lib/internal-navigation";
 export default function ErrorPage({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <main className="routeError" role="alert">

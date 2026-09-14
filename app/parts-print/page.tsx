@@ -1,3 +1,4 @@
+import { appLocation as location } from "../lib/internal-navigation";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 

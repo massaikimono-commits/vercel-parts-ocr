@@ -1,5 +1,6 @@
 "use client";
 
+import { appLocation as location } from "../lib/internal-navigation";
 export type StagedPart = {
   id: string;
   name: string;
