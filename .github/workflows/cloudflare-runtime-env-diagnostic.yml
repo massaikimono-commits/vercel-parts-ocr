@@ -86,7 +86,6 @@ jobs:
           failures = 0
           mime_failures = 0
           html_fallbacks = 0
-          missing_build_files = 0
 
           for p in asset_paths:
               st, h, body, final = get(p)
@@ -99,15 +98,11 @@ jobs:
                   mime_ok = ('javascript' in ct) or ('ecmascript' in ct)
               elif ext == '.css':
                   mime_ok = 'text/css' in ct
-              local = Path('dist/client') / p.lstrip('/')
-              local_exists = local.exists()
               if st != 200: failures += 1
               if not mime_ok: mime_failures += 1
               if looks_html: html_fallbacks += 1
-              if not local_exists: missing_build_files += 1
-              print(f'ASSET path={p} status={st} content_type={ct} bytes={len(body)} html_fallback={str(looks_html).lower()} local_dist_client={str(local_exists).lower()}')
+              print(f'ASSET path={p} status={st} content_type={ct} bytes={len(body)} html_fallback={str(looks_html).lower()}')
 
-          # Probe the same root as an RSC/Flight request without exposing response body.
           rsc_headers = {
               'User-Agent':'ICB-Cloudflare-Diagnostic/1.0',
               'RSC':'1',
@@ -119,7 +114,71 @@ jobs:
           looks_html = lower.startswith(b'<!doctype html') or lower.startswith(b'<html')
           print(f'RSC path=/?_rsc=icbdiag status={st} content_type={ct} bytes={len(body)} html_body={str(looks_html).lower()} final_url={final}')
 
-          print(f'SUMMARY asset_http_failures={failures} mime_failures={mime_failures} html_fallbacks={html_fallbacks} missing_dist_client_files={missing_build_files}')
-          if failures or mime_failures or html_fallbacks or missing_build_files:
+          dist_static = Path('dist/client/_next/static')
+          dist_files = [p for p in dist_static.rglob('*') if p.is_file()] if dist_static.exists() else []
+          print(f'DIST_CLIENT static_dir_exists={str(dist_static.exists()).lower()} static_file_count={len(dist_files)}')
+          print(f'SUMMARY asset_http_failures={failures} mime_failures={mime_failures} html_fallbacks={html_fallbacks}')
+          if failures or mime_failures or html_fallbacks or st != 200 or 'text/x-component' not in ct:
               sys.exit(2)
           PY
+
+      - name: Install browser diagnostic runtime
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.55.0
+          npx playwright install chromium webkit
+
+      - name: Production post-hydration browser smoke
+        env:
+          PRODUCTION_URL: https://vercel-parts-ocr.massa-ikimono.workers.dev/
+        run: |
+          node <<'NODE'
+          const { chromium, webkit, devices } = require('playwright');
+
+          const url = process.env.PRODUCTION_URL;
+          const cases = [
+            ['chromium-desktop', chromium, {}],
+            ['webkit-iphone', webkit, { ...devices['iPhone 13'] }],
+          ];
+
+          let totalErrors = 0;
+          for (const [name, engine, contextOptions] of cases) {
+            const browser = await engine.launch({ headless: true });
+            const context = await browser.newContext(contextOptions);
+            const page = await context.newPage();
+            const pageErrors = [];
+            const requestFailures = [];
+            const badResponses = [];
+            let crashed = false;
+
+            page.on('pageerror', err => pageErrors.push(String(err && err.stack || err)));
+            page.on('requestfailed', req => requestFailures.push(`${req.method()} ${req.url()} :: ${req.failure()?.errorText || 'unknown'}`));
+            page.on('response', res => { if (res.status() >= 400) badResponses.push(`${res.status()} ${res.url()}`); });
+            page.on('crash', () => { crashed = true; });
+
+            let navStatus = null;
+            let navError = null;
+            try {
+              const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 });
+              navStatus = response ? response.status() : null;
+              await page.waitForTimeout(5000);
+            } catch (e) {
+              navError = String(e && e.stack || e);
+            }
+
+            const currentUrl = page.url();
+            const title = await page.title().catch(() => '');
+            const bodyTextLength = await page.locator('body').innerText().then(t => t.length).catch(() => -1);
+            console.log(`BROWSER case=${name} nav_status=${navStatus} crashed=${crashed} current_url=${currentUrl} title=${JSON.stringify(title)} body_text_length=${bodyTextLength}`);
+            console.log(`BROWSER_ERRORS case=${name} page_errors=${pageErrors.length} request_failures=${requestFailures.length} bad_responses=${badResponses.length} nav_error=${navError ? 'true' : 'false'}`);
+            for (const e of pageErrors.slice(0, 10)) console.log(`PAGE_ERROR case=${name} ${e}`);
+            for (const e of requestFailures.slice(0, 20)) console.log(`REQUEST_FAILED case=${name} ${e}`);
+            for (const e of badResponses.slice(0, 20)) console.log(`BAD_RESPONSE case=${name} ${e}`);
+            if (navError) console.log(`NAV_ERROR case=${name} ${navError}`);
+
+            if (crashed || navError || pageErrors.length || requestFailures.length || badResponses.length) totalErrors++;
+            await browser.close();
+          }
+
+          console.log(`BROWSER_SUMMARY failing_cases=${totalErrors}`);
+          if (totalErrors) process.exit(3);
+          NODE
