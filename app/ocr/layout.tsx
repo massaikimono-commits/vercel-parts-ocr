@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import PartsOcrBatchLinker from "./parts-ocr-batch-linker";
 
 const linkStyle = {
@@ -19,15 +20,15 @@ export default function OCRLayout({ children }: { children: ReactNode }) {
       <PartsOcrBatchLinker />
       <div style={{ maxWidth: 980, margin: "14px auto 0", padding: "0 14px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
-          <a href="/ocr/auto" style={{ ...linkStyle, background: "#2f6fe4", color: "#fff", borderColor: "#2f6fe4" }}>
+          <Link href="/ocr/auto" prefetch={true} style={{ ...linkStyle, background: "#2f6fe4", color: "#fff", borderColor: "#2f6fe4" }}>
             ✨ 自動判定OCR
-          </a>
-          <a href="/ocr" style={linkStyle}>
+          </Link>
+          <Link href="/ocr" prefetch={true} style={linkStyle}>
             大一用品商会 専用OCR
-          </a>
-          <a href="/ocr/general" style={linkStyle}>
+          </Link>
+          <Link href="/ocr/general" prefetch={true} style={linkStyle}>
             汎用A4・他社伝票OCR
-          </a>
+          </Link>
         </div>
       </div>
       {children}
