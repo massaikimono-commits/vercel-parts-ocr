@@ -1,0 +1,83 @@
+name: Apply app completion batch
+
+on:
+  push:
+    branches:
+      - infra/app-completion-audit-20260914
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout helper branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve patch script
+        run: cp scripts/apply-app-completion-batch.py /tmp/apply-app-completion-batch.py
+
+      - name: Switch to formal app branch
+        run: |
+          git fetch origin preview/schedule-ux-20260903
+          git checkout -B preview/schedule-ux-20260903 origin/preview/schedule-ux-20260903
+          test "$(git rev-parse HEAD)" = "4cfa9949ecff674d5b96a25f29fe2f4eb88cc60a"
+
+      - name: Apply completion patch
+        run: python /tmp/apply-app-completion-batch.py
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify targeted regressions
+        run: |
+          npm run test:app-completion
+          npm run test:schedule-source-dom-cleanup
+          npm run test:mobile-quick-nav
+          npm run test:operational-readiness
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Validate CI routing contract
+        run: node scripts/ci-routing-regression.mjs
+
+      - name: Full build and application regressions
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build
+
+      - name: Extended full regression fixtures
+        run: |
+          node scripts/qr-photo-contrast-regression.mjs
+          node scripts/qr-photo-distractor-regression.mjs
+          node scripts/qr-density-performance.mjs
+          node scripts/parts-photo-fixture-regression.mjs
+
+      - name: Deployment safety
+        run: |
+          python - <<'PY'
+          import pathlib, tomllib
+          with pathlib.Path('netlify.toml').open('rb') as f:
+              tomllib.load(f)
+          PY
+          node scripts/deployment-safety-regression.mjs
+
+      - name: Commit once to formal app branch
+        run: |
+          git config user.name "massaikimono-commits"
+          git config user.email "massa_ikimono@icloud.com"
+          git add app/home-dashboard.tsx app/responsive-ux-controller.tsx app/schedule/search/page.tsx app/customer-vehicles/page.tsx app/page.tsx scripts/app-completion-regression.mjs package.json
+          git diff --cached --check
+          git commit -m "ux: finish app readiness source and empty-state cleanup"
+          git push origin HEAD:preview/schedule-ux-20260903
