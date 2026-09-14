@@ -2,6 +2,11 @@ from pathlib import Path
 
 p = Path("scripts/mobile-quick-nav-regression.mjs")
 text = p.read_text()
+anchor = 'const controller = fs.readFileSync("app/responsive-ux-controller.tsx", "utf8");\n'
+addition = anchor + 'const home = fs.readFileSync("app/home-dashboard.tsx", "utf8");\nconst schedule = fs.readFileSync("app/schedule/page.tsx", "utf8");\n'
+if text.count(anchor) != 1:
+    raise SystemExit("mobile quick-nav controller source anchor mismatch")
+text = text.replace(anchor, addition, 1)
 replacements = [
     (
         'assert(controller.includes("uxDailyReportShortcut"), "daily report must receive a high-frequency shortcut");',
