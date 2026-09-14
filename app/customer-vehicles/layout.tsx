@@ -1,6 +1,6 @@
 "use client";
-
 import { appLocation as location } from "../lib/internal-navigation";
+
 import type { ReactNode } from "react";
 
 const ACTIVE_KEY = "parts-active-vehicle";

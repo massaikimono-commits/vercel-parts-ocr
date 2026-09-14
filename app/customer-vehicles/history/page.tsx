@@ -1,6 +1,6 @@
-import { appLocation as location } from "../../lib/internal-navigation";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+import { appLocation as location } from "../../lib/internal-navigation";
 
 import { useEffect, useMemo, useState } from "react";
 import { safeActionError } from "../../lib/client-security";

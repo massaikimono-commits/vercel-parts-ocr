@@ -1,6 +1,6 @@
-import { appLocation as location } from "../../lib/internal-navigation";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+import { appLocation as location } from "../../lib/internal-navigation";
 
 import { useMemo, useRef, useState } from "react";
 import { supabase } from "../../supabase";
