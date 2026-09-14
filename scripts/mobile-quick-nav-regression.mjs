@@ -50,13 +50,13 @@ assert(controller.includes(".weekSummary{display:flex!important"), "weekly overs
 assert(controller.includes(".jumpBar"), "weekly date jump must be compacted rather than removed");
 assert(controller.includes("uxDailyReportShortcut"), "daily report must receive a high-frequency shortcut");
 assert(controller.includes('/schedule/print?day=${encodeURIComponent(reportDay())}'), "daily report shortcut must preserve selected/JST day");
-assert(controller.includes(".homeWeekRow"), "home weekly rows must be intercepted for whole-day navigation");
-assert(controller.includes('/schedule?day=${addDays(mondayOf(todayJst()), index)}'), "home weekly row/customer taps must open that day, not customer/edit directly");
-assert(controller.includes('replaceAll("予約変更", "予定詳細")'), "reservation-change entry wording must normalize to 予定詳細");
-assert(controller.includes('replaceAll("かんたん予約変更", "予定詳細")'), "easy-change heading must normalize to 予定詳細");
-
-assert(controller.includes("const WEEK_HINT ="), "weekly hint text must have a stable target value");
-assert(controller.includes("hint && hint.textContent !== WEEK_HINT"), "weekly hint mutation must be idempotent");
+assert(!controller.includes(".homeWeekRow"), "home weekly navigation must no longer depend on controller click interception");
+assert(!controller.includes('replaceAll("予約変更", "予定詳細")'), "global 予約変更 label replacement must stay removed");
+assert(!controller.includes('replaceAll("かんたん予約変更", "予定詳細")'), "global easy-change label replacement must stay removed");
+assert(!controller.includes("const WEEK_HINT ="), "weekly hint must no longer depend on controller constant replacement");
+assert(!controller.includes("hint && hint.textContent !== WEEK_HINT"), "weekly hint DOM mutation must stay removed");
+assert(week.includes("予定カードから予定詳細を開けます。"), "weekly hint must be source-defined");
+assert(week.includes('/schedule/detail?entry='), "weekly cards must open schedule detail from source");
 assert(controller.includes("new MutationObserver(requestApplyUx)"), "DOM observer must use the guarded scheduler");
 assert(controller.includes("window.requestAnimationFrame"), "DOM observer updates must be coalesced per animation frame");
 assert(controller.includes("if (disposed || applyFrame) return"), "observer scheduler must block re-entrant frame storms");
