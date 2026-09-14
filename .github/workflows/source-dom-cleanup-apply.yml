@@ -12,105 +12,19 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout preview branch
+      - name: Checkout automation branch
         uses: actions/checkout@v4
-        with:
-          ref: preview/schedule-ux-20260903
-          fetch-depth: 0
 
-      - name: Apply source-level navigation cleanup
-        shell: python
+      - name: Save patch script
+        run: cp scripts/apply-source-dom-cleanup.py /tmp/apply-source-dom-cleanup.py
+
+      - name: Switch to preview branch
         run: |
-          from pathlib import Path
-          import json
+          git fetch origin preview/schedule-ux-20260903
+          git checkout -B preview/schedule-ux-20260903 origin/preview/schedule-ux-20260903
 
-          def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected exactly 1 match, got {count}: {old[:80]}")
-              p.write_text(text.replace(old, new, 1))
-
-          week = Path("app/schedule/week/page.tsx")
-          text = week.read_text()
-          replacements = [
-              ('onClick={() => editEntry(entry.id)}', 'onClick={() => openDetail(entry.id)}'),
-              ('aria-label={`${customerName(customer)}の予約を変更`}', 'aria-label={`${customerName(customer)}の予定詳細を開く`}'),
-              ('function editEntry(id: string) {\n    location.assign("/schedule/edit?id=" + encodeURIComponent(id));\n  }', 'function openDetail(id: string) {\n    location.assign("/schedule/detail?entry=" + encodeURIComponent(id));\n  }'),
-              ('横にスクロールすると1週間を続けて確認できます。上部サマリーと「要確認日のみ表示」で問題日を先に確認でき、予約カードをタップすると空き確認付きの予約変更へ直接進めます。', '横にスクロールすると1週間を続けて確認できます。予定カードから予定詳細を開けます。'),
-          ]
-          for old, new in replacements:
-              if text.count(old) != 1:
-                  raise SystemExit(f"week source expected exactly 1 match, got {text.count(old)}: {old[:80]}")
-              text = text.replace(old, new, 1)
-          week.write_text(text)
-
-          month = Path("app/schedule/month/page.tsx")
-          text = month.read_text()
-          old = 'className={"monthRow " + reasonClass(work) + (overlaps.has(entry.id) ? " overlapping" : "")}\n                      onClick={() => { window.location.href = "/schedule/edit?id=" + encodeURIComponent(entry.id); }}'
-          new = 'className={"monthRow " + reasonClass(work) + (overlaps.has(entry.id) ? " overlapping" : "")}\n                      aria-label={`${customerName(customer)}の予定詳細を開く`}\n                      onClick={() => { window.location.href = "/schedule/detail?entry=" + encodeURIComponent(entry.id); }}'
-          if text.count(old) != 1:
-              raise SystemExit(f"month source expected exactly 1 match, got {text.count(old)}")
-          month.write_text(text.replace(old, new, 1))
-
-          controller = Path("app/responsive-ux-controller.tsx")
-          text = controller.read_text()
-          text = text.replace('const WEEK_HINT = "横にスクロールすると1週間を続けて確認できます。予定カードから予定詳細を開けます。";\n', '')
-          start = text.find('function replaceSchedulingCopy(root: ParentNode) {')
-          end_marker = '\n\nexport default function ResponsiveUxController()'
-          end = text.find(end_marker, start)
-          if start < 0 or end < 0:
-              raise SystemExit('replaceSchedulingCopy block not found')
-          text = text[:start] + text[end+2:]
-          text = text.replace('      replaceSchedulingCopy(document.body);\n', '')
-          hint_block = '''      if (pathname === "/schedule/week") {\n        const hint = document.querySelector<HTMLElement>(".hint");\n        if (hint && hint.textContent !== WEEK_HINT) hint.textContent = WEEK_HINT;\n      }\n'''
-          if hint_block not in text:
-              raise SystemExit('week hint DOM block not found')
-          text = text.replace(hint_block, '')
-          home_intercept = '''\n        const scheduleRow = target.closest<HTMLElement>(".homeWeekRow");\n        if (scheduleRow) {\n          const dayCard = scheduleRow.closest<HTMLElement>(".homeWeekDay");\n          const cards = Array.from(document.querySelectorAll<HTMLElement>(".homeWeekDay"));\n          const index = dayCard ? cards.indexOf(dayCard) : -1;\n          if (index >= 0) {\n            event.preventDefault();\n            event.stopPropagation();\n            location.assign(`/schedule?day=${addDays(mondayOf(todayJst()), index)}`);\n          }\n        }\n'''
-          if home_intercept not in text:
-              raise SystemExit('home week click intercept not found')
-          text = text.replace(home_intercept, '\n')
-          controller.write_text(text)
-
-          regression = Path("scripts/schedule-source-dom-cleanup-regression.mjs")
-          regression.write_text(r'''import fs from "node:fs";
-
-function read(path) { return fs.readFileSync(path, "utf8"); }
-function assert(ok, message) { if (!ok) throw new Error(message); }
-
-const week = read("app/schedule/week/page.tsx");
-const month = read("app/schedule/month/page.tsx");
-const controller = read("app/responsive-ux-controller.tsx");
-const edit = read("app/schedule/edit/page.tsx");
-
-assert(week.includes('/schedule/detail?entry='), "weekly cards must open schedule detail from source");
-assert(!week.includes('function editEntry('), "weekly source must not retain editEntry navigation helper");
-assert(week.includes('の予定詳細を開く`'), "weekly aria-label must be source-defined");
-assert(week.includes('予定カードから予定詳細を開けます。'), "weekly hint must be source-defined");
-assert(month.includes('/schedule/detail?entry='), "monthly cards must open schedule detail from source");
-assert(month.includes('aria-label={`${customerName(customer)}の予定詳細を開く`}'), "monthly aria-label must be source-defined");
-assert(!controller.includes('replaceSchedulingCopy'), "global schedule label replacement must be removed");
-assert(!controller.includes('replaceAll("予約変更"'), "global 予約変更 replacement must be removed");
-assert(!controller.includes('WEEK_HINT'), "weekly hint DOM override must be removed");
-assert(!controller.includes('.homeWeekRow'), "home weekly click intercept must be removed after source migration");
-assert(edit.includes('予約変更') || edit.includes('変更'), "edit screen change semantics must remain present");
-
-console.log("Schedule source/DOM cleanup regression: PASS");
-''')
-
-          package = Path("package.json")
-          data = json.loads(package.read_text())
-          data["scripts"]["test:schedule-source-dom-cleanup"] = "node scripts/schedule-source-dom-cleanup-regression.mjs"
-          needle = "npm run test:cloudflare-architecture"
-          build = data["scripts"]["build"]
-          if "npm run test:schedule-source-dom-cleanup" not in build:
-              if needle not in build:
-                  raise SystemExit('build insertion point not found')
-              build = build.replace(needle, "npm run test:schedule-source-dom-cleanup && " + needle, 1)
-          data["scripts"]["build"] = build
-          package.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+      - name: Apply source cleanup
+        run: python /tmp/apply-source-dom-cleanup.py
 
       - name: Verify targeted regression
         run: npm run test:schedule-source-dom-cleanup
