@@ -60,7 +60,7 @@ for (const file of targets) {
   let text = fs.readFileSync(file, "utf8");
   const before = text;
 
-  if (file === "app/schedule/month/page.tsx") {
+  if (file === "app/schedule/month/page.tsx" || file === "app/schedule/week/page.tsx") {
     text = text.replace(/window\.location\.href\s*=\s*([^;\n]+);/g, "location.assign($1);");
   }
 
