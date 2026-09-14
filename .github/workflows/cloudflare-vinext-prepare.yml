@@ -29,13 +29,18 @@ jobs:
       - name: Initialize vinext non-destructively when needed
         run: |
           if [ ! -f vite.config.ts ] || [ ! -f wrangler.jsonc ]; then
-            npx --yes vinext@latest init \
+            # vinext beta.9 currently asks npm for an unpinned react-server-dom-webpack.
+            # The app is on React 19.2.8 and vinext supports ^19.2.6, so allow init to
+            # finish, then immediately pin the transport to the matching React release.
+            npm_config_legacy_peer_deps=true npx --yes vinext@latest init \
               --platform=cloudflare \
               --cdn-cache=workers-cache \
               --data-cache=none \
               --image-optimization=none \
               --no-prerender \
               --no-experimental-warm-cdn-cache
+            npm install --save-exact react-server-dom-webpack@19.2.8
+            npm ls react react-dom react-server-dom-webpack
           else
             echo "vinext staging config already present; init skipped"
           fi
@@ -48,6 +53,12 @@ jobs:
             echo "Protected application/runtime area changed by vinext init"
             exit 1
           fi
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Validate CI routing contract
+        run: node scripts/ci-routing-regression.mjs
 
       - name: Verify Cloudflare architecture
         run: npm run test:cloudflare-architecture
