@@ -1,0 +1,48 @@
+name: Internal navigation candidate audit
+
+on:
+  push:
+    branches:
+      - candidate/internal-navigation-spa-20260914
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Internal navigation audit
+        run: node scripts/internal-navigation-audit.mjs
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Full regression
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+        run: npm run build
+
+      - name: Deployment safety
+        run: |
+          python - <<'PY'
+          import pathlib, tomllib
+          with pathlib.Path('netlify.toml').open('rb') as f:
+              tomllib.load(f)
+          print('netlify.toml syntax is valid.')
+          PY
+          node scripts/deployment-safety-regression.mjs
