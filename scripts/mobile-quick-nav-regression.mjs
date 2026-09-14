@@ -45,7 +45,7 @@ assert(nav.includes('"/schedule/print"'), "schedule print route must suppress qu
 assert(nav.includes("env(safe-area-inset-bottom)"), "quick nav must respect iPhone safe area");
 assert(nav.includes("@media print"), "quick nav must be hidden for printing");
 assert(!nav.includes("supabase"), "quick nav must not add database traffic");
-assert(!nav.includes("fetch("), "quick nav must not add arbitrary fetch traffic");
+assert(!/(^|[^A-Za-z])fetch\s*\(/m.test(nav), "quick nav must not add arbitrary direct fetch traffic");
 assert(nav.includes("router.prefetch(item.href)"), "primary quick-nav routes must be warmed with Next router prefetch");
 assert(nav.includes("router.prefetch(todayHref)"), "Today route must be warmed with Next router prefetch");
 assert(nav.includes("<Link") && nav.includes("prefetch={true}"), "quick nav links must use Next Link prefetch");
