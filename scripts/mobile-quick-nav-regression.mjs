@@ -29,6 +29,8 @@ assert(shell.indexOf("<ResponsiveUxController />") < shell.indexOf("<LayoutDensi
 assert(shell.indexOf("<LayoutDensityCalibration />") < shell.indexOf("<DailyReportVisualAlignment />"), "handwritten alignment must render after physical A3 calibration");
 assert(shell.includes("<MobileQuickNav />"), "app shell must render MobileQuickNav inside the guarded app");
 
+assert(nav.includes('import Link from "next/link"'), "mobile quick nav must use Next.js Link");
+assert(nav.includes("useRouter"), "mobile quick nav must use Next router for route warm-up");
 assert(nav.includes('href: "/schedule/new"'), "mobile quick nav must include schedule registration");
 assert(nav.includes('href: "/schedule/search"'), "mobile quick nav must include schedule search");
 assert(nav.includes('href: "/customer-vehicles"'), "mobile quick nav must include customer/vehicle management");
@@ -43,7 +45,11 @@ assert(nav.includes('"/schedule/print"'), "schedule print route must suppress qu
 assert(nav.includes("env(safe-area-inset-bottom)"), "quick nav must respect iPhone safe area");
 assert(nav.includes("@media print"), "quick nav must be hidden for printing");
 assert(!nav.includes("supabase"), "quick nav must not add database traffic");
-assert(!nav.includes("fetch("), "quick nav must not add network fetches");
+assert(!nav.includes("fetch("), "quick nav must not add arbitrary fetch traffic");
+assert(nav.includes("router.prefetch(item.href)"), "primary quick-nav routes must be warmed with Next router prefetch");
+assert(nav.includes("router.prefetch(todayHref)"), "Today route must be warmed with Next router prefetch");
+assert(nav.includes("<Link") && nav.includes("prefetch={true}"), "quick nav links must use Next Link prefetch");
+assert(!nav.includes("<a\n") && !nav.includes("<a "), "quick nav must not regress to raw anchor navigation");
 assert(!nav.includes("/ocr/auto"), "quick nav must not couple global navigation to OCR execution");
 
 assert(controller.includes('body[data-ux-route="/schedule/week"] .attentionBar{display:none!important}'), "post-registration attention-day UI must be removed from weekly view");
@@ -102,7 +108,6 @@ assert(controller.includes('body[data-ux-route="/settings/business-calendar"] .i
 assert(controller.includes('content:"年間カレンダー設定"'), "low-frequency annual upload must be labelled as settings");
 assert(calendar.includes("営業日設定・変更"), "business-day editing must remain available");
 
-// A3 daily-report calibration is tied to the original 1755 x 2482 raster geometry (150 dpi A3).
 for (const token of [
   "page: { widthMm: 297, heightMm: 420, sourceWidth: 1755, sourceHeight: 2482 }",
   "top: 260 / 2482",
@@ -130,7 +135,6 @@ assert(!calibration.includes("scale("), "print calibration must not apply viewpo
 assert(!calibration.includes("translateZ("), "print calibration must remove Safari transform/rasterization drift");
 assert(calibration.includes("transform:none!important") && calibration.includes("-webkit-transform:none!important"), "all report overlays must print without transforms");
 
-// Handwritten-sample visual contract: keep same-row relationships and lower-section columns stable.
 for (const token of [
   '.deliveryEntry .reportWorkCode',
   'top:39%!important',
