@@ -48,3 +48,78 @@ jobs:
 
       - name: Vinext build
         run: npm run build:vinext
+
+      - name: Production asset and RSC smoke
+        env:
+          PRODUCTION_ORIGIN: https://vercel-parts-ocr.massa-ikimono.workers.dev
+        run: |
+          python - <<'PY'
+          import os, re, sys, urllib.request, urllib.error
+          from pathlib import Path
+          from urllib.parse import urljoin
+
+          origin = os.environ['PRODUCTION_ORIGIN'].rstrip('/')
+
+          def get(path, headers=None):
+              url = urljoin(origin + '/', path.lstrip('/'))
+              req = urllib.request.Request(url, headers=headers or {'User-Agent':'ICB-Cloudflare-Diagnostic/1.0'})
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      body = r.read()
+                      return r.status, dict(r.headers.items()), body, r.geturl()
+              except urllib.error.HTTPError as e:
+                  return e.code, dict(e.headers.items()), e.read(), e.geturl()
+
+          status, headers, html_bytes, final_url = get('/')
+          ctype = headers.get('Content-Type','')
+          print(f'ROOT status={status} content_type={ctype} bytes={len(html_bytes)} final_url={final_url}')
+          if status != 200:
+              sys.exit('ROOT_NOT_200')
+
+          html = html_bytes.decode('utf-8', 'replace')
+          refs = sorted(set(re.findall(r'''(?:src|href)=["']([^"']+)["']''', html)))
+          asset_paths = [p for p in refs if p.startswith('/_next/static/')]
+          print(f'ROOT next_static_refs={len(asset_paths)}')
+          if not asset_paths:
+              sys.exit('NO_NEXT_STATIC_REFS')
+
+          failures = 0
+          mime_failures = 0
+          html_fallbacks = 0
+          missing_build_files = 0
+
+          for p in asset_paths:
+              st, h, body, final = get(p)
+              ct = h.get('Content-Type','')
+              lower = body[:256].lstrip().lower()
+              looks_html = lower.startswith(b'<!doctype html') or lower.startswith(b'<html')
+              ext = Path(p.split('?',1)[0]).suffix.lower()
+              mime_ok = True
+              if ext == '.js':
+                  mime_ok = ('javascript' in ct) or ('ecmascript' in ct)
+              elif ext == '.css':
+                  mime_ok = 'text/css' in ct
+              local = Path('dist/client') / p.lstrip('/')
+              local_exists = local.exists()
+              if st != 200: failures += 1
+              if not mime_ok: mime_failures += 1
+              if looks_html: html_fallbacks += 1
+              if not local_exists: missing_build_files += 1
+              print(f'ASSET path={p} status={st} content_type={ct} bytes={len(body)} html_fallback={str(looks_html).lower()} local_dist_client={str(local_exists).lower()}')
+
+          # Probe the same root as an RSC/Flight request without exposing response body.
+          rsc_headers = {
+              'User-Agent':'ICB-Cloudflare-Diagnostic/1.0',
+              'RSC':'1',
+              'Accept':'text/x-component',
+          }
+          st, h, body, final = get('/?_rsc=icbdiag', headers=rsc_headers)
+          ct = h.get('Content-Type','')
+          lower = body[:256].lstrip().lower()
+          looks_html = lower.startswith(b'<!doctype html') or lower.startswith(b'<html')
+          print(f'RSC path=/?_rsc=icbdiag status={st} content_type={ct} bytes={len(body)} html_body={str(looks_html).lower()} final_url={final}')
+
+          print(f'SUMMARY asset_http_failures={failures} mime_failures={mime_failures} html_fallbacks={html_fallbacks} missing_dist_client_files={missing_build_files}')
+          if failures or mime_failures or html_fallbacks or missing_build_files:
+              sys.exit(2)
+          PY
