@@ -48,11 +48,13 @@ function importPathFor(file) {
   return rel;
 }
 
-function insertImport(text, statement) {
-  const directive = /^([\ufeff]?["']use client["'];\s*\n)/;
-  const match = text.match(directive);
-  if (match) return text.slice(0, match[0].length) + statement + "\n" + text.slice(match[0].length);
-  return statement + "\n" + text;
+function placeImport(text, statement) {
+  const lines = text.split(/\r?\n/);
+  const filtered = lines.filter((line) => !line.startsWith("import { appLocation as location } from "));
+  const directiveIndex = filtered.findIndex((line) => /^\s*["']use client["'];?\s*$/.test(line));
+  if (directiveIndex >= 0) filtered.splice(directiveIndex + 1, 0, statement);
+  else filtered.unshift(statement);
+  return filtered.join("\n");
 }
 
 let changed = 0;
@@ -65,9 +67,9 @@ for (const file of targets) {
   }
 
   const hasUnqualifiedLocation = /(?<!window\.)\blocation\.(?:assign|href|reload|replace|pathname|search)\b/.test(text);
-  if (hasUnqualifiedLocation && !text.includes("appLocation as location")) {
+  if (hasUnqualifiedLocation) {
     const statement = `import { appLocation as location } from "${importPathFor(file)}";`;
-    text = insertImport(text, statement);
+    text = placeImport(text, statement);
   }
 
   if (text !== before) {
