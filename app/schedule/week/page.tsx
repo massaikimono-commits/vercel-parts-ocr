@@ -520,7 +520,7 @@ export default function WeeklySchedulePage() {
           <button onClick={() => moveWeek(-1)}>← 前週</button>
           <button onClick={goCurrentWeek}>今週</button>
           <button onClick={() => moveWeek(1)}>翌週 →</button>
-          <button onClick={() => { window.location.href = "/schedule/month?day=" + jumpDay; }}>月全体</button>
+          <button onClick={() => { location.assign("/schedule/month?day=" + jumpDay); }}>月全体</button>
         </div>
       </section>
 
