@@ -1,0 +1,64 @@
+/* Desktop-only high-density operating UI. Mobile/tablet rules remain owned by existing responsive styles. */
+@media (min-width: 981px) {
+  :root { --desktop-gap: 8px; --desktop-radius: 12px; }
+  body { font-size: 13px; }
+  main { max-width: 1180px; padding-bottom: 24px; }
+  .header { padding: 14px 14px 8px; }
+  .title, h1 { font-size: 22px; line-height: 1.2; }
+  h1 { margin-bottom: 10px; }
+  h2 { font-size: 17px; margin-top: 16px; margin-bottom: 8px; }
+  h3 { font-size: 14px; margin-top: 12px; margin-bottom: 6px; }
+  p { line-height: 1.45; }
+  .desc { margin-top: 4px; line-height: 1.4; }
+  .tabs { gap: 6px; padding: 0 14px 9px; }
+  button { border-radius: 9px; padding: 7px 10px; min-height: 34px; }
+  .big { font-size: 14px; padding: 9px 12px; }
+  input, select, textarea { border-width: 1px; border-radius: 8px; padding: 7px 9px; margin: 3px 0; min-height: 34px; }
+  textarea { min-height: 92px; }
+  .card { border-radius: 14px; padding: 14px; margin: 0 12px 10px; box-shadow: 0 3px 14px #1a28400a; }
+  .subcard { border-radius: 12px; padding: 11px; }
+  .manage-grid { gap: 10px; }
+  .actions { gap: 6px; margin-top: 8px; }
+  .notice { margin: 0 12px 8px; padding: 8px 10px; border-radius: 9px; }
+  .row { margin: 4px 0; }
+  .list { margin: 7px 0; }
+  .empty, .stats { padding: 10px; border-radius: 10px; }
+  .stats { font-size: 14px; }
+  hr { margin: 12px 0; }
+  .table { border-radius: 10px; }
+  th, td { padding: 5px 7px; line-height: 1.3; }
+  .file { border-radius: 9px; padding: 7px 10px; margin: 5px 0 10px; }
+  .positions { gap: 7px; }
+  .pos { border-radius: 10px; padding: 8px; }
+  footer { padding: 10px; }
+
+  /* Home: materially more content above the fold. */
+  .homeDash { max-width: 1320px; padding: 10px 14px 28px; }
+  .homeHead { margin-bottom: 8px; min-height: 38px; }
+  .homeLogo { font-size: 27px; letter-spacing: -.5px; }
+  .homeSub { font-size: 12px; margin-top: 0; }
+  .homeDash .logout { padding: 6px 9px; min-height: 32px; }
+  .desktopHeroGrid { gap: 9px; }
+  .desktopHero { min-height: 112px; border-radius: 14px; padding: 14px 16px; }
+  .desktopHero span { font-size: 14px; }
+  .desktopHero strong { font-size: 24px; }
+  .desktopHero small { font-size: 11px; }
+  .dateSearch { margin-top: 9px; border-radius: 12px; padding: 10px; grid-template-columns: 1fr 150px auto auto auto; gap: 7px; }
+  .dateSearch div { gap: 2px; }
+  .desktopTools { gap: 7px; margin-top: 9px; }
+  .desktopTools button { min-height: 62px; gap: 2px; padding: 9px 11px; }
+  .desktopTools b { font-size: 14px; }
+  .desktopTools small { font-size: 11px; }
+
+  /* Source-owned schedule/customer/vehicle screens share the same desktop density. */
+  [style*="maxWidth"] { scroll-margin-top: 8px; }
+  form { line-height: 1.35; }
+  form label { line-height: 1.25; }
+  form button { min-height: 34px; }
+  dialog { max-height: 88vh; }
+}
+
+@media print {
+  /* Desktop compact rules must never alter formal print geometry. */
+  body { font-size: initial; }
+}
