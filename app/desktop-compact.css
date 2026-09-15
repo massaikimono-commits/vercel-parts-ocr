@@ -1,64 +1,13 @@
 /* Desktop-only high-density operating UI. Mobile/tablet rules remain owned by existing responsive styles. */
-@media (min-width: 981px) {
-  :root { --desktop-gap: 8px; --desktop-radius: 12px; }
-  body { font-size: 13px; }
-  main { max-width: 1180px; padding-bottom: 24px; }
-  .header { padding: 14px 14px 8px; }
-  .title, h1 { font-size: 22px; line-height: 1.2; }
-  h1 { margin-bottom: 10px; }
-  h2 { font-size: 17px; margin-top: 16px; margin-bottom: 8px; }
-  h3 { font-size: 14px; margin-top: 12px; margin-bottom: 6px; }
-  p { line-height: 1.45; }
-  .desc { margin-top: 4px; line-height: 1.4; }
-  .tabs { gap: 6px; padding: 0 14px 9px; }
-  button { border-radius: 9px; padding: 7px 10px; min-height: 34px; }
-  .big { font-size: 14px; padding: 9px 12px; }
-  input, select, textarea { border-width: 1px; border-radius: 8px; padding: 7px 9px; margin: 3px 0; min-height: 34px; }
-  textarea { min-height: 92px; }
-  .card { border-radius: 14px; padding: 14px; margin: 0 12px 10px; box-shadow: 0 3px 14px #1a28400a; }
-  .subcard { border-radius: 12px; padding: 11px; }
-  .manage-grid { gap: 10px; }
-  .actions { gap: 6px; margin-top: 8px; }
-  .notice { margin: 0 12px 8px; padding: 8px 10px; border-radius: 9px; }
-  .row { margin: 4px 0; }
-  .list { margin: 7px 0; }
-  .empty, .stats { padding: 10px; border-radius: 10px; }
-  .stats { font-size: 14px; }
-  hr { margin: 12px 0; }
-  .table { border-radius: 10px; }
-  th, td { padding: 5px 7px; line-height: 1.3; }
-  .file { border-radius: 9px; padding: 7px 10px; margin: 5px 0 10px; }
-  .positions { gap: 7px; }
-  .pos { border-radius: 10px; padding: 8px; }
-  footer { padding: 10px; }
-
-  /* Home: materially more content above the fold. */
-  .homeDash { max-width: 1320px; padding: 10px 14px 28px; }
-  .homeHead { margin-bottom: 8px; min-height: 38px; }
-  .homeLogo { font-size: 27px; letter-spacing: -.5px; }
-  .homeSub { font-size: 12px; margin-top: 0; }
-  .homeDash .logout { padding: 6px 9px; min-height: 32px; }
-  .desktopHeroGrid { gap: 9px; }
-  .desktopHero { min-height: 112px; border-radius: 14px; padding: 14px 16px; }
-  .desktopHero span { font-size: 14px; }
-  .desktopHero strong { font-size: 24px; }
-  .desktopHero small { font-size: 11px; }
-  .dateSearch { margin-top: 9px; border-radius: 12px; padding: 10px; grid-template-columns: 1fr 150px auto auto auto; gap: 7px; }
-  .dateSearch div { gap: 2px; }
-  .desktopTools { gap: 7px; margin-top: 9px; }
-  .desktopTools button { min-height: 62px; gap: 2px; padding: 9px 11px; }
-  .desktopTools b { font-size: 14px; }
-  .desktopTools small { font-size: 11px; }
-
-  /* Source-owned schedule/customer/vehicle screens share the same desktop density. */
-  [style*="maxWidth"] { scroll-margin-top: 8px; }
-  form { line-height: 1.35; }
-  form label { line-height: 1.25; }
-  form button { min-height: 34px; }
-  dialog { max-height: 88vh; }
+@media (min-width:981px){
+:root{--desktop-gap:7px;--desktop-radius:11px}body{font-size:13px}main{max-width:1180px;padding-bottom:18px}.header{padding:8px 12px 6px;min-height:0}.title,h1{font-size:21px;line-height:1.18}h1{margin:0 0 8px}h2{font-size:16px;margin:12px 0 6px}h3{font-size:14px;margin:9px 0 5px}p{line-height:1.4;margin-top:6px;margin-bottom:6px}.desc{margin-top:3px;line-height:1.35}.tabs{gap:5px;padding:0 12px 7px}button{border-radius:8px;padding:6px 9px;min-height:32px}.big{font-size:14px;padding:8px 11px}input,select,textarea{border-width:1px;border-radius:8px;padding:6px 8px;margin:2px 0;min-height:32px}textarea{min-height:82px}.card{border-radius:12px;padding:11px;margin:0 10px 8px;box-shadow:0 2px 10px #1a284008}.subcard{border-radius:10px;padding:9px}.manage-grid{gap:8px}.actions{gap:5px;margin-top:6px}.notice{margin:0 10px 7px;padding:7px 9px;border-radius:8px}.row{margin:3px 0}.list{margin:5px 0}.empty,.stats{padding:8px;border-radius:9px}.stats{font-size:13px}hr{margin:9px 0}.table{border-radius:9px}th,td{padding:4px 6px;line-height:1.25}.file{border-radius:8px;padding:6px 9px;margin:4px 0 8px}.positions{gap:6px}.pos{border-radius:9px;padding:7px}footer{padding:8px}form{line-height:1.3}form label{line-height:1.2}form button{min-height:32px}dialog{max-height:90vh}
+/* Home vertical-space audit: compress containers, not information. */
+.homeDash{max-width:1320px;padding:5px 12px 20px}.homeHead{height:44px;min-height:44px;margin:0 0 6px;display:flex;align-items:center;justify-content:space-between}.homeHead>div{display:flex;align-items:baseline;gap:8px}.homeLogo{font-size:25px;line-height:1}.homeSub{font-size:11px;margin:0}.homeDash .logout{padding:5px 8px;min-height:30px}.homeWeek{padding:10px!important;margin-bottom:8px!important;border-radius:14px!important}.homeWeekHead{margin-bottom:7px!important;gap:8px!important}.homeWeekHead h2{font-size:18px!important}.homeWeekGrid{gap:5px!important}.homeWeekDayHead{padding:6px!important}.homeWeekRows{padding:4px!important;gap:3px!important}.homeWeekRow{padding:5px!important}.homeWeekAdd{margin:3px!important;padding:5px!important}
+.homeStaying{margin-bottom:8px!important;padding:9px 10px!important;border-radius:13px!important}.homeStayingHead{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:8px!important;margin:0 0 6px!important}.homeStayingHead>div{display:flex!important;align-items:baseline!important;gap:7px!important}.homeStayingHead span{font-size:10px!important}.homeStayingHead h2{margin:0!important;font-size:16px!important}.homeStayingHead>strong{font-size:15px!important;margin-left:0!important}.homeStayingGrid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))!important;gap:5px!important}.homeStayingGrid>button{min-height:0!important;padding:6px 8px!important;gap:8px!important;line-height:1.2!important}.homeStayingGrid>button span{gap:1px!important}.homeStayingGrid>button b{font-size:12px!important}.homeStayingGrid>button small{font-size:10px!important}.homeStayingEmpty{padding:7px!important}
+.homeWorkStatus{margin-bottom:8px!important;padding:8px 10px!important;border-radius:13px!important}.todayStatusGrid{gap:6px!important;margin-top:6px!important}.statusTile{padding:7px 6px!important}.statusTile strong{font-size:22px!important}.desktopHeroGrid{gap:7px}.desktopHero{min-height:78px;border-radius:12px;padding:9px 12px}.desktopHero span{font-size:12px}.desktopHero strong{font-size:19px}.desktopHero small{font-size:10px}.homeWorkload{margin-top:8px!important;padding:10px!important;border-radius:13px!important}.homeWorkloadHead{margin-bottom:6px!important}.homeWorkloadGrid{gap:6px!important}.homeWorker{padding:7px!important}.dateSearch{margin-top:7px;border-radius:11px;padding:8px;grid-template-columns:1fr 145px auto auto auto;gap:5px}.dateSearch div{gap:1px}.desktopTools{gap:5px;margin-top:7px}.desktopTools button{min-height:48px;gap:1px;padding:7px 9px}.desktopTools b{font-size:13px}.desktopTools small{font-size:10px}
+/* Formal display name/order only; routes remain unchanged. */
+.desktopTools button:nth-child(8){order:3}.desktopTools button:nth-child(3){order:8}.desktopTools button:nth-child(8) b{font-size:0}.desktopTools button:nth-child(8) b::before{content:"車両検索";font-size:13px}.mobileActions button:nth-child(11){font-size:0}.mobileActions button:nth-child(11)::before{content:"車両検索";font-size:13px}
+/* Generic route density: parent containers and stacks. */
+[style*="maxWidth"]{scroll-margin-top:42px}.manage-grid,.grid,.form-grid{row-gap:8px!important}section.card>h1:first-child,section.card>h2:first-child{margin-top:0}.card>.actions:last-child{margin-bottom:0}
 }
-
-@media print {
-  /* Desktop compact rules must never alter formal print geometry. */
-  body { font-size: initial; }
-}
+@media print{body{font-size:initial}.desktopQuickNav,.desktopQuickNavSpacer{display:none!important}}

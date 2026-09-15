@@ -3,106 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-
-const HIDDEN_PREFIXES = [
-  "/parts-print",
-  "/inspection/print",
-  "/schedule/print",
-];
-
-const ITEMS = [
-  { href: "/", label: "ホーム", icon: "⌂" },
-  { href: "/schedule/new", label: "予定登録", icon: "＋" },
-  { href: "/schedule/search", label: "予定検索", icon: "⌕" },
-  { href: "/customer-vehicles", label: "顧客車両", icon: "車" },
-] as const;
-
-function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
-  if (href === "/schedule/new") return pathname === "/schedule/new";
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function todayJst() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
-export default function MobileQuickNav() {
-  const pathname = usePathname() || "/";
-  const router = useRouter();
-  const [todayActive, setTodayActive] = useState(false);
-
-  const todayHref = `/schedule?day=${todayJst()}`;
-
-  useEffect(() => {
-    // vinext/Cloudflareでは未訪問routeの初回遷移時にroute asset取得が間に合わず、
-    // root client treeが再構築されるケースがあるため、主要routeを明示的にwarm-upする。
-    // Next.js Linkの自動prefetch任せにせず、初回表示直後に主要導線を先読みする。
-    for (const item of ITEMS) router.prefetch(item.href);
-    router.prefetch(todayHref);
-  }, [router, todayHref]);
-
-  useEffect(() => {
-    if (pathname !== "/schedule") {
-      setTodayActive(false);
-      return;
-    }
-    const selectedDay = new URLSearchParams(location.search).get("day");
-    setTodayActive(!selectedDay || selectedDay === todayJst());
-  }, [pathname]);
-
-  if (HIDDEN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
-    return null;
-  }
-
-  return (
-    <nav className="mobileQuickNav" aria-label="スマホ共通ショートカット">
-      {ITEMS.map((item) => {
-        const active = isActive(pathname, item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            prefetch={true}
-            className={active ? "active" : ""}
-            aria-current={active ? "page" : undefined}
-          >
-            <span aria-hidden="true">{item.icon}</span>
-            <b>{item.label}</b>
-          </Link>
-        );
-      })}
-      <Link
-        href={todayHref}
-        prefetch={true}
-        className={todayActive ? "todayShortcut active" : "todayShortcut"}
-        aria-current={todayActive ? "page" : undefined}
-        aria-label="今日の1日の予定を開く"
-      >
-        <span aria-hidden="true">日</span>
-        <b>今日</b>
-      </Link>
-      <style jsx global>{`
-        .mobileQuickNav{display:none}
-        @media(max-width:760px){
-          body{padding-bottom:calc(66px + env(safe-area-inset-bottom))}
-          .mobileQuickNav{position:fixed;z-index:1000;left:8px;right:8px;bottom:max(7px,env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:5px;background:rgba(255,255,255,.96);border:1px solid #d6dfeb;border-radius:16px;box-shadow:0 8px 28px rgba(20,35,55,.18);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-          .mobileQuickNav a{min-width:0;min-height:48px;border-radius:11px;text-decoration:none;color:#66758a;display:grid;place-items:center;align-content:center;gap:1px;font-size:11px;font-weight:900;-webkit-tap-highlight-color:transparent}
-          .mobileQuickNav a>span{font-size:17px;line-height:1}
-          .mobileQuickNav a>b{font-size:10px;line-height:1.2;white-space:nowrap}
-          .mobileQuickNav a.active{background:#eef4ff;color:#245fae}
-          .mobileQuickNav a.todayShortcut{background:#f7f9fc;color:#315f98}
-          .mobileQuickNav a.todayShortcut.active{background:#e6f0ff;color:#164f9d}
-          .mobileQuickNav a:focus-visible{outline:3px solid #72a7ed;outline-offset:1px}
-        }
-        @media(max-width:360px){.mobileQuickNav a>b{font-size:9px}}
-        @media print{.mobileQuickNav{display:none!important}body{padding-bottom:0!important}}
-      `}</style>
-    </nav>
-  );
-}
+const HIDDEN_PREFIXES=["/parts-print","/inspection/print","/schedule/print"];
+const ITEMS=[{href:"/",label:"ホーム",icon:"⌂"},{href:"/schedule/new",label:"予定登録",icon:"＋"},{href:"/schedule/search",label:"予定検索",icon:"⌕"},{href:"/customer-vehicles",label:"車両検索",icon:"車"}] as const;
+function isActive(pathname:string,href:string){if(href==="/")return pathname==="/";if(href==="/schedule/new")return pathname==="/schedule/new";return pathname===href||pathname.startsWith(`${href}/`)}
+function todayJst(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
+export default function MobileQuickNav(){const pathname=usePathname()||"/";const router=useRouter();const[todayActive,setTodayActive]=useState(false);const todayHref=`/schedule?day=${todayJst()}`;
+useEffect(()=>{for(const item of ITEMS)router.prefetch(item.href);router.prefetch(todayHref)},[router,todayHref]);
+useEffect(()=>{if(pathname!=="/schedule"){setTodayActive(false);return}const selectedDay=new URLSearchParams(location.search).get("day");setTodayActive(!selectedDay||selectedDay===todayJst())},[pathname]);
+if(HIDDEN_PREFIXES.some((prefix)=>pathname===prefix||pathname.startsWith(`${prefix}/`)))return null;
+return <nav className="mobileQuickNav" aria-label="スマホ共通ショートカット">{ITEMS.map((item)=>{const active=isActive(pathname,item.href);return <Link key={item.href} href={item.href} prefetch={true} className={active?"active":""} aria-current={active?"page":undefined}><span aria-hidden="true">{item.icon}</span><b>{item.label}</b></Link>})}<Link href={todayHref} prefetch={true} className={todayActive?"todayShortcut active":"todayShortcut"} aria-current={todayActive?"page":undefined} aria-label="今日の1日の予定を開く"><span aria-hidden="true">日</span><b>今日</b></Link><style jsx global>{`
+.mobileQuickNav{display:none}@media(max-width:760px){body{padding-bottom:calc(66px + env(safe-area-inset-bottom))}.mobileQuickNav{position:fixed;z-index:1000;left:8px;right:8px;bottom:max(7px,env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:5px;background:rgba(255,255,255,.96);border:1px solid #d6dfeb;border-radius:16px;box-shadow:0 8px 28px rgba(20,35,55,.18);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}.mobileQuickNav a{min-width:0;min-height:48px;border-radius:11px;text-decoration:none;color:#66758a;display:grid;place-items:center;align-content:center;gap:1px;font-size:11px;font-weight:900;-webkit-tap-highlight-color:transparent}.mobileQuickNav a>span{font-size:17px;line-height:1}.mobileQuickNav a>b{font-size:10px;line-height:1.2;white-space:nowrap}.mobileQuickNav a.active{background:#eef4ff;color:#245fae}.mobileQuickNav a.todayShortcut{background:#f7f9fc;color:#315f98}.mobileQuickNav a.todayShortcut.active{background:#e6f0ff;color:#164f9d}.mobileQuickNav a:focus-visible{outline:3px solid #72a7ed;outline-offset:1px}}@media(max-width:360px){.mobileQuickNav a>b{font-size:9px}}@media print{.mobileQuickNav{display:none!important}body{padding-bottom:0!important}}
+`}</style></nav>}
