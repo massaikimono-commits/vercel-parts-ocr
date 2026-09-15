@@ -1,13 +1,16 @@
-name: R2 DB backup test
+name: R2 DB backup
 
 on:
   workflow_dispatch:
+  schedule:
+    # 04:30 JST (19:30 UTC on the previous calendar day)
+    - cron: '30 19 * * *'
 
 permissions:
   contents: read
 
 concurrency:
-  group: icb-r2-db-backup-test
+  group: icb-r2-db-backup
   cancel-in-progress: false
 
 jobs:
@@ -15,12 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout candidate backup implementation
+      - name: Checkout verified backup implementation
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: candidate/r2-supabase-backup-20260915
           persist-credentials: false
-      - name: Validate candidate script syntax
+      - name: Validate backup script syntax
         shell: bash
         run: bash -n scripts/r2-db-backup.sh
       - name: Create and verify R2 database backup
