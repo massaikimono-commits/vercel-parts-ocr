@@ -785,11 +785,6 @@ export default function ScheduleNewPage() {
       setHardErrors(["お客様名を入力してください。"]);
       return;
     }
-    if (selectedVehicleIds.length <= 1 && !registrationNumber.trim() && !registrationLast4.trim()) {
-      setHardErrors(["登録番号またはナンバー下4桁を入力してください。"]);
-      return;
-    }
-
     setBusy(true);
     try {
       if (selectedVehicleIds.length > 1) {
@@ -995,7 +990,7 @@ export default function ScheduleNewPage() {
       <section className="card">
         <div className="eyebrow">入出庫予定登録</div>
         <h1>予定を追加</h1>
-        <div className="notice">初入庫は「お客様名＋ナンバー下4桁」だけでも予定登録できます。型式・車台番号・完全な登録番号は、入庫後や車検証読取後に追記できます。</div>
+        <div className="notice">初回電話予約など車番がまだ分からない場合は「お客様名だけ」でも予定登録できます。車番・型式・車台番号は、確認後に顧客・車両情報へ追加できます。</div>
         {successMessage && (
           <div className="successBanner" role="status" aria-live="polite">
             <b>{successMessage}</b>
@@ -1093,7 +1088,7 @@ export default function ScheduleNewPage() {
             const last = value.match(/(\d{4})(?!.*\d)/)?.[1];
             if (last) setRegistrationLast4(last);
           }} /></label>
-          <label>ナンバー下4桁<input inputMode="numeric" maxLength={4} value={registrationLast4} onChange={(e) => setRegistrationLast4(e.target.value.replace(/\D/g, "").slice(-4))} /></label>
+          <label>ナンバー下4桁<input inputMode="numeric" maxLength={4} value={registrationLast4} onChange={(e) => setRegistrationLast4(e.target.value.replace(/\D/g, "").slice(-4))} placeholder="未確認なら空欄で登録可" /></label>
           <label>メーカー<input value={maker} onChange={(e) => setMaker(e.target.value)} /></label>
           <label>型式<input value={model} onChange={(e) => setModel(e.target.value)} /></label>
         </div>
