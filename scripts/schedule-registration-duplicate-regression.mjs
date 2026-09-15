@@ -19,7 +19,9 @@ assert.doesNotMatch(source, /既存顧客の確認|既存顧客を使う|候補�
 assert.doesNotMatch(source, /DuplicateCustomerCandidate|DuplicateVehicleCandidate|duplicateCustomers|duplicateVehicles/, "candidate duplicate UI/state is removed");
 assert.match(source, /const selectedCustomerForSubmit = existingCustomerId;/, "explicitly selected registered customer is submitted directly");
 assert.match(source, /const selectedVehicleForSubmit = existingVehicleId;/, "explicitly selected registered vehicle is submitted directly");
-assert.match(source, /初入庫は「お客様名＋ナンバー下4桁」だけでも予定登録できます。/, "initial intake guidance allows name + last4");
-assert.match(source, /if \(selectedVehicleIds\.length <= 1 && !registrationNumber\.trim\(\) && !registrationLast4\.trim\(\)\)/, "manual initial intake accepts last4 without full registration");
+assert.match(source, /車番がまだ分からない場合は「お客様名だけ」でも予定登録できます。/, "initial intake guidance allows customer name without plate");
+assert.match(source, /if \(selectedVehicleIds\.length <= 1 && !customerName\.trim\(\)\)/, "customer name remains required for single/new registration");
+assert.doesNotMatch(source, /if \(selectedVehicleIds\.length <= 1 && !registrationNumber\.trim\(\) && !registrationLast4\.trim\(\)\)/, "plate is no longer required for provisional initial intake");
+assert.match(source, /const sameDayWarnings = resolvedVehicleId\s*\? await sameDayVehicleScheduleWarnings\(\[resolvedVehicleId\]\)\s*:\s*\[\];/, "vehicle-unconfirmed registration skips vehicle duplicate warning");
 
 console.log("schedule registration duplicate regression: ok");
