@@ -17,6 +17,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
@@ -28,11 +30,13 @@ jobs:
         run: npm run build
       - name: Deployment safety
         run: |
-          node scripts/netlify-toml-syntax-check.mjs
-          node scripts/netlify-production-deploy-lock.mjs
-          node scripts/netlify-preview-deploy-lock.mjs
-          node scripts/netlify-branch-deploy-skip.mjs
-          node scripts/vercel-selective-deploy-guard.mjs
+          python - <<'PY'
+          import pathlib, tomllib
+          with pathlib.Path('netlify.toml').open('rb') as f:
+              tomllib.load(f)
+          print('netlify.toml syntax is valid.')
+          PY
+          node scripts/deployment-safety-regression.mjs
       - name: Protected diff audit
         run: |
           git diff --name-only c9357f6481e7910565af9ea003f05f7e6016e4b4...HEAD | tee /tmp/changed.txt
