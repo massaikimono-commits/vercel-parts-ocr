@@ -1,9 +1,9 @@
-name: Vehicle name-only candidate verify
+name: Vehicle name-only rebased candidate verify
 
 on:
   push:
     branches:
-      - feature/vehicle-register-name-only-schedule-20260915
+      - candidate/vehicle-register-name-only-rebased-20260915
 
 permissions:
   contents: read
@@ -39,7 +39,7 @@ jobs:
           node scripts/deployment-safety-regression.mjs
       - name: Protected diff audit
         run: |
-          git diff --name-only c9357f6481e7910565af9ea003f05f7e6016e4b4...HEAD | tee /tmp/changed.txt
+          git diff --name-only cdabecadf993cff1b36bbbeda0b3998fcd71ec98...HEAD | tee /tmp/changed.txt
           if grep -E '^(supabase/|database/|app/certificate-|app/lib/certificate-|app/eval/|app/ocr/)' /tmp/changed.txt; then
             echo 'Protected DB/OCR path changed' >&2
             exit 1
@@ -48,4 +48,4 @@ jobs:
             echo 'Deployment configuration changed' >&2
             exit 1
           fi
-          git diff --check c9357f6481e7910565af9ea003f05f7e6016e4b4...HEAD
+          git diff --check cdabecadf993cff1b36bbbeda0b3998fcd71ec98...HEAD
