@@ -30,8 +30,6 @@ mkdir "$WORKDIR/db"
 tar -C "$WORKDIR/db" -xzf "$ARCHIVE"
 (cd "$WORKDIR/db" && sha256sum -c SHA256SUMS)
 
-# Hosted Supabase managed schemas can differ from the pinned isolated image.
-# Preserve the complete data.sql in R2, while restoring public app data independently.
 PUBLIC_DATA="$WORKDIR/db/public-data.sql"
 awk '
   /^COPY (public\.|"public"\.)/ { keep=1 }
@@ -51,6 +49,11 @@ for _ in $(seq 1 90); do
   sleep 2
 done
 docker exec "$CID" pg_isready -U postgres -d postgres >/dev/null
+
+# Hosted Supabase schema dumps can reference extension-owned namespaces that are not
+# initialized by a bare container start. Create the namespace only; schema.sql remains
+# authoritative for the backed-up app objects.
+docker exec "$CID" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c 'CREATE SCHEMA IF NOT EXISTS vault;' >/dev/null
 
 docker cp "$WORKDIR/db/schema.sql" "$CID:/tmp/schema.sql"
 docker cp "$PUBLIC_DATA" "$CID:/tmp/public-data.sql"
