@@ -1,0 +1,33 @@
+name: R2 DB restore test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: icb-r2-db-restore-test
+  cancel-in-progress: false
+
+jobs:
+  restore-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout candidate backup implementation
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: candidate/r2-supabase-backup-20260915
+          persist-credentials: false
+      - name: Validate restore verifier syntax
+        shell: bash
+        run: bash -n scripts/r2-db-restore-verify.sh
+      - name: Restore latest R2 backup into isolated database
+        shell: bash
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: bash scripts/r2-db-restore-verify.sh
