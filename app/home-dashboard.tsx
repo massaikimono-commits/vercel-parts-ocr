@@ -513,7 +513,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       <section className="mobileToday">
         <div className="mobileActions">
           <button className="primaryAction" onClick={() => registerDay(todayJst())}>＋ 予定登録</button>
-          <button className="vehicleRegisterAction" onClick={() => location.assign("/vehicle-workflow")}>＋ 車両登録</button>
+          <button className="vehicleRegisterAction" onClick={() => location.assign("/vehicle-workflow?mode=new")}>＋ 車両登録</button>
           <button className="uxDailyReportShortcut" onClick={() => location.assign(`/schedule/print?day=${todayJst()}`)}>日報</button>
           <button onClick={() => location.assign("/schedule/search")}>名前・電話・下4桁で予定検索</button>
           <button onClick={() => location.assign("/schedule/week")}>1週間のスケジュール</button>

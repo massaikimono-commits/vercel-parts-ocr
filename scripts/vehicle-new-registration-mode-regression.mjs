@@ -1,0 +1,15 @@
+import fs from "node:fs";
+const read = p => fs.readFileSync(p, "utf8");
+const home = read("app/home-dashboard.tsx");
+const entry = read("app/vehicle-workflow/page.tsx");
+const v2 = read("app/vehicle-workflow-v2/page.tsx");
+const fast = read("app/vehicle-workflow-fast/page.tsx");
+if (!home.includes('/vehicle-workflow?mode=new')) throw new Error("home new-registration route missing");
+if (!entry.includes('mode === "new" ? "/vehicle-workflow-v2?mode=new"')) throw new Error("entry mode forwarding missing");
+if (!v2.includes('newRegistrationMode={searchParams.get("mode") === "new"}')) throw new Error("v2 mode binding missing");
+if (!fast.includes('if(newRegistrationMode){setVehicles([])')) throw new Error("new mode must suppress vehicle loading");
+if (!fast.includes('newRegistrationMode ? <section className="card"><h1>新規車両登録</h1>')) throw new Error("new registration UI missing");
+if (!fast.includes(': <section className="card"><h1>作業車両を選択</h1>')) throw new Error("normal vehicle UI missing");
+if (!fast.includes('supabase.from("vehicles").select("*")')) throw new Error("existing vehicle search removed");
+if (!fast.includes('supabase.from("vehicles").insert(p)')) throw new Error("vehicle insert removed");
+console.log("vehicle new-registration mode regression: PASS");
