@@ -30,24 +30,36 @@ mkdir "$WORKDIR/db"
 tar -C "$WORKDIR/db" -xzf "$ARCHIVE"
 (cd "$WORKDIR/db" && sha256sum -c SHA256SUMS)
 
-# Restore into an isolated ephemeral Supabase-compatible PostgreSQL container only.
-CID="$(docker run -d -e POSTGRES_PASSWORD=restoretest -e POSTGRES_DB=postgres -p 127.0.0.1::5432 public.ecr.aws/supabase/postgres:17.6.1.167)"
+CID="$(docker run -d -e POSTGRES_PASSWORD=restoretest -e POSTGRES_DB=postgres public.ecr.aws/supabase/postgres:17.6.1.167)"
 for _ in $(seq 1 90); do
   docker exec "$CID" pg_isready -U postgres -d postgres >/dev/null 2>&1 && break
   sleep 2
 done
 docker exec "$CID" pg_isready -U postgres -d postgres >/dev/null
 
-# Supabase role dump may contain managed-role statements that are not required to validate app schema/data.
 docker cp "$WORKDIR/db/schema.sql" "$CID:/tmp/schema.sql"
 docker cp "$WORKDIR/db/data.sql" "$CID:/tmp/data.sql"
-docker exec "$CID" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /tmp/schema.sql >/tmp/schema-restore.log 2>&1 || { cat /tmp/schema-restore.log; exit 5; }
-# Data-only dump has known circular FKs. Disable user triggers during isolated restore validation.
-docker exec "$CID" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "SET session_replication_role = replica;" -f /tmp/data.sql -c "SET session_replication_role = origin;" >/tmp/data-restore.log 2>&1 || { cat /tmp/data-restore.log; exit 6; }
+SCHEMA_LOG="$WORKDIR/schema-restore.log"
+if ! docker exec "$CID" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /tmp/schema.sql >"$SCHEMA_LOG" 2>&1; then
+  echo "Schema restore failed. First PostgreSQL error context:" >&2
+  grep -n -m1 -B4 -A8 -E '(^|[[:space:]])(ERROR|FATAL):|psql:.*ERROR:' "$SCHEMA_LOG" >&2 || tail -n 80 "$SCHEMA_LOG" >&2
+  exit 5
+fi
+
+# Apply the entire data file in one session so session_replication_role remains replica
+# for COPY statements that participate in circular foreign keys.
+DATA_WRAPPER="$WORKDIR/data-restore-wrapper.sql"
+printf '%s\n' 'SET session_replication_role = replica;' '\i /tmp/data.sql' 'SET session_replication_role = origin;' > "$DATA_WRAPPER"
+docker cp "$DATA_WRAPPER" "$CID:/tmp/data-restore-wrapper.sql"
+DATA_LOG="$WORKDIR/data-restore.log"
+if ! docker exec "$CID" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /tmp/data-restore-wrapper.sql >"$DATA_LOG" 2>&1; then
+  echo "Data restore failed. First PostgreSQL error context:" >&2
+  grep -n -m1 -B4 -A8 -E '(^|[[:space:]])(ERROR|FATAL):|psql:.*ERROR:' "$DATA_LOG" >&2 || tail -n 80 "$DATA_LOG" >&2
+  exit 6
+fi
 
 TABLES="$(docker exec "$CID" psql -At -U postgres -d postgres -c "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE';")"
 [[ "$TABLES" =~ ^[0-9]+$ && "$TABLES" -gt 0 ]] || { echo "No public tables restored." >&2; exit 7; }
-# Validate all restored FK constraints after triggers are re-enabled.
 INVALID="$(docker exec "$CID" psql -At -U postgres -d postgres -c "select count(*) from pg_constraint where contype='f' and not convalidated;")"
 [[ "$INVALID" == "0" ]] || { echo "Unvalidated foreign keys remain: $INVALID" >&2; exit 8; }
 echo "Isolated restore verification PASS: $KEY; public tables=$TABLES"
