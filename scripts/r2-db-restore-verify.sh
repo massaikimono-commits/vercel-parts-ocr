@@ -30,20 +30,19 @@ mkdir "$WORKDIR/db"
 tar -C "$WORKDIR/db" -xzf "$ARCHIVE"
 (cd "$WORKDIR/db" && sha256sum -c SHA256SUMS)
 
-# Supabase CLI intentionally excludes managed schemas (auth/storage/etc.) from schema.sql
-# while data.sql can contain their rows. A pinned local Supabase image may therefore have
-# a different managed-schema revision than the hosted project. Keep the complete data.sql
-# in the backup, but isolate public-schema COPY blocks for deterministic app-data restore testing.
+# Hosted Supabase managed schemas can differ from the pinned isolated image.
+# Preserve the complete data.sql in R2, while restoring public app data independently.
 PUBLIC_DATA="$WORKDIR/db/public-data.sql"
 awk '
-  /^COPY public\./ { keep=1 }
-  /^COPY / && $0 !~ /^COPY public\./ { keep=0 }
+  /^COPY (public\.|"public"\.)/ { keep=1 }
+  /^COPY / && $0 !~ /^COPY (public\.|"public"\.)/ { keep=0 }
   keep { print }
   keep && /^\\\.$/ { keep=0 }
 ' "$WORKDIR/db/data.sql" > "$PUBLIC_DATA"
-PUBLIC_COPY_COUNT="$(grep -c '^COPY public\.' "$PUBLIC_DATA" || true)"
-[[ "$PUBLIC_COPY_COUNT" =~ ^[0-9]+$ && "$PUBLIC_COPY_COUNT" -gt 0 ]] || { echo "No public COPY blocks found in backup data." >&2; exit 5; }
-MANAGED_COPY_COUNT="$(grep '^COPY ' "$WORKDIR/db/data.sql" | grep -vc '^COPY public\.' || true)"
+PUBLIC_COPY_COUNT="$(grep -Ec '^COPY (public\.|"public"\.)' "$PUBLIC_DATA" || true)"
+[[ "$PUBLIC_COPY_COUNT" =~ ^[0-9]+$ && "$PUBLIC_COPY_COUNT" -gt 0 ]] || { echo "No public COPY blocks found in backup data." >&2; echo "First COPY targets:" >&2; grep -m5 '^COPY ' "$WORKDIR/db/data.sql" >&2 || true; exit 5; }
+TOTAL_COPY_COUNT="$(grep -c '^COPY ' "$WORKDIR/db/data.sql" || true)"
+MANAGED_COPY_COUNT="$(( TOTAL_COPY_COUNT - PUBLIC_COPY_COUNT ))"
 echo "Backup data coverage: public COPY blocks=$PUBLIC_COPY_COUNT; managed-schema COPY blocks retained=$MANAGED_COPY_COUNT"
 
 CID="$(docker run -d -e POSTGRES_PASSWORD=restoretest -e POSTGRES_DB=postgres public.ecr.aws/supabase/postgres:17.6.1.167)"
