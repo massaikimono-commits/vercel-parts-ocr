@@ -1,4 +1,5 @@
 import "./globals.css";
+import "./desktop-compact.css";
 import AuthRouteGuard from "./auth-route-guard";
 import SessionLifetimeGuard from "./session-lifetime-guard";
 import MobileQuickNav from "./mobile-quick-nav";
