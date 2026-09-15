@@ -1,0 +1,47 @@
+name: Vehicle name-only candidate verify
+
+on:
+  push:
+    branches:
+      - feature/vehicle-register-name-only-schedule-20260915
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Focused regression
+        run: node scripts/vehicle-name-only-regression.mjs
+      - name: Full regression and build
+        run: npm run build
+      - name: Deployment safety
+        run: |
+          node scripts/netlify-toml-syntax-check.mjs
+          node scripts/netlify-production-deploy-lock.mjs
+          node scripts/netlify-preview-deploy-lock.mjs
+          node scripts/netlify-branch-deploy-skip.mjs
+          node scripts/vercel-selective-deploy-guard.mjs
+      - name: Protected diff audit
+        run: |
+          git diff --name-only c9357f6481e7910565af9ea003f05f7e6016e4b4...HEAD | tee /tmp/changed.txt
+          if grep -E '^(supabase/|database/|app/certificate-|app/lib/certificate-|app/eval/|app/ocr/)' /tmp/changed.txt; then
+            echo 'Protected DB/OCR path changed' >&2
+            exit 1
+          fi
+          if grep -E '^(netlify.toml|wrangler.jsonc|vite.config.ts)$' /tmp/changed.txt; then
+            echo 'Deployment configuration changed' >&2
+            exit 1
+          fi
+          git diff --check c9357f6481e7910565af9ea003f05f7e6016e4b4...HEAD
