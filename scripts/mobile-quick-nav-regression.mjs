@@ -32,9 +32,9 @@ assert(shell.includes("<MobileQuickNav />"), "app shell must render MobileQuickN
 assert(nav.includes('import Link from "next/link"'), "mobile quick nav must use Next.js Link");
 assert(nav.includes("useRouter"), "mobile quick nav must use Next router for route warm-up");
 assert(/href:\s*['"]\/schedule\/new['"]/.test(nav), "mobile quick nav must include schedule registration");
-assert(nav.includes('href: "/schedule/search"'), "mobile quick nav must include schedule search");
-assert(nav.includes('href: "/customer-vehicles"'), "mobile quick nav must include customer/vehicle management");
-assert(nav.includes('href: "/"'), "mobile quick nav must include home");
+assert(/href:\s*['"]\/schedule\/search['"]/.test(nav), "mobile quick nav must include schedule search");
+assert(/href:\s*['"]\/customer-vehicles['"]/.test(nav), "mobile quick nav must include customer/vehicle management");
+assert(/href:\s*['"]\/['"]/.test(nav), "mobile quick nav must include home");
 assert(nav.includes('`/schedule?day=${todayJst()}`'), "Today shortcut must always target today's daily schedule");
 assert(nav.includes('timeZone: "Asia/Tokyo"'), "Today shortcut must use JST day semantics");
 assert(!nav.includes("scheduleContext &&"), "Today shortcut must no longer be schedule-context-only");
