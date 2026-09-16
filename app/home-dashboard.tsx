@@ -530,7 +530,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
       <section className="desktopMain">
         <div className="desktopHeroGrid">
           <button className="desktopHero primaryHero" onClick={() => registerDay(todayJst())}><span>予定登録</span><strong>＋ 新しい予定を登録</strong><small>いちばん使う機能</small></button>
-          <button className="desktopHero" onClick={() => location.assign("/vehicle-workflow")}><span>車両登録</span><strong>＋ 車両だけ先に登録</strong><small>予定登録なしで車両情報を保存</small></button>
+          <button className="desktopHero" onClick={() => location.assign("/vehicle-workflow?mode=new")}><span>車両登録</span><strong>＋ 車両だけ先に登録</strong><small>予定登録なしで車両情報を保存</small></button>
         </div>
 
         {!busy && !loadError && workerLoad.length > 0 && (
