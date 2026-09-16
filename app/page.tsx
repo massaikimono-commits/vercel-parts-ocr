@@ -830,17 +830,19 @@ export default function Home() {
         <header className="header"><div className="title" style={{ fontSize: "42px", fontWeight: 800 }}>icb</div></header>
         <section className="card">
           <h1>ログイン</h1>
-          <input type="text" aria-label="ログインID" autoCapitalize="none" autoCorrect="off" placeholder="ログインID" value={loginId} onChange={(e) => setLoginId(e.target.value)} />
-          <input type="password" aria-label="パスワード" placeholder="パスワード" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <div className="actions">
-            <button
-              className="primary"
-              disabled={loginBusy}
-              onClick={() => void loginWithProtection()}
-            >
-              {loginBusy ? "確認中…" : "ログイン"}
-            </button>
-          </div>
+          <form onSubmit={(event) => { event.preventDefault(); void loginWithProtection(); }}>
+            <input type="text" aria-label="ログインID" autoCapitalize="none" autoCorrect="off" placeholder="ログインID" value={loginId} onChange={(e) => setLoginId(e.target.value)} />
+            <input type="password" aria-label="パスワード" placeholder="パスワード" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <div className="actions">
+              <button
+                type="submit"
+                className="primary"
+                disabled={loginBusy}
+              >
+                {loginBusy ? "確認中…" : "ログイン"}
+              </button>
+            </div>
+          </form>
           {authMsg && <div className="notice">{authMsg}</div>}
         </section>
       </main>
