@@ -41,6 +41,18 @@ Normal development must not deploy automatically.
 - Batch fixes -> CI/regression -> one deliberate test deployment -> practical test -> one deliberate production deployment.
 - Never use deployment as a substitute for local/CI validation.
 
+## Confirmed Netlify access control
+
+Verified on 2026-09-02 with an unauthenticated/private-browser access test:
+
+- Netlify Project visibility: Private.
+- Netlify Deploy Preview visibility: Private.
+- Opening the Deploy Preview while not signed in shows Netlify's "This site is private" gate.
+- After signing in to the invited/authorized Netlify account through GitHub, the request reaches the app's own icb login screen.
+- Therefore the current Preview is protected by a Netlify-level access gate in front of the app-level login.
+
+This is a hosting-access confirmation only. It does not mean the older Preview contains every newer source/security fix from current main.
+
 ## Known deployment boundary
 
 - Netlify Production: `https://icb-vehicle-app.netlify.app`
