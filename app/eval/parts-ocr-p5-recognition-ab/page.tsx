@@ -1,1 +1,1 @@
-export { default } from '../parts-ocr-architecture-p5-token-grid-poc/page';
+export { default } from '../parts-ocr-p5-token-grid-poc/page';
