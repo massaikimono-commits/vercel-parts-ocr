@@ -32,10 +32,8 @@ assert(/catch\s*\([^)]*\)\s*\{[\s\S]*?passToExisting\(input\)/.test(v2), "P0: v2
 assert(/CertificatePdfStructuredReaderV3/.test(v2Layout), "P0: canonical vehicle-workflow-v2 route must mount structured PDF v3");
 assert(/CertificatePdfNativeReaderV2/.test(v2Layout), "P0: canonical vehicle-workflow-v2 route must mount native PDF v2 fallback");
 
-const fastHasV3 = /CertificatePdfStructuredReaderV3/.test(fastLayout);
-const fastHasV2 = /CertificatePdfNativeReaderV2/.test(fastLayout);
-if (!fastHasV3 || !fastHasV2) {
-  console.warn("P0 diagnostic: direct /vehicle-workflow-fast does not mount the complete native PDF chain; canonical /vehicle-workflow-v2 remains the required route.");
-}
+assert(/CertificatePdfWorkerLocalizer/.test(fastLayout), "P0: fast vehicle workflow must mount the local PDF worker initializer");
+assert(/CertificatePdfStructuredReaderV3/.test(fastLayout), "P0: fast vehicle workflow must mount structured PDF v3");
+assert(/CertificatePdfNativeReaderV2/.test(fastLayout), "P0: fast vehicle workflow must mount native PDF v2 fallback");
 
 console.log("pdf-native-p0-contract-regression: PASS");
