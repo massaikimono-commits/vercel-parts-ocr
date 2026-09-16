@@ -36,7 +36,7 @@ assert(/href:\s*['"]\/schedule\/search['"]/.test(nav), "mobile quick nav must in
 assert(/href:\s*['"]\/customer-vehicles['"]/.test(nav), "mobile quick nav must include customer/vehicle management");
 assert(/href:\s*['"]\/['"]/.test(nav), "mobile quick nav must include home");
 assert(nav.includes('`/schedule?day=${todayJst()}`'), "Today shortcut must always target today's daily schedule");
-assert(nav.includes('timeZone: "Asia/Tokyo"'), "Today shortcut must use JST day semantics");
+assert(/timeZone:\s*['"]Asia\/Tokyo['"]/.test(nav), "Today shortcut must use JST day semantics");
 assert(!nav.includes("scheduleContext &&"), "Today shortcut must no longer be schedule-context-only");
 assert(nav.includes("repeat(5,minmax(0,1fr))"), "mobile quick nav must be five columns on every normal route");
 assert(nav.includes('"/parts-print"'), "parts print route must suppress quick nav");
