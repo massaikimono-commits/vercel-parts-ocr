@@ -7,15 +7,16 @@ const assert = (condition, message) => {
 
 const v3 = read("app/certificate-pdf-structured-reader-v3.jsx");
 const v2 = read("app/certificate-pdf-native-reader-v2.jsx");
+const workerLocalizer = read("app/certificate-pdf-worker-localizer.jsx");
 const fastLayout = read("app/vehicle-workflow-fast/layout.tsx");
 const v2Layout = read("app/vehicle-workflow-v2/layout.tsx");
 
-const cdnWorker = /GlobalWorkerOptions\.workerSrc\s*=\s*[`'"][^`'"]*cdn\.jsdelivr\.net/i;
 const localWorker = /new URL\(\s*["']pdfjs-dist\/legacy\/build\/pdf\.worker\.min\.mjs["']\s*,\s*import\.meta\.url\s*\)\.toString\(\)/;
 
-assert(!cdnWorker.test(v3), "P0: structured PDF v3 must not depend on jsDelivr for its PDF worker");
-assert(localWorker.test(v3), "P0: structured PDF v3 must use the bundled local pdfjs worker");
+assert(localWorker.test(workerLocalizer), "P0: canonical PDF route must initialize the bundled local pdfjs worker before PDF readers run");
 assert(localWorker.test(v2), "P0: PDF native v2 must keep the bundled local pdfjs worker");
+assert(/CertificatePdfWorkerLocalizer/.test(v2Layout), "P0: canonical vehicle-workflow-v2 route must mount the local PDF worker initializer");
+assert(v2Layout.indexOf("<CertificatePdfWorkerLocalizer />") < v2Layout.indexOf("<CertificatePdfStructuredReaderV3 />"), "P0: local PDF worker initializer must be mounted before structured PDF v3");
 
 assert(/function passToExisting\(input\)/.test(v3), "P0: v3 fallback handoff helper must exist");
 assert(/catch\s*\([^)]*\)\s*\{[\s\S]*?passToExisting\(input\)/.test(v3), "P0: v3 errors must hand off to the next PDF reader");
