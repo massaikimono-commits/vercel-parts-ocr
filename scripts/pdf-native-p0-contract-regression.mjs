@@ -18,6 +18,7 @@ const externalWorker = /cdn\.jsdelivr\.net/i;
 assert(localWorker.test(workerLocalizer), "P0: canonical PDF route must initialize the bundled local pdfjs worker before PDF readers run");
 assert(localWorker.test(v3), "P0: structured PDF v3 must set the bundled local pdfjs worker at load time");
 assert(!externalWorker.test(v3), "P0: structured PDF v3 must not depend on an external CDN worker");
+assert(!/location\\.pathname\\.startsWith\\(\\s*["']\\/vehicle-workflow/.test(v3), "P0: mounted structured PDF v3 must not be disabled by stale SPA pathname state");
 assert(/document\.addEventListener\(\s*["']change["']\s*,\s*onChange\s*\)/.test(v2Reader), "P0: v2 PDF reader must remain bubble-phase so structured v3 owns the first PDF change");
 assert(localWorker.test(v2), "P0: PDF native v2 must keep the bundled local pdfjs worker");
 assert(/CertificatePdfWorkerLocalizer/.test(v2Layout), "P0: canonical vehicle-workflow-v2 route must mount the local PDF worker initializer");
