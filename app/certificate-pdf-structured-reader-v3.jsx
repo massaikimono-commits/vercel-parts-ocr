@@ -478,6 +478,31 @@ async function choosePage(pdf) {
   return best;
 }
 
+// Shared native-PDF entry point. The single-registration reader and bulk import
+// must use the same structured parser so identical PDFs produce identical fields.
+export async function parseVehicleCertificatePdfStructured(file) {
+  const pdfjs = await loadPdfJs();
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  try {
+    const chosen = await choosePage(pdf);
+    const page = await pdf.getPage(chosen.pageNumber);
+    const tokens = chosen.tokens.length ? chosen.tokens : await pageTokens(page);
+    const parsed = parseStructured(buildLines(tokens));
+    return {
+      patch: parsed.patch,
+      strong: parsed.strong,
+      confident: parsed.strong,
+      found: parsed.found,
+      totalCount: parsed.found,
+      pageNumber: chosen.pageNumber,
+      pageCount: pdf.numPages || 1,
+      parser: "structured-v3",
+    };
+  } finally {
+    await pdf.destroy?.();
+  }
+}
+
 async function renderPage(pdf, pageNumber, targetWidth = 1800) {
   const page = await pdf.getPage(pageNumber);
   const base = page.getViewport({ scale: 1 });

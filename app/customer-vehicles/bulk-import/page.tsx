@@ -7,6 +7,7 @@ import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
 import { validateDocumentFile } from "../../lib/file-security";
 import { parseVehicleCertificatePdfNative } from "../../certificate-pdf-native-reader-v2";
+import { parseVehicleCertificatePdfStructured } from "../../certificate-pdf-structured-reader-v3";
 
 type CandidateStatus = "ready" | "review" | "error" | "saved";
 
@@ -25,6 +26,33 @@ type Candidate = {
   maker: string;
   model: string;
 };
+
+const DETAIL_FIELDS = [
+  ["registrationDate", "登録／交付年月日"],
+  ["firstRegistration", "初度登録／初度検査年月"],
+  ["vehicleClass", "自動車の種別"],
+  ["purpose", "用途"],
+  ["privateBusiness", "自家用／事業用"],
+  ["bodyShape", "車体の形状"],
+  ["seatingCapacity", "乗車定員"],
+  ["maxPayloadKg", "最大積載量 kg"],
+  ["vehicleWeightKg", "車両重量 kg"],
+  ["grossVehicleWeightKg", "車両総重量 kg"],
+  ["lengthCm", "長さ cm"],
+  ["widthCm", "幅 cm"],
+  ["heightCm", "高さ cm"],
+  ["engineModel", "原動機の型式"],
+  ["displacementOrRatedOutput", "総排気量／定格出力"],
+  ["fuel", "燃料"],
+  ["modelDesignationNumber", "型式指定番号"],
+  ["classificationNumber", "類別区分番号"],
+  ["frontFrontAxleWeightKg", "前前軸重 kg"],
+  ["frontRearAxleWeightKg", "前後軸重 kg"],
+  ["rearFrontAxleWeightKg", "後前軸重 kg"],
+  ["rearRearAxleWeightKg", "後後軸重 kg"],
+  ["inspectionExpiry", "有効期間満了日"],
+  ["baseLocation", "使用の本拠の位置"],
+] as const;
 
 function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -90,6 +118,20 @@ export default function CustomerVehicleBulkImportPage() {
     setCandidates((old) => old.map((row) => row.id === id ? { ...row, ...patch } : row));
   }
 
+  function updateCertificateField(id: string, key: string, value: string) {
+    setCandidates((old) => old.map((row) => {
+      if (row.id !== id) return row;
+      const next: Candidate = { ...row, patch: { ...row.patch, [key]: value } };
+      if (key === "userName") next.customerName = value;
+      if (key === "userAddress") next.customerAddress = value;
+      if (key === "registrationNumber") next.registrationNumber = value;
+      if (key === "chassisNumber") next.chassisNumber = value;
+      if (key === "vehicleName") next.maker = value;
+      if (key === "model") next.model = value;
+      return next;
+    }));
+  }
+
   async function chooseFiles(files: FileList | null) {
     const list = Array.from(files || []);
     if (!list.length) return;
@@ -127,14 +169,19 @@ export default function CustomerVehicleBulkImportPage() {
       }
 
       try {
-        const parsed: any = await parseVehicleCertificatePdfNative(file);
+        const structured: any = await parseVehicleCertificatePdfStructured(file);
+        const parsed: any = structured?.strong
+          ? structured
+          : await parseVehicleCertificatePdfNative(file).then((fallback: any) =>
+              (fallback?.totalCount || 0) > (structured?.totalCount || 0) ? fallback : structured
+            );
         const patch = (parsed?.patch || {}) as Record<string, string>;
         const customerName = String(patch.userName || "").trim();
         const customerAddress = String(patch.userAddress || "").trim();
         const registrationNumber = String(patch.registrationNumber || "").trim();
         const chassisNumber = String(patch.chassisNumber || "").trim();
         const basicReady = Boolean(customerName && (registrationNumber || chassisNumber));
-        const confident = Boolean(parsed?.confident);
+        const confident = Boolean(parsed?.strong ?? parsed?.confident);
 
         next.push({
           id: uid(),
@@ -142,7 +189,7 @@ export default function CustomerVehicleBulkImportPage() {
           selected: basicReady && confident,
           status: basicReady && confident ? "ready" : "review",
           message: basicReady && confident
-            ? `直接取得 ${parsed?.totalCount || 0}項目 / ${parsed?.pageCount || 1}ページ中${parsed?.pageNumber || 1}ページ目`
+            ? `${parsed?.parser === "structured-v3" ? "PDF Native v3" : "PDF Native v2"} ${parsed?.totalCount || 0}項目 / ${parsed?.pageCount || 1}ページ中${parsed?.pageNumber || 1}ページ目`
             : "必要項目が不足しています。お客様名・登録番号/車台番号を確認して補完してください。",
           patch,
           customerType: inferredCustomerType(customerName),
@@ -343,7 +390,7 @@ export default function CustomerVehicleBulkImportPage() {
                   <input
                     value={row.customerName}
                     disabled={row.status === "error" || row.status === "saved"}
-                    onChange={(event) => updateCandidate(row.id, { customerName: event.target.value })}
+                    onChange={(event) => updateCertificateField(row.id, "userName", event.target.value)}
                     onBlur={() => markCandidateAfterEdit(row.id)}
                   />
                 </label>
@@ -351,14 +398,14 @@ export default function CustomerVehicleBulkImportPage() {
                   <input
                     value={row.customerAddress}
                     disabled={row.status === "error" || row.status === "saved"}
-                    onChange={(event) => updateCandidate(row.id, { customerAddress: event.target.value })}
+                    onChange={(event) => updateCertificateField(row.id, "userAddress", event.target.value)}
                   />
                 </label>
                 <label>登録番号
                   <input
                     value={row.registrationNumber}
                     disabled={row.status === "error" || row.status === "saved"}
-                    onChange={(event) => updateCandidate(row.id, { registrationNumber: event.target.value })}
+                    onChange={(event) => updateCertificateField(row.id, "registrationNumber", event.target.value)}
                     onBlur={() => markCandidateAfterEdit(row.id)}
                   />
                 </label>
@@ -366,17 +413,32 @@ export default function CustomerVehicleBulkImportPage() {
                   <input
                     value={row.chassisNumber}
                     disabled={row.status === "error" || row.status === "saved"}
-                    onChange={(event) => updateCandidate(row.id, { chassisNumber: event.target.value })}
+                    onChange={(event) => updateCertificateField(row.id, "chassisNumber", event.target.value)}
                     onBlur={() => markCandidateAfterEdit(row.id)}
                   />
                 </label>
                 <label>メーカー
-                  <input value={row.maker} disabled={row.status === "error" || row.status === "saved"} onChange={(event) => updateCandidate(row.id, { maker: event.target.value })} />
+                  <input value={row.maker} disabled={row.status === "error" || row.status === "saved"} onChange={(event) => updateCertificateField(row.id, "vehicleName", event.target.value)} />
                 </label>
                 <label>型式
-                  <input value={row.model} disabled={row.status === "error" || row.status === "saved"} onChange={(event) => updateCandidate(row.id, { model: event.target.value })} />
+                  <input value={row.model} disabled={row.status === "error" || row.status === "saved"} onChange={(event) => updateCertificateField(row.id, "model", event.target.value)} />
                 </label>
               </div>
+
+              <details className="certificateDetails">
+                <summary>車検証の詳細項目を確認・修正</summary>
+                <div className="grid detailGrid">
+                  {DETAIL_FIELDS.map(([key, label]) => (
+                    <label key={key}>{label}
+                      <input
+                        value={String(row.patch[key] || "")}
+                        disabled={row.status === "error" || row.status === "saved"}
+                        onChange={(event) => updateCertificateField(row.id, key, event.target.value)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </details>
             </article>
           ))}
         </section>
@@ -400,7 +462,7 @@ export default function CustomerVehicleBulkImportPage() {
         .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.summary>div{background:#f7f9fc;border-radius:12px;padding:10px;display:grid}.summary small{color:#718096}.summary b{font-size:24px}
         .list{display:grid;gap:12px}.candidate{margin-bottom:0}.candidate.ready{border-color:#b8dcc4}.candidate.review{border-color:#e5c277}.candidate.error{border-color:#e5b0aa;background:#fff9f8}
         .candidateHead{display:flex;justify-content:space-between;align-items:center}.selectCheck{display:flex;gap:7px;align-items:center;font-weight:800}.selectCheck input{width:auto}.status{font-size:12px;font-weight:900;border-radius:999px;padding:5px 9px;background:#f0f3f7}.candidate.ready .status{background:#eaf7ee;color:#24713d}.candidate.review .status{background:#fff6df;color:#87610c}.candidate.error .status{background:#ffeceb;color:#a13b32}.candidate.saved{border-color:#b8dcc4;background:#f8fcf9}.candidate.saved .status{background:#eaf7ee;color:#24713d}
-        .candidate h2{font-size:18px;margin:10px 0 4px;word-break:break-all}.rowMessage{margin:0 0 12px!important;font-size:13px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.grid label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#607086}.grid input,.grid select{width:100%;border:1px solid #cbd6e3;border-radius:10px;padding:10px;color:#172033;background:#fff}
+        .candidate h2{font-size:18px;margin:10px 0 4px;word-break:break-all}.rowMessage{margin:0 0 12px!important;font-size:13px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.grid label{display:grid;gap:5px;font-size:12px;font-weight:800;color:#607086}.grid input,.grid select{width:100%;border:1px solid #cbd6e3;border-radius:10px;padding:10px;color:#172033;background:#fff}.certificateDetails{margin-top:14px;border-top:1px solid #dbe3ee;padding-top:12px}.certificateDetails summary{cursor:pointer;font-weight:900;color:#315d98}.detailGrid{margin-top:12px}
         .caution{background:#fffdf6;border-color:#eadca6}.caution p{margin-bottom:0}
         @media(max-width:650px){.grid{grid-template-columns:1fr}.summary{grid-template-columns:1fr 1fr 1fr}.card{padding:16px}.page{padding-left:10px;padding-right:10px}.card h1{font-size:25px}}
       `}</style>
