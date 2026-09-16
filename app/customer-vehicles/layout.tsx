@@ -1,6 +1,6 @@
 "use client";
 import { appLocation as location } from "../lib/internal-navigation";
-
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 const ACTIVE_KEY = "parts-active-vehicle";
@@ -16,6 +16,9 @@ function readActiveVehicle() {
 }
 
 export default function CustomerVehiclesLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const isVehicleSearch = pathname === "/customer-vehicles";
+
   function openActiveVehicleRoute(path: string) {
     const active = readActiveVehicle();
     if (!active?.id) {
@@ -59,6 +62,7 @@ export default function CustomerVehiclesLayout({ children }: { children: ReactNo
         <button onClick={() => openActiveVehicleRoute("/inspection/select")}>📝 記録簿</button>
         <button onClick={startPartsOcr}>📷 部品OCR</button>
         <button onClick={() => openVehicleScopedRoute("/customer-vehicles/lease-maintenance")}>リースメンテ契約</button>
+        {!isVehicleSearch && <button onClick={() => openVehicleScopedRoute("/customer-vehicles/history")}>履歴</button>}
       </nav>
       <style jsx global>{`
         .activeVehicleDock{position:fixed;right:16px;bottom:18px;z-index:50;display:flex;gap:7px;padding:8px;background:rgba(255,255,255,.96);border:1px solid #d7e0ec;border-radius:18px;box-shadow:0 10px 28px rgba(31,65,120,.18);backdrop-filter:blur(8px)}
