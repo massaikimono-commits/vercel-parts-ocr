@@ -1,7 +1,9 @@
 import "./globals.css";
+import "./desktop-compact.css";
 import AuthRouteGuard from "./auth-route-guard";
 import SessionLifetimeGuard from "./session-lifetime-guard";
 import MobileQuickNav from "./mobile-quick-nav";
+import DesktopQuickNav from "./desktop-quick-nav";
 import ResponsiveUxController from "./responsive-ux-controller";
 import LayoutDensityCalibration from "./layout-density-calibration";
 import DailyReportVisualAlignment from "./daily-report-visual-alignment";
@@ -32,6 +34,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
         <InternalNavigationBridge />
         <SessionLifetimeGuard />
         <AuthRouteGuard>
+          <DesktopQuickNav />
           {children}
           <ResponsiveUxController />
           <LayoutDensityCalibration />

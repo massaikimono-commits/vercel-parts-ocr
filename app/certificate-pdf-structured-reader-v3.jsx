@@ -444,9 +444,13 @@ function parseStructured(lines) {
 
 async function loadPdfJs() {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-  }
+  // The first PDF change can race the route-level localizer. Set the bundled
+  // worker at the point immediately before getDocument() is called so a fresh
+  // session never falls back to an external CDN worker.
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
   return pdfjs;
 }
 
@@ -472,6 +476,31 @@ async function choosePage(pdf) {
     if (score > best.score) best = { pageNumber: n, tokens, score };
   }
   return best;
+}
+
+// Shared native-PDF entry point. The single-registration reader and bulk import
+// must use the same structured parser so identical PDFs produce identical fields.
+export async function parseVehicleCertificatePdfStructured(file) {
+  const pdfjs = await loadPdfJs();
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  try {
+    const chosen = await choosePage(pdf);
+    const page = await pdf.getPage(chosen.pageNumber);
+    const tokens = chosen.tokens.length ? chosen.tokens : await pageTokens(page);
+    const parsed = parseStructured(buildLines(tokens));
+    return {
+      patch: parsed.patch,
+      strong: parsed.strong,
+      confident: parsed.strong,
+      found: parsed.found,
+      totalCount: parsed.found,
+      pageNumber: chosen.pageNumber,
+      pageCount: pdf.numPages || 1,
+      parser: "structured-v3",
+    };
+  } finally {
+    await pdf.destroy?.();
+  }
 }
 
 async function renderPage(pdf, pageNumber, targetWidth = 1800) {
@@ -606,7 +635,9 @@ function passToExisting(input) {
 
 export default function CertificatePdfStructuredReaderV3() {
   useLayoutEffect(() => {
-    if (!location.pathname.startsWith("/vehicle-workflow")) return;
+    // This reader is mounted by the vehicle form itself. Internal SPA navigation
+    // can display the form before window.location reflects the route, so a
+    // pathname gate would incorrectly disable native PDF handling.
     let dead = false;
 
     const onChange = async (event) => {
