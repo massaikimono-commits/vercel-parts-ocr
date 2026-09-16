@@ -12,7 +12,7 @@ const fastLayout = read("app/vehicle-workflow-fast/layout.tsx");
 const v2Layout = read("app/vehicle-workflow-v2/layout.tsx");
 
 const localWorker = /new URL\(\s*["']pdfjs-dist\/legacy\/build\/pdf\.worker\.min\.mjs["']\s*,\s*import\.meta\.url\s*\)\.toString\(\)/;
-const externalWorker = /cdn\\.jsdelivr\\.net/i;
+const externalWorker = /cdn\.jsdelivr\.net/i;
 
 assert(localWorker.test(workerLocalizer), "P0: canonical PDF route must initialize the bundled local pdfjs worker before PDF readers run");
 assert(localWorker.test(v3), "P0: structured PDF v3 must set the bundled local pdfjs worker at load time");
