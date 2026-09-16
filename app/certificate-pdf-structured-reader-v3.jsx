@@ -610,7 +610,9 @@ function passToExisting(input) {
 
 export default function CertificatePdfStructuredReaderV3() {
   useLayoutEffect(() => {
-    if (!location.pathname.startsWith("/vehicle-workflow")) return;
+    // This reader is mounted by the vehicle form itself. Internal SPA navigation
+    // can display the form before window.location reflects the route, so a
+    // pathname gate would incorrectly disable native PDF handling.
     let dead = false;
 
     const onChange = async (event) => {
