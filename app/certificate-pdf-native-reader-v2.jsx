@@ -339,7 +339,7 @@ export default function CertificatePdfNativeReaderV2() {
         } finally { await pdf.destroy?.(); }
       } catch (e) { console.error("pdf native v2", e); showStatus("PDFネイティブ v2で直接解析できなかったため、既存OCRへ切り替えます。"); passToExisting(input); }
     };
-    document.addEventListener("change", onChange, true);
+    document.addEventListener("change", onChange);
     return () => { dead = true; window.clearInterval(timer); document.removeEventListener("change", onChange, true); };
   }, []);
   return null;

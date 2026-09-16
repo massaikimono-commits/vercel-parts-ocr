@@ -31,9 +31,9 @@ assert(guard.includes("safe-area-inset-bottom"), "recovery UI must respect iPhon
 assert(guard.includes(":focus-visible"), "keyboard focus must remain visible");
 
 assert(nav.includes("todayActive"), "Today quick-nav item must expose selected state");
-assert(nav.includes('selectedDay === todayJst()'), "Today selected state must use JST day semantics");
-assert(nav.includes('className={todayActive ? "todayShortcut active" : "todayShortcut"}'), "Today selected state must be visual");
-assert(nav.includes('aria-current={todayActive ? "page" : undefined}'), "Today selected state must be announced accessibly");
+assert(/selectedDay\s*===\s*todayJst\(\)/.test(nav), "Today selected state must use JST day semantics");
+assert(/todayActive\s*\?\s*["']todayShortcut active["']\s*:\s*["']todayShortcut["']/.test(nav), "Today selected state must be visual");
+assert(/aria-current=\{todayActive\s*\?\s*["']page["']\s*:\s*undefined\}/.test(nav), "Today selected state must be announced accessibly");
 assert(nav.includes("repeat(5,minmax(0,1fr))"), "quick nav must remain five stable items");
 assert(nav.includes("safe-area-inset-bottom"), "quick nav must keep iPhone safe-area support");
 

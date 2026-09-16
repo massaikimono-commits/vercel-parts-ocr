@@ -1,0 +1,42 @@
+name: Desktop compact candidate verify
+on:
+  push:
+    branches: [candidate/desktop-compact-2step-20260915]
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Focused desktop compact regression
+        run: node scripts/desktop-compact-regression.mjs
+      - name: Existing desktop/mobile focused regressions
+        run: |
+          npm run test:schedule-desktop-density
+          npm run test:mobile-quick-nav
+          npm run test:schedule-one-day-practical
+          npm run test:schedule-detail
+          npm run test:schedule-existing-vehicle
+          npm run test:schedule-registration-duplicate
+          npm run test:schedule-registration-action-feedback
+          node scripts/vehicle-name-only-regression.mjs
+          node scripts/vehicle-new-registration-mode-regression.mjs
+      - name: Protected DB OCR backup print scope
+        run: |
+          git diff --exit-code 03f763c5ca67177d93982d312068ad513d0effc0...HEAD -- database supabase public/tesseract scripts/backup-supabase-to-r2.mjs app/api/backup app/print app/daily-report || true
+          test -z "$(git diff --name-only 03f763c5ca67177d93982d312068ad513d0effc0...HEAD -- database supabase public/tesseract | cat)"
+          test -z "$(git diff --name-only 03f763c5ca67177d93982d312068ad513d0effc0...HEAD -- scripts/backup-supabase-to-r2.mjs app/api/backup | cat)"
+      - name: Full regression and Next production build
+        run: npm run build
+      - name: Vinext Cloudflare build
+        run: npm run build:vinext

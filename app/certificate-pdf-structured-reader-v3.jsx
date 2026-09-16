@@ -444,9 +444,13 @@ function parseStructured(lines) {
 
 async function loadPdfJs() {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-  }
+  // The first PDF change can race the route-level localizer. Set the bundled
+  // worker at the point immediately before getDocument() is called so a fresh
+  // session never falls back to an external CDN worker.
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
   return pdfjs;
 }
 
@@ -606,7 +610,9 @@ function passToExisting(input) {
 
 export default function CertificatePdfStructuredReaderV3() {
   useLayoutEffect(() => {
-    if (!location.pathname.startsWith("/vehicle-workflow")) return;
+    // This reader is mounted by the vehicle form itself. Internal SPA navigation
+    // can display the form before window.location reflects the route, so a
+    // pathname gate would incorrectly disable native PDF handling.
     let dead = false;
 
     const onChange = async (event) => {
