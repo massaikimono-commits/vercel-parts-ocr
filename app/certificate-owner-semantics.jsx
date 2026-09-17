@@ -11,49 +11,46 @@ function norm(value) {
 
 function isMasked(value) {
   const t = norm(value).replace(/\s/g, "");
-  return Boolean(t) && /^[＊*]+$/.test(t);
+  return Boolean(t) && /^\*+$/.test(t);
 }
 
-function semanticPerson(value) {
-  const t = norm(value);
-  if (!t || isMasked(t)) return "";
-  return t;
+function classify(raw) {
+  const value = norm(raw);
+  if (!value) return { rawValue: "", value: "", status: "NOT_PRESENT" };
+  if (isMasked(value)) return { rawValue: value, value: "", status: "MASKED" };
+  return { rawValue: value, value, status: "VALUE" };
 }
 
 function normalizePatch(detail) {
   const patch = { ...detail };
-  const rawOwnerName = norm(patch.ownerNameRaw ?? patch.ownerName ?? "");
-  const rawOwnerAddress = norm(patch.ownerAddressRaw ?? patch.ownerAddress ?? "");
-  const rawUserName = norm(patch.userNameRaw ?? patch.userName ?? "");
-  const rawUserAddress = norm(patch.userAddressRaw ?? patch.userAddress ?? "");
+  const ownerName = classify(patch.ownerNameRaw ?? patch.ownerName ?? "");
+  const ownerAddress = classify(patch.ownerAddressRaw ?? patch.ownerAddress ?? "");
+  const userName = classify(patch.userNameRaw ?? patch.userName ?? "");
+  const userAddress = classify(patch.userAddressRaw ?? patch.userAddress ?? "");
 
-  if (rawOwnerName) patch.ownerNameRaw = rawOwnerName;
-  if (rawOwnerAddress) patch.ownerAddressRaw = rawOwnerAddress;
-  if (rawUserName) patch.userNameRaw = rawUserName;
-  if (rawUserAddress) patch.userAddressRaw = rawUserAddress;
+  const apply = (key, rawKey, stateKey, item) => {
+    if (item.rawValue) patch[rawKey] = item.rawValue; else delete patch[rawKey];
+    if (item.value) patch[key] = item.value; else delete patch[key];
+    patch[stateKey] = item.status;
+  };
 
-  const ownerName = semanticPerson(rawOwnerName);
-  const ownerAddress = semanticPerson(rawOwnerAddress);
-  const userName = semanticPerson(rawUserName);
-  const userAddress = semanticPerson(rawUserAddress);
+  apply("ownerName", "ownerNameRaw", "ownerNameStatus", ownerName);
+  apply("ownerAddress", "ownerAddressRaw", "ownerAddressStatus", ownerAddress);
+  apply("userName", "userNameRaw", "userNameStatus", userName);
+  apply("userAddress", "userAddressRaw", "userAddressStatus", userAddress);
 
-  if (ownerName) patch.ownerName = ownerName; else delete patch.ownerName;
-  if (ownerAddress) patch.ownerAddress = ownerAddress; else delete patch.ownerAddress;
-  if (userName) patch.userName = userName; else if (isMasked(rawUserName)) delete patch.userName;
-  if (userAddress) patch.userAddress = userAddress; else if (isMasked(rawUserAddress)) delete patch.userAddress;
-
-  // Japanese inspection-record semantics: when the user field is omitted/masked because it is the same
-  // person/address as the owner, expose an explicit resolved value without destroying the raw evidence.
-  if (!patch.userName && ownerName) patch.resolvedUserName = ownerName;
-  else if (patch.userName) patch.resolvedUserName = patch.userName;
-  if (!patch.userAddress && ownerAddress) patch.resolvedUserAddress = ownerAddress;
-  else if (patch.userAddress) patch.resolvedUserAddress = patch.userAddress;
+  // Never infer user identity/address from owner data merely because the user field is masked or absent.
+  // A future document-rule resolver may populate resolvedUser* only when that equivalence is explicitly proven.
+  delete patch.resolvedUserName;
+  delete patch.resolvedUserAddress;
+  delete patch.resolutionReason;
 
   patch.ownerUserSemantics = JSON.stringify({
-    ownerNameMasked: isMasked(rawOwnerName), ownerAddressMasked: isMasked(rawOwnerAddress),
-    userNameMasked: isMasked(rawUserName), userAddressMasked: isMasked(rawUserAddress),
-    resolvedUserNameFromOwner: !userName && Boolean(ownerName),
-    resolvedUserAddressFromOwner: !userAddress && Boolean(ownerAddress),
+    ownerNameStatus: ownerName.status,
+    ownerAddressStatus: ownerAddress.status,
+    userNameStatus: userName.status,
+    userAddressStatus: userAddress.status,
+    automaticOwnerToUserResolution: false,
   });
   return patch;
 }
