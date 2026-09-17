@@ -33,8 +33,7 @@ export default function CertificateOwnerFieldsUi() {
       );
       if (!card) return;
 
-      // Keep the PDF/parser association contract untouched. This component only
-      // reorganizes the already-authoritative values into the normal vertical form.
+      // Display-only reorganization. Keep PDF/parser values and associations untouched.
       let box = card.querySelector("[data-owner-fields]");
       if (!box) {
         box = document.createElement("div");
@@ -49,7 +48,6 @@ export default function CertificateOwnerFieldsUi() {
             <span style="font-weight:700">所有者の住所</span>
             <input data-owner-input="ownerAddress" autocomplete="off">
           </label>
-          <div data-owner-provenance-slot></div>
         `;
         card.querySelector(".grid")?.insertAdjacentElement("beforebegin", box);
         box.querySelectorAll("[data-owner-input]").forEach((input) => {
@@ -67,8 +65,20 @@ export default function CertificateOwnerFieldsUi() {
       if (ownerNameInput && document.activeElement !== ownerNameInput) ownerNameInput.value = ownerName;
       if (ownerAddressInput && document.activeElement !== ownerAddressInput) ownerAddressInput.value = ownerAddress;
 
-      const slot = box.querySelector("[data-owner-provenance-slot]");
-      let provenance = box.querySelector("[data-owner-provenance]");
+      const grid = card.querySelector(".grid");
+      if (grid) {
+        grid.style.display = "flex";
+        grid.style.flexDirection = "column";
+        grid.style.gap = "14px";
+      }
+
+      // Issuance-owner provenance belongs between inspection expiry and current user.
+      // Find the existing authoritative User field and insert the reference immediately
+      // before it, rather than attaching it to the current Owner block.
+      const userField = grid
+        ? Array.from(grid.children).find((el) => el.textContent?.includes("使用者の氏名又は名称"))
+        : null;
+      let provenance = card.querySelector("[data-owner-provenance]");
       const issuanceName = String(latest?.ownerAtIssuanceNameRaw || "").trim();
       const issuanceAddress = String(latest?.ownerAtIssuanceAddressRaw || "").trim();
       if (issuanceName || issuanceAddress) {
@@ -76,29 +86,21 @@ export default function CertificateOwnerFieldsUi() {
           provenance = document.createElement("div");
           provenance.dataset.ownerProvenance = "1";
           provenance.style.cssText = "padding:12px 14px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;color:#5d6878;font-size:13px;line-height:1.55";
-          slot?.appendChild(provenance);
         }
         provenance.innerHTML = `<b>発行時所有者情報（参考）</b><br>${escapeHtml(issuanceName || "未記載")}${issuanceAddress ? `<br>${escapeHtml(issuanceAddress)}` : ""}`;
+        if (userField && provenance.nextElementSibling !== userField) {
+          grid.insertBefore(provenance, userField);
+        }
       } else if (provenance) {
         provenance.remove();
       }
 
-      // The legacy card heading made owner/current-user/issuance-owner look like one
-      // semantic block. Hide only that heading/card chrome; preserve its grid so the
-      // existing User and base-location inputs remain authoritative and follow below.
       const heading = card.querySelector("h2");
       if (heading) heading.style.display = "none";
       card.style.padding = "0";
       card.style.border = "0";
       card.style.background = "transparent";
       card.style.boxShadow = "none";
-
-      const grid = card.querySelector(".grid");
-      if (grid) {
-        grid.style.display = "flex";
-        grid.style.flexDirection = "column";
-        grid.style.gap = "14px";
-      }
     };
 
     const onAuth = (event) => ensure(event?.detail || {});
