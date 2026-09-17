@@ -21,28 +21,63 @@ function linesFrom(tokens) {
   for(const l of lines){l.tokens.sort((a,b)=>a.x-b.x);l.text=l.tokens.map(x=>x.text).join(" ");}
   return lines.sort((a,b)=>a.y-b.y);
 }
-function labelX(line,label){const wanted=compact(label);for(let s=0;s<line.tokens.length;s++){let j="";for(let e=s;e<line.tokens.length&&e<s+8;e++){j+=compact(line.tokens[e].text);if(j.includes(wanted))return line.tokens[s].x;if(j.length>wanted.length+10)break;}}return null;}
-function primaryNumber(text){const outside=norm(text).replace(/[\[［].*?[\]］]/g," ");const m=outside.match(/(?:^|\D)(\d{2,5})(?:\D|$)/);return m?String(Number(m[1])):"";}
-function recoverWeights(tokens, lines){
-  const header=lines.find(l=>{const t=compact(l.text);return t.includes("最大積載量")&&t.includes("車両重量")&&t.includes("車両総重量");});
-  if(!header)return {};
-  const labels=["最大積載量","車両重量","車両総重量"], xs=labels.map(x=>labelX(header,x)); if(xs.some(x=>x===null))return {};
-  const ordered=xs.map((x,i)=>({x,i})).sort((a,b)=>a.x-b.x), bounds=new Map();
-  for(let p=0;p<ordered.length;p++){const left=p===0?ordered[p].x-.02:(ordered[p-1].x+ordered[p].x)/2;const right=p===ordered.length-1?1:(ordered[p].x+ordered[p+1].x)/2;bounds.set(ordered[p].i,[left,right]);}
-  const next=lines.find(l=>l.y>header.y+.006&&compact(l.text).includes("車台番号")&&compact(l.text).includes("前前軸重")); const maxY=next?next.y-.002:header.y+.09;
-  const vals=labels.map((_,i)=>{const [left,right]=bounds.get(i);return primaryNumber(tokens.filter(t=>t.y>header.y+.002&&t.y<maxY&&t.x>=left&&t.x<right).sort((a,b)=>a.y-b.y||a.x-b.x).map(t=>t.text).join(" "));});
-  const out={}; if(vals[0])out.maxPayloadKg=vals[0];if(vals[1])out.vehicleWeightKg=vals[1];if(vals[2])out.grossVehicleWeightKg=vals[2];return out;
+function labelAnchor(lines,label){
+  const wanted=compact(label);
+  for(const line of lines){
+    for(let s=0;s<line.tokens.length;s++){
+      let joined="";
+      for(let e=s;e<line.tokens.length&&e<s+12;e++){
+        joined+=compact(line.tokens[e].text);
+        if(joined.includes(wanted)) return {x:line.tokens[s].x,y:line.y,line,start:s,end:e};
+        if(joined.length>wanted.length+18)break;
+      }
+    }
+  }
+  return null;
 }
-const OWNER_LABELS=["所有者の氏名又は名称","所有者の住所","使用者の氏名又は名称","使用者の住所"];
-function recoverIdentity(lines){
-  const out={}; const map=[["所有者の氏名又は名称","ownerNameRaw"],["所有者の住所","ownerAddressRaw"],["使用者の氏名又は名称","userNameRaw"],["使用者の住所","userAddressRaw"]];
-  const isLabel=s=>OWNER_LABELS.some(l=>compact(s).includes(compact(l)));
-  for(const [label,key] of map){
-    const wanted=compact(label); const i=lines.findIndex(l=>compact(l.text).includes(wanted)); if(i<0)continue;
-    const line=lines[i]; let value=""; let joined="";
-    for(let p=0;p<line.tokens.length;p++){joined+=compact(line.tokens[p].text);if(joined.includes(wanted)){value=norm(line.tokens.slice(p+1).map(t=>t.text).join(" "));break;}}
-    if(!value){for(let j=i+1;j<Math.min(lines.length,i+4);j++){if(isLabel(lines[j].text))break;const candidate=norm(lines[j].text);if(candidate){value=candidate;break;}}}
-    value=value.replace(/\[\d+\]$/g,"").trim(); if(value&&value.length<=160)out[key]=value;
+function cellText(tokens, anchor, left, right, bottom){
+  if(!anchor)return "";
+  const sameLine=anchor.line.tokens.slice(anchor.end+1).filter(t=>t.x>=left&&t.x<right).map(t=>t.text).join(" ");
+  const below=tokens.filter(t=>t.y>anchor.y+.002&&t.y<bottom&&t.x>=left&&t.x<right).sort((a,b)=>a.y-b.y||a.x-b.x).map(t=>t.text).join(" ");
+  return norm([sameLine,below].filter(Boolean).join(" "));
+}
+function numericCell(text){
+  const s=norm(text).replace(/kg/ig," ");
+  const m=s.match(/(\d{2,5})(?:\s*[\[［]\s*(\d{2,5})\s*[\]］])?/);
+  if(!m)return "";
+  return m[2]?`${Number(m[1])} [${Number(m[2])}]`:String(Number(m[1]));
+}
+function recoverWeights(tokens, lines){
+  const defs=[["最大積載量","maxPayloadKg"],["車両重量","vehicleWeightKg"],["車両総重量","grossVehicleWeightKg"]];
+  const anchors=defs.map(([label])=>labelAnchor(lines,label)); if(anchors.some(x=>!x))return {};
+  const ordered=anchors.map((a,i)=>({a,i})).sort((p,q)=>p.a.x-q.a.x), bounds=new Map();
+  for(let p=0;p<ordered.length;p++){
+    const cur=ordered[p], prev=ordered[p-1]?.a, next=ordered[p+1]?.a;
+    bounds.set(cur.i,[prev?(prev.x+cur.a.x)/2:Math.max(0,cur.a.x-.04),next?(cur.a.x+next.x)/2:1]);
+  }
+  const headerBottom=Math.max(...anchors.map(a=>a.y));
+  const stopAnchors=[labelAnchor(lines,"車台番号"),labelAnchor(lines,"前前軸重"),labelAnchor(lines,"長さ")].filter(Boolean).filter(a=>a.y>headerBottom+.004);
+  const bottom=stopAnchors.length?Math.min(...stopAnchors.map(a=>a.y))-.002:headerBottom+.085;
+  const out={};
+  defs.forEach(([,key],i)=>{const [left,right]=bounds.get(i);const v=numericCell(cellText(tokens,anchors[i],left,right,bottom));if(v)out[key]=v;});
+  return out;
+}
+const ID_DEFS=[["所有者の氏名又は名称","ownerNameRaw"],["所有者の住所","ownerAddressRaw"],["使用者の氏名又は名称","userNameRaw"],["使用者の住所","userAddressRaw"]];
+function cleanIdentity(v){return norm(v).replace(/\[\d+\]$/g,"").trim();}
+function recoverIdentity(tokens,lines){
+  const anchors=ID_DEFS.map(([label])=>labelAnchor(lines,label));
+  const out={};
+  for(let i=0;i<ID_DEFS.length;i++){
+    const a=anchors[i]; if(!a)continue;
+    const sameRow=anchors.filter(Boolean).filter(x=>Math.abs(x.y-a.y)<.025).sort((p,q)=>p.x-q.x);
+    const pos=sameRow.indexOf(a), prev=sameRow[pos-1], next=sameRow[pos+1];
+    const left=prev?(prev.x+a.x)/2:Math.max(0,a.x-.025), right=next?(a.x+next.x)/2:1;
+    const lower=anchors.filter(Boolean).filter(x=>x.y>a.y+.008&&x.x>=left-.03&&x.x<right+.03).sort((p,q)=>p.y-q.y)[0];
+    const bottom=lower?lower.y-.002:Math.min(1,a.y+.075);
+    let value=cleanIdentity(cellText(tokens,a,left,right,bottom));
+    for(const [label] of ID_DEFS)value=value.replace(new RegExp(compact(label),"g"),"");
+    value=cleanIdentity(value);
+    if(value&&value.length<=180)out[ID_DEFS[i][1]]=value;
   }
   return out;
 }
@@ -58,7 +93,7 @@ function semanticDisplacement(detail){
 async function extract(file){
   const pdfjs=await import("pdfjs-dist/legacy/build/pdf.mjs"); pdfjs.GlobalWorkerOptions.workerSrc=new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs",import.meta.url).toString();
   const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
-  try{let best=null;for(let n=1;n<=Math.min(pdf.numPages||1,8);n++){const page=await pdf.getPage(n),vp=page.getViewport({scale:1}),content=await page.getTextContent(),tokens=(content.items||[]).map(x=>token(x,vp.width,vp.height)).filter(Boolean),lines=linesFrom(tokens),text=compact(lines.map(l=>l.text).join(" "));const score=(text.includes("最大積載量")?3:0)+(text.includes("所有者の氏名又は名称")?3:0)+(text.includes("使用者の氏名又は名称")?2:0)+(text.includes("総排気量又は定格出力")?1:0);if(!best||score>best.score)best={tokens,lines,score,pageNumber:n};}return{...recoverWeights(best?.tokens||[],best?.lines||[]),...recoverIdentity(best?.lines||[]),pageNumber:best?.pageNumber||1};}finally{await pdf.destroy?.().catch?.(()=>{});}
+  try{let best=null;for(let n=1;n<=Math.min(pdf.numPages||1,8);n++){const page=await pdf.getPage(n),vp=page.getViewport({scale:1}),content=await page.getTextContent(),tokens=(content.items||[]).map(x=>token(x,vp.width,vp.height)).filter(Boolean),lines=linesFrom(tokens),text=compact(lines.map(l=>l.text).join(" "));const score=(text.includes("最大積載量")?3:0)+(text.includes("所有者の氏名又は名称")?3:0)+(text.includes("使用者の氏名又は名称")?2:0)+(text.includes("総排気量又は定格出力")?1:0);if(!best||score>best.score)best={tokens,lines,score,pageNumber:n};}return{...recoverWeights(best?.tokens||[],best?.lines||[]),...recoverIdentity(best?.tokens||[],best?.lines||[]),pageNumber:best?.pageNumber||1};}finally{await pdf.destroy?.().catch?.(()=>{});}
 }
 export default function CertificatePdfSemanticRecovery(){
   useLayoutEffect(()=>{let dead=false,pending=null,latest=null,dispatching=false;
