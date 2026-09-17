@@ -12,21 +12,45 @@ function norm(v) {
   return String(v || "").normalize("NFKC").replace(/[‐‑‒–—―]/g, "-").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
 }
 function compact(v) { return norm(v).replace(/[\s:：・,，.。()（）\[\]［］]/g, ""); }
+function semanticText(v) {
+  let s = norm(v);
+  // PDF text layers often emit Japanese labels/values and numbers one glyph at a time.
+  // Collapse only same-class glyph fragmentation; keep boundaries between Japanese, numbers and Latin text.
+  for (let i = 0; i < 4; i += 1) {
+    s = s
+      .replace(/([ぁ-んァ-ヶ一-龠々])\s+([ぁ-んァ-ヶ一-龠々])/g, "$1$2")
+      .replace(/([0-9])\s+([0-9])/g, "$1$2")
+      .replace(/([A-Za-z])\s+([A-Za-z])/g, "$1$2");
+  }
+  return s;
+}
 function jpMonth(v) {
-  const m = norm(v).match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?/);
+  const m = semanticText(v).match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?/);
   if (!m) return "";
   const month = Number(m[3]);
   return month >= 1 && month <= 12 ? `${m[1]}${m[2] === "元" ? "元" : Number(m[2])}年${month}月` : "";
 }
 function jpDate(v) {
-  const m = norm(v).match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/);
+  const m = semanticText(v).match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/);
   if (!m) return "";
   const month = Number(m[3]); const day = Number(m[4]);
   return month >= 1 && month <= 12 && day >= 1 && day <= 31 ? `${m[1]}${m[2] === "元" ? "元" : Number(m[2])}年${month}月${day}日` : "";
 }
 function registration(v) {
-  const m = norm(v).match(/([ぁ-んァ-ヶ一-龠]{1,8})\s*([0-9]\s*[0-9]\s*[0-9])\s*([ぁ-ん])\s*([0-9]\s*[0-9]\s*[0-9]\s*[0-9])/);
-  return m ? `${m[1]} ${m[2].replace(/\D/g, "")} ${m[3]} ${m[4].replace(/\D/g, "")}` : "";
+  const m = semanticText(v).match(/([ぁ-んァ-ヶ一-龠]{1,8})\s*([0-9]{3})\s*([ぁ-ん])\s*([0-9]{4})/);
+  return m ? `${m[1]} ${m[2]} ${m[3]} ${m[4]}` : "";
+}
+function registrationAfterLabel(v) {
+  const text = semanticText(v);
+  const labels = ["自動車登録番号又は車両番号", "車両番号"];
+  for (const label of labels) {
+    const at = text.indexOf(label);
+    if (at < 0) continue;
+    const tail = text.slice(at + label.length, at + label.length + 100);
+    const plate = registration(tail);
+    if (plate) return plate;
+  }
+  return registration(text);
 }
 function token(item, w, h) {
   const text = norm(item?.str); if (!text) return null;
@@ -44,23 +68,26 @@ function linesFrom(tokens) {
 }
 function detect(lines){const d=compact(lines.map(l=>l.text).join("\n"));return d.includes(compact("自動車検査証記録事項"))&&d.includes(compact("1.基本情報"))&&d.includes(compact("3.車両詳細情報"));}
 function parse(lines){
-  const patch={}; const all=norm(lines.map(l=>l.text).join("\n")); const dense=compact(all);
+  const patch={};
+  const raw=lines.map(l=>l.text).join("\n");
+  const all=semanticText(raw);
+  const dense=compact(all);
   const put=(k,v)=>{if(v!==undefined&&v!==null&&String(v).trim())patch[k]=String(v).trim();};
-  put("registrationNumber",registration(all));
-  const chassis=all.toUpperCase().match(/\b([A-Z]{1,6}[A-Z0-9]{0,8}-[A-Z0-9]{4,14})\b/); if(chassis)put("chassisNumber",chassis[1].replace(/O/g,"0"));
-  const model=all.toUpperCase().match(/\b((?:[0-9][A-Z]{1,3}|[A-Z]{1,4})-[A-Z0-9]{2,14})\b/); if(model)put("model",model[1]);
+  put("registrationNumber",registrationAfterLabel(all));
+  const chassis=all.toUpperCase().match(/\b([A-Z]{1,6}[A-Z0-9]{0,8}\s*-\s*[A-Z0-9]{4,14})\b/); if(chassis)put("chassisNumber",chassis[1].replace(/\s/g,"").replace(/O/g,"0"));
+  const model=all.toUpperCase().match(/\b((?:[0-9][A-Z]{1,3}|[A-Z]{1,4})\s*-\s*[A-Z0-9]{2,14})\b/); if(model)put("model",model[1].replace(/\s/g,""));
   const makers=["トヨタ","レクサス","日産","ニッサン","ホンダ","三菱","マツダ","スバル","スズキ","ダイハツ","いすゞ","日野","UDトラックス"]; put("vehicleName",makers.find(x=>dense.includes(compact(x)))||"");
   const engine=all.match(/原動機の型式\s*([A-Z0-9-]{2,12})/i); if(engine)put("engineModel",engine[1]);
   const dates=[...all.matchAll(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?(?:\s*(\d{1,2})\s*日?)?/g)];
   if(dates[1])put("registrationDate",jpDate(dates[1][0])); if(dates[2])put("firstRegistration",jpMonth(dates[2][0]));
-  const expiryMatch=all.match(/有効期間の満了する日[\s\S]{0,100}?((?:令和|平成|昭和)\s*(?:元|\d{1,2})\s*年?\s*\d{1,2}\s*月?\s*\d{1,2}\s*日?)/); if(expiryMatch)put("inspectionExpiry",jpDate(expiryMatch[1]));
+  const expiryMatch=all.match(/有効期間の満了する日[\s\S]{0,140}?((?:令和|平成|昭和)\s*(?:元|\d{1,2})\s*年?\s*\d{1,2}\s*月?\s*\d{1,2}\s*日?)/); if(expiryMatch)put("inspectionExpiry",jpDate(expiryMatch[1]));
   put("vehicleClass",["普通","小型","軽自動車","大型特殊"].find(x=>dense.includes(compact(x)))||""); put("purpose",["乗用","貨物","乗合","特種"].find(x=>dense.includes(x))||""); put("privateBusiness",["自家用","事業用"].find(x=>dense.includes(x))||"");
   put("bodyShape",["キャブオーバ","ステーションワゴン","ボンネット","ピックアップ","トラック","ダンプ","セダン","箱型","バン","バス","幌型"].find(x=>dense.includes(x))||"");
-  const seat=all.match(/乗車定員[\s\S]{0,80}?(\d{1,2})\s*(?:\[[^\]]+\]\s*)?人/); if(seat)put("seatingCapacity",String(Number(seat[1])));
+  const seat=all.match(/乗車定員[\s\S]{0,100}?(\d{1,2})\s*(?:\[[^\]]+\]\s*)?人/); if(seat)put("seatingCapacity",String(Number(seat[1])));
   const labeled=[["maxPayloadKg","最大積載量","kg"],["vehicleWeightKg","車両重量","kg"],["grossVehicleWeightKg","車両総重量","kg"],["lengthCm","長さ","cm"],["widthCm","幅","cm"],["heightCm","高さ","cm"],["frontFrontAxleWeightKg","前前軸重","kg"],["frontRearAxleWeightKg","前後軸重","kg"],["rearFrontAxleWeightKg","後前軸重","kg"],["rearRearAxleWeightKg","後後軸重","kg"]];
-  for(const [k,label,unit] of labeled){const re=new RegExp(label+"[\\s\\S]{0,70}?(-|\\d{1,5})\\s*"+unit,"i");const m=all.match(re);if(m)put(k,m[1]==="-"?"-":String(Number(m[1])));}
+  for(const [k,label,unit] of labeled){const re=new RegExp(label+"[\\s\\S]{0,100}?(-|\\d{1,5})\\s*"+unit,"i");const m=all.match(re);if(m)put(k,m[1]==="-"?"-":String(Number(m[1])));}
   const fuel=["軽油","ガソリン","揮発油","電気","LPG","CNG","水素"].find(x=>all.includes(x)); if(fuel)put("fuel",fuel);
-  const disp=all.match(/総排気量又は定格出力[\s\S]{0,100}?(\d+(?:\.\d+)?)\s*(L|kW)/i); if(disp)put("displacementOrRatedOutput",`${disp[1]} ${disp[2].toUpperCase()}`);
+  const disp=all.match(/総排気量又は定格出力[\s\S]{0,120}?(\d+(?:\.\d+)?)\s*(L|kW)/i); if(disp)put("displacementOrRatedOutput",`${disp[1]} ${disp[2].toUpperCase()}`);
   const td=all.match(/型式指定番号\s*(\d{4,6})/); if(td)put("modelDesignationNumber",td[1]); const cl=all.match(/類別区分番号\s*(\d{4})/); if(cl)put("classificationNumber",cl[1]);
   const user=all.match(/使用者の氏名又は名称\s*([^\n]{2,80})/); if(user)put("userName",user[1].replace(/使用者の住所.*$/,"")); const addr=all.match(/使用者の住所\s*([^\n]{4,120})/); if(addr)put("userAddress",addr[1].replace(/\s*\[[0-9\s]+\]\s*$/,"")); const base=all.match(/使用の本拠の位置\s*([^\n]{1,120})/); if(base&&!/^\*+$/.test(compact(base[1])))put("baseLocation",base[1]);
   const required=["registrationNumber","chassisNumber","model","vehicleName","registrationDate","firstRegistration","inspectionExpiry","vehicleClass","purpose","privateBusiness","bodyShape","vehicleWeightKg","grossVehicleWeightKg","lengthCm","widthCm","heightCm","engineModel","fuel"];
@@ -86,9 +113,6 @@ export default function CertificatePdfInspectionRecordAdapter(){
       if(input.dataset[PASS_KEY]==="1"){delete input.dataset[PASS_KEY];return;}
       if(input.dataset.pdfStructuredV3PassThrough==="1"||input.dataset.pdfNativeV2PassThrough==="1"||input.dataset.pdfNativePassThrough==="1")return;
       const file=input.files?.[0]; if(!file||!(file.type==="application/pdf"||/\.pdf$/i.test(file.name||"")))return;
-
-      // Own the first PDF change synchronously so v3/v2 cannot race this adapter.
-      // Non-target or weak target documents are explicitly re-dispatched to the existing v3 path.
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation?.();
       status("PDF構造読み取り v3: 帳票形式を確認中…");
       try{
