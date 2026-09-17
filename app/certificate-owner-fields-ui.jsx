@@ -4,11 +4,13 @@ import { useEffect } from "react";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 
-function value(detail, semantic, raw) {
-  const v = String(detail?.[semantic] || "").trim();
-  if (v) return v;
-  const r = String(detail?.[raw] || "").trim();
-  return r || "未記載";
+function display(detail, semantic, raw, status) {
+  const state = String(detail?.[status] || "");
+  const value = String(detail?.[semantic] || "").trim();
+  if (value) return value;
+  if (state === "MASKED") return "マスキング（原文保持）";
+  const rawValue = String(detail?.[raw] || "").trim();
+  return rawValue || "未記載";
 }
 
 export default function CertificateOwnerFieldsUi() {
@@ -23,11 +25,11 @@ export default function CertificateOwnerFieldsUi() {
         box.style.cssText = "margin:0 0 14px;padding:14px;border:1px solid #cbd8eb;border-radius:14px;background:#f8fafc;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px";
         card.querySelector(".grid")?.insertAdjacentElement("beforebegin", box);
       }
-      const ownerName = value(detail, "ownerName", "ownerNameRaw");
-      const ownerAddress = value(detail, "ownerAddress", "ownerAddressRaw");
-      const resolvedUserName = String(detail.resolvedUserName || detail.userName || "").trim() || "未記載";
-      const resolvedUserAddress = String(detail.resolvedUserAddress || detail.userAddress || "").trim() || "未記載";
-      box.innerHTML = `<div><b>所有者の氏名又は名称</b><div>${escapeHtml(ownerName)}</div></div><div><b>所有者の住所</b><div>${escapeHtml(ownerAddress)}</div></div><div><b>使用者（解決後）</b><div>${escapeHtml(resolvedUserName)}</div></div><div><b>使用者住所（解決後）</b><div>${escapeHtml(resolvedUserAddress)}</div></div>`;
+      const ownerName = display(detail, "ownerName", "ownerNameRaw", "ownerNameStatus");
+      const ownerAddress = display(detail, "ownerAddress", "ownerAddressRaw", "ownerAddressStatus");
+      const userName = display(detail, "userName", "userNameRaw", "userNameStatus");
+      const userAddress = display(detail, "userAddress", "userAddressRaw", "userAddressStatus");
+      box.innerHTML = `<div><b>所有者の氏名又は名称</b><div>${escapeHtml(ownerName)}</div></div><div><b>所有者の住所</b><div>${escapeHtml(ownerAddress)}</div></div><div><b>使用者の氏名又は名称</b><div>${escapeHtml(userName)}</div></div><div><b>使用者の住所</b><div>${escapeHtml(userAddress)}</div></div>`;
     };
     const onAuth = (event) => ensure(event?.detail || {});
     window.addEventListener(AUTH_EVENT, onAuth);
