@@ -6,6 +6,7 @@ const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
 const QR_PRIORITY_KEY = "__vehicleCertificateQrPriority";
 const DOC_TYPE = "AUTOMOBILE_INSPECTION_RECORD";
+const PASS_KEY = "pdfInspectionRecordAdapterPassThrough";
 
 function norm(v) {
   return String(v || "").normalize("NFKC").replace(/[‐‑‒–—―]/g, "-").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
@@ -13,11 +14,15 @@ function norm(v) {
 function compact(v) { return norm(v).replace(/[\s:：・,，.。()（）\[\]［］]/g, ""); }
 function jpMonth(v) {
   const m = norm(v).match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?/);
-  return m ? `${m[1]}${m[2] === "元" ? "元" : Number(m[2])}年${Number(m[3])}月` : "";
+  if (!m) return "";
+  const month = Number(m[3]);
+  return month >= 1 && month <= 12 ? `${m[1]}${m[2] === "元" ? "元" : Number(m[2])}年${month}月` : "";
 }
 function jpDate(v) {
   const m = norm(v).match(/(令和|平成|昭和)\s*(元|\d{1,2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})\s*日?/);
-  return m ? `${m[1]}${m[2] === "元" ? "元" : Number(m[2])}年${Number(m[3])}月${Number(m[4])}日` : "";
+  if (!m) return "";
+  const month = Number(m[3]); const day = Number(m[4]);
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31 ? `${m[1]}${m[2] === "元" ? "元" : Number(m[2])}年${month}月${day}日` : "";
 }
 function registration(v) {
   const m = norm(v).match(/([ぁ-んァ-ヶ一-龠]{1,8})\s*([0-9]\s*[0-9]\s*[0-9])\s*([ぁ-ん])\s*([0-9]\s*[0-9]\s*[0-9]\s*[0-9])/);
@@ -52,11 +57,7 @@ function parse(lines){
   put("vehicleClass",["普通","小型","軽自動車","大型特殊"].find(x=>dense.includes(compact(x)))||""); put("purpose",["乗用","貨物","乗合","特種"].find(x=>dense.includes(x))||""); put("privateBusiness",["自家用","事業用"].find(x=>dense.includes(x))||"");
   put("bodyShape",["キャブオーバ","ステーションワゴン","ボンネット","ピックアップ","トラック","ダンプ","セダン","箱型","バン","バス","幌型"].find(x=>dense.includes(x))||"");
   const seat=all.match(/乗車定員[\s\S]{0,80}?(\d{1,2})\s*(?:\[[^\]]+\]\s*)?人/); if(seat)put("seatingCapacity",String(Number(seat[1])));
-  const labeled=[
-    ["maxPayloadKg","最大積載量","kg"],["vehicleWeightKg","車両重量","kg"],["grossVehicleWeightKg","車両総重量","kg"],
-    ["lengthCm","長さ","cm"],["widthCm","幅","cm"],["heightCm","高さ","cm"],
-    ["frontFrontAxleWeightKg","前前軸重","kg"],["frontRearAxleWeightKg","前後軸重","kg"],["rearFrontAxleWeightKg","後前軸重","kg"],["rearRearAxleWeightKg","後後軸重","kg"]
-  ];
+  const labeled=[["maxPayloadKg","最大積載量","kg"],["vehicleWeightKg","車両重量","kg"],["grossVehicleWeightKg","車両総重量","kg"],["lengthCm","長さ","cm"],["widthCm","幅","cm"],["heightCm","高さ","cm"],["frontFrontAxleWeightKg","前前軸重","kg"],["frontRearAxleWeightKg","前後軸重","kg"],["rearFrontAxleWeightKg","後前軸重","kg"],["rearRearAxleWeightKg","後後軸重","kg"]];
   for(const [k,label,unit] of labeled){const re=new RegExp(label+"[\\s\\S]{0,70}?(-|\\d{1,5})\\s*"+unit,"i");const m=all.match(re);if(m)put(k,m[1]==="-"?"-":String(Number(m[1])));}
   const fuel=["軽油","ガソリン","揮発油","電気","LPG","CNG","水素"].find(x=>all.includes(x)); if(fuel)put("fuel",fuel);
   const disp=all.match(/総排気量又は定格出力[\s\S]{0,100}?(\d+(?:\.\d+)?)\s*(L|kW)/i); if(disp)put("displacementOrRatedOutput",`${disp[1]} ${disp[2].toUpperCase()}`);
@@ -74,4 +75,33 @@ async function extract(file){
 function apply(patch){window[PDF_PRIORITY_KEY]=patch;window[QR_PRIORITY_KEY]=null;window.dispatchEvent(new CustomEvent(AUTH_EVENT,{detail:patch}));}
 function reset(){Array.from(document.querySelectorAll("button")).find(b=>(b.textContent||"").includes("＋新規車両"))?.click();}
 function status(message,error=false){const card=Array.from(document.querySelectorAll("section.card")).find(s=>s.querySelector("h2")?.textContent?.includes("車検証から読み取る"));if(!card)return;let box=card.querySelector("[data-inspection-record-adapter-status]");if(!box){box=document.createElement("div");box.dataset.inspectionRecordAdapterStatus="1";box.style.cssText="margin-top:12px;padding:14px;border-radius:14px;border:1px solid #a8ddbf;font-weight:800";card.querySelector(".actions")?.insertAdjacentElement("afterend",box);}box.textContent=message;box.style.background=error?"#fff1f1":"#effaf4";box.style.color=error?"#922":"#174c2e";}
-export default function CertificatePdfInspectionRecordAdapter(){useLayoutEffect(()=>{let dead=false;const onChange=async e=>{const input=e.target;if(!(input instanceof HTMLInputElement)||input.type!=="file")return;const file=input.files?.[0];if(!file||!(file.type==="application/pdf"||/\.pdf$/i.test(file.name||"")))return;try{const r=await extract(file);if(dead||!r.isTarget)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.();status(`PDF構造読み取り v3: ${DOC_TYPE} を解析中…`);if(!r.strong){status(`PDF構造読み取り v3: ${DOC_TYPE} ${r.requiredCount}必須項目。安全フォールバックへ移行します。`,true);return;}reset();await new Promise(x=>setTimeout(x,0));if(dead)return;apply(r.patch);status(`PDF構造読み取り v3 完了: ${DOC_TYPE} / ${Object.keys(r.patch).length}項目 / OCR 0pass`);input.value="";}catch(err){console.error("inspection record adapter",err);}};window.addEventListener("change",onChange,true);return()=>{dead=true;window.removeEventListener("change",onChange,true);};},[]);return null;}
+function passToV3(input){input.dataset[PASS_KEY]="1";input.dispatchEvent(new Event("change",{bubbles:true}));}
+
+export default function CertificatePdfInspectionRecordAdapter(){
+  useLayoutEffect(()=>{
+    let dead=false;
+    const onChange=async e=>{
+      const input=e.target;
+      if(!(input instanceof HTMLInputElement)||input.type!=="file")return;
+      if(input.dataset[PASS_KEY]==="1"){delete input.dataset[PASS_KEY];return;}
+      if(input.dataset.pdfStructuredV3PassThrough==="1"||input.dataset.pdfNativeV2PassThrough==="1"||input.dataset.pdfNativePassThrough==="1")return;
+      const file=input.files?.[0]; if(!file||!(file.type==="application/pdf"||/\.pdf$/i.test(file.name||"")))return;
+
+      // Own the first PDF change synchronously so v3/v2 cannot race this adapter.
+      // Non-target or weak target documents are explicitly re-dispatched to the existing v3 path.
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation?.();
+      status("PDF構造読み取り v3: 帳票形式を確認中…");
+      try{
+        const r=await extract(file); if(dead)return;
+        if(!r.isTarget){passToV3(input);return;}
+        status(`PDF構造読み取り v3: ${DOC_TYPE} を解析中…`);
+        if(!r.strong){status(`PDF構造読み取り v3: ${DOC_TYPE} ${r.requiredCount}必須項目。安全フォールバックへ移行します。`,true);passToV3(input);return;}
+        reset(); await new Promise(x=>setTimeout(x,0)); if(dead)return;
+        apply(r.patch); status(`PDF構造読み取り v3 完了: ${DOC_TYPE} / ${Object.keys(r.patch).length}項目 / OCR 0pass`); input.value="";
+      }catch(err){console.error("inspection record adapter",err);status(`PDF構造読み取り v3: ${DOC_TYPE} adapter error。安全フォールバックへ移行します。`,true);if(!dead)passToV3(input);}
+    };
+    window.addEventListener("change",onChange,true);
+    return()=>{dead=true;window.removeEventListener("change",onChange,true);};
+  },[]);
+  return null;
+}
