@@ -42,7 +42,7 @@ function linesFrom(tokens) {
   for(const l of lines){l.tokens.sort((a,b)=>a.x-b.x);l.text=l.tokens.map(x=>x.text).join(" ");}
   return lines.sort((a,b)=>a.y-b.y);
 }
-function detect(lines){const d=compact(lines.map(l=>l.text).join("\n"));return d.includes("自動車検査証記録事項")&&d.includes("1.基本情報")&&d.includes("3.車両詳細情報");}
+function detect(lines){const d=compact(lines.map(l=>l.text).join("\n"));return d.includes(compact("自動車検査証記録事項"))&&d.includes(compact("1.基本情報"))&&d.includes(compact("3.車両詳細情報"));}
 function parse(lines){
   const patch={}; const all=norm(lines.map(l=>l.text).join("\n")); const dense=compact(all);
   const put=(k,v)=>{if(v!==undefined&&v!==null&&String(v).trim())patch[k]=String(v).trim();};
