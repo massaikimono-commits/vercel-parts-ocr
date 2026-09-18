@@ -17,6 +17,10 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+function findField(grid, label) {
+  return grid ? Array.from(grid.children).find((el) => el.textContent?.includes(label)) : null;
+}
+
 export default function CertificateOwnerFieldsUi() {
   useEffect(() => {
     let latest = window.__vehicleCertificatePdfPriority || {};
@@ -33,12 +37,17 @@ export default function CertificateOwnerFieldsUi() {
       );
       if (!card) return;
 
-      // Display-only reorganization. Keep PDF/parser values and associations untouched.
+      const grid = card.querySelector(".grid");
+      if (!grid) return;
+      grid.style.display = "flex";
+      grid.style.flexDirection = "column";
+      grid.style.gap = "14px";
+
       let box = card.querySelector("[data-owner-fields]");
       if (!box) {
         box = document.createElement("div");
         box.dataset.ownerFields = "1";
-        box.style.cssText = "margin:0 0 14px;display:flex;flex-direction:column;gap:14px";
+        box.style.cssText = "display:flex;flex-direction:column;gap:14px";
         box.innerHTML = `
           <label style="display:flex;flex-direction:column;gap:7px">
             <span style="font-weight:700">所有者の氏名又は名称</span>
@@ -48,9 +57,7 @@ export default function CertificateOwnerFieldsUi() {
             <span style="font-weight:700">所有者の住所</span>
             <input data-owner-input="ownerAddress" autocomplete="off">
           </label>
-          <div data-owner-provenance-slot></div>
         `;
-        card.querySelector(".grid")?.insertAdjacentElement("beforebegin", box);
         box.querySelectorAll("[data-owner-input]").forEach((input) => {
           input.addEventListener("input", (event) => {
             const target = event.currentTarget;
@@ -66,30 +73,19 @@ export default function CertificateOwnerFieldsUi() {
       if (ownerNameInput && document.activeElement !== ownerNameInput) ownerNameInput.value = ownerName;
       if (ownerAddressInput && document.activeElement !== ownerAddressInput) ownerAddressInput.value = ownerAddress;
 
-      const grid = card.querySelector(".grid");
-      if (grid) {
-        grid.style.display = "flex";
-        grid.style.flexDirection = "column";
-        grid.style.gap = "14px";
+      // Formal display contract: inspection expiry -> Owner -> User -> base location -> vehicle specs.
+      const expiryField = findField(grid, "有効期間の満了する日");
+      const userField = findField(grid, "使用者の氏名又は名称");
+      if (userField) {
+        if (box.parentElement !== grid || box.nextElementSibling !== userField) grid.insertBefore(box, userField);
+      } else if (expiryField) {
+        expiryField.insertAdjacentElement("afterend", box);
       }
 
-      // Issuance-owner provenance is historical/reference Owner information. Keep it
-      // visually inside the Owner group, without changing parser/association semantics.
-      const slot = box.querySelector("[data-owner-provenance-slot]");
-      let provenance = card.querySelector("[data-owner-provenance]");
-      const issuanceName = String(latest?.ownerAtIssuanceNameRaw || "").trim();
-      const issuanceAddress = String(latest?.ownerAtIssuanceAddressRaw || "").trim();
-      if (issuanceName || issuanceAddress) {
-        if (!provenance) {
-          provenance = document.createElement("div");
-          provenance.dataset.ownerProvenance = "1";
-          provenance.style.cssText = "padding:12px 14px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;color:#5d6878;font-size:13px;line-height:1.55";
-        }
-        provenance.innerHTML = `<b>発行時所有者情報（参考）</b><br>${escapeHtml(issuanceName || "未記載")}${issuanceAddress ? `<br>${escapeHtml(issuanceAddress)}` : ""}`;
-        if (slot && provenance.parentElement !== slot) slot.appendChild(provenance);
-      } else if (provenance) {
-        provenance.remove();
-      }
+      // Issuance-owner data remains reference evidence only. It is intentionally not
+      // rendered as a second card here and is never copied into Owner/User by this UI layer.
+      const oldProvenance = card.querySelector("[data-owner-provenance]");
+      if (oldProvenance) oldProvenance.remove();
 
       const heading = card.querySelector("h2");
       if (heading) heading.style.display = "none";
