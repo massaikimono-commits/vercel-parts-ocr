@@ -9,6 +9,7 @@ import LayoutDensityCalibration from "./layout-density-calibration";
 import DailyReportVisualAlignment from "./daily-report-visual-alignment";
 import OperationalRecoveryGuard from "./operational-recovery-guard";
 import InternalNavigationBridge from "./internal-navigation-bridge";
+import CertificatePdfRuntimeSessionGuard from "./certificate-pdf-runtime-session-guard";
 
 export const metadata = {
   title: "部品伝票OCR・印刷",
@@ -33,6 +34,7 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
       <body>
         <InternalNavigationBridge />
         <SessionLifetimeGuard />
+        <CertificatePdfRuntimeSessionGuard />
         <AuthRouteGuard>
           <DesktopQuickNav />
           {children}
