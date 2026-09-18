@@ -13,6 +13,7 @@ import CertificateKeiBaseline from "./certificate-kei-baseline";
 import CertificateQrApply from "./certificate-qr-apply-fixed";
 import CertificatePhotoRescue from "./certificate-photo-rescue";
 import CertificateFinalNativeFix from "./certificate-final-native-fix";
+import CertificatePdfRuntimeSessionGuard from "./certificate-pdf-runtime-session-guard";
 
 // Common vehicle-certificate enhancement stack.
 // This component is mounted only by vehicle-workflow route layouts so schedule,
@@ -20,6 +21,7 @@ import CertificateFinalNativeFix from "./certificate-final-native-fix";
 export default function VehicleCertificateRouteEnhancers() {
   return (
     <>
+      <CertificatePdfRuntimeSessionGuard />
       <CertificatePriorityFix />
       <CertificateEssentialFieldsFix />
       <CertificateRowPriorityFix />
