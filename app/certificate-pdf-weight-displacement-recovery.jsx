@@ -33,29 +33,32 @@ function parseWeightText(text){
   const primary=Number(m[1]),alternate=m[2]?Number(m[2]):null; if(!Number.isFinite(primary)||primary<300||primary>50000)return null;
   return{raw:alternate==null?String(primary):`${primary} [${alternate}]`,primary,alternate,source:clean};
 }
-function parseWeightTokens(tokens){
-  const ordered=[...tokens].sort((a,b)=>a.x-b.x); const text=ordered.map(t=>t.text).join(" "); return parseWeightText(text);
-}
+function parseWeightTokens(tokens){const ordered=[...tokens].sort((a,b)=>a.x-b.x);return parseWeightText(ordered.map(t=>t.text).join(" "));}
+function isAxleRegionToken(t, axleAnchors){return axleAnchors.some(a=>Math.abs(t.y-a.y)<.075&&Math.abs(t.cx-a.cx)<.12);}
 function recoverWeights(tokens,lines){
   const defs=[["最大積載量","maxPayloadKg","maxPayload"],["車両重量","vehicleWeightKg","vehicleWeight"],["車両総重量","grossVehicleWeightKg","grossVehicleWeight"]];
   const items=defs.map(([label,key,base])=>({label,key,base,a:anchor(lines,label)})); if(items.some(x=>!x.a))return{};
-  const ordered=[...items].sort((a,b)=>a.a.cx-b.a.cx);
-  const headerBottom=Math.max(...items.map(x=>x.a.y));
-  const structural=["車台番号","長さ","前前軸重","総排気量又は定格出力","型式","原動機の型式"].map(x=>anchor(lines,x)).filter(Boolean).filter(a=>a.y>headerBottom+.003).map(a=>a.y);
-  const bottom=Math.min(headerBottom+.085, ...(structural.length?structural:[1]));
+  const axleAnchors=["前前軸重","前後軸重","後前軸重","後後軸重"].map(x=>anchor(lines,x)).filter(Boolean);
+  const allWeightAnchors=[...items.map(x=>x.a),...axleAnchors];
   const out={},evidence={};
-  for(let i=0;i<ordered.length;i++){
-    const item=ordered[i];
-    const prev=ordered[i-1]?.a, next=ordered[i+1]?.a;
-    const left=prev ? (prev.cx+item.a.cx)/2 : Math.max(0,item.a.left-.045);
-    const right=next ? (item.a.cx+next.cx)/2 : Math.min(1,item.a.right+.075);
-    const candidateLines=lines.filter(line=>line.y>headerBottom+.001&&line.y<bottom);
-    let hit=null;
-    for(const line of candidateLines){
-      const cellTokens=line.tokens.filter(t=>t.cx>=left&&t.cx<right&&!/^(?:kg|cm|人)$/.test(compact(t.text)));
-      const parsed=parseWeightTokens(cellTokens); if(parsed){hit={line,parsed,cellTokens};break;}
+  for(const item of items){
+    const candidates=[];
+    for(const line of lines){
+      if(line.y<item.a.y-.018||line.y>item.a.y+.085)continue;
+      const numericTokens=line.tokens.filter(t=>/\d/.test(t.text)&&!isAxleRegionToken(t,axleAnchors));
+      if(!numericTokens.length)continue;
+      const parsed=parseWeightTokens(numericTokens); if(!parsed)continue;
+      const valueCx=numericTokens.reduce((s,t)=>s+t.cx,0)/numericTokens.length;
+      const dx=Math.abs(valueCx-item.a.cx),dy=Math.abs(line.y-item.a.y);
+      if(dx>.14||dy>.085)continue;
+      const nearest=allWeightAnchors.map(a=>({a,d:Math.abs(valueCx-a.cx)+Math.abs(line.y-a.y)*1.6})).sort((a,b)=>a.d-b.d)[0];
+      if(!nearest||nearest.a!==item.a)continue;
+      const score=dx+dy*1.6;
+      candidates.push({line,parsed,numericTokens,valueCx,score});
     }
-    evidence[item.base]={label:item.label,labelX:item.a.cx,labelY:item.a.y,left,right,headerBottom,bottom,valueLine:hit?.line?.text||"",cellTokens:hit?.cellTokens?.map(t=>t.text)||[],parsed:hit?.parsed||null};
+    candidates.sort((a,b)=>a.score-b.score);
+    const hit=candidates[0]||null;
+    evidence[item.base]={label:item.label,labelX:item.a.cx,labelY:item.a.y,candidates:candidates.slice(0,4).map(c=>({line:c.line.text,tokens:c.numericTokens.map(t=>t.text),valueCx:c.valueCx,score:c.score,parsed:c.parsed})),selected:hit?{line:hit.line.text,parsed:hit.parsed}:null};
     if(!hit)continue;
     out[item.key]=hit.parsed.raw; out[`${item.base}Raw`]=hit.parsed.raw; out[`${item.base}PrimaryKg`]=hit.parsed.primary; out[`${item.base}AlternateKg`]=hit.parsed.alternate;
   }
