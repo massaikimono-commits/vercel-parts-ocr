@@ -39,18 +39,23 @@ function parseWeightTokens(tokens){
 function recoverWeights(tokens,lines){
   const defs=[["最大積載量","maxPayloadKg","maxPayload"],["車両重量","vehicleWeightKg","vehicleWeight"],["車両総重量","grossVehicleWeightKg","grossVehicleWeight"]];
   const items=defs.map(([label,key,base])=>({label,key,base,a:anchor(lines,label)})); if(items.some(x=>!x.a))return{};
+  const ordered=[...items].sort((a,b)=>a.a.cx-b.a.cx);
+  const headerBottom=Math.max(...items.map(x=>x.a.y));
+  const structural=["車台番号","長さ","前前軸重","総排気量又は定格出力","型式","原動機の型式"].map(x=>anchor(lines,x)).filter(Boolean).filter(a=>a.y>headerBottom+.003).map(a=>a.y);
+  const bottom=Math.min(headerBottom+.085, ...(structural.length?structural:[1]));
   const out={},evidence={};
-  for(const item of items){
-    const otherAnchors=items.filter(x=>x!==item).map(x=>x.a);
-    const rightStop=Math.min(1,...otherAnchors.filter(a=>a.left>item.a.left+.02).map(a=>a.left));
-    const left=Math.max(0,item.a.left-.025),right=Math.min(1,rightStop-.006);
-    const rowBands=lines.filter(line=>line.y>item.a.y+.001&&line.y<item.a.y+.07);
+  for(let i=0;i<ordered.length;i++){
+    const item=ordered[i];
+    const prev=ordered[i-1]?.a, next=ordered[i+1]?.a;
+    const left=prev ? (prev.cx+item.a.cx)/2 : Math.max(0,item.a.left-.045);
+    const right=next ? (item.a.cx+next.cx)/2 : Math.min(1,item.a.right+.075);
+    const candidateLines=lines.filter(line=>line.y>headerBottom+.001&&line.y<bottom);
     let hit=null;
-    for(const line of rowBands){
-      const cellTokens=line.tokens.filter(t=>t.cx>=left&&t.cx<=right&&!/^(?:kg)$/i.test(compact(t.text)));
+    for(const line of candidateLines){
+      const cellTokens=line.tokens.filter(t=>t.cx>=left&&t.cx<right&&!/^(?:kg|cm|人)$/.test(compact(t.text)));
       const parsed=parseWeightTokens(cellTokens); if(parsed){hit={line,parsed,cellTokens};break;}
     }
-    evidence[item.base]={label:item.label,labelY:item.a.y,left,right,valueLine:hit?.line?.text||"",cellTokens:hit?.cellTokens?.map(t=>t.text)||[],parsed:hit?.parsed||null};
+    evidence[item.base]={label:item.label,labelX:item.a.cx,labelY:item.a.y,left,right,headerBottom,bottom,valueLine:hit?.line?.text||"",cellTokens:hit?.cellTokens?.map(t=>t.text)||[],parsed:hit?.parsed||null};
     if(!hit)continue;
     out[item.key]=hit.parsed.raw; out[`${item.base}Raw`]=hit.parsed.raw; out[`${item.base}PrimaryKg`]=hit.parsed.primary; out[`${item.base}AlternateKg`]=hit.parsed.alternate;
   }
