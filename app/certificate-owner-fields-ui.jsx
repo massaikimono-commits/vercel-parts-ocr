@@ -48,6 +48,7 @@ export default function CertificateOwnerFieldsUi() {
             <span style="font-weight:700">所有者の住所</span>
             <input data-owner-input="ownerAddress" autocomplete="off">
           </label>
+          <div data-owner-provenance-slot></div>
         `;
         card.querySelector(".grid")?.insertAdjacentElement("beforebegin", box);
         box.querySelectorAll("[data-owner-input]").forEach((input) => {
@@ -72,12 +73,9 @@ export default function CertificateOwnerFieldsUi() {
         grid.style.gap = "14px";
       }
 
-      // Issuance-owner provenance belongs between inspection expiry and current user.
-      // Find the existing authoritative User field and insert the reference immediately
-      // before it, rather than attaching it to the current Owner block.
-      const userField = grid
-        ? Array.from(grid.children).find((el) => el.textContent?.includes("使用者の氏名又は名称"))
-        : null;
+      // Issuance-owner provenance is historical/reference Owner information. Keep it
+      // visually inside the Owner group, without changing parser/association semantics.
+      const slot = box.querySelector("[data-owner-provenance-slot]");
       let provenance = card.querySelector("[data-owner-provenance]");
       const issuanceName = String(latest?.ownerAtIssuanceNameRaw || "").trim();
       const issuanceAddress = String(latest?.ownerAtIssuanceAddressRaw || "").trim();
@@ -88,9 +86,7 @@ export default function CertificateOwnerFieldsUi() {
           provenance.style.cssText = "padding:12px 14px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;color:#5d6878;font-size:13px;line-height:1.55";
         }
         provenance.innerHTML = `<b>発行時所有者情報（参考）</b><br>${escapeHtml(issuanceName || "未記載")}${issuanceAddress ? `<br>${escapeHtml(issuanceAddress)}` : ""}`;
-        if (userField && provenance.nextElementSibling !== userField) {
-          grid.insertBefore(provenance, userField);
-        }
+        if (slot && provenance.parentElement !== slot) slot.appendChild(provenance);
       } else if (provenance) {
         provenance.remove();
       }
