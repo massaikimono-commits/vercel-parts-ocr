@@ -8,7 +8,7 @@ const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
 function norm(v) {
   return String(v ?? "").normalize("NFKC").replace(/[‐‑‒–—―]/g, "-").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
 }
-function compact(v) { return norm(v).replace(/[\s:：・,，.。()（）\[\]［］]/g, ""); }
+function compact(v) { return norm(v).replace(/[\s:：・,，()（）\[\]［］]/g, ""); }
 function makeToken(item, width, height) {
   const text = norm(item?.str);
   if (!text) return null;
@@ -50,12 +50,21 @@ function anchor(lines, label) {
   }
   return null;
 }
-function parseWeightTokens(tokens) {
-  const text = norm(tokens.map((t) => t.text).join(" ")).replace(/kg/ig, " ");
-  const m = text.match(/(\d{2,5})(?:\s*[\[［]\s*(\d{2,5})\s*[\]］])?/);
+function parseWeightText(text) {
+  const clean = norm(text).replace(/kg/ig, " ");
+  const m = clean.match(/(\d{3,5})(?:\s*[\[［]\s*(\d{3,5})\s*[\]］])?/);
   if (!m) return null;
   const primary = Number(m[1]), alternate = m[2] ? Number(m[2]) : null;
-  return { raw: alternate == null ? String(primary) : `${primary} [${alternate}]`, primary, alternate, source: text };
+  if (!Number.isFinite(primary) || primary < 300 || primary > 50000) return null;
+  return { raw: alternate == null ? String(primary) : `${primary} [${alternate}]`, primary, alternate, source: clean };
+}
+function valueLineBelow(lines, a, nextLabelY) {
+  const candidates = lines.filter((line) => line.y > a.y + .002 && line.y < nextLabelY - .001 && line.y - a.y < .055);
+  for (const line of candidates) {
+    const parsed = parseWeightText(line.text);
+    if (parsed) return { line, parsed };
+  }
+  return null;
 }
 function recoverWeights(tokens, lines) {
   const defs = [
@@ -65,54 +74,57 @@ function recoverWeights(tokens, lines) {
   ];
   const items = defs.map(([label, key, base]) => ({ label, key, base, a: anchor(lines, label) }));
   if (items.some((x) => !x.a)) return {};
-  const sorted = [...items].sort((a, b) => a.a.cx - b.a.cx);
-  const headerY = Math.max(...items.map((x) => x.a.y));
-  const nextAnchors = ["長さ", "前前軸重", "車台番号", "総排気量又は定格出力"]
-    .map((x) => anchor(lines, x)).filter(Boolean).filter((x) => x.y > headerY + .004);
-  const bottom = nextAnchors.length ? Math.min(...nextAnchors.map((x) => x.y)) - .002 : Math.min(1, headerY + .11);
   const out = {}, evidence = {};
-  sorted.forEach((item, i) => {
-    const prev = sorted[i - 1], next = sorted[i + 1];
-    const left = prev ? (prev.a.cx + item.a.cx) / 2 : Math.max(0, item.a.left - .04);
-    const right = next ? (item.a.cx + next.a.cx) / 2 : 1;
-    const candidates = tokens.filter((t) => t.y > headerY + .001 && t.y < bottom && t.cx >= left && t.cx < right)
-      .sort((a, b) => a.y - b.y || a.x - b.x);
-    const parsed = parseWeightTokens(candidates);
-    evidence[item.base] = { label: item.label, sourceTokens: candidates.map((t) => t.text).join(" "), parsed };
-    if (!parsed) return;
-    out[item.key] = parsed.raw;
-    out[`${item.base}Raw`] = parsed.raw;
-    out[`${item.base}PrimaryKg`] = parsed.primary;
-    out[`${item.base}AlternateKg`] = parsed.alternate;
-  });
-  out.__weightEvidenceV2 = evidence;
+  for (const item of items) {
+    const laterLabels = items.map((x) => x.a).filter((a) => a.y > item.a.y + .003).map((a) => a.y);
+    const structuralStops = ["長さ", "前前軸重", "総排気量又は定格出力"].map((x) => anchor(lines, x)).filter(Boolean).filter((a) => a.y > item.a.y + .003).map((a) => a.y);
+    const nextY = Math.min(1, ...(laterLabels.length ? laterLabels : [1]), ...(structuralStops.length ? structuralStops : [1]));
+    const hit = valueLineBelow(lines, item.a, nextY);
+    evidence[item.base] = { label: item.label, labelY: item.a.y, valueLine: hit?.line?.text || "", parsed: hit?.parsed || null };
+    if (!hit) continue;
+    out[item.key] = hit.parsed.raw;
+    out[`${item.base}Raw`] = hit.parsed.raw;
+    out[`${item.base}PrimaryKg`] = hit.parsed.primary;
+    out[`${item.base}AlternateKg`] = hit.parsed.alternate;
+  }
+  out.__weightEvidenceV3 = evidence;
   return out;
+}
+function parseDecimalToken(text) {
+  const s = norm(text).replace(/,/g, ".");
+  const m = s.match(/^(\d{1,2})\s*[.．]\s*(\d{1,3})$/);
+  if (m) return `${Number(m[1])}.${m[2]}`;
+  if (/^\d{1,2}\.\d{1,3}$/.test(s)) return s;
+  return "";
 }
 function recoverDisplacement(tokens, lines) {
   const a = anchor(lines, "総排気量又は定格出力");
   if (!a) return {};
   const stops = ["燃料の種類", "型式指定番号", "類別区分番号"].map((x) => anchor(lines, x)).filter(Boolean).filter((x) => x.y > a.y + .004);
-  const bottom = stops.length ? Math.min(...stops.map((x) => x.y)) - .002 : Math.min(1, a.y + .085);
-  const region = tokens.filter((t) => t.y > a.y + .001 && t.y < bottom && t.x >= Math.max(0, a.left - .02));
-  const numbers = region.filter((t) => /^\d+(?:\.\d+)?$/.test(compact(t.text)));
-  const units = region.filter((t) => /^(?:L|l|ℓ|kW|KW|kw)$/.test(compact(t.text)));
+  const bottom = stops.length ? Math.min(...stops.map((x) => x.y)) - .001 : Math.min(1, a.y + .065);
+  const regionLines = lines.filter((line) => line.y > a.y + .002 && line.y < bottom);
   let best = null;
-  for (const n of numbers) {
-    for (const u of units) {
-      const dy = Math.abs(n.y - u.y), dx = Math.abs((n.x + n.w) - u.x);
-      const score = dy * 8 + dx;
-      if (!best || score < best.score) best = { n, u, score, dy, dx };
+  for (const line of regionLines) {
+    const decimal = parseDecimalToken(line.text) || (() => {
+      const joined = line.tokens.map((t) => norm(t.text)).join("");
+      return parseDecimalToken(joined);
+    })();
+    if (!decimal) continue;
+    const unitTokens = line.tokens.filter((t) => /^(?:L|l|ℓ|kW|KW|kw)$/.test(compact(t.text)));
+    for (const u of unitTokens) {
+      const score = Math.abs(line.y - u.y);
+      if (!best || score < best.score) best = { value: decimal, u, score, line };
     }
   }
-  const sourceTokens = region.sort((p, q) => p.y - q.y || p.x - q.x).map((t) => t.text).join(" ");
-  if (!best || best.dy > .018) return { __displacementEvidenceV2: { sourceTokens, parsed: null } };
-  const value = compact(best.n.text), unit = /^(?:L|l|ℓ)$/.test(compact(best.u.text)) ? "L" : "kW";
+  const sourceTokens = regionLines.map((line) => line.text).join(" | ");
+  if (!best) return { __displacementEvidenceV3: { sourceTokens, parsed: null } };
+  const unit = /^(?:L|l|ℓ)$/.test(compact(best.u.text)) ? "L" : "kW";
   return {
-    displacementOrRatedOutput: `${value} ${unit}`,
-    displacementOrRatedOutputRaw: `${value} ${norm(best.u.text)}`,
-    displacementOrRatedOutputValue: value,
+    displacementOrRatedOutput: `${best.value} ${unit}`,
+    displacementOrRatedOutputRaw: `${best.value} ${norm(best.u.text)}`,
+    displacementOrRatedOutputValue: best.value,
     displacementOrRatedOutputUnit: unit,
-    __displacementEvidenceV2: { sourceTokens, parsed: { value, unit, dy: best.dy, dx: best.dx } },
+    __displacementEvidenceV3: { sourceTokens, parsed: { value: best.value, unit, valueLine: best.line.text } },
   };
 }
 async function extract(file) {
@@ -149,7 +161,7 @@ export default function CertificatePdfWeightDisplacementRecovery() {
       const recovered = latest || (pending ? await pending : null) || {};
       if (dead) return;
       const merged = { ...detail };
-      const keys = ["maxPayloadKg", "vehicleWeightKg", "grossVehicleWeightKg", "maxPayloadRaw", "maxPayloadPrimaryKg", "maxPayloadAlternateKg", "vehicleWeightRaw", "vehicleWeightPrimaryKg", "vehicleWeightAlternateKg", "grossVehicleWeightRaw", "grossVehicleWeightPrimaryKg", "grossVehicleWeightAlternateKg", "displacementOrRatedOutput", "displacementOrRatedOutputRaw", "displacementOrRatedOutputValue", "displacementOrRatedOutputUnit", "__weightEvidenceV2", "__displacementEvidenceV2"];
+      const keys = ["maxPayloadKg", "vehicleWeightKg", "grossVehicleWeightKg", "maxPayloadRaw", "maxPayloadPrimaryKg", "maxPayloadAlternateKg", "vehicleWeightRaw", "vehicleWeightPrimaryKg", "vehicleWeightAlternateKg", "grossVehicleWeightRaw", "grossVehicleWeightPrimaryKg", "grossVehicleWeightAlternateKg", "displacementOrRatedOutput", "displacementOrRatedOutputRaw", "displacementOrRatedOutputValue", "displacementOrRatedOutputUnit", "__weightEvidenceV3", "__displacementEvidenceV3"];
       for (const key of keys) if (recovered[key] !== undefined && recovered[key] !== "") merged[key] = recovered[key];
       if (JSON.stringify(merged) === JSON.stringify(detail)) return;
       dispatching = true;
