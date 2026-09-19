@@ -38,12 +38,7 @@ function anchorTokens(all, labels) {
 }
 
 function near(anchor, all, options = {}) {
-  const {
-    maxDy = 0.035,
-    minDx = -0.01,
-    maxDx = 0.42,
-    sameLineBonus = 0.03,
-  } = options;
+  const { maxDy = 0.035, minDx = -0.01, maxDx = 0.42, sameLineBonus = 0.03 } = options;
   return all
     .filter((token) => token !== anchor)
     .map((token) => {
@@ -51,8 +46,6 @@ function near(anchor, all, options = {}) {
       const dy = Math.abs(token.y - anchor.y);
       if (dy > maxDy || dx < minDx || dx > maxDx) return null;
       const sameLine = token.lineIndex === anchor.lineIndex;
-      // Baseline affinity first, then horizontal distance. This preserves the
-      // successful 09e1a461 displacement-unit semantics without vehicle rules.
       const score = dy * 10 + Math.max(0, dx) - (sameLine ? sameLineBonus : 0);
       return { token, score, dx, dy };
     })
@@ -78,6 +71,9 @@ const engine = (value) => {
   const text = norm(value).toUpperCase();
   if (!/^[A-Z0-9]{2,10}(?:-[A-Z0-9]{2,10})?$/.test(text)) return "";
   if (["L", "KW"].includes(text)) return "";
+  // Model/type values contain a hyphen and can sit close to the engine label in
+  // fragmented PDF text layers. Never let an engine recovery consume them.
+  if (model(text)) return "";
   return text;
 };
 
@@ -136,12 +132,7 @@ const FIELD_SPECS = [
 function resolveSimpleField(spec, all) {
   const anchors = anchorTokens(all, spec.labels);
   for (const anchor of anchors) {
-    const candidate = firstMatch(
-      anchor,
-      all,
-      (text) => Boolean(spec.parse(text)),
-      { maxDx: spec.maxDx, maxDy: 0.035 }
-    );
+    const candidate = firstMatch(anchor, all, (text) => Boolean(spec.parse(text)), { maxDx: spec.maxDx, maxDy: 0.035 });
     if (candidate) {
       const value = spec.parse(candidate.text);
       if (value) return { value, evidence: { label: anchor.text, candidate: candidate.text, method: "anchor-relative" } };
@@ -154,14 +145,10 @@ function resolveDisplacement(all) {
   const anchors = anchorTokens(all, ["総排気量又は定格出力"]);
   for (const anchor of anchors) {
     const candidates = near(anchor, all, { maxDx: 0.38, maxDy: 0.04 });
-
-    // Prefer an already combined token such as "1.99 L".
     for (const { token } of candidates) {
       const value = displacement(token.text);
       if (value) return { value, evidence: { label: anchor.text, candidate: token.text, method: "baseline-affinity" } };
     }
-
-    // PDF text layers frequently split value and unit into adjacent tokens.
     const numeric = candidates.find(({ token }) => /^\d+(?:\.\d+)?$/.test(norm(token.text)));
     if (!numeric) continue;
     const unit = candidates
@@ -173,16 +160,7 @@ function resolveDisplacement(all) {
       })[0];
     if (!unit) continue;
     const value = displacement(`${numeric.token.text} ${unit.token.text}`);
-    if (value) {
-      return {
-        value,
-        evidence: {
-          label: anchor.text,
-          candidate: `${numeric.token.text} ${unit.token.text}`,
-          method: "baseline-affinity-split-token",
-        },
-      };
-    }
+    if (value) return { value, evidence: { label: anchor.text, candidate: `${numeric.token.text} ${unit.token.text}`, method: "baseline-affinity-split-token" } };
   }
   return null;
 }
@@ -191,27 +169,17 @@ export function resolveCertificatePdfMissingFields(lines, strictPatch = {}) {
   const patch = { ...strictPatch };
   const provenance = {};
   const all = tokens(lines);
-
   for (const [key, value] of Object.entries(strictPatch || {})) {
     if (nonEmpty(value)) provenance[key] = { source: "strict", locked: true };
   }
-
   const putMissing = (key, resolved) => {
     if (!resolved || nonEmpty(patch[key])) return;
     patch[key] = resolved.value;
-    provenance[key] = {
-      source: "anchor",
-      locked: true,
-      evidence: resolved.evidence,
-    };
+    provenance[key] = { source: "anchor", locked: true, evidence: resolved.evidence };
   };
-
   for (const spec of FIELD_SPECS) {
     if (!nonEmpty(patch[spec.key])) putMissing(spec.key, resolveSimpleField(spec, all));
   }
-  if (!nonEmpty(patch.displacementOrRatedOutput)) {
-    putMissing("displacementOrRatedOutput", resolveDisplacement(all));
-  }
-
+  if (!nonEmpty(patch.displacementOrRatedOutput)) putMissing("displacementOrRatedOutput", resolveDisplacement(all));
   return { patch, provenance };
 }
