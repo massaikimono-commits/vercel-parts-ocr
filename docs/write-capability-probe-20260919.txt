@@ -1,3 +1,0 @@
-ICB GitHub write capability probe
-branch: candidate/certificate-pdf-v3-layout-generalization-20260919
-purpose: verify connector write path only; no runtime/source behavior change.
