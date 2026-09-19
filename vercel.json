@@ -5,7 +5,7 @@
       "**": false,
       "main": false,
       "preview/schedule-ux-20260903": true,
-      "candidate/certificate-pdf-inspection-record-adapter-20260917": true,
+      "candidate/certificate-pdf-v3-layout-generalization-sidecar-20260919": true,
       "work/**": false,
       "eval/**": false,
       "experiment/**": false,

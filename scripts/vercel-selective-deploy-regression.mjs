@@ -12,7 +12,7 @@ assert(rules && typeof rules === "object" && !Array.isArray(rules), "git.deploym
 
 const allowedBranches = [
   "preview/schedule-ux-20260903",
-  "candidate/certificate-pdf-inspection-record-adapter-20260917",
+  "candidate/certificate-pdf-v3-layout-generalization-sidecar-20260919",
 ];
 const forbiddenPatterns = [
   "main",
@@ -53,7 +53,7 @@ function matches(pattern, branch) {
 
 function deploymentEnabled(branch) {
   const matching = Object.entries(rules).filter(([pattern]) => matches(pattern, branch));
-  if (!matching.length) return true; // Vercel's documented default for unspecified branches.
+  if (!matching.length) return true;
   return matching.some(([, enabled]) => enabled === true);
 }
 
