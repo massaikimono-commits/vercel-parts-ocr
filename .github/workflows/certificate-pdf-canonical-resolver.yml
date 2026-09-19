@@ -1,0 +1,23 @@
+name: Certificate PDF canonical resolver
+
+on:
+  push:
+    branches:
+      - candidate/certificate-pdf-canonical-generalization-20260919
+  pull_request:
+    paths:
+      - app/certificate-pdf-canonical-missing-field-resolver.js
+      - scripts/certificate-pdf-canonical-resolver-regression.mjs
+      - app/certificate-pdf-structured-reader-v3.jsx
+
+jobs:
+  canonical-resolver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Canonical resolver regression
+        run: node scripts/certificate-pdf-canonical-resolver-regression.mjs
