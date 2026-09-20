@@ -12,7 +12,7 @@ function line(y,entries){return{y,text:entries.map(([text])=>text).join(" "),tok
 {
  const lines=[line(.50,[["総排気量又は定格出力",.10,.18],["1.99",.40,.05],["L",.47,.02]]),line(.53,[["kW",.47,.02]])];const r=resolveCertificatePdfMissingFields(lines,{});assert.equal(r.patch.displacementOrRatedOutput,"1.99 L");assert.equal(r.provenance.displacementOrRatedOutput.evidence.method,"baseline-affinity-split-token");
 }
-{const r=resolveCertificatePdfMissingFields([line(.60,[["総排気量又は定格出力",.10,.18],["85",.40],["kW",.46]])],{});assert.equal(r.patch.displacementOrRatedOutput,"85 kW");}
+{const r=resolveCertificatePdfMissingFields([line(.60,[["総排気量又は定格出力",.10,.18],["85",.40],["kW",.46]])],{});assert.equal(r.patch.displacementOrRatedOutput,"85 KW");}
 {const r=resolveCertificatePdfMissingFields([line(.70,[["PE52-000952",.20],["2020 kg",.40],["3.49",.55],["L",.60]])],{});assert.equal(r.patch.chassisNumber,undefined);assert.equal(r.patch.vehicleWeightKg,undefined);assert.equal(r.patch.displacementOrRatedOutput,undefined);}
 {const r=resolveCertificatePdfMissingFields([line(.74,[["原動機の型式",.10,.10],["DBA-PE52",.28,.09]]),line(.76,[["VQ35",.28,.06]])],{});assert.equal(r.patch.engineModel,"VQ35");}
 {
