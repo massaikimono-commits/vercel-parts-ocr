@@ -1,0 +1,19 @@
+TARGET BASE: a508fc7d0fb0a0025c67fb5a2c93ae68b192c3b8
+TARGET FILE: app/certificate-pdf-structured-reader-v3.jsx
+
+PATCH 1 — immediately after:
+import { useLayoutEffect } from "react";
+
+ADD:
+import { resolveCertificatePdfMissingFields } from "./certificate-pdf-canonical-missing-field-resolver";
+
+PATCH 2 — immediately after:
+if (!patch.vehicleName) put("vehicleName", makerFromText(allText));
+
+ADD:
+
+  const recovered = resolveCertificatePdfMissingFields(lines, patch);
+  Object.assign(patch, recovered.patch);
+
+No other byte/content changes are authorized.
+Do not change required[], found calculation, strong gate, QR path, fallback path, worker setup, AUTH event, completion, or formatting.
