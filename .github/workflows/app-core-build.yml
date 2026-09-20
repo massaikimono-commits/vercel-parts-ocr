@@ -2,6 +2,9 @@ name: App core build check
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - candidate/certificate-pdf-canonical-generalization-20260919
 
 permissions:
   contents: read
