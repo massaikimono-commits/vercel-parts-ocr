@@ -5,7 +5,7 @@ import { resolveCertificatePdfMissingFields } from "./certificate-pdf-canonical-
 import { resolveCertificatePdfSemanticFields } from "./certificate-pdf-semantic-resolver";
 import { resolveCertificatePdfWeightDisplacementFields } from "./certificate-pdf-weight-displacement-resolver";
 import { isCertificateInspectionRecord, parseCertificateInspectionRecordLines } from "./certificate-pdf-inspection-record-adapter";
-import { commitCertificatePdfFinal, createCertificatePdfRunOwnership } from "./certificate-pdf-single-owner-contract";
+import { commitCertificatePdfFinal, createCertificatePdfCompletionContract, createCertificatePdfRunOwnership } from "./certificate-pdf-single-owner-contract";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -664,6 +664,20 @@ export default function CertificatePdfStructuredReaderV3() {
     // pathname gate would incorrectly disable native PDF handling.
     let dead = false;
     const ownership = createCertificatePdfRunOwnership();
+    const completion = createCertificatePdfCompletionContract(ownership);
+
+    const cancelIfInactive = (runId) => {
+      if (!dead && completion.isActive(runId)) return false;
+      completion.cancel(runId);
+      return true;
+    };
+
+    const fallback = (runId, input, message, error = false) => {
+      if (!completion.settle(runId, error ? "error" : "fallback")) return false;
+      showStatus(message, error);
+      passToExisting(input);
+      return true;
+    };
 
     const onChange = async (event) => {
       const input = event.target;
@@ -678,9 +692,9 @@ export default function CertificatePdfStructuredReaderV3() {
 
       const file = input.files?.[0];
       if (!file) return;
-      const runId = ownership.beginRun();
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
       if (!isPdf) return;
+      const runId = completion.beginRun();
 
       // PDFはまずこのv3が判断する。十分に構造化できた時だけOCRを完全に止める。
       event.preventDefault();
@@ -697,44 +711,46 @@ export default function CertificatePdfStructuredReaderV3() {
           const parsed = parseStructured(buildLines(tokens));
           const canvas = await renderPage(pdf, chosen.pageNumber, 1800);
           const qrFound = await hasQr(canvas);
-          if (dead || !ownership.isCurrent(runId)) return;
+          if (cancelIfInactive(runId)) return;
 
           showPreview(canvas);
           showDebug(parsed, tokens.length);
 
           if (qrFound) {
-            showStatus(`PDF ${chosen.pageNumber}ページ目: QRを検出。QR優先ルートへ引き継ぎます。`);
-            passToExisting(input);
+            fallback(runId, input, `PDF ${chosen.pageNumber}ページ目: QRを検出。QR優先ルートへ引き継ぎます。`);
             return;
           }
 
           if (!parsed.strong) {
-            showStatus(`PDF構造読み取り v3: ${parsed.found}項目。構造確信度不足のため既存OCRへフォールバックします。`);
-            passToExisting(input);
+            fallback(runId, input, `PDF構造読み取り v3: ${parsed.found}項目。構造確信度不足のため既存OCRへフォールバックします。`);
             return;
           }
 
           resetForm();
           await new Promise((resolve) => setTimeout(resolve, 0));
-          if (dead || !ownership.isCurrent(runId)) return;
-          if (!applyPatch(ownership, runId, parsed.patch)) return;
+          if (cancelIfInactive(runId)) return;
+          if (!applyPatch(ownership, runId, parsed.patch)) {
+            fallback(runId, input, "PDF構造読み取り v3: FINAL確定に失敗したため既存OCRへ切り替えます。", true);
+            return;
+          }
+          if (!completion.settle(runId, "completed")) return;
           showStatus(`PDF構造読み取り v3 完了: OCR 0pass / ${parsed.found}項目をPDF文字から直接確定。既存OCRは実行していません。`);
           input.value = "";
         } finally {
           await pdf.destroy?.().catch?.(() => {});
         }
       } catch (error) {
-        if (dead || !ownership.isCurrent(runId)) return;
+        if (cancelIfInactive(runId)) return;
         console.error("PDF structured v3", error);
-        showStatus(`PDF構造読み取り v3 エラー: ${error?.message || error}。既存OCRへ切り替えます。`, true);
-        passToExisting(input);
+        fallback(runId, input, `PDF構造読み取り v3 エラー: ${error?.message || error}。既存OCRへ切り替えます。`, true);
       }
     };
 
     window.addEventListener("change", onChange, true);
     return () => {
       dead = true;
-      ownership.invalidate();
+      const cancelledRunId = completion.invalidate();
+      if (cancelledRunId !== null) showStatus("PDF構造読み取り v3: 処理をキャンセルしました。", true);
       window.removeEventListener("change", onChange, true);
     };
   }, []);

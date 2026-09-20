@@ -25,8 +25,9 @@ assert(/CertificatePdfWorkerLocalizer/.test(v2Layout), "P0: canonical vehicle-wo
 assert(v2Layout.indexOf("<CertificatePdfWorkerLocalizer />") < v2Layout.indexOf("<CertificatePdfStructuredReaderV3 />"), "P0: local PDF worker initializer must be mounted before structured PDF v3");
 
 assert(/function passToExisting\(input\)/.test(v3), "P0: v3 fallback handoff helper must exist");
-assert(/catch\s*\([^)]*\)\s*\{[\s\S]*?passToExisting\(input\)/.test(v3), "P0: v3 errors must hand off to the next PDF reader");
-assert(/!parsed\.strong[\s\S]*?passToExisting\(input\)/.test(v3), "P0: weak v3 parses must hand off to the next PDF reader");
+assert(/const fallback = \([^)]*\) => \{[\s\S]*?passToExisting\(input\)/.test(v3), "P0: v3 controlled fallback must hand off to the next PDF reader");
+assert(/catch\s*\([^)]*\)\s*\{[\s\S]*?fallback\(runId, input/.test(v3), "P0: v3 errors must use the controlled fallback handoff");
+assert(/!parsed\.strong[\s\S]*?fallback\(runId, input/.test(v3), "P0: weak v3 parses must use the controlled fallback handoff");
 assert(/function passToExisting\(input\)/.test(v2), "P0: v2 fallback handoff helper must exist");
 assert(/catch\s*\([^)]*\)\s*\{[\s\S]*?passToExisting\(input\)/.test(v2), "P0: v2 errors must hand off to legacy processing");
 

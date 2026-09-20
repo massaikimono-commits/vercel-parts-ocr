@@ -79,7 +79,8 @@ const ownerSemantics = read("app/certificate-owner-semantics.jsx");
 
 assert.match(structured, /commitCertificatePdfFinal/);
 assert.match(structured, /createCertificatePdfRunOwnership/);
-assert.match(structured, /if \(dead \|\| !ownership\.isCurrent\(runId\)\) return;[\s\S]*console\.error\("PDF structured v3"/);
+assert.match(structured, /createCertificatePdfCompletionContract/);
+assert.match(structured, /cancelIfInactive\(runId\)/);
 assert.doesNotMatch(semanticWriter, /addEventListener|dispatchEvent|PDF_PRIORITY/);
 assert.doesNotMatch(weightWriter, /addEventListener|dispatchEvent|PDF_PRIORITY/);
 assert.doesNotMatch(inspectionAdapter, /addEventListener|dispatchEvent|PDF_PRIORITY/);

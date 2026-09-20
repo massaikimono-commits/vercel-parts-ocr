@@ -12,6 +12,7 @@ on:
       - app/certificate-pdf-single-owner-contract.js
       - app/certificate-pdf-weight-displacement-resolver.js
       - scripts/certificate-pdf-canonical-resolver-regression.mjs
+      - scripts/certificate-pdf-completion-contract-regression.mjs
       - scripts/certificate-pdf-single-owner-regression.mjs
       - app/certificate-pdf-structured-reader-v3.jsx
 
@@ -26,5 +27,7 @@ jobs:
           node-version: 20
       - name: Canonical resolver regression
         run: node scripts/certificate-pdf-canonical-resolver-regression.mjs
+      - name: Completion contract regression
+        run: node scripts/certificate-pdf-completion-contract-regression.mjs
       - name: Single owner regression
         run: node scripts/certificate-pdf-single-owner-regression.mjs
