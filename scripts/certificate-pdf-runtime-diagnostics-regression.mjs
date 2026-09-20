@@ -76,6 +76,21 @@ for (const checkpoint of [
 ]) {
   assert.match(structuredSource, new RegExp(`(?:checkpointCertificatePdfDiagnostic|terminalCertificatePdfDiagnostic)\\(diagnosticId,?[^)]*${checkpoint}`));
 }
+const renderProbeCheckpoints = [
+  "RENDER_PAGE_ENTER", "PAGE_OBJECT_STARTED", "PAGE_OBJECT_READY", "BASE_VIEWPORT_READY", "SCALED_VIEWPORT_READY",
+  "CANVAS_READY", "CONTEXT_READY", "RENDER_TASK_CREATE_STARTED", "RENDER_TASK_CREATED", "RENDER_PROMISE_STARTED",
+  "RENDER_PROMISE_DONE", "RENDER_PAGE_RETURN",
+];
+const renderPageSource = structuredSource.slice(structuredSource.indexOf("async function renderPage"), structuredSource.indexOf("function cropLower"));
+let previousRenderCheckpointIndex = -1;
+for (const checkpoint of renderProbeCheckpoints) {
+  const checkpointIndex = renderPageSource.indexOf(`checkpointCertificatePdfDiagnostic(diagnosticId, "${checkpoint}")`);
+  assert.ok(checkpointIndex > previousRenderCheckpointIndex, `${checkpoint} must preserve render probe order`);
+  previousRenderCheckpointIndex = checkpointIndex;
+}
+assert.equal((renderPageSource.match(/\bawait\b/g) || []).length, 2, "render probe must not add an await");
+assert.match(renderPageSource, /const renderTask = page\.render\(\{ canvasContext: ctx, viewport \}\);[\s\S]*await renderTask\.promise;/);
+assert.match(structuredSource, /renderPage\(pdf, chosen\.pageNumber, 1800, diagnosticId\)/);
 assert.match(structuredSource, /beginCertificatePdfDiagnosticRun\(runId\)\?\.diagnosticId/);
 assert.match(moduleSource, /recordCheckpoint\(diagnosticId, "RUN_STARTED"/);
 assert.match(structuredSource, /data-pdf-structured-v3-diagnostic/);

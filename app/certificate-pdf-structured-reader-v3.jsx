@@ -523,18 +523,31 @@ export async function parseVehicleCertificatePdfStructured(file) {
   }
 }
 
-async function renderPage(pdf, pageNumber, targetWidth = 1800) {
+async function renderPage(pdf, pageNumber, targetWidth = 1800, diagnosticId = null) {
+  checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PAGE_ENTER");
+  checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_OBJECT_STARTED");
   const page = await pdf.getPage(pageNumber);
+  checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_OBJECT_READY");
   const base = page.getViewport({ scale: 1 });
+  checkpointCertificatePdfDiagnostic(diagnosticId, "BASE_VIEWPORT_READY");
   const scale = Math.max(1, Math.min(4, targetWidth / Math.max(1, base.width)));
   const viewport = page.getViewport({ scale });
+  checkpointCertificatePdfDiagnostic(diagnosticId, "SCALED_VIEWPORT_READY");
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(viewport.width));
   canvas.height = Math.max(1, Math.round(viewport.height));
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CANVAS_READY");
   const ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CONTEXT_READY");
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvasContext: ctx, viewport }).promise;
+  checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_TASK_CREATE_STARTED");
+  const renderTask = page.render({ canvasContext: ctx, viewport });
+  checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_TASK_CREATED");
+  checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PROMISE_STARTED");
+  await renderTask.promise;
+  checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PROMISE_DONE");
+  checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PAGE_RETURN");
   return canvas;
 }
 
@@ -745,7 +758,7 @@ export default function CertificatePdfStructuredReaderV3() {
           const parsed = parseStructured(buildLines(tokens));
           checkpointCertificatePdfDiagnostic(diagnosticId, "STRUCTURED_PARSED", { found: parsed.found, strong: parsed.strong });
           checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_RENDER_STARTED");
-          const canvas = await renderPage(pdf, chosen.pageNumber, 1800);
+          const canvas = await renderPage(pdf, chosen.pageNumber, 1800, diagnosticId);
           checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_RENDERED", { width: canvas.width, height: canvas.height });
           checkpointCertificatePdfDiagnostic(diagnosticId, "QR_CHECK_STARTED");
           const qrFound = await hasQr(canvas);
