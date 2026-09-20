@@ -14,7 +14,7 @@ const kg = (value) => { const m=norm(value).match(/^(-|\d{1,5})\s*kg$/i); return
 const cm = (value) => { const m=norm(value).match(/^(\d{2,4})\s*cm$/i); return m?String(Number(m[1])):""; };
 const seats = (value) => { const m=norm(value).match(/^(\d{1,2})\s*人$/); return m?String(Number(m[1])):""; };
 const fuel = (value) => { const text=norm(value); return ["軽油","ガソリン","揮発油","電気","LPG","CNG","水素"].find((v)=>text.includes(v))||""; };
-const displacement = (value) => { const m=norm(value).match(/^(\d+(?:\.\d+)?)\s*(L|kW)$/i); return m?`${m[1]} ${/^l$/i.test(m[2])?"L":"kW"}`:""; };
+const displacement = (value) => { const m=norm(value).match(/^(\d+(?:\.\d+)?)\s*(L|kW)$/i); return m?`${m[1]} ${m[2].toUpperCase()}`:""; };
 const number = (value,digits) => { const re=new RegExp(`^\\d{${digits}}$`), text=norm(value); return re.test(text)?text:""; };
 const FIELD_SPECS=[
  {key:"chassisNumber",labels:["車台番号"],parse:chassis,maxDx:.5},{key:"model",labels:["型式"],parse:model,maxDx:.34},{key:"engineModel",labels:["原動機の型式"],parse:engine,maxDx:.34},{key:"seatingCapacity",labels:["乗車定員"],parse:seats,maxDx:.25},
