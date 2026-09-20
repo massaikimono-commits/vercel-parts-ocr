@@ -1,12 +1,6 @@
 "use client";
 
-import { useLayoutEffect } from "react";
-
-const AUTH_EVENT="vehicle-certificate-authoritative";
-const PDF_PRIORITY_KEY="__vehicleCertificatePdfPriority";
-const QR_PRIORITY_KEY="__vehicleCertificateQrPriority";
-const DOC_TYPE="AUTOMOBILE_INSPECTION_RECORD";
-const PASS_KEY="pdfInspectionRecordAdapterPassThrough";
+export const CERTIFICATE_INSPECTION_RECORD_TYPE="AUTOMOBILE_INSPECTION_RECORD";
 
 const LABELS=["自動車登録番号又は車両番号","車両番号","車台番号","登録年月日/交付年月日","登録年月日／交付年月日","交付年月日","初度登録年月","初度検査年月","有効期間の満了する日","型式指定番号","類別区分番号","型式","原動機の型式","車名","自動車の種別","用途","自家用・事業用の別","車体の形状","乗車定員","最大積載量","車両重量","車両総重量","長さ","幅","高さ","前前軸重","前後軸重","後前軸重","後後軸重","燃料の種類","総排気量又は定格出力","記録事項番号","使用者の氏名又は名称","使用者の住所","使用の本拠の位置","3.車両詳細情報"];
 function norm(v){return String(v||"").normalize("NFKC").replace(/[‐‑‒–—―]/g,"-").replace(/\r/g,"").replace(/[ \t]+/g," ").trim();}
@@ -16,9 +10,9 @@ function jpMonth(v){const m=glyphs(v).match(/(令和|平成|昭和)(元|\d{1,2})
 function jpDate(v){const m=glyphs(v).match(/(令和|平成|昭和)(元|\d{1,2})年?(\d{1,2})月?(\d{1,2})日?/);if(!m)return"";const mo=Number(m[3]),d=Number(m[4]);return mo>=1&&mo<=12&&d>=1&&d<=31?`${m[1]}${m[2]==="元"?"元":Number(m[2])}年${mo}月${d}日`:"";}
 function token(item,w,h){const text=norm(item?.str);if(!text)return null;const tr=item?.transform||[1,0,0,1,0,0];return{text,x:Number(tr[4]||0)/Math.max(1,w),y:1-Number(tr[5]||0)/Math.max(1,h),h:Math.max(Math.abs(Number(tr[3]||0)),Number(item?.height||0),1)/Math.max(1,h)};}
 function linesFrom(tokens){const lines=[];for(const t of [...tokens].sort((a,b)=>a.y-b.y||a.x-b.x)){let l=lines.find(x=>Math.abs(x.y-t.y)<=Math.max(.0045,t.h*.72));if(!l){l={y:t.y,tokens:[]};lines.push(l);}l.tokens.push(t);l.y=l.tokens.reduce((s,x)=>s+x.y,0)/l.tokens.length;}for(const l of lines){l.tokens.sort((a,b)=>a.x-b.x);l.text=l.tokens.map(x=>x.text).join(" ");}return lines.sort((a,b)=>a.y-b.y);}
-function detect(lines){const d=compact(lines.map(l=>l.text).join("\n"));return d.includes("自動車検査証記録事項")&&d.includes("1基本情報")&&d.includes("3車両詳細情報");}
+export function isCertificateInspectionRecord(lines){const d=compact(lines.map(l=>l.text).join("\n"));return d.includes("自動車検査証記録事項")&&d.includes("1基本情報")&&d.includes("3車両詳細情報");}
 function stripNextLabel(s){let out=glyphs(s);let cut=out.length;for(const label of LABELS){const p=out.indexOf(glyphs(label));if(p>=0&&p<cut)cut=p;}return out.slice(0,cut);}
-function parse(lines){
+export function parseCertificateInspectionRecordLines(lines){
  const patch={};const put=(k,v)=>{const s=String(v??"").trim();if(s)patch[k]=s;};
  const rows=lines.map(l=>({raw:norm(l.text),dense:glyphs(l.text)})).filter(x=>x.raw);
  const whole=rows.map(x=>x.dense).join("\n");
@@ -46,9 +40,4 @@ function parse(lines){
  const required=["registrationNumber","chassisNumber","model","vehicleName","registrationDate","firstRegistration","inspectionExpiry","vehicleClass","purpose","privateBusiness","bodyShape","vehicleWeightKg","grossVehicleWeightKg","lengthCm","widthCm","heightCm","engineModel","fuel"];
  const requiredCount=required.filter(k=>patch[k]).length;const strong=Boolean(patch.registrationNumber&&patch.chassisNumber&&patch.model&&patch.vehicleName&&patch.engineModel&&patch.fuel&&requiredCount>=14);return{patch,requiredCount,strong};
 }
-async function extract(file){const pdfjs=await import("pdfjs-dist/legacy/build/pdf.mjs");pdfjs.GlobalWorkerOptions.workerSrc=new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs",import.meta.url).toString();const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;try{const page=await pdf.getPage(1),vp=page.getViewport({scale:1}),content=await page.getTextContent(),tokens=(content.items||[]).map(x=>token(x,vp.width,vp.height)).filter(Boolean),lines=linesFrom(tokens);return{tokens,lines,...parse(lines),isTarget:detect(lines)};}finally{await pdf.destroy?.().catch?.(()=>{});}}
-function apply(patch){window[PDF_PRIORITY_KEY]=patch;window[QR_PRIORITY_KEY]=null;window.dispatchEvent(new CustomEvent(AUTH_EVENT,{detail:patch}));}
-function reset(){Array.from(document.querySelectorAll("button")).find(b=>(b.textContent||"").includes("＋新規車両"))?.click();}
-function status(message,error=false){const card=Array.from(document.querySelectorAll("section.card")).find(s=>s.querySelector("h2")?.textContent?.includes("車検証から読み取る"));if(!card)return;let box=card.querySelector("[data-inspection-record-adapter-status]");if(!box){box=document.createElement("div");box.dataset.inspectionRecordAdapterStatus="1";box.style.cssText="margin-top:12px;padding:14px;border-radius:14px;border:1px solid #a8ddbf;font-weight:800";card.querySelector(".actions")?.insertAdjacentElement("afterend",box);}box.textContent=message;box.style.background=error?"#fff1f1":"#effaf4";box.style.color=error?"#922":"#174c2e";}
-function passToV3(input){input.dataset[PASS_KEY]="1";input.dispatchEvent(new Event("change",{bubbles:true}));}
-export default function CertificatePdfInspectionRecordAdapter(){useLayoutEffect(()=>{let dead=false;const onChange=async e=>{const input=e.target;if(!(input instanceof HTMLInputElement)||input.type!=="file")return;if(input.dataset[PASS_KEY]==="1"){delete input.dataset[PASS_KEY];return;}if(input.dataset.pdfStructuredV3PassThrough==="1"||input.dataset.pdfNativeV2PassThrough==="1"||input.dataset.pdfNativePassThrough==="1")return;const file=input.files?.[0];if(!file||!(file.type==="application/pdf"||/\.pdf$/i.test(file.name||"")))return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.();status("PDF構造読み取り v3: 帳票形式を確認中…");try{const r=await extract(file);if(dead)return;if(!r.isTarget){passToV3(input);return;}status(`PDF構造読み取り v3: ${DOC_TYPE} を解析中…`);if(!r.strong){status(`PDF構造読み取り v3: ${DOC_TYPE} ${r.requiredCount}必須項目。安全フォールバックへ移行します。`,true);passToV3(input);return;}reset();await new Promise(x=>setTimeout(x,0));if(dead)return;apply(r.patch);status(`PDF構造読み取り v3 完了: ${DOC_TYPE} / ${Object.keys(r.patch).length}項目 / OCR 0pass`);input.value="";}catch(err){console.error("inspection record adapter",err);status(`PDF構造読み取り v3: ${DOC_TYPE} adapter error。安全フォールバックへ移行します。`,true);if(!dead)passToV3(input);}};window.addEventListener("change",onChange,true);return()=>{dead=true;window.removeEventListener("change",onChange,true);};},[]);return null;}
+export default function CertificatePdfInspectionRecordAdapter(){return null;}

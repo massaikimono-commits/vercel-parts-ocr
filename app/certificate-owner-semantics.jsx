@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { isCertificatePdfStructuredFinal } from "./certificate-pdf-single-owner-contract";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -62,6 +63,7 @@ export default function CertificateOwnerSemantics() {
       if (dispatching) return;
       const detail = event?.detail;
       if (!detail || typeof detail !== "object") return;
+      if (isCertificatePdfStructuredFinal(detail)) return;
       const normalized = normalizePatch(detail);
       if (JSON.stringify(normalized) === JSON.stringify(detail)) return;
       dispatching = true;

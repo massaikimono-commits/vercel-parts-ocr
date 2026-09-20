@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { isCertificatePdfStructuredFinal } from "./certificate-pdf-single-owner-contract";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -235,6 +236,7 @@ export default function CertificatePdfRowCorrector() {
       const base = window[PDF_PRIORITY_KEY];
       const row = window[ROW_PRIORITY_KEY];
       if (!base || !row || typeof base !== "object" || typeof row !== "object") return;
+      if (isCertificatePdfStructuredFinal(base)) return;
       const merged = { ...base, ...row };
       if (JSON.stringify(base) === JSON.stringify(merged)) return;
       window[PDF_PRIORITY_KEY] = merged;
@@ -264,7 +266,8 @@ export default function CertificatePdfRowCorrector() {
       }
     };
 
-    const onAuthority = () => {
+    const onAuthority = (event) => {
+      if (isCertificatePdfStructuredFinal(event?.detail)) return;
       if (!correcting) applyCorrection();
     };
 

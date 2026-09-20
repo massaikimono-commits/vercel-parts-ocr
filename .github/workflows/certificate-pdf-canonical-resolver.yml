@@ -4,10 +4,15 @@ on:
   push:
     branches:
       - candidate/certificate-pdf-canonical-generalization-20260919
+      - candidate/certificate-pdf-v3-single-authoritative-owner-20260920
   pull_request:
     paths:
       - app/certificate-pdf-canonical-missing-field-resolver.js
+      - app/certificate-pdf-semantic-resolver.js
+      - app/certificate-pdf-single-owner-contract.js
+      - app/certificate-pdf-weight-displacement-resolver.js
       - scripts/certificate-pdf-canonical-resolver-regression.mjs
+      - scripts/certificate-pdf-single-owner-regression.mjs
       - app/certificate-pdf-structured-reader-v3.jsx
 
 jobs:
@@ -21,3 +26,5 @@ jobs:
           node-version: 20
       - name: Canonical resolver regression
         run: node scripts/certificate-pdf-canonical-resolver-regression.mjs
+      - name: Single owner regression
+        run: node scripts/certificate-pdf-single-owner-regression.mjs

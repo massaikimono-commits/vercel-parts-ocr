@@ -2,6 +2,10 @@
 
 import { useLayoutEffect } from "react";
 import { resolveCertificatePdfMissingFields } from "./certificate-pdf-canonical-missing-field-resolver";
+import { resolveCertificatePdfSemanticFields } from "./certificate-pdf-semantic-resolver";
+import { resolveCertificatePdfWeightDisplacementFields } from "./certificate-pdf-weight-displacement-resolver";
+import { isCertificateInspectionRecord, parseCertificateInspectionRecordLines } from "./certificate-pdf-inspection-record-adapter";
+import { commitCertificatePdfFinal, createCertificatePdfRunOwnership } from "./certificate-pdf-single-owner-contract";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -394,6 +398,17 @@ function parseStructured(lines) {
 
   const recovered = resolveCertificatePdfMissingFields(lines, patch);
   Object.assign(patch, recovered.patch);
+  const semantic = resolveCertificatePdfSemanticFields(lines, patch);
+  Object.assign(patch, semantic.patch);
+  const weightDisplacement = resolveCertificatePdfWeightDisplacementFields(lines, patch);
+  Object.assign(patch, weightDisplacement.patch);
+  if (isCertificateInspectionRecord(lines)) {
+    const inspection = parseCertificateInspectionRecordLines(lines);
+    for (const [key, value] of Object.entries(inspection.patch || {})) {
+      if ((patch[key] === undefined || patch[key] === "") && value !== undefined && value !== "") patch[key] = value;
+    }
+    patch.__inspectionRecordType = "AUTOMOBILE_INSPECTION_RECORD";
+  }
 
   const required = [
     "registrationNumber",
@@ -626,10 +641,15 @@ function resetForm() {
   button?.click();
 }
 
-function applyPatch(patch) {
-  window[PDF_PRIORITY_KEY] = patch;
-  window[QR_PRIORITY_KEY] = null;
-  window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: patch }));
+function applyPatch(ownership, runId, patch) {
+  return commitCertificatePdfFinal({
+    ownership,
+    runId,
+    patch,
+    writePdf: (value) => { window[PDF_PRIORITY_KEY] = value; },
+    clearQr: () => { window[QR_PRIORITY_KEY] = null; },
+    dispatch: (value) => window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: value })),
+  });
 }
 
 function passToExisting(input) {
@@ -643,6 +663,7 @@ export default function CertificatePdfStructuredReaderV3() {
     // can display the form before window.location reflects the route, so a
     // pathname gate would incorrectly disable native PDF handling.
     let dead = false;
+    const ownership = createCertificatePdfRunOwnership();
 
     const onChange = async (event) => {
       const input = event.target;
@@ -657,6 +678,7 @@ export default function CertificatePdfStructuredReaderV3() {
 
       const file = input.files?.[0];
       if (!file) return;
+      const runId = ownership.beginRun();
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
       if (!isPdf) return;
 
@@ -675,7 +697,7 @@ export default function CertificatePdfStructuredReaderV3() {
           const parsed = parseStructured(buildLines(tokens));
           const canvas = await renderPage(pdf, chosen.pageNumber, 1800);
           const qrFound = await hasQr(canvas);
-          if (dead) return;
+          if (dead || !ownership.isCurrent(runId)) return;
 
           showPreview(canvas);
           showDebug(parsed, tokens.length);
@@ -694,14 +716,15 @@ export default function CertificatePdfStructuredReaderV3() {
 
           resetForm();
           await new Promise((resolve) => setTimeout(resolve, 0));
-          if (dead) return;
-          applyPatch(parsed.patch);
+          if (dead || !ownership.isCurrent(runId)) return;
+          if (!applyPatch(ownership, runId, parsed.patch)) return;
           showStatus(`PDF構造読み取り v3 完了: OCR 0pass / ${parsed.found}項目をPDF文字から直接確定。既存OCRは実行していません。`);
           input.value = "";
         } finally {
           await pdf.destroy?.().catch?.(() => {});
         }
       } catch (error) {
+        if (dead || !ownership.isCurrent(runId)) return;
         console.error("PDF structured v3", error);
         showStatus(`PDF構造読み取り v3 エラー: ${error?.message || error}。既存OCRへ切り替えます。`, true);
         passToExisting(input);
@@ -711,6 +734,7 @@ export default function CertificatePdfStructuredReaderV3() {
     window.addEventListener("change", onChange, true);
     return () => {
       dead = true;
+      ownership.invalidate();
       window.removeEventListener("change", onChange, true);
     };
   }, []);
