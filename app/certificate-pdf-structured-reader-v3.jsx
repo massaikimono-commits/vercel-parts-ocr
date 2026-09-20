@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { resolveCertificatePdfMissingFields } from "./certificate-pdf-canonical-missing-field-resolver";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -390,6 +391,9 @@ function parseStructured(lines) {
   // 全体からの安全な補完（構造行に無かった時のみ）。
   if (!patch.registrationNumber) put("registrationNumber", registration(allText));
   if (!patch.vehicleName) put("vehicleName", makerFromText(allText));
+
+  const recovered = resolveCertificatePdfMissingFields(lines, patch);
+  Object.assign(patch, recovered.patch);
 
   const required = [
     "registrationNumber",
