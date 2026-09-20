@@ -104,9 +104,9 @@ function harness() {
 
 const structured = fs.readFileSync(new URL("../app/certificate-pdf-structured-reader-v3.jsx", import.meta.url), "utf8");
 assert.match(structured, /const completion = createCertificatePdfCompletionContract\(ownership\)/);
-assert.match(structured, /if \(!applyPatch\([\s\S]*?fallback\(runId, input,/);
-assert.match(structured, /if \(!parsed\.strong\)[\s\S]*?fallback\(runId, input,/);
-assert.match(structured, /catch \(error\)[\s\S]*?fallback\(runId, input,/);
+assert.match(structured, /if \(!applyPatch\([\s\S]*?fallback\(runId, diagnosticId, input,/);
+assert.match(structured, /if \(!parsed\.strong\)[\s\S]*?fallback\(runId, diagnosticId, input,/);
+assert.match(structured, /catch \(error\)[\s\S]*?fallback\(runId, diagnosticId, input,/);
 assert.match(structured, /completion\.settle\(runId, "completed"\)/);
 assert.match(structured, /completion\.invalidate\(\)/);
 

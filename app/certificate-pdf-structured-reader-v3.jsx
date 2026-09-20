@@ -6,6 +6,7 @@ import { resolveCertificatePdfSemanticFields } from "./certificate-pdf-semantic-
 import { resolveCertificatePdfWeightDisplacementFields } from "./certificate-pdf-weight-displacement-resolver";
 import { isCertificateInspectionRecord, parseCertificateInspectionRecordLines } from "./certificate-pdf-inspection-record-adapter";
 import { commitCertificatePdfFinal, createCertificatePdfCompletionContract, createCertificatePdfRunOwnership } from "./certificate-pdf-single-owner-contract";
+import { beginCertificatePdfDiagnosticRun, checkpointCertificatePdfDiagnostic, formatCertificatePdfDiagnosticSnapshot, isCertificatePdfDiagnosticUiEnabled, subscribeCertificatePdfDiagnostics, terminalCertificatePdfDiagnostic } from "./certificate-pdf-runtime-diagnostics";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -591,6 +592,20 @@ function showStatus(message, error = false) {
   box.style.color = error ? "#922" : "#174c2e";
 }
 
+function showDiagnostic(snapshot) {
+  if (!isCertificatePdfDiagnosticUiEnabled()) return;
+  const card = vehicleCard();
+  if (!card) return;
+  let box = card.querySelector("[data-pdf-structured-v3-diagnostic]");
+  if (!box) {
+    box = document.createElement("pre");
+    box.dataset.pdfStructuredV3Diagnostic = "1";
+    box.style.cssText = "margin-top:10px;padding:10px;border-radius:10px;border:1px solid #b8c7dc;background:#f7f9fc;color:#334155;font:700 12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap";
+    card.querySelector(".actions")?.insertAdjacentElement("afterend", box);
+  }
+  box.textContent = formatCertificatePdfDiagnosticSnapshot(snapshot);
+}
+
 function showDebug(result, tokenCount) {
   const card = vehicleCard();
   if (!card) return;
@@ -663,21 +678,26 @@ export default function CertificatePdfStructuredReaderV3() {
     // can display the form before window.location reflects the route, so a
     // pathname gate would incorrectly disable native PDF handling.
     let dead = false;
+    let activeDiagnosticId = null;
     const ownership = createCertificatePdfRunOwnership();
     const completion = createCertificatePdfCompletionContract(ownership);
 
-    const cancelIfInactive = (runId) => {
+    const cancelIfInactive = (runId, diagnosticId) => {
       if (!dead && completion.isActive(runId)) return false;
       completion.cancel(runId);
+      terminalCertificatePdfDiagnostic(diagnosticId, "cancelled");
       return true;
     };
 
-    const fallback = (runId, input, message, error = false) => {
+    const fallback = (runId, diagnosticId, input, message, error = false) => {
       if (!completion.settle(runId, error ? "error" : "fallback")) return false;
+      terminalCertificatePdfDiagnostic(diagnosticId, error ? "error" : "fallback");
       showStatus(message, error);
       passToExisting(input);
       return true;
     };
+
+    const unsubscribeDiagnostics = subscribeCertificatePdfDiagnostics(showDiagnostic);
 
     const onChange = async (event) => {
       const input = event.target;
@@ -695,6 +715,8 @@ export default function CertificatePdfStructuredReaderV3() {
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
       if (!isPdf) return;
       const runId = completion.beginRun();
+      const diagnosticId = beginCertificatePdfDiagnosticRun(runId)?.diagnosticId;
+      activeDiagnosticId = diagnosticId;
 
       // PDFはまずこのv3が判断する。十分に構造化できた時だけOCRを完全に止める。
       event.preventDefault();
@@ -703,46 +725,68 @@ export default function CertificatePdfStructuredReaderV3() {
       showStatus("PDF構造読み取り v3: 文字レイヤーと表の行構造を解析中…");
 
       try {
+        checkpointCertificatePdfDiagnostic(diagnosticId, "PDFJS_LOAD_STARTED");
         const pdfjs = await loadPdfJs();
-        const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+        checkpointCertificatePdfDiagnostic(diagnosticId, "PDFJS_LOADED");
+        checkpointCertificatePdfDiagnostic(diagnosticId, "FILE_BUFFER_STARTED");
+        const fileBuffer = await file.arrayBuffer();
+        checkpointCertificatePdfDiagnostic(diagnosticId, "FILE_BUFFER_READY", { byteLength: fileBuffer.byteLength });
+        checkpointCertificatePdfDiagnostic(diagnosticId, "DOCUMENT_LOAD_STARTED");
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(fileBuffer) }).promise;
+        checkpointCertificatePdfDiagnostic(diagnosticId, "DOCUMENT_LOADED", { pageCount: pdf.numPages || 0 });
         try {
+          checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_CHOOSE_STARTED");
           const chosen = await choosePage(pdf);
+          checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_CHOSEN", { pageNumber: chosen.pageNumber });
+          checkpointCertificatePdfDiagnostic(diagnosticId, "TOKENS_LOAD_STARTED");
           const tokens = chosen.tokens.length ? chosen.tokens : await pageTokens(await pdf.getPage(chosen.pageNumber));
+          checkpointCertificatePdfDiagnostic(diagnosticId, "TOKENS_READY", { tokenCount: tokens.length });
+          checkpointCertificatePdfDiagnostic(diagnosticId, "STRUCTURED_PARSE_STARTED");
           const parsed = parseStructured(buildLines(tokens));
+          checkpointCertificatePdfDiagnostic(diagnosticId, "STRUCTURED_PARSED", { found: parsed.found, strong: parsed.strong });
+          checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_RENDER_STARTED");
           const canvas = await renderPage(pdf, chosen.pageNumber, 1800);
+          checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_RENDERED", { width: canvas.width, height: canvas.height });
+          checkpointCertificatePdfDiagnostic(diagnosticId, "QR_CHECK_STARTED");
           const qrFound = await hasQr(canvas);
-          if (cancelIfInactive(runId)) return;
+          checkpointCertificatePdfDiagnostic(diagnosticId, "QR_CHECK_DONE", { qrFound });
+          if (cancelIfInactive(runId, diagnosticId)) return;
+          checkpointCertificatePdfDiagnostic(diagnosticId, "RUN_ACTIVE_CONFIRMED");
 
           showPreview(canvas);
           showDebug(parsed, tokens.length);
 
           if (qrFound) {
-            fallback(runId, input, `PDF ${chosen.pageNumber}ページ目: QRを検出。QR優先ルートへ引き継ぎます。`);
+            fallback(runId, diagnosticId, input, `PDF ${chosen.pageNumber}ページ目: QRを検出。QR優先ルートへ引き継ぎます。`);
             return;
           }
 
           if (!parsed.strong) {
-            fallback(runId, input, `PDF構造読み取り v3: ${parsed.found}項目。構造確信度不足のため既存OCRへフォールバックします。`);
+            fallback(runId, diagnosticId, input, `PDF構造読み取り v3: ${parsed.found}項目。構造確信度不足のため既存OCRへフォールバックします。`);
             return;
           }
 
           resetForm();
+          checkpointCertificatePdfDiagnostic(diagnosticId, "FORM_RESET");
           await new Promise((resolve) => setTimeout(resolve, 0));
-          if (cancelIfInactive(runId)) return;
+          if (cancelIfInactive(runId, diagnosticId)) return;
+          checkpointCertificatePdfDiagnostic(diagnosticId, "FINAL_COMMIT_STARTED");
           if (!applyPatch(ownership, runId, parsed.patch)) {
-            fallback(runId, input, "PDF構造読み取り v3: FINAL確定に失敗したため既存OCRへ切り替えます。", true);
+            fallback(runId, diagnosticId, input, "PDF構造読み取り v3: FINAL確定に失敗したため既存OCRへ切り替えます。", true);
             return;
           }
+          checkpointCertificatePdfDiagnostic(diagnosticId, "FINAL_COMMITTED");
           if (!completion.settle(runId, "completed")) return;
+          terminalCertificatePdfDiagnostic(diagnosticId, "completed", { found: parsed.found });
           showStatus(`PDF構造読み取り v3 完了: OCR 0pass / ${parsed.found}項目をPDF文字から直接確定。既存OCRは実行していません。`);
           input.value = "";
         } finally {
           await pdf.destroy?.().catch?.(() => {});
         }
       } catch (error) {
-        if (cancelIfInactive(runId)) return;
+        if (cancelIfInactive(runId, diagnosticId)) return;
         console.error("PDF structured v3", error);
-        fallback(runId, input, `PDF構造読み取り v3 エラー: ${error?.message || error}。既存OCRへ切り替えます。`, true);
+        fallback(runId, diagnosticId, input, `PDF構造読み取り v3 エラー: ${error?.message || error}。既存OCRへ切り替えます。`, true);
       }
     };
 
@@ -750,7 +794,11 @@ export default function CertificatePdfStructuredReaderV3() {
     return () => {
       dead = true;
       const cancelledRunId = completion.invalidate();
-      if (cancelledRunId !== null) showStatus("PDF構造読み取り v3: 処理をキャンセルしました。", true);
+      if (cancelledRunId !== null) {
+        terminalCertificatePdfDiagnostic(activeDiagnosticId, "cancelled");
+        showStatus("PDF構造読み取り v3: 処理をキャンセルしました。", true);
+      }
+      unsubscribeDiagnostics();
       window.removeEventListener("change", onChange, true);
     };
   }, []);
