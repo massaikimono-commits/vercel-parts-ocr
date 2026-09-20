@@ -67,4 +67,43 @@ function line(y, entries) {
   assert.equal(result.patch.displacementOrRatedOutput, undefined);
 }
 
+// Collision guard: a model-shaped value near the engine label must never become engineModel.
+{
+  const lines = [
+    line(0.74, [["原動機の型式", 0.10, 0.10], ["DBA-PE52", 0.28, 0.09]]),
+    line(0.76, [["VQ35", 0.28, 0.06]]),
+  ];
+  const result = resolveCertificatePdfMissingFields(lines, {});
+  assert.equal(result.patch.engineModel, "VQ35");
+}
+
+// Missing-only contract: partial strict patches are enriched without changing locked values.
+{
+  const lines = [
+    line(0.80, [["車台番号", 0.10, 0.08], ["PE52-000952", 0.28, 0.10]]),
+    line(0.82, [["車両重量", 0.10, 0.08], ["2020 kg", 0.28, 0.08]]),
+    line(0.84, [["車両総重量", 0.10, 0.10], ["2405 kg", 0.28, 0.08]]),
+  ];
+  const strict = { chassisNumber: "LOCKED-0001", vehicleWeightKg: "1999" };
+  const result = resolveCertificatePdfMissingFields(lines, strict);
+  assert.equal(result.patch.chassisNumber, "LOCKED-0001");
+  assert.equal(result.patch.vehicleWeightKg, "1999");
+  assert.equal(result.patch.grossVehicleWeightKg, "2405");
+  assert.equal(result.provenance.chassisNumber.source, "strict");
+  assert.equal(result.provenance.grossVehicleWeightKg.source, "anchor");
+}
+
+// Validation guard: malformed unit/value candidates remain missing instead of weakening confidence.
+{
+  const lines = [
+    line(0.88, [["車両重量", 0.10, 0.08], ["2020", 0.28, 0.08]]),
+    line(0.90, [["長さ", 0.10, 0.05], ["ABC cm", 0.28, 0.08]]),
+    line(0.92, [["型式指定番号", 0.10, 0.10], ["12A45", 0.28, 0.08]]),
+  ];
+  const result = resolveCertificatePdfMissingFields(lines, {});
+  assert.equal(result.patch.vehicleWeightKg, undefined);
+  assert.equal(result.patch.lengthCm, undefined);
+  assert.equal(result.patch.modelDesignationNumber, undefined);
+}
+
 console.log("certificate PDF canonical resolver regression: PASS");
