@@ -523,6 +523,27 @@ export async function parseVehicleCertificatePdfStructured(file) {
   }
 }
 
+function isCertificatePdfCfAcPreflightEnabled(locationLike = globalThis.location) {
+  if (!isCertificatePdfDiagnosticUiEnabled(locationLike)) return false;
+  return new URLSearchParams(locationLike?.search || "").get("certificatePdfCfAc") === "1";
+}
+
+async function runCertificatePdfCfAcPreflight(file, pdfjs, diagnosticId) {
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CF_PREFLIGHT_STARTED");
+  const preflightBuffer = await file.arrayBuffer();
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CF_PREFLIGHT_BUFFER_READY", { byteLength: preflightBuffer.byteLength });
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CF_PREFLIGHT_DOCUMENT_STARTED");
+  const preflightPdf = await pdfjs.getDocument({ data: new Uint8Array(preflightBuffer) }).promise;
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CF_PREFLIGHT_DOCUMENT_READY", { pageCount: preflightPdf.numPages || 0 });
+  const preflightPage = await preflightPdf.getPage(1);
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CF_PREFLIGHT_PAGE_READY");
+  await preflightPage.getTextContent();
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CF_PREFLIGHT_TEXT_READY");
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CF_PREFLIGHT_DESTROY_STARTED");
+  await preflightPdf.destroy();
+  checkpointCertificatePdfDiagnostic(diagnosticId, "CF_PREFLIGHT_DESTROY_DONE");
+}
+
 async function renderPage(pdf, pageNumber, targetWidth = 1800, diagnosticId = null) {
   checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PAGE_ENTER");
   checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_OBJECT_STARTED");
@@ -765,9 +786,12 @@ export default function CertificatePdfStructuredReaderV3() {
         checkpointCertificatePdfDiagnostic(diagnosticId, "PDFJS_LOAD_STARTED");
         const pdfjs = await loadPdfJs();
         checkpointCertificatePdfDiagnostic(diagnosticId, "PDFJS_LOADED");
+        const cfAcPreflightEnabled = isCertificatePdfCfAcPreflightEnabled();
+        if (cfAcPreflightEnabled) await runCertificatePdfCfAcPreflight(file, pdfjs, diagnosticId);
         checkpointCertificatePdfDiagnostic(diagnosticId, "FILE_BUFFER_STARTED");
         const fileBuffer = await file.arrayBuffer();
         checkpointCertificatePdfDiagnostic(diagnosticId, "FILE_BUFFER_READY", { byteLength: fileBuffer.byteLength });
+        if (cfAcPreflightEnabled) checkpointCertificatePdfDiagnostic(diagnosticId, "CF_MAIN_DOCUMENT_STARTED");
         checkpointCertificatePdfDiagnostic(diagnosticId, "DOCUMENT_LOAD_STARTED");
         const pdf = await pdfjs.getDocument({ data: new Uint8Array(fileBuffer) }).promise;
         checkpointCertificatePdfDiagnostic(diagnosticId, "DOCUMENT_LOADED", { pageCount: pdf.numPages || 0 });
