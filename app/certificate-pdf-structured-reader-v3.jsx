@@ -545,10 +545,27 @@ async function renderPage(pdf, pageNumber, targetWidth = 1800, diagnosticId = nu
   const renderTask = page.render({ canvasContext: ctx, viewport });
   checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_TASK_CREATED");
   checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PROMISE_STARTED");
-  await renderTask.promise;
+  try {
+    await renderTask.promise;
+    checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PROMISE_FULFILLED");
+  } catch (error) {
+    checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PROMISE_REJECTED", safeRenderDiagnosticError(error));
+    throw error;
+  }
   checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PROMISE_DONE");
   checkpointCertificatePdfDiagnostic(diagnosticId, "RENDER_PAGE_RETURN");
   return canvas;
+}
+
+function safeRenderDiagnosticError(error) {
+  try {
+    return {
+      errorName: String(error?.name || "Error").slice(0, 80),
+      safeMessage: String(error?.message || error || "RenderTask rejected").replace(/\s+/g, " ").slice(0, 240),
+    };
+  } catch {
+    return { errorName: "Error", safeMessage: "RenderTask rejection details unavailable" };
+  }
 }
 
 function cropLower(source) {
@@ -616,7 +633,10 @@ function showDiagnostic(snapshot) {
     box.style.cssText = "margin-top:10px;padding:10px;border-radius:10px;border:1px solid #b8c7dc;background:#f7f9fc;color:#334155;font:700 12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap";
     card.querySelector(".actions")?.insertAdjacentElement("afterend", box);
   }
-  box.textContent = formatCertificatePdfDiagnosticSnapshot(snapshot);
+  const rejected = snapshot?.checkpoints?.findLast?.((item) => item.checkpoint === "RENDER_PROMISE_REJECTED");
+  const details = snapshot ? [`Diagnostic: ${snapshot.diagnosticId}`] : [];
+  if (rejected) details.push(`Render rejection: ${rejected.metadata.errorName}: ${rejected.metadata.safeMessage}`);
+  box.textContent = [formatCertificatePdfDiagnosticSnapshot(snapshot), ...details].join("\n");
 }
 
 function showDebug(result, tokenCount) {
@@ -692,6 +712,7 @@ export default function CertificatePdfStructuredReaderV3() {
     // pathname gate would incorrectly disable native PDF handling.
     let dead = false;
     let activeDiagnosticId = null;
+    let activeRenderContext = null;
     const ownership = createCertificatePdfRunOwnership();
     const completion = createCertificatePdfCompletionContract(ownership);
 
@@ -727,6 +748,9 @@ export default function CertificatePdfStructuredReaderV3() {
       if (!file) return;
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
       if (!isPdf) return;
+      if (activeRenderContext && completion.isActive(activeRenderContext.runId)) {
+        checkpointCertificatePdfDiagnostic(activeRenderContext.diagnosticId, "RUN_INVALIDATED_DURING_RENDER");
+      }
       const runId = completion.beginRun();
       const diagnosticId = beginCertificatePdfDiagnosticRun(runId)?.diagnosticId;
       activeDiagnosticId = diagnosticId;
@@ -758,7 +782,14 @@ export default function CertificatePdfStructuredReaderV3() {
           const parsed = parseStructured(buildLines(tokens));
           checkpointCertificatePdfDiagnostic(diagnosticId, "STRUCTURED_PARSED", { found: parsed.found, strong: parsed.strong });
           checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_RENDER_STARTED");
-          const canvas = await renderPage(pdf, chosen.pageNumber, 1800, diagnosticId);
+          const renderContext = { runId, diagnosticId };
+          activeRenderContext = renderContext;
+          let canvas;
+          try {
+            canvas = await renderPage(pdf, chosen.pageNumber, 1800, diagnosticId);
+          } finally {
+            if (activeRenderContext === renderContext) activeRenderContext = null;
+          }
           checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_RENDERED", { width: canvas.width, height: canvas.height });
           checkpointCertificatePdfDiagnostic(diagnosticId, "QR_CHECK_STARTED");
           const qrFound = await hasQr(canvas);
@@ -794,7 +825,9 @@ export default function CertificatePdfStructuredReaderV3() {
           showStatus(`PDF構造読み取り v3 完了: OCR 0pass / ${parsed.found}項目をPDF文字から直接確定。既存OCRは実行していません。`);
           input.value = "";
         } finally {
+          checkpointCertificatePdfDiagnostic(diagnosticId, "DOCUMENT_DESTROY_STARTED", { duringRender: activeRenderContext?.diagnosticId === diagnosticId });
           await pdf.destroy?.().catch?.(() => {});
+          checkpointCertificatePdfDiagnostic(diagnosticId, "DOCUMENT_DESTROY_DONE");
         }
       } catch (error) {
         if (cancelIfInactive(runId, diagnosticId)) return;
@@ -809,6 +842,9 @@ export default function CertificatePdfStructuredReaderV3() {
       const cancelledRunId = completion.invalidate();
       if (cancelledRunId !== null) {
         terminalCertificatePdfDiagnostic(activeDiagnosticId, "cancelled");
+        if (activeRenderContext?.diagnosticId === activeDiagnosticId) {
+          checkpointCertificatePdfDiagnostic(activeDiagnosticId, "READER_UNMOUNTED_DURING_RENDER");
+        }
         showStatus("PDF構造読み取り v3: 処理をキャンセルしました。", true);
       }
       unsubscribeDiagnostics();

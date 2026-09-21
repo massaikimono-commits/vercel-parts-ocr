@@ -79,7 +79,7 @@ for (const checkpoint of [
 const renderProbeCheckpoints = [
   "RENDER_PAGE_ENTER", "PAGE_OBJECT_STARTED", "PAGE_OBJECT_READY", "BASE_VIEWPORT_READY", "SCALED_VIEWPORT_READY",
   "CANVAS_READY", "CONTEXT_READY", "RENDER_TASK_CREATE_STARTED", "RENDER_TASK_CREATED", "RENDER_PROMISE_STARTED",
-  "RENDER_PROMISE_DONE", "RENDER_PAGE_RETURN",
+  "RENDER_PROMISE_FULFILLED", "RENDER_PROMISE_DONE", "RENDER_PAGE_RETURN",
 ];
 const renderPageSource = structuredSource.slice(structuredSource.indexOf("async function renderPage"), structuredSource.indexOf("function cropLower"));
 let previousRenderCheckpointIndex = -1;
@@ -89,11 +89,20 @@ for (const checkpoint of renderProbeCheckpoints) {
   previousRenderCheckpointIndex = checkpointIndex;
 }
 assert.equal((renderPageSource.match(/\bawait\b/g) || []).length, 2, "render probe must not add an await");
-assert.match(renderPageSource, /const renderTask = page\.render\(\{ canvasContext: ctx, viewport \}\);[\s\S]*await renderTask\.promise;/);
+assert.match(renderPageSource, /const renderTask = page\.render\(\{ canvasContext: ctx, viewport \}\);[\s\S]*try \{[\s\S]*await renderTask\.promise;[\s\S]*RENDER_PROMISE_FULFILLED[\s\S]*\} catch \(error\) \{[\s\S]*RENDER_PROMISE_REJECTED[\s\S]*throw error;/);
 assert.match(structuredSource, /renderPage\(pdf, chosen\.pageNumber, 1800, diagnosticId\)/);
+for (const lifecycleCheckpoint of [
+  "RUN_INVALIDATED_DURING_RENDER", "READER_UNMOUNTED_DURING_RENDER", "DOCUMENT_DESTROY_STARTED", "DOCUMENT_DESTROY_DONE",
+]) {
+  assert.match(structuredSource, new RegExp(`checkpointCertificatePdfDiagnostic\\([^)]*${lifecycleCheckpoint}`));
+}
+assert.match(structuredSource, /const renderContext = \{ runId, diagnosticId \};[\s\S]*activeRenderContext = renderContext;[\s\S]*finally \{[\s\S]*activeRenderContext === renderContext/);
+assert.doesNotMatch(structuredSource, /renderTask\.cancel|Promise\.race/);
 assert.match(structuredSource, /beginCertificatePdfDiagnosticRun\(runId\)\?\.diagnosticId/);
 assert.match(moduleSource, /recordCheckpoint\(diagnosticId, "RUN_STARTED"/);
 assert.match(structuredSource, /data-pdf-structured-v3-diagnostic/);
+assert.match(structuredSource, /Diagnostic: \$\{snapshot\.diagnosticId\}/);
+assert.match(structuredSource, /RENDER_PROMISE_REJECTED[\s\S]*Render rejection:/);
 assert.match(moduleSource, /hostname\.endsWith\("\.vercel\.app"\)/);
 
 console.log("certificate PDF runtime diagnostics regression: PASS");
