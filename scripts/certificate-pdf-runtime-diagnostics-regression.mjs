@@ -98,7 +98,7 @@ for (const lifecycleCheckpoint of [
 }
 assert.match(structuredSource, /const renderContext = \{ runId, diagnosticId \};[\s\S]*activeRenderContext = renderContext;[\s\S]*finally \{[\s\S]*activeRenderContext === renderContext/);
 assert.doesNotMatch(structuredSource, /renderTask\.cancel|Promise\.race/);
-assert.match(structuredSource, /beginCertificatePdfDiagnosticRun\(runId\)\?\.diagnosticId/);
+assert.match(structuredSource, /safeBeginCertificatePdfDiagnosticRun\(runId, runStartedMetadata\)/);
 assert.match(moduleSource, /recordCheckpoint\(diagnosticId, "RUN_STARTED"/);
 assert.match(structuredSource, /data-pdf-structured-v3-diagnostic/);
 assert.match(structuredSource, /Diagnostic: \$\{snapshot\.diagnosticId\}/);

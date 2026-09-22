@@ -6,12 +6,165 @@ import { resolveCertificatePdfSemanticFields } from "./certificate-pdf-semantic-
 import { resolveCertificatePdfWeightDisplacementFields } from "./certificate-pdf-weight-displacement-resolver";
 import { isCertificateInspectionRecord, parseCertificateInspectionRecordLines } from "./certificate-pdf-inspection-record-adapter";
 import { commitCertificatePdfFinal, createCertificatePdfCompletionContract, createCertificatePdfRunOwnership } from "./certificate-pdf-single-owner-contract";
-import { beginCertificatePdfDiagnosticRun, checkpointCertificatePdfDiagnostic, formatCertificatePdfDiagnosticSnapshot, isCertificatePdfDiagnosticUiEnabled, subscribeCertificatePdfDiagnostics, terminalCertificatePdfDiagnostic } from "./certificate-pdf-runtime-diagnostics";
+import { beginCertificatePdfDiagnosticRun, checkpointCertificatePdfDiagnostic, formatCertificatePdfDiagnosticSnapshot, getCertificatePdfDiagnosticSnapshot, isCertificatePdfDiagnosticUiEnabled, subscribeCertificatePdfDiagnostics, terminalCertificatePdfDiagnostic } from "./certificate-pdf-runtime-diagnostics";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
 const QR_PRIORITY_KEY = "__vehicleCertificateQrPriority";
 const PASS_KEY = "pdfStructuredV3PassThrough";
+
+let nextCertificatePdfComponentInstanceId = 0;
+let nextCertificatePdfListenerInstanceId = 0;
+let nextCertificatePdfMountGeneration = 0;
+let latestCertificatePdfProvenanceRun = null;
+let nextCertificatePdfEventSequence = 0;
+let certificatePdfUserSelectionCount = 0;
+const certificatePdfEventProvenance = new WeakMap();
+
+function safeCertificatePdfEventProvenance(event) {
+  try {
+    const existing = certificatePdfEventProvenance.get(event);
+    if (existing) return existing;
+    const value = {
+      eventSequence: ++nextCertificatePdfEventSequence,
+      userSelectionCount: event?.isTrusted ? ++certificatePdfUserSelectionCount : certificatePdfUserSelectionCount,
+    };
+    certificatePdfEventProvenance.set(event, value);
+    return value;
+  } catch {
+    return { eventSequence: 0, userSelectionCount: certificatePdfUserSelectionCount };
+  }
+}
+
+function safeCertificatePdfFileFingerprint(file) {
+  try {
+    if (!file) return "none";
+    return [
+      `n${String(file.name || "").length}`,
+      `s${Number(file.size) || 0}`,
+      `t${String(file.type || "")}`,
+      `m${Number(file.lastModified) || 0}`,
+    ].join(":");
+  } catch {
+    return "unavailable";
+  }
+}
+
+function safeCertificatePdfCheckpoint(diagnosticId, checkpoint, metadata = {}) {
+  try {
+    return checkpointCertificatePdfDiagnostic(diagnosticId, checkpoint, metadata);
+  } catch {
+    return null;
+  }
+}
+
+function safeBeginCertificatePdfDiagnosticRun(runId, metadata) {
+  try {
+    return beginCertificatePdfDiagnosticRun(runId, metadata)?.diagnosticId || null;
+  } catch {
+    return null;
+  }
+}
+
+function safeCertificatePdfPreviousRun() {
+  const empty = {
+    previousActiveRunId: null,
+    previousCheckpoint: null,
+    previousTerminalState: null,
+    previousComponentInstanceId: null,
+    previousListenerInstanceId: null,
+    previousMountGeneration: null,
+    snapshot: null,
+  };
+  try {
+    if (!latestCertificatePdfProvenanceRun) return empty;
+    const previous = latestCertificatePdfProvenanceRun;
+    const snapshot = getCertificatePdfDiagnosticSnapshot(previous.diagnosticId);
+    return {
+      previousActiveRunId: snapshot?.terminalState === "processing" ? previous.runId : null,
+      previousCheckpoint: snapshot?.checkpoint || null,
+      previousTerminalState: snapshot?.terminalState || null,
+      previousComponentInstanceId: previous.componentInstanceId,
+      previousListenerInstanceId: previous.listenerInstanceId,
+      previousMountGeneration: previous.mountGeneration,
+      snapshot,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+function isCertificatePdfRenderPending(previous) {
+  try {
+    if (previous?.previousTerminalState !== "processing") return false;
+    const checkpoints = previous.snapshot?.checkpoints || [];
+    let renderStartedAt = -1;
+    for (let index = 0; index < checkpoints.length; index += 1) {
+      if (checkpoints[index]?.checkpoint === "RENDER_PROMISE_STARTED") renderStartedAt = index;
+    }
+    if (renderStartedAt < 0) return false;
+    const settled = new Set([
+      "RENDER_PROMISE_FULFILLED",
+      "RENDER_PROMISE_REJECTED",
+      "COMPLETED",
+      "FALLBACK",
+      "ERROR",
+      "CANCELLED",
+    ]);
+    return !checkpoints.slice(renderStartedAt + 1).some((item) => settled.has(item?.checkpoint));
+  } catch {
+    return false;
+  }
+}
+
+function safeCertificatePdfRunEntryMetadata(event, input, file, identity, previous, runId = null) {
+  try {
+    const eventProvenance = safeCertificatePdfEventProvenance(event);
+    return {
+      runId,
+      eventIsTrusted: Boolean(event?.isTrusted),
+      eventType: String(event?.type || ""),
+      eventPhase: Number(event?.eventPhase) || 0,
+      eventSequence: eventProvenance.eventSequence,
+      userSelectionCount: eventProvenance.userSelectionCount,
+      componentInstanceId: identity.componentInstanceId,
+      listenerInstanceId: identity.listenerInstanceId,
+      mountGeneration: identity.mountGeneration,
+      fileFingerprint: safeCertificatePdfFileFingerprint(file),
+      passKeyState: input?.dataset?.[PASS_KEY] === "1",
+      pdfNativeV2PassThroughState: input?.dataset?.pdfNativeV2PassThrough === "1",
+      pdfNativePassThroughState: input?.dataset?.pdfNativePassThrough === "1",
+      previousActiveRunId: previous?.previousActiveRunId ?? null,
+      previousCheckpoint: previous?.previousCheckpoint ?? null,
+      previousTerminalState: previous?.previousTerminalState ?? null,
+      previousComponentInstanceId: previous?.previousComponentInstanceId ?? null,
+      previousListenerInstanceId: previous?.previousListenerInstanceId ?? null,
+      previousMountGeneration: previous?.previousMountGeneration ?? null,
+    };
+  } catch {
+    return {
+      runId,
+      eventIsTrusted: false,
+      eventType: "",
+      eventPhase: 0,
+      eventSequence: 0,
+      userSelectionCount: certificatePdfUserSelectionCount,
+      componentInstanceId: identity?.componentInstanceId || "unavailable",
+      listenerInstanceId: identity?.listenerInstanceId || "unavailable",
+      mountGeneration: identity?.mountGeneration || 0,
+      fileFingerprint: "unavailable",
+      passKeyState: false,
+      pdfNativeV2PassThroughState: false,
+      pdfNativePassThroughState: false,
+      previousActiveRunId: null,
+      previousCheckpoint: null,
+      previousTerminalState: null,
+      previousComponentInstanceId: null,
+      previousListenerInstanceId: null,
+      previousMountGeneration: null,
+    };
+  }
+}
 
 const MAKERS = ["トヨタ", "レクサス", "日産", "ニッサン", "ホンダ", "三菱", "マツダ", "スバル", "スズキ", "ダイハツ", "いすゞ", "日野", "UDトラックス", "メルセデス・ベンツ", "フォルクスワーゲン", "アウディ", "BMW", "ボルボ"];
 const BODY_TYPES = ["キャブオーバ", "ステーションワゴン", "ボンネット", "ピックアップ", "トラック", "ダンプ", "セダン", "箱型", "バン", "バス", "幌型"];
@@ -655,8 +808,31 @@ function showDiagnostic(snapshot) {
     card.querySelector(".actions")?.insertAdjacentElement("afterend", box);
   }
   const rejected = snapshot?.checkpoints?.findLast?.((item) => item.checkpoint === "RENDER_PROMISE_REJECTED");
+  const handlerEntries = snapshot?.checkpoints?.filter((item) => item.checkpoint === "V3_HANDLER_ENTER") || [];
+  const runStarts = snapshot?.checkpoints?.filter((item) => item.checkpoint === "RUN_STARTED") || [];
+  const reentries = snapshot?.checkpoints?.filter((item) => item.checkpoint === "RUN_REENTRY_WHILE_RENDER_PENDING") || [];
+  const provenance = handlerEntries.at(-1)?.metadata || runStarts.at(-1)?.metadata;
+  const reentry = reentries.at(-1)?.metadata;
   const details = snapshot ? [`Diagnostic: ${snapshot.diagnosticId}`] : [];
   if (rejected) details.push(`Render rejection: ${rejected.metadata.errorName}: ${rejected.metadata.safeMessage}`);
+  if (snapshot) details.push(`Handler entries: ${handlerEntries.length}`, `Run starts: ${runStarts.length}`, `Render-pending reentries: ${reentries.length}`);
+  if (provenance) {
+    details.push(
+      `Event: trusted=${provenance.eventIsTrusted} type=${provenance.eventType} phase=${provenance.eventPhase}`,
+      `User selections: ${provenance.userSelectionCount} event=${provenance.eventSequence}`,
+      `Instance: component=${provenance.componentInstanceId} listener=${provenance.listenerInstanceId} mount=${provenance.mountGeneration}`,
+      `File fingerprint: ${provenance.fileFingerprint}`,
+      `PASS: v3=${provenance.passKeyState} v2=${provenance.pdfNativeV2PassThroughState} native=${provenance.pdfNativePassThroughState}`,
+      `Previous: run=${provenance.previousActiveRunId} checkpoint=${provenance.previousCheckpoint} terminal=${provenance.previousTerminalState}`
+    );
+  }
+  if (reentry) {
+    details.push(
+      `Reentry: ${reentry.previousRunId} -> ${reentry.newRunId}`,
+      `Previous instance: component=${reentry.previousComponentInstanceId} listener=${reentry.previousListenerInstanceId} mount=${reentry.previousMountGeneration}`,
+      `New instance: component=${reentry.newComponentInstanceId} listener=${reentry.newListenerInstanceId} mount=${reentry.newMountGeneration}`
+    );
+  }
   box.textContent = [formatCertificatePdfDiagnosticSnapshot(snapshot), ...details].join("\n");
 }
 
@@ -734,6 +910,10 @@ export default function CertificatePdfStructuredReaderV3() {
     let dead = false;
     let activeDiagnosticId = null;
     let activeRenderContext = null;
+    const mountGeneration = ++nextCertificatePdfMountGeneration;
+    const componentInstanceId = `v3-component-${++nextCertificatePdfComponentInstanceId}`;
+    const listenerInstanceId = `v3-listener-${++nextCertificatePdfListenerInstanceId}`;
+    const observerIdentity = { componentInstanceId, listenerInstanceId, mountGeneration };
     const ownership = createCertificatePdfRunOwnership();
     const completion = createCertificatePdfCompletionContract(ownership);
 
@@ -758,23 +938,74 @@ export default function CertificatePdfStructuredReaderV3() {
       const input = event.target;
       if (!(input instanceof HTMLInputElement) || input.type !== "file") return;
 
+      const file = input.files?.[0] || null;
+      const previousRun = safeCertificatePdfPreviousRun();
+      const handlerMetadata = safeCertificatePdfRunEntryMetadata(
+        event,
+        input,
+        file,
+        observerIdentity,
+        previousRun
+      );
+
       if (input.dataset[PASS_KEY] === "1") {
+        safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_HANDLER_ENTER", handlerMetadata);
         delete input.dataset[PASS_KEY];
         return;
       }
       // v2/v1 がフォールバック用に再送したイベントは横取りしない。
-      if (input.dataset.pdfNativeV2PassThrough === "1" || input.dataset.pdfNativePassThrough === "1") return;
+      if (input.dataset.pdfNativeV2PassThrough === "1" || input.dataset.pdfNativePassThrough === "1") {
+        safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_HANDLER_ENTER", handlerMetadata);
+        return;
+      }
 
-      const file = input.files?.[0];
-      if (!file) return;
+      if (!file) {
+        safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_HANDLER_ENTER", handlerMetadata);
+        return;
+      }
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
-      if (!isPdf) return;
+      if (!isPdf) {
+        safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_HANDLER_ENTER", handlerMetadata);
+        return;
+      }
       if (activeRenderContext && completion.isActive(activeRenderContext.runId)) {
         checkpointCertificatePdfDiagnostic(activeRenderContext.diagnosticId, "RUN_INVALIDATED_DURING_RENDER");
       }
       const runId = completion.beginRun();
-      const diagnosticId = beginCertificatePdfDiagnosticRun(runId)?.diagnosticId;
+      const runStartedMetadata = safeCertificatePdfRunEntryMetadata(
+        event,
+        input,
+        file,
+        observerIdentity,
+        previousRun,
+        runId
+      );
+      const diagnosticId = safeBeginCertificatePdfDiagnosticRun(runId, runStartedMetadata);
       activeDiagnosticId = diagnosticId;
+      safeCertificatePdfCheckpoint(diagnosticId, "V3_HANDLER_ENTER", runStartedMetadata);
+      if (isCertificatePdfRenderPending(previousRun)) {
+        safeCertificatePdfCheckpoint(diagnosticId, "RUN_REENTRY_WHILE_RENDER_PENDING", {
+          previousRunId: previousRun.previousActiveRunId,
+          newRunId: runId,
+          previousComponentInstanceId: previousRun.previousComponentInstanceId,
+          previousListenerInstanceId: previousRun.previousListenerInstanceId,
+          previousMountGeneration: previousRun.previousMountGeneration,
+          newComponentInstanceId: componentInstanceId,
+          newListenerInstanceId: listenerInstanceId,
+          newMountGeneration: mountGeneration,
+          previousCheckpoint: previousRun.previousCheckpoint,
+          previousTerminalState: previousRun.previousTerminalState,
+          eventIsTrusted: Boolean(event?.isTrusted),
+          fileFingerprint: safeCertificatePdfFileFingerprint(file),
+        });
+      }
+      latestCertificatePdfProvenanceRun = {
+        runId,
+        diagnosticId,
+        componentInstanceId,
+        listenerInstanceId,
+        mountGeneration,
+      };
 
       // PDFはまずこのv3が判断する。十分に構造化できた時だけOCRを完全に止める。
       event.preventDefault();
