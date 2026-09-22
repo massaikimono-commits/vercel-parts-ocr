@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { observeCertificatePdfProgrammaticChange } from "./certificate-pdf-programmatic-change-origin";
 
 const PDF_WORKER_SRC = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
 
@@ -454,7 +455,9 @@ function dispatchPatch(patch) {
 
 function passToExistingPipeline(input) {
   input.dataset[PASS_THROUGH] = "1";
-  input.dispatchEvent(new Event("change", { bubbles: true }));
+  const changeEvent = new Event("change", { bubbles: true });
+  observeCertificatePdfProgrammaticChange(changeEvent, "LEGACY_NATIVE_PASS_TO_EXISTING");
+  input.dispatchEvent(changeEvent);
 }
 
 function enhanceInputs() {

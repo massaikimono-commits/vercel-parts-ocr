@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { observeCertificatePdfProgrammaticChange } from "./certificate-pdf-programmatic-change-origin";
 
 const PDF_WORKER_SRC = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
 
@@ -209,7 +210,9 @@ export default function CertificatePdfBridge() {
         input.files = transfer.files;
         delete input.dataset.pdfConverting;
         showPdfStatus(`PDF ${pages}ページ中 ${pageNumber}ページ目を車検証として選択しました。QR・OCRを開始します。`);
-        input.dispatchEvent(new Event("change", { bubbles: true }));
+        const changeEvent = new Event("change", { bubbles: true });
+        observeCertificatePdfProgrammaticChange(changeEvent, "PDF_BRIDGE_REDISPATCH");
+        input.dispatchEvent(changeEvent);
       } catch (error) {
         delete input.dataset.pdfConverting;
         input.value = "";

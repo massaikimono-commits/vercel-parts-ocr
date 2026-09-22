@@ -66,6 +66,7 @@ assert.doesNotThrow(() => isRenderPending({ get previousTerminalState() { throw 
 
 for (const field of [
   "eventIsTrusted", "eventType", "eventPhase", "eventSequence", "userSelectionCount", "componentInstanceId", "listenerInstanceId", "mountGeneration",
+  "programmaticChangeOrigin", "originSequence",
   "fileFingerprint", "passKeyState", "pdfNativeV2PassThroughState", "pdfNativePassThroughState",
   "previousActiveRunId", "previousCheckpoint", "previousTerminalState",
 ]) {
@@ -83,7 +84,7 @@ assert.equal((source.match(/window\.removeEventListener\("change", onChange, tru
 assert.equal((source.match(/event\.preventDefault\(\)/g) || []).length, 1, "observer must not add event suppression");
 assert.equal((source.match(/event\.stopPropagation\(\)/g) || []).length, 1, "observer must not add propagation changes");
 assert.equal((source.match(/event\.stopImmediatePropagation\?\.\(\)/g) || []).length, 1, "observer must not add immediate propagation changes");
-assert.equal((source.match(/input\.dispatchEvent\(new Event\("change"/g) || []).length, 1, "observer must not add programmatic change events");
+assert.equal((source.match(/input\.dispatchEvent\(changeEvent\)/g) || []).length, 1, "observer must not add programmatic change events");
 assert.match(source, /if \(input\.dataset\[PASS_KEY\] === "1"\) \{[\s\S]*delete input\.dataset\[PASS_KEY\];\s*return;/, "PASS_KEY semantics must remain intact");
 assert.match(source, /new URLSearchParams\(locationLike\?\.search \|\| ""\)\.get\("certificatePdfCfAc"\) === "1"/, "CF-A/C must remain explicit and default OFF");
 

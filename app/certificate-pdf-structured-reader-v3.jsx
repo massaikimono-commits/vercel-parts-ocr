@@ -7,6 +7,7 @@ import { resolveCertificatePdfWeightDisplacementFields } from "./certificate-pdf
 import { isCertificateInspectionRecord, parseCertificateInspectionRecordLines } from "./certificate-pdf-inspection-record-adapter";
 import { commitCertificatePdfFinal, createCertificatePdfCompletionContract, createCertificatePdfRunOwnership } from "./certificate-pdf-single-owner-contract";
 import { beginCertificatePdfDiagnosticRun, checkpointCertificatePdfDiagnostic, formatCertificatePdfDiagnosticSnapshot, getCertificatePdfDiagnosticSnapshot, isCertificatePdfDiagnosticUiEnabled, subscribeCertificatePdfDiagnostics, terminalCertificatePdfDiagnostic } from "./certificate-pdf-runtime-diagnostics";
+import { getCertificatePdfProgrammaticChangeOrigin, observeCertificatePdfProgrammaticChange } from "./certificate-pdf-programmatic-change-origin";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -120,6 +121,7 @@ function isCertificatePdfRenderPending(previous) {
 function safeCertificatePdfRunEntryMetadata(event, input, file, identity, previous, runId = null) {
   try {
     const eventProvenance = safeCertificatePdfEventProvenance(event);
+    const programmaticOrigin = getCertificatePdfProgrammaticChangeOrigin(event);
     return {
       runId,
       eventIsTrusted: Boolean(event?.isTrusted),
@@ -127,6 +129,8 @@ function safeCertificatePdfRunEntryMetadata(event, input, file, identity, previo
       eventPhase: Number(event?.eventPhase) || 0,
       eventSequence: eventProvenance.eventSequence,
       userSelectionCount: eventProvenance.userSelectionCount,
+      programmaticChangeOrigin: programmaticOrigin.programmaticChangeOrigin,
+      originSequence: programmaticOrigin.originSequence,
       componentInstanceId: identity.componentInstanceId,
       listenerInstanceId: identity.listenerInstanceId,
       mountGeneration: identity.mountGeneration,
@@ -149,6 +153,8 @@ function safeCertificatePdfRunEntryMetadata(event, input, file, identity, previo
       eventPhase: 0,
       eventSequence: 0,
       userSelectionCount: certificatePdfUserSelectionCount,
+      programmaticChangeOrigin: null,
+      originSequence: null,
       componentInstanceId: identity?.componentInstanceId || "unavailable",
       listenerInstanceId: identity?.listenerInstanceId || "unavailable",
       mountGeneration: identity?.mountGeneration || 0,
@@ -820,6 +826,7 @@ function showDiagnostic(snapshot) {
     details.push(
       `Event: trusted=${provenance.eventIsTrusted} type=${provenance.eventType} phase=${provenance.eventPhase}`,
       `User selections: ${provenance.userSelectionCount} event=${provenance.eventSequence}`,
+      `Origin: ${provenance.programmaticChangeOrigin || "USER_OR_UNKNOWN"} sequence=${provenance.originSequence ?? "-"}`,
       `Instance: component=${provenance.componentInstanceId} listener=${provenance.listenerInstanceId} mount=${provenance.mountGeneration}`,
       `File fingerprint: ${provenance.fileFingerprint}`,
       `PASS: v3=${provenance.passKeyState} v2=${provenance.pdfNativeV2PassThroughState} native=${provenance.pdfNativePassThroughState}`,
@@ -899,7 +906,9 @@ function applyPatch(ownership, runId, patch) {
 
 function passToExisting(input) {
   input.dataset[PASS_KEY] = "1";
-  input.dispatchEvent(new Event("change", { bubbles: true }));
+  const changeEvent = new Event("change", { bubbles: true });
+  observeCertificatePdfProgrammaticChange(changeEvent, "V3_PASS_TO_EXISTING");
+  input.dispatchEvent(changeEvent);
 }
 
 export default function CertificatePdfStructuredReaderV3() {

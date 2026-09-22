@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { observeCertificatePdfProgrammaticChange } from "./certificate-pdf-programmatic-change-origin";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -313,7 +314,10 @@ function applyPatch(patch) {
   window[PDF_PRIORITY_KEY] = patch; window[QR_PRIORITY_KEY] = null; window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: patch }));
 }
 function passToExisting(input) {
-  input.dataset[OWN_PASS] = "1"; input.dataset[V1_PASS] = "1"; input.dispatchEvent(new Event("change", { bubbles: true }));
+  input.dataset[OWN_PASS] = "1"; input.dataset[V1_PASS] = "1";
+  const changeEvent = new Event("change", { bubbles: true });
+  observeCertificatePdfProgrammaticChange(changeEvent, "NATIVE_V2_PASS_TO_EXISTING");
+  input.dispatchEvent(changeEvent);
 }
 function enhanceInputs() {
   if (!location.pathname.startsWith("/vehicle-workflow")) return;
