@@ -85,7 +85,7 @@ assert.equal((source.match(/event\.preventDefault\(\)/g) || []).length, 1, "obse
 assert.equal((source.match(/event\.stopPropagation\(\)/g) || []).length, 1, "observer must not add propagation changes");
 assert.equal((source.match(/event\.stopImmediatePropagation\?\.\(\)/g) || []).length, 1, "observer must not add immediate propagation changes");
 assert.equal((source.match(/input\.dispatchEvent\(changeEvent\)/g) || []).length, 1, "observer must not add programmatic change events");
-assert.match(source, /if \(input\.dataset\[PASS_KEY\] === "1"\) \{[\s\S]*delete input\.dataset\[PASS_KEY\];\s*return;/, "PASS_KEY semantics must remain intact");
+assert.match(source, /if \(input\.dataset\[PASS_KEY\] === "1"\) \{[\s\S]*delete input\.dataset\[PASS_KEY\];[\s\S]*V3_PASS_CONSUMED[\s\S]*return;/, "PASS_KEY semantics must remain intact");
 assert.match(source, /new URLSearchParams\(locationLike\?\.search \|\| ""\)\.get\("certificatePdfCfAc"\) === "1"/, "CF-A/C must remain explicit and default OFF");
 
 for (const checkpoint of [

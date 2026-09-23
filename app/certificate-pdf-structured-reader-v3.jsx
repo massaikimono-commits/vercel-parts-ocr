@@ -7,7 +7,7 @@ import { resolveCertificatePdfWeightDisplacementFields } from "./certificate-pdf
 import { isCertificateInspectionRecord, parseCertificateInspectionRecordLines } from "./certificate-pdf-inspection-record-adapter";
 import { commitCertificatePdfFinal, createCertificatePdfCompletionContract, createCertificatePdfRunOwnership } from "./certificate-pdf-single-owner-contract";
 import { beginCertificatePdfDiagnosticRun, checkpointCertificatePdfDiagnostic, formatCertificatePdfDiagnosticSnapshot, getCertificatePdfDiagnosticSnapshot, isCertificatePdfDiagnosticUiEnabled, subscribeCertificatePdfDiagnostics, terminalCertificatePdfDiagnostic } from "./certificate-pdf-runtime-diagnostics";
-import { getCertificatePdfProgrammaticChangeOrigin, observeCertificatePdfProgrammaticChange } from "./certificate-pdf-programmatic-change-origin";
+import { getCertificatePdfPassConsumer, getCertificatePdfProgrammaticChangeOrigin, observeCertificatePdfPassConsumer, observeCertificatePdfProgrammaticChange } from "./certificate-pdf-programmatic-change-origin";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -54,6 +54,14 @@ function safeCertificatePdfFileFingerprint(file) {
 function safeCertificatePdfCheckpoint(diagnosticId, checkpoint, metadata = {}) {
   try {
     return checkpointCertificatePdfDiagnostic(diagnosticId, checkpoint, metadata);
+  } catch {
+    return null;
+  }
+}
+
+function safeCertificatePdfPassKeyState(input) {
+  try {
+    return input?.dataset?.[PASS_KEY] === "1";
   } catch {
     return null;
   }
@@ -122,6 +130,7 @@ function safeCertificatePdfRunEntryMetadata(event, input, file, identity, previo
   try {
     const eventProvenance = safeCertificatePdfEventProvenance(event);
     const programmaticOrigin = getCertificatePdfProgrammaticChangeOrigin(event);
+    const passConsumer = getCertificatePdfPassConsumer(event);
     return {
       runId,
       eventIsTrusted: Boolean(event?.isTrusted),
@@ -131,6 +140,10 @@ function safeCertificatePdfRunEntryMetadata(event, input, file, identity, previo
       userSelectionCount: eventProvenance.userSelectionCount,
       programmaticChangeOrigin: programmaticOrigin.programmaticChangeOrigin,
       originSequence: programmaticOrigin.originSequence,
+      passConsumerCount: passConsumer?.passConsumerCount ?? 0,
+      passConsumerComponentInstanceId: passConsumer?.passConsumerComponentInstanceId ?? null,
+      passConsumerListenerInstanceId: passConsumer?.passConsumerListenerInstanceId ?? null,
+      passConsumerMountGeneration: passConsumer?.passConsumerMountGeneration ?? null,
       componentInstanceId: identity.componentInstanceId,
       listenerInstanceId: identity.listenerInstanceId,
       mountGeneration: identity.mountGeneration,
@@ -155,6 +168,10 @@ function safeCertificatePdfRunEntryMetadata(event, input, file, identity, previo
       userSelectionCount: certificatePdfUserSelectionCount,
       programmaticChangeOrigin: null,
       originSequence: null,
+      passConsumerCount: 0,
+      passConsumerComponentInstanceId: null,
+      passConsumerListenerInstanceId: null,
+      passConsumerMountGeneration: null,
       componentInstanceId: identity?.componentInstanceId || "unavailable",
       listenerInstanceId: identity?.listenerInstanceId || "unavailable",
       mountGeneration: identity?.mountGeneration || 0,
@@ -817,10 +834,14 @@ function showDiagnostic(snapshot) {
   const handlerEntries = snapshot?.checkpoints?.filter((item) => item.checkpoint === "V3_HANDLER_ENTER") || [];
   const runStarts = snapshot?.checkpoints?.filter((item) => item.checkpoint === "RUN_STARTED") || [];
   const reentries = snapshot?.checkpoints?.filter((item) => item.checkpoint === "RUN_REENTRY_WHILE_RENDER_PENDING") || [];
+  const passObserved = snapshot?.checkpoints?.findLast?.((item) => item.checkpoint === "V3_PASS_OBSERVED");
+  const passConsumed = snapshot?.checkpoints?.findLast?.((item) => item.checkpoint === "V3_PASS_CONSUMED");
   const provenance = handlerEntries.at(-1)?.metadata || runStarts.at(-1)?.metadata;
   const reentry = reentries.at(-1)?.metadata;
   const details = snapshot ? [`Diagnostic: ${snapshot.diagnosticId}`] : [];
   if (rejected) details.push(`Render rejection: ${rejected.metadata.errorName}: ${rejected.metadata.safeMessage}`);
+  if (passObserved) details.push(`PASS observed: origin=${passObserved.metadata.originSequence} event=${passObserved.metadata.eventSequence} listener=${passObserved.metadata.listenerInstanceId} before=${passObserved.metadata.passKeyStateBeforeConsume}`);
+  if (passConsumed) details.push(`PASS consumed: origin=${passConsumed.metadata.originSequence} event=${passConsumed.metadata.eventSequence} count=${passConsumed.metadata.passConsumerCount} component=${passConsumed.metadata.passConsumerComponentInstanceId} listener=${passConsumed.metadata.passConsumerListenerInstanceId} mount=${passConsumed.metadata.passConsumerMountGeneration} after=${passConsumed.metadata.passKeyStateAfterConsume}`);
   if (snapshot) details.push(`Handler entries: ${handlerEntries.length}`, `Run starts: ${runStarts.length}`, `Render-pending reentries: ${reentries.length}`);
   if (provenance) {
     details.push(
@@ -830,6 +851,7 @@ function showDiagnostic(snapshot) {
       `Instance: component=${provenance.componentInstanceId} listener=${provenance.listenerInstanceId} mount=${provenance.mountGeneration}`,
       `File fingerprint: ${provenance.fileFingerprint}`,
       `PASS: v3=${provenance.passKeyState} v2=${provenance.pdfNativeV2PassThroughState} native=${provenance.pdfNativePassThroughState}`,
+      `PASS consumer: count=${provenance.passConsumerCount} component=${provenance.passConsumerComponentInstanceId || "-"} listener=${provenance.passConsumerListenerInstanceId || "-"} mount=${provenance.passConsumerMountGeneration ?? "-"}`,
       `Previous: run=${provenance.previousActiveRunId} checkpoint=${provenance.previousCheckpoint} terminal=${provenance.previousTerminalState}`
     );
   }
@@ -959,7 +981,19 @@ export default function CertificatePdfStructuredReaderV3() {
 
       if (input.dataset[PASS_KEY] === "1") {
         safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_HANDLER_ENTER", handlerMetadata);
+        safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_PASS_OBSERVED", {
+          ...handlerMetadata,
+          passKeyStateBeforeConsume: true,
+          passKeyStateAfterConsume: true,
+        });
         delete input.dataset[PASS_KEY];
+        const passConsumer = observeCertificatePdfPassConsumer(event, observerIdentity);
+        safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_PASS_CONSUMED", {
+          ...handlerMetadata,
+          ...passConsumer,
+          passKeyStateBeforeConsume: true,
+          passKeyStateAfterConsume: safeCertificatePdfPassKeyState(input),
+        });
         return;
       }
       // v2/v1 がフォールバック用に再送したイベントは横取りしない。
