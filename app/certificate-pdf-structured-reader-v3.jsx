@@ -8,6 +8,7 @@ import { isCertificateInspectionRecord, parseCertificateInspectionRecordLines } 
 import { commitCertificatePdfFinal, createCertificatePdfCompletionContract, createCertificatePdfRunOwnership } from "./certificate-pdf-single-owner-contract";
 import { beginCertificatePdfDiagnosticRun, checkpointCertificatePdfDiagnostic, formatCertificatePdfDiagnosticSnapshot, getCertificatePdfDiagnosticSnapshot, isCertificatePdfDiagnosticUiEnabled, subscribeCertificatePdfDiagnostics, terminalCertificatePdfDiagnostic } from "./certificate-pdf-runtime-diagnostics";
 import { getCertificatePdfPassConsumer, getCertificatePdfProgrammaticChangeOrigin, observeCertificatePdfPassConsumer, observeCertificatePdfProgrammaticChange } from "./certificate-pdf-programmatic-change-origin";
+import { claimCertificatePdfV3Event, isCertificatePdfV3FallbackEvent, markCertificatePdfV3FallbackEvent } from "./certificate-pdf-fallback-event-ownership";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -928,7 +929,7 @@ function applyPatch(ownership, runId, patch) {
 
 function passToExisting(input) {
   input.dataset[PASS_KEY] = "1";
-  const changeEvent = new Event("change", { bubbles: true });
+  const changeEvent = markCertificatePdfV3FallbackEvent(new Event("change", { bubbles: true }));
   observeCertificatePdfProgrammaticChange(changeEvent, "V3_PASS_TO_EXISTING");
   input.dispatchEvent(changeEvent);
 }
@@ -996,6 +997,12 @@ export default function CertificatePdfStructuredReaderV3() {
         });
         return;
       }
+      // Another V3 listener may already have consumed the input's one-use PASS token.
+      // The Event itself still belongs to the same fallback across every listener.
+      if (isCertificatePdfV3FallbackEvent(event)) {
+        safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_HANDLER_ENTER", handlerMetadata);
+        return;
+      }
       // v2/v1 がフォールバック用に再送したイベントは横取りしない。
       if (input.dataset.pdfNativeV2PassThrough === "1" || input.dataset.pdfNativePassThrough === "1") {
         safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_HANDLER_ENTER", handlerMetadata);
@@ -1008,6 +1015,10 @@ export default function CertificatePdfStructuredReaderV3() {
       }
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
       if (!isPdf) {
+        safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_HANDLER_ENTER", handlerMetadata);
+        return;
+      }
+      if (!claimCertificatePdfV3Event(event)) {
         safeCertificatePdfCheckpoint(activeDiagnosticId, "V3_HANDLER_ENTER", handlerMetadata);
         return;
       }
