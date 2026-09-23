@@ -10,6 +10,7 @@ import { beginCertificatePdfDiagnosticRun, checkpointCertificatePdfDiagnostic, f
 import { getCertificatePdfPassConsumer, getCertificatePdfProgrammaticChangeOrigin, observeCertificatePdfPassConsumer, observeCertificatePdfProgrammaticChange } from "./certificate-pdf-programmatic-change-origin";
 import { claimCertificatePdfV3Event, isCertificatePdfV3FallbackEvent, markCertificatePdfV3FallbackEvent } from "./certificate-pdf-fallback-event-ownership";
 import { beginCertificatePdfFieldProvenance, getCertificatePdfFieldProvenance, isCertificatePdfFieldProvenanceEnabled, observeCertificatePdfFieldApply, observeCertificatePdfFieldRaw, observeCertificatePdfFieldRows, observeCertificatePdfFieldStage, terminalCertificatePdfFieldProvenance } from "./certificate-pdf-field-provenance";
+import { removeCertificatePdfFieldProvenanceUi, showCertificatePdfFieldProvenanceUi } from "./certificate-pdf-field-provenance-ui";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -836,6 +837,7 @@ function showStatus(message, error = false) {
 }
 
 function showDiagnostic(snapshot) {
+  showCertificatePdfFieldProvenanceUi(snapshot);
   if (!isCertificatePdfDiagnosticUiEnabled()) return;
   const card = vehicleCard();
   if (!card) return;
@@ -879,32 +881,6 @@ function showDiagnostic(snapshot) {
     );
   }
   box.textContent = [formatCertificatePdfDiagnosticSnapshot(snapshot), ...details].join("\n");
-  if (isCertificatePdfFieldProvenanceEnabled()) {
-    let panel = card.querySelector("[data-pdf-structured-v3-field-provenance]");
-    if (!panel) {
-      panel = document.createElement("details");
-      panel.dataset.pdfStructuredV3FieldProvenance = "1";
-      const summary = document.createElement("summary");
-      summary.textContent = "PDF v3 Field Provenance (1 run JSON)";
-      const copy = document.createElement("button");
-      copy.type = "button";
-      copy.textContent = "Traceをコピー";
-      const output = document.createElement("textarea");
-      output.readOnly = true;
-      output.setAttribute("aria-label", "PDF v3 field provenance JSON");
-      output.style.cssText = "display:block;width:100%;min-height:240px;font:12px/1.4 monospace";
-      copy.addEventListener("click", () => {
-        try {
-          if (navigator.clipboard?.writeText) void navigator.clipboard.writeText(output.value).catch(() => {});
-          else { output.select(); document.execCommand("copy"); }
-        } catch {}
-      });
-      panel.append(summary, copy, output);
-      card.appendChild(panel);
-    }
-    const output = panel.querySelector("textarea");
-    if (output) output.value = JSON.stringify(getCertificatePdfFieldProvenance(snapshot?.diagnosticId), null, 2) || "Trace待機中";
-  }
 }
 
 function showDebug(result, tokenCount) {
@@ -1008,6 +984,7 @@ export default function CertificatePdfStructuredReaderV3() {
     };
 
     const unsubscribeDiagnostics = subscribeCertificatePdfDiagnostics(showDiagnostic);
+    showCertificatePdfFieldProvenanceUi(getCertificatePdfDiagnosticSnapshot());
 
     const onChange = async (event) => {
       const input = event.target;
@@ -1219,6 +1196,7 @@ export default function CertificatePdfStructuredReaderV3() {
         showStatus("PDF構造読み取り v3: 処理をキャンセルしました。", true);
       }
       unsubscribeDiagnostics();
+      removeCertificatePdfFieldProvenanceUi();
       window.removeEventListener("change", onChange, true);
     };
   }, []);

@@ -107,7 +107,7 @@ assert.equal(getCertificatePdfFieldProvenance(diagId), null, "new run does not e
 assert.equal(isCertificatePdfFieldProvenanceEnabled({ hostname: "preview.vercel.app", search: "?certificatePdfProvenance=1" }), true);
 assert.equal(isCertificatePdfFieldProvenanceEnabled({ hostname: "preview.vercel.app", search: "" }), false);
 assert.equal(isCertificatePdfFieldProvenanceEnabled({ hostname: "icb-vehicle-app.netlify.app", search: "?certificatePdfProvenance=1" }), false);
-assert.match(source, /data-pdf-structured-v3-field-provenance/);
+assert.match(fs.readFileSync(new URL("../app/certificate-pdf-field-provenance-ui.js", import.meta.url), "utf8"), /data-pdf-structured-v3-field-provenance/);
 assert.match(source, /FIELD_PROVENANCE_READY/);
 const observerSource = fs.readFileSync(new URL("../app/certificate-pdf-field-provenance.js", import.meta.url), "utf8");
 for (const forbidden of ["dispatchEvent", "AUTH_EVENT", "PDF_PRIORITY", "QR_PRIORITY", "localStorage", "supabase", "fetch(", "Promise.race", "setTimeout", "renderTask.cancel"]) {
