@@ -9,6 +9,7 @@ import { commitCertificatePdfFinal, createCertificatePdfCompletionContract, crea
 import { beginCertificatePdfDiagnosticRun, checkpointCertificatePdfDiagnostic, formatCertificatePdfDiagnosticSnapshot, getCertificatePdfDiagnosticSnapshot, isCertificatePdfDiagnosticUiEnabled, subscribeCertificatePdfDiagnostics, terminalCertificatePdfDiagnostic } from "./certificate-pdf-runtime-diagnostics";
 import { getCertificatePdfPassConsumer, getCertificatePdfProgrammaticChangeOrigin, observeCertificatePdfPassConsumer, observeCertificatePdfProgrammaticChange } from "./certificate-pdf-programmatic-change-origin";
 import { claimCertificatePdfV3Event, isCertificatePdfV3FallbackEvent, markCertificatePdfV3FallbackEvent } from "./certificate-pdf-fallback-event-ownership";
+import { beginCertificatePdfFieldProvenance, getCertificatePdfFieldProvenance, isCertificatePdfFieldProvenanceEnabled, observeCertificatePdfFieldApply, observeCertificatePdfFieldRaw, observeCertificatePdfFieldRows, observeCertificatePdfFieldStage, terminalCertificatePdfFieldProvenance } from "./certificate-pdf-field-provenance";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -298,8 +299,9 @@ function valueAfterLabel(line, label) {
   return "";
 }
 
-function parseStructured(lines) {
+function parseStructured(lines, observeStage = null) {
   const patch = {};
+  const observe = (...args) => { try { observeStage?.(...args); } catch {} };
   const allText = lines.map((line) => line.text).join("\n");
   const put = (key, value) => {
     if (value !== undefined && value !== null && String(value).trim() !== "") {
@@ -574,12 +576,20 @@ function parseStructured(lines) {
   if (!patch.registrationNumber) put("registrationNumber", registration(allText));
   if (!patch.vehicleName) put("vehicleName", makerFromText(allText));
 
+  observe("strict", {}, patch, patch);
+  const strictPatch = observeStage ? { ...patch } : null;
   const recovered = resolveCertificatePdfMissingFields(lines, patch);
   Object.assign(patch, recovered.patch);
+  observe("canonical", strictPatch, recovered.patch, patch, recovered.provenance);
+  const canonicalPatch = observeStage ? { ...patch } : null;
   const semantic = resolveCertificatePdfSemanticFields(lines, patch);
   Object.assign(patch, semantic.patch);
+  observe("semantic", canonicalPatch, semantic.patch, patch, semantic.provenance);
+  const semanticPatch = observeStage ? { ...patch } : null;
   const weightDisplacement = resolveCertificatePdfWeightDisplacementFields(lines, patch);
   Object.assign(patch, weightDisplacement.patch);
+  observe("weight", semanticPatch, weightDisplacement.patch, patch, weightDisplacement.provenance);
+  observe("displacement", semanticPatch, weightDisplacement.patch, patch, weightDisplacement.provenance);
   if (isCertificateInspectionRecord(lines)) {
     const inspection = parseCertificateInspectionRecordLines(lines);
     for (const [key, value] of Object.entries(inspection.patch || {})) {
@@ -636,6 +646,9 @@ function parseStructured(lines) {
       patch.fuel &&
       found >= 22
   );
+  observe("final", strictPatch, weightDisplacement.patch, patch, {
+    ...recovered.provenance, ...semantic.provenance, ...weightDisplacement.provenance,
+  });
   return { patch, found, strong, lines, allText };
 }
 
@@ -651,18 +664,20 @@ async function loadPdfJs() {
   return pdfjs;
 }
 
-async function pageTokens(page) {
+async function pageTokens(page, observeContent = null) {
   const viewport = page.getViewport({ scale: 1 });
   const content = await page.getTextContent();
-  return (content.items || []).map((item) => tokenFromItem(item, viewport.width, viewport.height)).filter(Boolean);
+  const tokens = (content.items || []).map((item) => tokenFromItem(item, viewport.width, viewport.height)).filter(Boolean);
+  try { observeContent?.(content.items || [], tokens); } catch {}
+  return tokens;
 }
 
-async function choosePage(pdf) {
+async function choosePage(pdf, observePage = null) {
   let best = { pageNumber: 1, tokens: [], score: -1 };
   const max = Math.min(pdf.numPages || 1, 8);
   for (let n = 1; n <= max; n += 1) {
     const page = await pdf.getPage(n);
-    const tokens = await pageTokens(page).catch(() => []);
+    const tokens = await pageTokens(page, observePage ? (items, result) => observePage(n, items, result) : null).catch(() => []);
     const text = compact(tokens.map((token) => token.text).join(" "));
     let score = 0;
     if (text.includes("車両情報")) score += 4;
@@ -864,6 +879,32 @@ function showDiagnostic(snapshot) {
     );
   }
   box.textContent = [formatCertificatePdfDiagnosticSnapshot(snapshot), ...details].join("\n");
+  if (isCertificatePdfFieldProvenanceEnabled()) {
+    let panel = card.querySelector("[data-pdf-structured-v3-field-provenance]");
+    if (!panel) {
+      panel = document.createElement("details");
+      panel.dataset.pdfStructuredV3FieldProvenance = "1";
+      const summary = document.createElement("summary");
+      summary.textContent = "PDF v3 Field Provenance (1 run JSON)";
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.textContent = "Traceをコピー";
+      const output = document.createElement("textarea");
+      output.readOnly = true;
+      output.setAttribute("aria-label", "PDF v3 field provenance JSON");
+      output.style.cssText = "display:block;width:100%;min-height:240px;font:12px/1.4 monospace";
+      copy.addEventListener("click", () => {
+        try {
+          if (navigator.clipboard?.writeText) void navigator.clipboard.writeText(output.value).catch(() => {});
+          else { output.select(); document.execCommand("copy"); }
+        } catch {}
+      });
+      panel.append(summary, copy, output);
+      card.appendChild(panel);
+    }
+    const output = panel.querySelector("textarea");
+    if (output) output.value = JSON.stringify(getCertificatePdfFieldProvenance(snapshot?.diagnosticId), null, 2) || "Trace待機中";
+  }
 }
 
 function showDebug(result, tokenCount) {
@@ -952,12 +993,14 @@ export default function CertificatePdfStructuredReaderV3() {
     const cancelIfInactive = (runId, diagnosticId) => {
       if (!dead && completion.isActive(runId)) return false;
       completion.cancel(runId);
+      terminalCertificatePdfFieldProvenance(diagnosticId, "cancelled");
       terminalCertificatePdfDiagnostic(diagnosticId, "cancelled");
       return true;
     };
 
     const fallback = (runId, diagnosticId, input, message, error = false) => {
       if (!completion.settle(runId, error ? "error" : "fallback")) return false;
+      terminalCertificatePdfFieldProvenance(diagnosticId, error ? "error" : "fallback");
       terminalCertificatePdfDiagnostic(diagnosticId, error ? "error" : "fallback");
       showStatus(message, error);
       passToExisting(input);
@@ -1036,6 +1079,8 @@ export default function CertificatePdfStructuredReaderV3() {
       );
       const diagnosticId = safeBeginCertificatePdfDiagnosticRun(runId, runStartedMetadata);
       activeDiagnosticId = diagnosticId;
+      const fieldProvenanceEnabled = isCertificatePdfFieldProvenanceEnabled();
+      if (fieldProvenanceEnabled) beginCertificatePdfFieldProvenance(diagnosticId, runId);
       safeCertificatePdfCheckpoint(diagnosticId, "V3_HANDLER_ENTER", runStartedMetadata);
       if (isCertificatePdfRenderPending(previousRun)) {
         safeCertificatePdfCheckpoint(diagnosticId, "RUN_REENTRY_WHILE_RENDER_PENDING", {
@@ -1082,13 +1127,25 @@ export default function CertificatePdfStructuredReaderV3() {
         checkpointCertificatePdfDiagnostic(diagnosticId, "DOCUMENT_LOADED", { pageCount: pdf.numPages || 0 });
         try {
           checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_CHOOSE_STARTED");
-          const chosen = await choosePage(pdf);
+          const capturedPages = fieldProvenanceEnabled ? new Map() : null;
+          const chosen = await choosePage(pdf, capturedPages ? (pageNumber, items, pageResult) => {
+            try { capturedPages.set(pageNumber, { items, tokens: pageResult }); } catch {}
+          } : null);
           checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_CHOSEN", { pageNumber: chosen.pageNumber });
           checkpointCertificatePdfDiagnostic(diagnosticId, "TOKENS_LOAD_STARTED");
-          const tokens = chosen.tokens.length ? chosen.tokens : await pageTokens(await pdf.getPage(chosen.pageNumber));
+          const tokens = chosen.tokens.length ? chosen.tokens : await pageTokens(await pdf.getPage(chosen.pageNumber),
+            capturedPages ? (items, pageResult) => { try { capturedPages.set(chosen.pageNumber, { items, tokens: pageResult }); } catch {} } : null);
           checkpointCertificatePdfDiagnostic(diagnosticId, "TOKENS_READY", { tokenCount: tokens.length });
           checkpointCertificatePdfDiagnostic(diagnosticId, "STRUCTURED_PARSE_STARTED");
-          const parsed = parseStructured(buildLines(tokens));
+          if (capturedPages?.has(chosen.pageNumber)) {
+            const captured = capturedPages.get(chosen.pageNumber);
+            observeCertificatePdfFieldRaw(diagnosticId, chosen.pageNumber, captured.items, tokens);
+          }
+          const lines = buildLines(tokens);
+          if (fieldProvenanceEnabled) observeCertificatePdfFieldRows(diagnosticId, lines);
+          const parsed = parseStructured(lines, fieldProvenanceEnabled ? (stage, input, candidate, output, provenance) =>
+            observeCertificatePdfFieldStage(diagnosticId, stage, input, candidate, output, provenance) : null);
+          if (fieldProvenanceEnabled) safeCertificatePdfCheckpoint(diagnosticId, "FIELD_PROVENANCE_READY", { fieldCount: Object.keys(getCertificatePdfFieldProvenance(diagnosticId)?.fields || {}).length });
           checkpointCertificatePdfDiagnostic(diagnosticId, "STRUCTURED_PARSED", { found: parsed.found, strong: parsed.strong });
           checkpointCertificatePdfDiagnostic(diagnosticId, "PAGE_RENDER_STARTED");
           const renderContext = { runId, diagnosticId };
@@ -1125,11 +1182,15 @@ export default function CertificatePdfStructuredReaderV3() {
           if (cancelIfInactive(runId, diagnosticId)) return;
           checkpointCertificatePdfDiagnostic(diagnosticId, "FINAL_COMMIT_STARTED");
           if (!applyPatch(ownership, runId, parsed.patch)) {
+            if (fieldProvenanceEnabled) observeCertificatePdfFieldApply(diagnosticId, parsed.patch, false);
             fallback(runId, diagnosticId, input, "PDF構造読み取り v3: FINAL確定に失敗したため既存OCRへ切り替えます。", true);
             return;
           }
+          if (fieldProvenanceEnabled) observeCertificatePdfFieldApply(diagnosticId, parsed.patch, true);
           checkpointCertificatePdfDiagnostic(diagnosticId, "FINAL_COMMITTED");
           if (!completion.settle(runId, "completed")) return;
+          terminalCertificatePdfFieldProvenance(diagnosticId, "completed");
+          if (fieldProvenanceEnabled) safeCertificatePdfCheckpoint(diagnosticId, "FIELD_PROVENANCE_APPLIED");
           terminalCertificatePdfDiagnostic(diagnosticId, "completed", { found: parsed.found });
           showStatus(`PDF構造読み取り v3 完了: OCR 0pass / ${parsed.found}項目をPDF文字から直接確定。既存OCRは実行していません。`);
           input.value = "";
@@ -1150,6 +1211,7 @@ export default function CertificatePdfStructuredReaderV3() {
       dead = true;
       const cancelledRunId = completion.invalidate();
       if (cancelledRunId !== null) {
+        terminalCertificatePdfFieldProvenance(activeDiagnosticId, "cancelled");
         terminalCertificatePdfDiagnostic(activeDiagnosticId, "cancelled");
         if (activeRenderContext?.diagnosticId === activeDiagnosticId) {
           checkpointCertificatePdfDiagnostic(activeDiagnosticId, "READER_UNMOUNTED_DURING_RENDER");
