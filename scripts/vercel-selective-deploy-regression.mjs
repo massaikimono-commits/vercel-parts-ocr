@@ -13,6 +13,7 @@ assert(rules && typeof rules === "object" && !Array.isArray(rules), "git.deploym
 const allowedBranches = [
   "preview/schedule-ux-20260903",
   "candidate/certificate-pdf-v3-single-authoritative-owner-20260920",
+  "candidate/certificate-pdf-generic-structural-resolver-20260924",
 ];
 const forbiddenPatterns = [
   "main",
@@ -39,7 +40,7 @@ const trueRules = Object.entries(rules).filter(([, enabled]) => enabled === true
 const expectedTrueRules = [...allowedBranches].sort();
 assert(
   trueRules.length === expectedTrueRules.length && trueRules.every((rule, index) => rule === expectedTrueRules[index]),
-  "only the two explicitly approved preview branches may enable Git deployments"
+  "only explicitly approved preview branches may enable Git deployments"
 );
 
 function matches(pattern, branch) {
