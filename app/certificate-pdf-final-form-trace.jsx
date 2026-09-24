@@ -1,5 +1,6 @@
 "use client";
 
+// Diagnostic-only A→H observer. It never mutates parser output or form state.
 import { useEffect } from "react";
 import { getCertificatePdfFieldProvenance } from "./certificate-pdf-field-provenance";
 
