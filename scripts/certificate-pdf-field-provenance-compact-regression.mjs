@@ -50,6 +50,7 @@ assert.match(compact.timestamp, /^\d{4}-\d\d-/);
 assert.equal(compact.pdfSummary.rawItemCount, 1200);
 assert.equal(compact.pdfSummary.normalizedTokenCount, 1200);
 assert.equal(compact.pdfSummary.derivedRowCount, 300);
+assert.equal(compact.pdfSummary.finalPatch.appliedFields, 15, "empty fields are not counted as applied values");
 assert.equal(compact.fields.length, CERTIFICATE_PDF_COMPACT_FIELDS.length);
 assert.ok(compact.fields.some((item) => item.field === "displacementOrRatedOutput"));
 assert.ok(compact.fields.some((item) => item.field === "frontAxleWeightKg"));

@@ -130,7 +130,7 @@ export function projectCertificatePdfFieldProvenanceCompact(full, diagnosticSnap
         strictParse: statuses("strict"), canonicalResolver: statuses("canonical"),
         semanticResolver: statuses("semantic"),
         specializedResolver: { weight: specializedStatus("weight"), displacement: specializedStatus("displacement") },
-        finalPatch: { appliedFields: fields.filter((item) => item.applyState === "applied").length,
+        finalPatch: { appliedFields: fields.filter((item) => item.applyState === "applied" && hasValue(item.applyPatchValue)).length,
           missingFields: fields.filter((item) => item.observed !== false && !hasValue(item.applyPatchValue)).map((item) => item.field) },
       },
       fields,
