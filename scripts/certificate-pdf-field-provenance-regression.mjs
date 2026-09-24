@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { resolveCertificatePdfMissingFields } from "../app/certificate-pdf-canonical-missing-field-resolver.js";
+import { resolveCertificatePdfGenericStructuralFields } from "../app/certificate-pdf-generic-structural-resolver.js";
 import { resolveCertificatePdfSemanticFields } from "../app/certificate-pdf-semantic-resolver.js";
 import { resolveCertificatePdfWeightDisplacementFields } from "../app/certificate-pdf-weight-displacement-resolver.js";
 import { createCertificatePdfCompletionContract, createCertificatePdfRunOwnership } from "../app/certificate-pdf-single-owner-contract.js";
@@ -20,10 +21,10 @@ const { isCertificateInspectionRecord, parseCertificateInspectionRecordLines } =
 const parserSource = source.slice(source.indexOf("const MAKERS ="), source.indexOf("async function loadPdfJs()"));
 assert.ok(parserSource.startsWith("const MAKERS"));
 const { tokenFromItem, buildLines, parseStructured } = new Function(
-  "resolveCertificatePdfMissingFields", "resolveCertificatePdfSemanticFields",
+  "resolveCertificatePdfMissingFields", "resolveCertificatePdfGenericStructuralFields", "resolveCertificatePdfSemanticFields",
   "resolveCertificatePdfWeightDisplacementFields", "isCertificateInspectionRecord",
   "parseCertificateInspectionRecordLines", `${parserSource}; return { tokenFromItem, buildLines, parseStructured };`
-)(resolveCertificatePdfMissingFields, resolveCertificatePdfSemanticFields,
+)(resolveCertificatePdfMissingFields, resolveCertificatePdfGenericStructuralFields, resolveCertificatePdfSemanticFields,
   resolveCertificatePdfWeightDisplacementFields, isCertificateInspectionRecord, parseCertificateInspectionRecordLines);
 const pageTokensSource = source.slice(source.indexOf("async function pageTokens(page, observeContent = null)"), source.indexOf("async function choosePage"));
 const pageTokens = new Function("tokenFromItem", `${pageTokensSource}; return pageTokens;`)(tokenFromItem);

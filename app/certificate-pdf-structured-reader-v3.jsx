@@ -2,6 +2,7 @@
 
 import { useLayoutEffect } from "react";
 import { resolveCertificatePdfMissingFields } from "./certificate-pdf-canonical-missing-field-resolver";
+import { resolveCertificatePdfGenericStructuralFields } from "./certificate-pdf-generic-structural-resolver";
 import { resolveCertificatePdfSemanticFields } from "./certificate-pdf-semantic-resolver";
 import { resolveCertificatePdfWeightDisplacementFields } from "./certificate-pdf-weight-displacement-resolver";
 import { isCertificateInspectionRecord, parseCertificateInspectionRecordLines } from "./certificate-pdf-inspection-record-adapter";
@@ -579,9 +580,11 @@ function parseStructured(lines, observeStage = null) {
 
   observe("strict", {}, patch, patch);
   const strictPatch = observeStage ? { ...patch } : null;
+  const generic = resolveCertificatePdfGenericStructuralFields(lines, patch);
+  Object.assign(patch, generic.patch);
   const recovered = resolveCertificatePdfMissingFields(lines, patch);
   Object.assign(patch, recovered.patch);
-  observe("canonical", strictPatch, recovered.patch, patch, recovered.provenance);
+  observe("canonical", strictPatch, recovered.patch, patch, { ...generic.provenance, ...recovered.provenance });
   const canonicalPatch = observeStage ? { ...patch } : null;
   const semantic = resolveCertificatePdfSemanticFields(lines, patch);
   Object.assign(patch, semantic.patch);
@@ -648,7 +651,7 @@ function parseStructured(lines, observeStage = null) {
       found >= 22
   );
   observe("final", strictPatch, weightDisplacement.patch, patch, {
-    ...recovered.provenance, ...semantic.provenance, ...weightDisplacement.provenance,
+    ...generic.provenance, ...recovered.provenance, ...semantic.provenance, ...weightDisplacement.provenance,
   });
   return { patch, found, strong, lines, allText };
 }
