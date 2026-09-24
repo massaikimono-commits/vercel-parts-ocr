@@ -44,7 +44,7 @@ const lines = [row(.20, vehicleLabels), row(.22, vehicleValues),
   row(.44, [["4.備考", .10, .07], ["区分外の文字", .29, .12]]),
 ];
 const generic = resolveCertificatePdfGenericStructuralFields(lines, {});
-assert.equal(generic.patch.maxPayloadKg, "-", "7010: explicit empty payload must not absorb 339 cm");
+assert.equal(generic.patch.maxPayloadKg, "", "explicit empty payload is canonicalized to an empty form value");
 assert.equal(generic.patch.lengthCm, "339");
 assert.equal(generic.patch.vehicleWeightKg, "1050");
 assert.equal(generic.patch.grossVehicleWeightKg, "1330");
@@ -58,26 +58,44 @@ assert.equal(generic.patch.ownerName, "甲");
 assert.equal(generic.patch.userName, "乙");
 assert.ok(!String(generic.patch.userName).includes("備考"), "identity section boundary");
 assert.equal(generic.provenance.lengthCm.source, "generic-structural");
+assert.equal(generic.provenance.maxPayloadKg.explicitEmpty, true);
+
+// A syntactically valid but structurally cross-owned value must not defeat a complete sequence.
+const contaminated = resolveCertificatePdfGenericStructuralFields(lines, {
+  maxPayloadKg: "339", vehicleWeightKg: "650", grossVehicleWeightKg: "650",
+  lengthCm: "570", widthCm: "570", heightCm: "570",
+  frontFrontAxleWeightKg: "339", rearRearAxleWeightKg: "339",
+});
+assert.equal(contaminated.patch.maxPayloadKg, "");
+assert.equal(contaminated.patch.vehicleWeightKg, "1050");
+assert.equal(contaminated.patch.grossVehicleWeightKg, "1330");
+assert.equal(contaminated.patch.lengthCm, "339");
+assert.equal(contaminated.patch.widthCm, "147");
+assert.equal(contaminated.patch.heightCm, "178");
+assert.equal(contaminated.patch.frontFrontAxleWeightKg, "570");
+assert.equal(contaminated.patch.rearRearAxleWeightKg, "480");
+assert.equal(contaminated.provenance.grossVehicleWeightKg.ownership, "sequence-slot");
 
 // The real integration order runs structural ownership before the existing resolvers.
 let patch = { ...generic.patch };
 for (const resolver of [resolveCertificatePdfMissingFields, resolveCertificatePdfSemanticFields, resolveCertificatePdfWeightDisplacementFields]) {
   patch = resolver(lines, patch).patch;
 }
-assert.equal(patch.maxPayloadKg, "-", "7010 maxPayloadKg=339 false positive must stay absent");
+assert.equal(patch.maxPayloadKg, "", "explicit payload dash must remain empty and never become a following dimension");
 assert.equal(patch.lengthCm, "339");
 const integrated = parseStructured(lines).patch;
-assert.equal(integrated.maxPayloadKg, "-", "runtime V3: explicit empty slot cannot become 339");
+assert.equal(integrated.maxPayloadKg, "", "runtime V3: explicit empty slot cannot become a following dimension");
 assert.equal(integrated.lengthCm, "339", "runtime V3: dimension is retained");
 
-const locked = resolveCertificatePdfGenericStructuralFields(lines, {
-  maxPayloadKg: "-", lengthCm: "355", vehicleWeightKg: "1070", ownerName: "正しい所有者",
+// Complete structural ownership may replace a valid-looking but conflicting value.
+const corrected = resolveCertificatePdfGenericStructuralFields(lines, {
+  maxPayloadKg: "999", lengthCm: "355", vehicleWeightKg: "1070", ownerName: "正しい所有者",
 });
-assert.equal(locked.patch.maxPayloadKg, "-", "an existing explicit empty slot is preserved");
-assert.equal(locked.patch.lengthCm, "355");
-assert.equal(locked.patch.vehicleWeightKg, "1070");
-assert.equal(locked.patch.ownerName, "正しい所有者");
-assert.equal(locked.provenance.maxPayloadKg, undefined);
+assert.equal(corrected.patch.maxPayloadKg, "");
+assert.equal(corrected.patch.lengthCm, "339");
+assert.equal(corrected.patch.vehicleWeightKg, "1050");
+assert.equal(corrected.patch.ownerName, "正しい所有者", "identity values remain preserve-first when already structurally valid");
+assert.equal(corrected.provenance.maxPayloadKg.ownership, "sequence-slot");
 
 const invalid = resolveCertificatePdfGenericStructuralFields(lines, { lengthCm: "長さ", vehicleWeightKg: "not-weight" });
 assert.equal(invalid.patch.lengthCm, "339");
@@ -97,6 +115,12 @@ const noPayload = resolveCertificatePdfGenericStructuralFields([
 assert.equal(noPayload.patch.maxPayloadKg, undefined, "missing is not confused with an explicit dash");
 assert.equal(noPayload.patch.lengthCm, "339", "dimension keeps its own cell");
 
+const incomplete = resolveCertificatePdfGenericStructuralFields([
+  row(.1, [["長さ", .55, .04], ["幅", .68, .03], ["高さ", .80, .04]]),
+  row(.12, [["339 cm", .56, .07], ["147 cm", .68, .07], ["178 cm", .80, .07]]),
+], { lengthCm: "355" });
+assert.equal(incomplete.patch.lengthCm, "355", "incomplete sequence cannot override an existing valid field");
+
 const nextLabel = resolveCertificatePdfGenericStructuralFields([
   row(.1, [["所有者の氏名又は名称", .1, .15]]),
   row(.12, [["所有者の住所", .1, .12]]),
@@ -105,4 +129,4 @@ const nextLabel = resolveCertificatePdfGenericStructuralFields([
 assert.equal(nextLabel.patch.ownerName, undefined, "the next label is not an identity value");
 assert.equal(nextLabel.patch.ownerAddress, "東京都");
 
-console.log("certificate PDF generic structural regression: PASS (7010 cross-field FP 0, label-as-value 0, section-overrun 0, existing-correct regression 0)");
+console.log("certificate PDF generic structural regression: PASS (sequence ownership authoritative, explicit-empty safe, cross-field FP 0, anti-overfit incomplete-sequence guard PASS)");
