@@ -68,10 +68,50 @@ export function createCertificatePdfCompletionContract(ownership) {
   };
 }
 
+// Strong structural ownership is resolved from labels/sequence/boundaries before
+// legacy compatibility resolvers run. Re-apply that evidence at the single FINAL
+// boundary so a weaker late candidate cannot move an already-owned value to a
+// neighbouring field. This is intentionally layout/value agnostic.
+function applyFinalStructuralOwnership(patch) {
+  const finalPatch = { ...patch };
+  const evidence = patch?.__genericStructuralEvidence;
+  if (!evidence || typeof evidence !== "object") return finalPatch;
+
+  for (const groupName of ["vehicle", "axles", "specification"]) {
+    const group = evidence[groupName];
+    if (group?.reason || !group?.slots) continue;
+    for (const [key, slot] of Object.entries(group.slots)) {
+      if (!slot?.parsed) continue;
+      // Explicit '-' is a resolved empty slot, not an unresolved value. The form
+      // contract displays it as empty and must not resurrect a legacy candidate.
+      finalPatch[key] = slot.explicitEmpty ? "" : String(slot.parsed.value ?? "");
+    }
+  }
+
+  const identity = evidence.identity;
+  if (identity && typeof identity === "object") {
+    const identityKeys = {
+      ownerNameRaw: "ownerName",
+      ownerAddressRaw: "ownerAddress",
+      userNameRaw: "userName",
+      userAddressRaw: "userAddress",
+      baseLocationRaw: "baseLocation",
+    };
+    for (const [rawKey, valueKey] of Object.entries(identityKeys)) {
+      const item = identity[rawKey];
+      if (!item || item.masked || item.labelAsValueRejected) continue;
+      const source = String(item.source ?? "").trim();
+      if (source) finalPatch[valueKey] = source;
+    }
+  }
+
+  return finalPatch;
+}
+
 export function commitCertificatePdfFinal({ ownership, runId, patch, writePdf, clearQr, dispatch }) {
   if (!ownership.claimCommit(runId)) return null;
   const finalPatch = {
-    ...patch,
+    ...applyFinalStructuralOwnership(patch),
     __certificatePdfFinalOwner: CERTIFICATE_PDF_FINAL_OWNER,
     __certificatePdfRunId: runId,
   };
