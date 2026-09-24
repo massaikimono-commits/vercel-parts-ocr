@@ -39,12 +39,14 @@ const vehicleValues = [
 const lines = [row(.20, vehicleLabels), row(.22, vehicleValues),
   row(.30, [["前軸重", .11, .06], ["後軸重", .40, .06]]),
   row(.32, [["570 kg", .11, .07], ["480 kg", .40, .07]]),
+  row(.35, [["型式指定番号", .11, .10], ["類別区分番号", .40, .10]]),
+  row(.37, [["18098", .11, .07], ["0001", .40, .07]]),
   row(.40, [["所有者の氏名又は名称", .10, .15], ["甲", .29]]),
   row(.42, [["使用者の氏名又は名称", .10, .15], ["乙", .29]]),
   row(.44, [["4.備考", .10, .07], ["区分外の文字", .29, .12]]),
 ];
 const generic = resolveCertificatePdfGenericStructuralFields(lines, {});
-assert.equal(generic.patch.maxPayloadKg, "", "explicit empty payload is canonicalized to an empty form value");
+assert.equal(generic.patch.maxPayloadKg, "-", "explicit empty payload stays an explicit structural value through downstream preserve-first stages");
 assert.equal(generic.patch.lengthCm, "339");
 assert.equal(generic.patch.vehicleWeightKg, "1050");
 assert.equal(generic.patch.grossVehicleWeightKg, "1330");
@@ -54,19 +56,21 @@ assert.equal(generic.patch.frontFrontAxleWeightKg, "570");
 assert.equal(generic.patch.rearRearAxleWeightKg, "480");
 assert.equal(generic.patch.frontRearAxleWeightKg, undefined);
 assert.equal(generic.patch.rearFrontAxleWeightKg, undefined);
+assert.equal(generic.patch.modelDesignationNumber, "18098");
+assert.equal(generic.patch.classificationNumber, "0001");
 assert.equal(generic.patch.ownerName, "甲");
 assert.equal(generic.patch.userName, "乙");
 assert.ok(!String(generic.patch.userName).includes("備考"), "identity section boundary");
 assert.equal(generic.provenance.lengthCm.source, "generic-structural");
 assert.equal(generic.provenance.maxPayloadKg.explicitEmpty, true);
 
-// A syntactically valid but structurally cross-owned value must not defeat a complete sequence.
 const contaminated = resolveCertificatePdfGenericStructuralFields(lines, {
   maxPayloadKg: "339", vehicleWeightKg: "650", grossVehicleWeightKg: "650",
   lengthCm: "570", widthCm: "570", heightCm: "570",
   frontFrontAxleWeightKg: "339", rearRearAxleWeightKg: "339",
+  modelDesignationNumber: "4", classificationNumber: "4",
 });
-assert.equal(contaminated.patch.maxPayloadKg, "");
+assert.equal(contaminated.patch.maxPayloadKg, "-");
 assert.equal(contaminated.patch.vehicleWeightKg, "1050");
 assert.equal(contaminated.patch.grossVehicleWeightKg, "1330");
 assert.equal(contaminated.patch.lengthCm, "339");
@@ -74,24 +78,28 @@ assert.equal(contaminated.patch.widthCm, "147");
 assert.equal(contaminated.patch.heightCm, "178");
 assert.equal(contaminated.patch.frontFrontAxleWeightKg, "570");
 assert.equal(contaminated.patch.rearRearAxleWeightKg, "480");
+assert.equal(contaminated.patch.modelDesignationNumber, "18098");
+assert.equal(contaminated.patch.classificationNumber, "0001");
 assert.equal(contaminated.provenance.grossVehicleWeightKg.ownership, "sequence-slot");
 
-// The real integration order runs structural ownership before the existing resolvers.
 let patch = { ...generic.patch };
 for (const resolver of [resolveCertificatePdfMissingFields, resolveCertificatePdfSemanticFields, resolveCertificatePdfWeightDisplacementFields]) {
   patch = resolver(lines, patch).patch;
 }
-assert.equal(patch.maxPayloadKg, "", "explicit payload dash must remain empty and never become a following dimension");
+assert.equal(patch.maxPayloadKg, "-", "explicit payload dash must remain owned and never become a following value");
 assert.equal(patch.lengthCm, "339");
+assert.equal(patch.modelDesignationNumber, "18098");
+assert.equal(patch.classificationNumber, "0001");
 const integrated = parseStructured(lines).patch;
-assert.equal(integrated.maxPayloadKg, "", "runtime V3: explicit empty slot cannot become a following dimension");
+assert.equal(integrated.maxPayloadKg, "-", "runtime V3: explicit empty slot survives canonical/semantic/final selection");
 assert.equal(integrated.lengthCm, "339", "runtime V3: dimension is retained");
+assert.equal(integrated.modelDesignationNumber, "18098");
+assert.equal(integrated.classificationNumber, "0001");
 
-// Complete structural ownership may replace a valid-looking but conflicting value.
 const corrected = resolveCertificatePdfGenericStructuralFields(lines, {
   maxPayloadKg: "999", lengthCm: "355", vehicleWeightKg: "1070", ownerName: "正しい所有者",
 });
-assert.equal(corrected.patch.maxPayloadKg, "");
+assert.equal(corrected.patch.maxPayloadKg, "-");
 assert.equal(corrected.patch.lengthCm, "339");
 assert.equal(corrected.patch.vehicleWeightKg, "1050");
 assert.equal(corrected.patch.ownerName, "正しい所有者", "identity values remain preserve-first when already structurally valid");
@@ -100,6 +108,16 @@ assert.equal(corrected.provenance.maxPayloadKg.ownership, "sequence-slot");
 const invalid = resolveCertificatePdfGenericStructuralFields(lines, { lengthCm: "長さ", vehicleWeightKg: "not-weight" });
 assert.equal(invalid.patch.lengthCm, "339");
 assert.equal(invalid.patch.vehicleWeightKg, "1050");
+
+const bareValues = resolveCertificatePdfGenericStructuralFields([
+  row(.1, vehicleLabels), row(.12, [["-", .09], ["650", .25], ["870", .41], ["339", .56], ["147", .68], ["152", .80]]),
+  row(.2, [["前軸重", .11, .06], ["後軸重", .40, .06]]), row(.22, [["400", .11], ["250", .40]]),
+], {}).patch;
+assert.deepEqual([
+  bareValues.maxPayloadKg, bareValues.vehicleWeightKg, bareValues.grossVehicleWeightKg,
+  bareValues.lengthCm, bareValues.widthCm, bareValues.heightCm,
+  bareValues.frontFrontAxleWeightKg, bareValues.rearRearAxleWeightKg,
+], ["-", "650", "870", "339", "147", "152", "400", "250"], "complete structural slots do not require repeated unit tokens");
 
 const fourAxles = [row(.1, [["前前軸重", .1, .09], ["前後軸重", .31, .09], ["後前軸重", .52, .09], ["後後軸重", .73, .09]]),
   row(.12, [["1250 kg", .11, .075], ["1050 kg", .32, .075], ["1690 kg", .53, .075], ["3070 kg", .74, .075]])];
@@ -129,4 +147,4 @@ const nextLabel = resolveCertificatePdfGenericStructuralFields([
 assert.equal(nextLabel.patch.ownerName, undefined, "the next label is not an identity value");
 assert.equal(nextLabel.patch.ownerAddress, "東京都");
 
-console.log("certificate PDF generic structural regression: PASS (sequence ownership authoritative, explicit-empty safe, cross-field FP 0, anti-overfit incomplete-sequence guard PASS)");
+console.log("certificate PDF generic structural regression: PASS (final ownership propagation, explicit-empty preservation, unit-optional complete slots, specification-number ownership, cross-field FP 0, anti-overfit incomplete-sequence guard PASS)");
