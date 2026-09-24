@@ -6,6 +6,7 @@
       "main": false,
       "preview/schedule-ux-20260903": true,
       "candidate/certificate-pdf-v3-single-authoritative-owner-20260920": true,
+      "candidate/certificate-pdf-generic-structural-resolver-20260924": true,
       "work/**": false,
       "eval/**": false,
       "experiment/**": false,
