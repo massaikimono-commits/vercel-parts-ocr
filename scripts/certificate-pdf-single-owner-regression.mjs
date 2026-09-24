@@ -69,6 +69,68 @@ for (const value of ["1.99", "1.79", "0.65", "3.49", "4.77"]) {
   assert.equal(lastPatch.__certificatePdfRunId, activeRun);
 }
 
+// Strong structural evidence must survive the final boundary even when a late
+// compatibility candidate has polluted the working patch. Explicit empty is a
+// resolved empty slot and leading-zero strings remain strings.
+{
+  const ownership = createCertificatePdfRunOwnership();
+  const runId = ownership.beginRun();
+  let dispatched = null;
+  const patch = {
+    maxPayloadKg: "650",
+    vehicleWeightKg: "650",
+    grossVehicleWeightKg: "400",
+    lengthCm: "400",
+    widthCm: "400",
+    heightCm: "400",
+    frontFrontAxleWeightKg: "999",
+    rearRearAxleWeightKg: "999",
+    modelDesignationNumber: "4",
+    classificationNumber: "4",
+    userName: "使用者の住所",
+    userAddress: "所有者の氏名又は名称",
+    baseLocation: "3.車両詳細情報",
+    __genericStructuralEvidence: {
+      vehicle: { slots: {
+        maxPayloadKg: { parsed: { value: "-" }, explicitEmpty: true },
+        vehicleWeightKg: { parsed: { value: "650" } },
+        grossVehicleWeightKg: { parsed: { value: "870" } },
+        lengthCm: { parsed: { value: "339" } },
+        widthCm: { parsed: { value: "147" } },
+        heightCm: { parsed: { value: "152" } },
+      } },
+      axles: { slots: {
+        frontFrontAxleWeightKg: { parsed: { value: "400" } },
+        rearRearAxleWeightKg: { parsed: { value: "250" } },
+      } },
+      specification: { slots: {
+        modelDesignationNumber: { parsed: { value: "18098" } },
+        classificationNumber: { parsed: { value: "0001" } },
+      } },
+      identity: {
+        userNameRaw: { source: "テスト 使用者", masked: false, labelAsValueRejected: false },
+        userAddressRaw: { source: "兵庫県テスト市1-2-3", masked: false, labelAsValueRejected: false },
+        baseLocationRaw: { source: "使用者住所に同じ", masked: false, labelAsValueRejected: false },
+      },
+    },
+  };
+  const result = commitCertificatePdfFinal({ ownership, runId, patch, writePdf: () => {}, clearQr: () => {}, dispatch: (value) => { dispatched = value; } });
+  assert.ok(result);
+  assert.equal(dispatched.maxPayloadKg, "");
+  assert.equal(dispatched.vehicleWeightKg, "650");
+  assert.equal(dispatched.grossVehicleWeightKg, "870");
+  assert.equal(dispatched.lengthCm, "339");
+  assert.equal(dispatched.widthCm, "147");
+  assert.equal(dispatched.heightCm, "152");
+  assert.equal(dispatched.frontFrontAxleWeightKg, "400");
+  assert.equal(dispatched.rearRearAxleWeightKg, "250");
+  assert.equal(dispatched.modelDesignationNumber, "18098");
+  assert.equal(dispatched.classificationNumber, "0001");
+  assert.equal(dispatched.userName, "テスト 使用者");
+  assert.equal(dispatched.userAddress, "兵庫県テスト市1-2-3");
+  assert.equal(dispatched.baseLocation, "使用者住所に同じ");
+}
+
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const structured = read("app/certificate-pdf-structured-reader-v3.jsx");
 const semanticWriter = read("app/certificate-pdf-semantic-recovery.jsx");
