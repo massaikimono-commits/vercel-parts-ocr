@@ -106,6 +106,9 @@ jobs:
       - name: Run vehicle-certificate regression
         run: npm run test:certificate
 
+      - name: Run generic structural ownership regression
+        run: node scripts/certificate-pdf-generic-structural-regression.mjs
+
       - name: Run certificate v2 legacy-override regression
         run: npm run test:certificate-v2-overrides
 
