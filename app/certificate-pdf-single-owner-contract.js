@@ -49,10 +49,7 @@ function applyFinalStructuralOwnership(patch) {
     if (group?.reason || !group?.slots) continue;
     for (const [key, slot] of Object.entries(group.slots)) {
       if (!slot?.parsed) continue;
-      // '-' is a resolved empty slot. Preserve the sentinel through the current
-      // sparse React form merge; converting it to "" would mean "no update" and
-      // could resurrect a stale neighbouring/legacy value.
-      finalPatch[key] = slot.explicitEmpty ? "-" : String(slot.parsed.value ?? "");
+      finalPatch[key] = slot.explicitEmpty ? "" : String(slot.parsed.value ?? "");
     }
   }
 
@@ -65,8 +62,6 @@ function applyFinalStructuralOwnership(patch) {
       if (item && !item.masked && !item.labelAsValueRejected && source && !isIdentityBoundaryContaminated(source)) {
         finalPatch[valueKey] = source;
       } else if (isIdentityBoundaryContaminated(finalPatch[valueKey])) {
-        // Boundary labels/section headings are never valid business values. An empty
-        // result is safer than publishing semantic contamination into the final form.
         finalPatch[valueKey] = "";
       }
     }
