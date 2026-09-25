@@ -29,6 +29,29 @@ export function createCertificatePdfRunOwnership() {
 }
 
 const TERMINAL_STATES = new Set(["completed", "fallback", "error", "cancelled"]);
+const IDENTITY_BOUNDARIES = [
+  "所有者の氏名又は名称",
+  "所有者の住所",
+  "使用者の氏名又は名称",
+  "使用者の住所",
+  "使用の本拠の位置",
+  "1.基本情報",
+  "2.所有者・使用者情報",
+  "2.使用者・所有者情報",
+  "2.使用者情報",
+  "3.車両詳細情報",
+  "4.備考",
+];
+
+function compactIdentity(value) {
+  return String(value ?? "").normalize("NFKC").replace(/\s+/g, "").trim();
+}
+
+function isIdentityBoundaryContaminated(value) {
+  const dense = compactIdentity(value);
+  if (!dense) return true;
+  return IDENTITY_BOUNDARIES.some((label) => dense.includes(compactIdentity(label)));
+}
 
 export function createCertificatePdfCompletionContract(ownership) {
   const states = new Map();
@@ -82,9 +105,10 @@ function applyFinalStructuralOwnership(patch) {
     if (group?.reason || !group?.slots) continue;
     for (const [key, slot] of Object.entries(group.slots)) {
       if (!slot?.parsed) continue;
-      // Explicit '-' is a resolved empty slot, not an unresolved value. The form
-      // contract displays it as empty and must not resurrect a legacy candidate.
-      finalPatch[key] = slot.explicitEmpty ? "" : String(slot.parsed.value ?? "");
+      // Keep the resolved '-' sentinel through the form-facing boundary. The current
+      // React form intentionally treats empty strings as sparse/no-update patches, so
+      // converting explicit empty to "" here would resurrect a stale legacy value.
+      finalPatch[key] = slot.explicitEmpty ? "-" : String(slot.parsed.value ?? "");
     }
   }
 
@@ -101,7 +125,10 @@ function applyFinalStructuralOwnership(patch) {
       const item = identity[rawKey];
       if (!item || item.masked || item.labelAsValueRejected) continue;
       const source = String(item.source ?? "").trim();
-      if (source) finalPatch[valueKey] = source;
+      // A label/section heading is a boundary, never an identity value. If generic
+      // evidence is contaminated, preserve the earlier semantic candidate instead of
+      // promoting the boundary text at FINAL ownership.
+      if (source && !isIdentityBoundaryContaminated(source)) finalPatch[valueKey] = source;
     }
   }
 
