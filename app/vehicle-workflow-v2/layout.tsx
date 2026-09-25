@@ -13,20 +13,18 @@ import CertificatePdfV3CompletionGuard from "../certificate-pdf-v3-completion-gu
 import CertificatePdfInspectionRecordAdapter from "../certificate-pdf-inspection-record-adapter";
 import CertificatePdfSemanticRecovery from "../certificate-pdf-semantic-recovery";
 import CertificatePdfWeightDisplacementRecovery from "../certificate-pdf-weight-displacement-recovery";
+import CertificatePdfFinalFormBridge from "../certificate-pdf-final-form-bridge";
 import CertificateOwnerSemantics from "../certificate-owner-semantics";
 import CertificateOwnerFieldsUi from "../certificate-owner-fields-ui";
 import CertificatePdfWorkerLocalizer from "../certificate-pdf-worker-localizer";
 import VehicleCertificateRouteEnhancers from "../vehicle-certificate-route-enhancers";
 
-// Vehicle certificate post-processing for /vehicle-workflow-v2.
-// Candidate-only inspection-record recovery is mounted before the adapter so it can
-// retain a private PDF copy before the input is cleared. It only merges values recovered
-// from their own semantic columns and never sources vehicle weights from axle weights.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <CertificatePdfWorkerLocalizer />
       <CertificatePdfV3CompletionGuard />
+      <CertificatePdfFinalFormBridge />
       <CertificatePdfSemanticRecovery />
       <CertificatePdfWeightDisplacementRecovery />
       <CertificatePdfInspectionRecordAdapter />
