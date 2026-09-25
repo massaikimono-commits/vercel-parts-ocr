@@ -89,6 +89,8 @@ jobs:
         run: node scripts/certificate-pdf-generic-structural-regression.mjs
       - name: Run PDF final form boundary regression
         run: node scripts/certificate-pdf-final-form-bridge-regression.mjs
+      - name: Run PDF final writer closure regression
+        run: node scripts/certificate-pdf-final-writer-closure-regression.mjs
       - name: Run certificate v2 legacy-override regression
         run: npm run test:certificate-v2-overrides
       - name: Run QR speed regression
