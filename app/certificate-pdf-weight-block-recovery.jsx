@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { isCertificatePdfStructuredFinal } from "./certificate-pdf-single-owner-contract";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -138,8 +139,14 @@ export default function CertificatePdfWeightBlockRecovery() {
     const onAuthoritative = async (event) => {
       const detail = event?.detail;
       if (!detail || typeof detail !== "object") return;
+      // structured-v3 FINAL is terminal. A recovery listener must never turn a
+      // FINAL event back into a non-final AUTH event and reopen compatibility writers.
+      if (isCertificatePdfStructuredFinal(detail)) return;
       const result = latest || (pending ? await pending : null);
       if (dead || !result) return;
+      // A non-final event may have started this async recovery before v3 committed.
+      // Re-check the shared PDF owner after await so stale recovery cannot write late.
+      if (isCertificatePdfStructuredFinal(window[PDF_PRIORITY_KEY])) return;
       window.__certificatePdfWeightDiagnostic = result;
       const recovered = result.patch || {};
       if (!recovered.maxPayloadKg || !recovered.vehicleWeightKg || !recovered.grossVehicleWeightKg) return;
@@ -153,5 +160,6 @@ export default function CertificatePdfWeightBlockRecovery() {
     window.addEventListener(AUTH_EVENT, onAuthoritative);
     return () => { dead = true; window.removeEventListener("change", onChange, true); window.removeEventListener(AUTH_EVENT, onAuthoritative); };
   }, []);
+
   return null;
 }
