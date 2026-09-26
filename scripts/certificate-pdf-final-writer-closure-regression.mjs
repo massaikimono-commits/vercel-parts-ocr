@@ -20,9 +20,12 @@ assert.match(fast, /<CertificatePdfStructuredReaderV3\s*\/>/);
 assert.match(fast, /<CertificatePdfNativeReaderV2\s*\/>/);
 
 // Duplicate v3 mounts must still share event identity ownership and stop the
-// original PDF change event before a v2 bubble consumer can run.
+// original PDF change event before a v2 bubble consumer can run. The runtime
+// intentionally uses optional chaining for stopImmediatePropagation so the
+// regression must accept that exact browser-safe form rather than require a
+// non-optional call that is not present in production source.
 assert.match(v3, /claimCertificatePdfV3Event\(event\)/);
-assert.match(v3, /event\.stopImmediatePropagation\(\)/);
+assert.match(v3, /event\.stopImmediatePropagation\?\.\(\)/);
 assert.match(v2, /document\.addEventListener\("change", onChange\)/);
 
 // FINAL form bridge may normalize explicit empty semantics, but must not create
