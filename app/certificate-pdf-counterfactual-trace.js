@@ -4,6 +4,7 @@ const TRACE_FIELDS = [
   "rearFrontAxleWeightKg", "rearRearAxleWeightKg", "displacementOrRatedOutput", "engineModel",
   "modelDesignationNumber", "classificationNumber", "ownerName", "ownerAddress", "userName", "userAddress", "baseLocation",
 ];
+const STORAGE_KEY = "certificatePdfCounterfactualTrace:v2";
 const runs = new Map();
 let currentRunId = null;
 let sequence = 0;
@@ -19,6 +20,25 @@ function safeValue(value) {
   if (value === null || ["string", "number", "boolean"].includes(typeof value)) return value;
   return String(value).slice(0, 240);
 }
+function persist(id) {
+  try {
+    if (!enabled() || !globalThis.sessionStorage) return;
+    const trace = getCertificatePdfCounterfactualTrace(id);
+    if (trace) globalThis.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(trace));
+  } catch {}
+}
+function restore() {
+  try {
+    if (!enabled() || !globalThis.sessionStorage) return;
+    const raw = globalThis.sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const record = JSON.parse(raw);
+    if (!record?.runId || !Array.isArray(record?.events)) return;
+    runs.set(String(record.runId), record);
+    currentRunId = String(record.runId);
+    sequence = Math.max(sequence, ...record.events.map((event) => Number(event?.sequence) || 0));
+  } catch {}
+}
 export function certificatePdfTraceFields(payload = {}) {
   const out = {};
   for (const field of TRACE_FIELDS) out[field] = safeValue(payload?.[field]);
@@ -28,6 +48,7 @@ export function beginCertificatePdfCounterfactualTrace(runId, metadata = {}) {
   if (!enabled()) return null;
   currentRunId = String(runId ?? `trace-${Date.now()}`);
   runs.set(currentRunId, { runId: currentRunId, startedAt: Date.now(), events: [], metadata: { ...metadata } });
+  persist(currentRunId);
   return currentRunId;
 }
 export function observeCertificatePdfCounterfactualTrace(runId, checkpoint, payload = {}, metadata = {}) {
@@ -35,9 +56,21 @@ export function observeCertificatePdfCounterfactualTrace(runId, checkpoint, payl
   const id = String(runId ?? currentRunId ?? "unowned");
   if (!runs.has(id)) runs.set(id, { runId: id, startedAt: Date.now(), events: [], metadata: {} });
   const record = runs.get(id);
-  const event = { sequence: ++sequence, checkpoint: String(checkpoint || "UNKNOWN"), timestamp: Date.now(), owner: safeValue(metadata.owner), writer: safeValue(metadata.writer), invocation: safeValue(metadata.invocation), parsedStrong: safeValue(metadata.parsedStrong), qrFound: safeValue(metadata.qrFound), detectedQrCount: safeValue(metadata.detectedQrCount), values: certificatePdfTraceFields(payload) };
+  const event = {
+    sequence: ++sequence,
+    checkpoint: String(checkpoint || "UNKNOWN"),
+    timestamp: Date.now(),
+    owner: safeValue(metadata.owner),
+    writer: safeValue(metadata.writer),
+    invocation: safeValue(metadata.invocation),
+    parsedStrong: safeValue(metadata.parsedStrong),
+    qrFound: safeValue(metadata.qrFound),
+    detectedQrCount: safeValue(metadata.detectedQrCount),
+    values: certificatePdfTraceFields(payload),
+  };
   record.events.push(event);
   try { globalThis.__certificatePdfCounterfactualTrace = getCertificatePdfCounterfactualTrace(id); } catch {}
+  persist(id);
   return event;
 }
 export function getCertificatePdfCounterfactualTrace(runId = currentRunId) {
@@ -45,5 +78,10 @@ export function getCertificatePdfCounterfactualTrace(runId = currentRunId) {
   if (!record) return null;
   return { ...record, events: record.events.map((event) => ({ ...event, values: { ...event.values } })) };
 }
+export function exportCertificatePdfCounterfactualTrace(runId = currentRunId) {
+  const trace = getCertificatePdfCounterfactualTrace(runId);
+  return trace ? JSON.stringify(trace, null, 2) : "";
+}
 export function getCertificatePdfCounterfactualTraceRunId() { return currentRunId; }
 export function isCertificatePdfCounterfactualTraceEnabled() { return enabled(); }
+restore();
