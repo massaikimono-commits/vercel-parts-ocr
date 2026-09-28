@@ -1,0 +1,157 @@
+name: Vercel one-shot preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Management-approved source branch
+        required: true
+        type: string
+      expected_sha:
+        description: Management-approved exact 40-char commit SHA
+        required: true
+        type: string
+      full_regression_run_id:
+        description: Successful Full regression workflow run ID for expected SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: vercel-one-shot-preview-${{ inputs.expected_sha }}
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_GHd3ONZSRilQtxTq1q6NS1jT
+  VERCEL_PROJECT_ID: prj_GUedEKT5z3vrL7NMLGhx04jgPeMK
+  EXPECTED_REPOSITORY: massaikimono-commits/vercel-parts-ocr
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Structural input guard
+        env:
+          INPUT_BRANCH: ${{ inputs.branch }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$INPUT_BRANCH" != "main"
+          echo "$EXPECTED_SHA" | grep -Eq '^[0-9a-f]{40}$'
+      - name: Verify branch HEAD and Full regression evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_BRANCH: ${{ inputs.branch }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          REGRESSION_RUN_ID: ${{ inputs.full_regression_run_id }}
+        run: |
+          set -euo pipefail
+          branch_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$INPUT_BRANCH" --jq '.object.sha')"
+          test "$branch_sha" = "$EXPECTED_SHA"
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REGRESSION_RUN_ID")"
+          test "$(jq -r '.name' <<<"$run_json")" = "Full regression"
+          test "$(jq -r '.head_sha' <<<"$run_json")" = "$EXPECTED_SHA"
+          test "$(jq -r '.conclusion' <<<"$run_json")" = "success"
+      - name: Checkout exact approved SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+      - name: Verify immutable checkout
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -z "$(git status --porcelain)"
+      - name: Require existing Vercel credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN repository/environment secret is not configured.' >&2; exit 78; }
+      - name: Check duplicate Preview deployment
+        id: duplicate
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          json="$(curl --fail-with-body -sS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&limit=100")"
+          match="$(jq -c --arg sha "$EXPECTED_SHA" '[.deployments[] | select(.meta.githubCommitSha == $sha and (.target == null or .target == "preview"))][0] // empty' <<<"$json")"
+          if [ -n "$match" ]; then
+            state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$match")"
+            id="$(jq -r '.uid // .id' <<<"$match")"
+            url="https://$(jq -r '.url' <<<"$match")"
+            echo "deployment_id=$id" >> "$GITHUB_OUTPUT"
+            echo "url=$url" >> "$GITHUB_OUTPUT"
+            echo "state=$state" >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            if [ "$state" = "ERROR" ] || [ "$state" = "CANCELED" ]; then echo "Existing deployment for exact SHA is $state; automatic retry is forbidden." >&2; exit 1; fi
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install Vercel CLI
+        if: steps.duplicate.outputs.found != 'true'
+        run: npm install --global vercel@latest
+      - name: Pull Preview environment
+        if: steps.duplicate.outputs.found != 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+      - name: Deploy exactly once to Preview
+        if: steps.duplicate.outputs.found != 'true'
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --yes --token="$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Resolve deployment URL
+        id: resolved
+        env:
+          DUPLICATE_URL: ${{ steps.duplicate.outputs.url }}
+          NEW_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          url="${DUPLICATE_URL:-${NEW_URL:-}}"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Inspect Preview and verify exact SHA
+        id: inspect
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          PREVIEW_URL: ${{ steps.resolved.outputs.url }}
+        run: |
+          set -euo pipefail
+          host="${PREVIEW_URL#https://}"; host="${host%/}"
+          json="$(curl --fail-with-body -sS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_ORG_ID")"
+          target="$(jq -r '.target // "preview"' <<<"$json")"
+          test "$target" != "production"
+          actual_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$json")"
+          test "$actual_sha" = "$EXPECTED_SHA"
+          id="$(jq -r '.uid // .id' <<<"$json")"
+          echo "deployment_id=$id" >> "$GITHUB_OUTPUT"
+      - name: Wait for READY and verify HTTP
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          PREVIEW_URL: ${{ steps.resolved.outputs.url }}
+        run: |
+          set -euo pipefail
+          host="${PREVIEW_URL#https://}"; host="${host%/}"; state=""
+          for i in $(seq 1 60); do
+            json="$(curl --fail-with-body -sS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_ORG_ID")"
+            state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$json")"
+            case "$state" in READY) break ;; ERROR|CANCELED) echo "Deployment ended in $state" >&2; exit 1 ;; esac
+            sleep 10
+          done
+          test "$state" = "READY"
+          code="$(curl -L -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL")"
+          case "$code" in 2*|3*) ;; *) echo "Preview HTTP check failed: $code" >&2; exit 1 ;; esac
+          { echo '## ICB One-shot Preview'; echo "- Workflow run ID: $GITHUB_RUN_ID"; echo "- Source branch: ${{ inputs.branch }}"; echo "- Source SHA: ${{ inputs.expected_sha }}"; echo "- Vercel Project ID: $VERCEL_PROJECT_ID"; echo "- Deployment ID: ${{ steps.inspect.outputs.deployment_id }}"; echo '- Target: Preview / non-Production'; echo '- Build / State: READY'; echo "- Preview URL: $PREVIEW_URL"; echo "- HTTP: $code"; } >> "$GITHUB_STEP_SUMMARY"
