@@ -10,6 +10,9 @@ const day = fs.readFileSync("app/schedule/page.tsx", "utf8");
 const week = fs.readFileSync("app/schedule/week/page.tsx", "utf8");
 const search = fs.readFileSync("app/schedule/search/page.tsx", "utf8");
 const print = fs.readFileSync("app/schedule/print/page.tsx", "utf8");
+const newPage = fs.readFileSync("app/schedule/new/page.tsx", "utf8");
+const edit = fs.readFileSync("app/schedule/edit/page.tsx", "utf8");
+const dashboard = fs.readFileSync("app/home-dashboard.tsx", "utf8");
 
 for (const label of ["15時以降", "16時以降", "17時以降"]) {
   assert.ok(ux.includes(`printTimeLabelOverride: "${label}"`), `${label} preset persists its semantic label`);
@@ -28,15 +31,22 @@ assert.doesNotMatch(sql, /delete\s+from|truncate\s+|drop\s+table/i, "candidate h
 assert.match(sql, /request_has_app_secret\(\)[\s\S]*is_active_app_user\(\)/, "candidate keeps active-user/app-secret guard");
 assert.doesNotMatch(sql, /grant execute[\s\S]{0,220}\bto\s+anon\b/i, "anon is not granted candidate mutation RPCs");
 
-assert.match(rules, /if \(row\.print_time_label_override\) return row\.print_time_label_override/, "daily report primary formatter prefers override");
+assert.match(rules, /if \(row\.print_time_label_override\?\.trim\(\)\) return row\.print_time_label_override\.trim\(\)/, "daily report primary formatter prefers nonempty override");
 assert.match(state, /print_time_label_override\?: string \| null/, "business-state entry carries override");
 assert.match(state, /if \(override\) return override/, "business-state formatter prefers override");
 assert.match(detail, /print_time_label_override/, "detail already consumes override");
 assert.match(day, /print_time_label_override/, "one-day schedule already loads override");
 assert.match(week, /print_time_label_override/, "week schedule already loads override");
 
-// These are deliberate integration gates: the large pages must be patched in a safe workspace.
-assert.match(search, /type ScheduleEntry/, "search consumer is audited");
-assert.match(print, /function dueParts\(/, "print due-time consumer is audited");
+assert.match(newPage, /deliveryLabelOverride \? \{ deliveryPrintTimeLabelOverride: deliveryLabelOverride \}/, "batch forwards delivery label");
+assert.match(newPage, /deliveryLabelOverride \? \{ p_delivery_print_time_label_override: deliveryLabelOverride \}/, "single forwards delivery label");
+assert.match(edit, /print_time_label_override:target\.printTimeLabelOverride/, "edit creates delivery with override");
+assert.match(edit, /p_print_time_label_override:target\.printTimeLabelOverride/, "edit updates delivery with override");
+assert.match(edit, /deliveryEntry\.print_time_label_override\|\|null/, "unchanged historical entry keeps override");
+assert.match(search, /if \(entry\.print_time_label_override\?\.trim\(\)\)/, "search prefers nonempty override");
+assert.equal((search.match(/\.select\("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override"\)/g) || []).length, 2, "both search queries load override");
+assert.match(print, /if \(delivery\.print_time_label_override\?\.trim\(\)\)/, "daily print due-time prefers override");
+assert.match(print, /entry_type,starts_at,print_time_mode,print_time_label_override/, "daily print secondary query loads override");
+assert.match(dashboard, /entry_type,starts_at,print_time_mode,print_time_label_override/, "dashboard secondary query loads override");
 
 console.log("delivery-time-db-contract-regression: PASS");

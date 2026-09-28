@@ -97,6 +97,7 @@ function dueParts(delivery: BusinessScheduleEntry | null) {
     month: "numeric",
     day: "numeric",
   }).format(d);
+  if (delivery.print_time_label_override?.trim()) return { date, time: delivery.print_time_label_override.trim() };
   if (delivery.print_time_mode === "unspecified") return { date, time: "中" };
   if (delivery.print_time_mode === "morning") return { date, time: "A中" };
   return {

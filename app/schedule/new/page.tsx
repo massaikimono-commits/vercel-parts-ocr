@@ -5,6 +5,7 @@ import { appLocation as location } from "../../lib/internal-navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
+import { DELIVERY_TIME_PRESETS, DELIVERY_CUSTOM_TIME_MIN, DELIVERY_CUSTOM_TIME_MAX, DELIVERY_CUSTOM_TIME_STEP_SECONDS, deliveryChoiceFromCustomTime } from "../delivery-time-ux";
 
 type EntryType = "delivery" | "pickup" | "customer_visit" | "onsite_repair";
 type Reason = "点検" | "車検" | "一般整備" | "板金塗装";
@@ -35,6 +36,7 @@ type TimeOption = {
   warnings?: string[];
   hardErrors?: string[];
   conflicts?: number;
+  printTimeLabelOverride?: string | null;
 };
 
 type Capacity = {
@@ -193,8 +195,8 @@ export default function ScheduleNewPage() {
 
   const [addDelivery, setAddDelivery] = useState(true);
   const [deliveryDay, setDeliveryDay] = useState(todayJst());
-  const [deliveryOptions, setDeliveryOptions] = useState<TimeOption[]>([]);
-  const [deliveryTimeKey, setDeliveryTimeKey] = useState("");
+  const [deliveryTimeKey, setDeliveryTimeKey] = useState("unspecified");
+  const [deliveryCustomTime, setDeliveryCustomTime] = useState("15:00");
 
   const [capacity, setCapacity] = useState<Capacity | null>(null);
   const [pickupCapacity, setPickupCapacity] = useState<PickupCapacity | null>(null);
@@ -228,14 +230,14 @@ export default function ScheduleNewPage() {
     let active = true;
     async function applyDefaultDeliveryDay() {
       if (reason !== "車検") {
-        if (reason === "点検") setDeliveryTimeKey("");
+        if (reason === "点検") setDeliveryTimeKey("unspecified");
         setDeliveryDay(day);
         return;
       }
       try {
         const next = await nextBusinessDay(day);
         if (!active) return;
-        setDeliveryTimeKey("");
+        setDeliveryTimeKey("unspecified");
         if (next) {
           setDeliveryDay(next);
         } else {
@@ -269,12 +271,8 @@ export default function ScheduleNewPage() {
   }, [day, entryType]);
 
   useEffect(() => {
-    if (entryType === "delivery") {
-      setAddDelivery(false);
-      return;
-    }
-    void loadDeliveryOptions();
-  }, [deliveryDay, entryType, reason]);
+    if (entryType === "delivery") setAddDelivery(false);
+  }, [entryType]);
 
   useEffect(() => {
     void loadStaff();
@@ -554,40 +552,22 @@ export default function ScheduleNewPage() {
     }
   }
 
-  async function loadDeliveryOptions() {
-    if (entryType === "delivery") return;
-    const { data, error } = await supabase.rpc("schedule_time_availability", {
-      p_day: deliveryDay,
-      p_entry_type: "delivery",
-      p_reason: reason,
-    });
-    if (error) {
-      setMessage(safeActionError("納車時間候補の読み込み", error));
-      return;
-    }
-    const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
-    setDeliveryOptions(options);
-    setDeliveryTimeKey((old) => {
-      const oldOption = options.find((x) => x.key === old);
-      if (oldOption && oldOption.availability !== "blocked") return old;
-      const preferredBroad = (reason === "点検" || reason === "車検")
-        ? options.find((x) => x.mode === "unspecified" && x.availability !== "blocked")
-        : null;
-      return preferredBroad?.key
-        || options.find((x) => x.availability === "open")?.key
-        || options.find((x) => x.availability === "warning")?.key
-        || "";
-    });
-  }
-
   const selectedTime = useMemo(
     () => timeOptions.find((x) => x.key === selectedTimeKey) || null,
     [timeOptions, selectedTimeKey]
   );
 
   const selectedDelivery = useMemo(
-    () => deliveryOptions.find((x) => x.key === deliveryTimeKey) || null,
-    [deliveryOptions, deliveryTimeKey]
+    () => {
+      const custom = deliveryChoiceFromCustomTime(deliveryCustomTime);
+      const choice = custom && deliveryTimeKey === custom.key
+        ? custom : DELIVERY_TIME_PRESETS.find((x) => x.key === deliveryTimeKey);
+      if (!choice) return null;
+      const startsAt = jstIso(deliveryDay, choice.time || "13:00");
+      return { key: choice.key, label: choice.label, mode: choice.mode, startsAt,
+        endsAt: plusMinutes(startsAt, 30), printTimeLabelOverride: choice.printTimeLabelOverride } as TimeOption;
+    },
+    [deliveryTimeKey, deliveryCustomTime, deliveryDay]
   );
 
   function mainTimes() {
@@ -767,7 +747,7 @@ export default function ScheduleNewPage() {
     setShowAfternoonOptions(false);
     setAddDelivery(true);
     setDeliveryDay(day);
-    setDeliveryTimeKey("");
+    setDeliveryTimeKey("unspecified");
     setRegisteredSearch("");
     setSelectedVehicleIds([]);
     setSelectedRegisteredVehicles([]);
@@ -787,6 +767,8 @@ export default function ScheduleNewPage() {
     }
     setBusy(true);
     try {
+      const deliveryLabelOverride = !isWaitingService && addDelivery && entryType !== "delivery"
+        ? selectedDelivery?.printTimeLabelOverride || null : null;
       if (selectedVehicleIds.length > 1) {
         const selectedRows = selectedVehicleIds
           .map((id) => selectedRegisteredVehicles.find((vehicle) => vehicle.vehicleId === id))
@@ -841,9 +823,11 @@ export default function ScheduleNewPage() {
           deliveryStartsAt: !isWaitingService && addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
           deliveryEndsAt: !isWaitingService && addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
           deliveryPrintTimeMode: !isWaitingService && addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
+          ...(deliveryLabelOverride ? { deliveryPrintTimeLabelOverride: deliveryLabelOverride } : {}),
         }));
 
-        const { data, error } = await supabase.rpc("create_schedule_registration_batch_v1", {
+        const { data, error } = await supabase.rpc(deliveryLabelOverride
+          ? "create_schedule_registration_batch_delivery_label_v1" : "create_schedule_registration_batch_v1", {
           p_day: day,
           p_items: batchItems,
           p_allow_warning_override: allowOverride,
@@ -896,7 +880,8 @@ export default function ScheduleNewPage() {
       const selectedCustomerForSubmitNow = existingCustomerId;
       const selectedVehicleForSubmitNow = existingVehicleId;
 
-      const { data, error } = await supabase.rpc("create_schedule_registration_v2", {
+      const { data, error } = await supabase.rpc(deliveryLabelOverride
+        ? "create_schedule_registration_delivery_label_v1" : "create_schedule_registration_v2", {
         p_customer_name: customerName.trim(),
         p_entry_type: entryType,
         p_reason: reason,
@@ -923,6 +908,7 @@ export default function ScheduleNewPage() {
         p_delivery_starts_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
         p_delivery_ends_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
         p_delivery_print_time_mode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
+        ...(deliveryLabelOverride ? { p_delivery_print_time_label_override: deliveryLabelOverride } : {}),
         p_allow_warning_override: allowOverride,
       });
       if (error) throw error;
@@ -1155,7 +1141,7 @@ export default function ScheduleNewPage() {
                   setIsWaitingService(next);
                   if (next) {
                     setAddDelivery(false);
-                    setDeliveryTimeKey("");
+                    setDeliveryTimeKey("unspecified");
                   }
                 }} />
                 作業待ち
@@ -1265,15 +1251,22 @@ export default function ScheduleNewPage() {
           {addDelivery && (
             <div className="grid deliveryGrid">
               <label>納車日<input type="date" value={deliveryDay} onChange={(e) => setDeliveryDay(e.target.value)} /></label>
-              <label>納車時間
-                <select value={deliveryTimeKey} onChange={(e) => setDeliveryTimeKey(e.target.value)}>
-                  {!deliveryOptions.length && <option value="">候補なし</option>}
-                  {deliveryOptions.map((x) => {
-                    const mark = x.availability === "blocked" ? "×" : x.availability === "warning" ? "△" : "○";
-                    return <option key={x.key} value={x.key} disabled={x.availability === "blocked"}>{mark} {x.label}</option>;
-                  })}
-                </select>
-              </label>
+              <div className="deliveryTimeChoices" role="group" aria-label="納車時間設定">
+                <span>納車時間設定</span>
+                {DELIVERY_TIME_PRESETS.map((choice) => <button type="button" key={choice.key}
+                  aria-pressed={deliveryTimeKey === choice.key}
+                  onClick={() => { setDeliveryTimeKey(choice.key); if (choice.time) setDeliveryCustomTime(choice.time); }}>
+                  {choice.label}
+                </button>)}
+                <label>任意時刻
+                  <input type="time" min={DELIVERY_CUSTOM_TIME_MIN} max={DELIVERY_CUSTOM_TIME_MAX}
+                    step={DELIVERY_CUSTOM_TIME_STEP_SECONDS} value={deliveryCustomTime}
+                    onFocus={() => { const choice = deliveryChoiceFromCustomTime(deliveryCustomTime); setDeliveryTimeKey(choice?.key || ""); }}
+                    onChange={(e) => { const choice = deliveryChoiceFromCustomTime(e.target.value); setDeliveryCustomTime(e.target.value);
+                      setDeliveryTimeKey(choice?.key || ""); }} />
+                </label>
+                {deliveryTimeKey.startsWith("custom_") && <span>指定時刻 {deliveryCustomTime}</span>}
+              </div>
             </div>
           )}
         </section>
