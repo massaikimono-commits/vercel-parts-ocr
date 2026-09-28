@@ -1,96 +1,45 @@
 import fs from "node:fs";
 import "./vercel-selective-deploy-regression.mjs";
+import "./vercel-one-shot-preview-guard.mjs";
 
 const errors = [];
-
-function fail(message) {
-  errors.push(message);
-}
-
+function fail(message) { errors.push(message); }
 const netlifyPath = "netlify.toml";
 const vercelPath = "vercel.json";
-
-if (!fs.existsSync(netlifyPath)) {
-  fail("netlify.toml is missing.");
-} else {
+if (!fs.existsSync(netlifyPath)) fail("netlify.toml is missing.");
+else {
   const netlify = fs.readFileSync(netlifyPath, "utf8");
-
-  const requiredNetlifyLines = [
-    'ignore = "exit 0"',
-    '[context.production]',
-    "ignore = \"git log -1 --pretty=%B | grep -Fq '[deploy netlify production]' && exit 1 || exit 0\"",
-    '[context.deploy-preview]',
-    "ignore = \"git log -1 --pretty=%B | grep -Fq '[deploy netlify preview]' && exit 1 || exit 0\"",
-    '[context.branch-deploy]',
-  ];
-
-  for (const requiredLine of requiredNetlifyLines) {
-    if (!netlify.includes(requiredLine)) {
-      fail(`Netlify deployment lock is missing or changed: ${requiredLine}`);
-    }
-  }
-
-  if (netlify.includes("[deploy netlify]'")) {
-    fail(
-      "Bare [deploy netlify] marker must not be used. Preview and production must have separate explicit markers."
-    );
-  }
+  const requiredNetlifyLines = ['ignore = "exit 0"','[context.production]',"ignore = \"git log -1 --pretty=%B | grep -Fq '[deploy netlify production]' && exit 1 || exit 0\"",'[context.deploy-preview]',"ignore = \"git log -1 --pretty=%B | grep -Fq '[deploy netlify preview]' && exit 1 || exit 0\"",'[context.branch-deploy]'];
+  for (const requiredLine of requiredNetlifyLines) if (!netlify.includes(requiredLine)) fail(`Netlify deployment lock is missing or changed: ${requiredLine}`);
+  if (netlify.includes("[deploy netlify]'")) fail("Bare [deploy netlify] marker must not be used. Preview and production must have separate explicit markers.");
 }
-
-if (!fs.existsSync(vercelPath)) {
-  fail("vercel.json is missing.");
-} else {
+if (!fs.existsSync(vercelPath)) fail("vercel.json is missing.");
+else {
   let vercel;
-  try {
-    vercel = JSON.parse(fs.readFileSync(vercelPath, "utf8"));
-  } catch (error) {
-    fail(`vercel.json is not valid JSON: ${error.message}`);
-  }
-
-  if (vercel && Object.prototype.hasOwnProperty.call(vercel, "ignoreCommand")) {
-    fail(
-      "Legacy Vercel ignoreCommand/[deploy] gate must stay retired. Selective git.deploymentEnabled branch rules are the only Git auto-deploy gate."
-    );
-  }
+  try { vercel = JSON.parse(fs.readFileSync(vercelPath, "utf8")); } catch (error) { fail(`vercel.json is not valid JSON: ${error.message}`); }
+  if (vercel && Object.prototype.hasOwnProperty.call(vercel, "ignoreCommand")) fail("Legacy Vercel ignoreCommand/[deploy] gate must stay retired. Selective git.deploymentEnabled branch rules are the only Git auto-deploy gate.");
 }
-
 const workflowDir = ".github/workflows";
+const oneShot = "vercel-one-shot-preview.yml";
 if (fs.existsSync(workflowDir)) {
-  const riskyPatterns = [
-    /\bnetlify\s+deploy\b/i,
-    /\bvercel\s+deploy\b/i,
-    /\bvercel\s+--prod\b/i,
-    /\bnpx\s+vercel\b/i,
-  ];
-
+  const riskyPatterns = [/\bnetlify\s+deploy\b/i,/\bvercel\s+deploy\b/i,/\bvercel\s+--prod\b/i,/\bnpx\s+vercel\b/i];
   for (const file of fs.readdirSync(workflowDir)) {
     const fullPath = `${workflowDir}/${file}`;
     if (!fs.statSync(fullPath).isFile()) continue;
-
     const body = fs.readFileSync(fullPath, "utf8");
     for (const pattern of riskyPatterns) {
-      if (pattern.test(body)) {
-        fail(
-          `Potential direct deployment command found in ${fullPath}: ${pattern}`
-        );
-      }
+      if (!pattern.test(body)) continue;
+      const permittedOneShotPreview = file === oneShot && pattern.source.includes("vercel\\s+deploy") && !/--prod\b/.test(body);
+      if (!permittedOneShotPreview) fail(`Potential direct deployment command found in ${fullPath}: ${pattern}`);
     }
   }
 }
-
-if (errors.length > 0) {
-  console.error("Deployment safety check FAILED:");
-  for (const error of errors) {
-    console.error(`- ${error}`);
-  }
-  process.exit(1);
-}
-
+if (errors.length > 0) { console.error("Deployment safety check FAILED:"); for (const error of errors) console.error(`- ${error}`); process.exit(1); }
 console.log("Deployment safety check passed.");
 console.log("- Netlify production requires [deploy netlify production].");
 console.log("- Netlify preview requires [deploy netlify preview].");
 console.log("- Netlify branch deploys remain skipped.");
-console.log("- Vercel Git auto-deploy is allowlisted to preview/schedule-ux-20260903 only.");
-console.log("- Vercel main and unknown/unapproved branches are blocked.");
+console.log("- Vercel Git auto-deploy remains allowlisted to preview/schedule-ux-20260903 only.");
+console.log("- Vercel main and unknown/unapproved Git branches remain blocked.");
 console.log("- Legacy Vercel ignoreCommand/[deploy] gate is absent.");
-console.log("- No direct Netlify/Vercel deploy command exists in GitHub Actions.");
+console.log("- Direct Vercel deployment is allowed only in the structurally guarded workflow_dispatch one-shot Preview workflow.");
