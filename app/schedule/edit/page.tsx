@@ -5,6 +5,7 @@ import { appLocation as location } from "../../lib/internal-navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
+import { DELIVERY_TIME_PRESETS, DELIVERY_CUSTOM_TIME_MIN, DELIVERY_CUSTOM_TIME_MAX, DELIVERY_CUSTOM_TIME_STEP_SECONDS, deliveryPresetForOverride, normalizeDeliveryCustomTime } from "../delivery-time-ux";
 
 type TimeOption = {
   key:string;
@@ -29,6 +30,7 @@ type Entry = {
   starts_at:string;
   ends_at:string;
   print_time_mode:string;
+  print_time_label_override:string|null;
 };
 
 type WorkOrder = {
@@ -60,6 +62,7 @@ type DeliveryTarget = {
   startsAt:string;
   endsAt:string;
   mode:"exact"|"unspecified";
+  printTimeLabelOverride:string|null;
 };
 
 type VehicleSummary = {
@@ -107,6 +110,7 @@ function entrySummaryLabel(entry:Entry|null){
     timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",weekday:"short",
   }).format(new Date(entry.starts_at));
   if(entry.print_time_mode==="morning") return `${LABEL[entry.entry_type]||entry.entry_type} ${date} A中`;
+  if(entry.print_time_label_override?.trim()) return `${LABEL[entry.entry_type]||entry.entry_type} ${date} ${entry.print_time_label_override.trim()}`;
   if(entry.print_time_mode==="unspecified") return `${LABEL[entry.entry_type]||entry.entry_type} ${date} 中`;
   return `${LABEL[entry.entry_type]||entry.entry_type} ${date} ${timeKey(entry.starts_at)}`;
 }
@@ -131,6 +135,7 @@ export default function ScheduleEditPage(){
   const [deliveryDay,setDeliveryDay]=useState("");
   const [deliveryMode,setDeliveryMode]=useState<"unspecified"|"exact">("unspecified");
   const [deliveryTime,setDeliveryTime]=useState("15:00");
+  const [deliveryChoiceKey,setDeliveryChoiceKey]=useState("unspecified");
   const [reason,setReason]=useState("");
   const [staffMembers,setStaffMembers]=useState<StaffMember[]>([]);
   const [staffId,setStaffId]=useState("");
@@ -166,7 +171,7 @@ export default function ScheduleEditPage(){
   async function loadEntry(entryId:string){
     setBusy(true);
     const {data,error}=await supabase.from("schedule_entries")
-      .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
+      .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override")
       .eq("id",entryId).single();
     if(error){setMessage(safeActionError("予定の読み込み", error));setBusy(false);return;}
     const e=data as Entry;
@@ -182,14 +187,14 @@ export default function ScheduleEditPage(){
           .select("id,vehicle_id,reason,worker_staff_id,worker_name,outsource_vendor_id,outsource_vendor_name,stay_reason,planned_delivery_date,is_waiting_service")
           .eq("id",e.work_order_id).maybeSingle(),
         supabase.from("schedule_entries")
-          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
+          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override")
           .eq("work_order_id",e.work_order_id)
           .eq("entry_type","delivery")
           .order("starts_at",{ascending:true})
           .limit(1)
           .maybeSingle(),
         supabase.from("schedule_entries")
-          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
+          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override")
           .eq("work_order_id",e.work_order_id)
           .in("entry_type",["pickup","customer_visit","onsite_repair"])
           .order("starts_at",{ascending:true})
@@ -216,6 +221,9 @@ export default function ScheduleEditPage(){
       setDeliveryDay(delivery ? dateKey(delivery.starts_at) : (work?.planned_delivery_date || dateKey(e.starts_at)));
       setDeliveryMode(delivery?.print_time_mode==="exact" ? "exact" : "unspecified");
       setDeliveryTime(delivery ? timeKey(delivery.starts_at) : "15:00");
+      setDeliveryChoiceKey(delivery?.print_time_label_override
+        ? (deliveryPresetForOverride(delivery.print_time_label_override)?.key || "historical")
+        : delivery?.print_time_mode==="exact" ? "custom" : "unspecified");
 
       const vehicleId=e.vehicle_id || work?.vehicle_id || relatedInbound?.vehicle_id || delivery?.vehicle_id || "";
       if(vehicleId){
@@ -403,13 +411,18 @@ export default function ScheduleEditPage(){
   function buildDeliveryTarget():DeliveryTarget|null {
     if(!deliveryEnabled) return null;
     if(!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDay)) throw new Error("納車予定日を入力してください。");
-    const time=deliveryMode==="unspecified" ? "13:00" : deliveryTime;
-    if(deliveryMode==="exact" && !/^\d{2}:\d{2}$/.test(time)) throw new Error("納車時間を入力してください。");
+    const preset=DELIVERY_TIME_PRESETS.find((x)=>x.key===deliveryChoiceKey);
+    const mode=preset?.mode || deliveryMode;
+    const time=mode==="unspecified" ? "13:00" : preset?.time || deliveryTime;
+    const historicalUnchanged=deliveryChoiceKey==="historical" && Boolean(deliveryEntry);
+    if(mode==="exact" && !historicalUnchanged && !normalizeDeliveryCustomTime(time)) throw new Error("納車時間は08:30〜17:30の30分刻みで指定してください。");
+    if(mode==="exact" && historicalUnchanged && !/^\d{2}:\d{2}$/.test(time)) throw new Error("納車時間を入力してください。");
     const startsAt=jstIso(deliveryDay,time);
     return {
       startsAt,
       endsAt:plusMinutes(startsAt,30),
-      mode:deliveryMode,
+      mode,
+      printTimeLabelOverride:historicalUnchanged ? deliveryEntry!.print_time_label_override : preset?.printTimeLabelOverride || null,
     };
   }
 
@@ -458,11 +471,16 @@ export default function ScheduleEditPage(){
     }
 
     if(deliveryEntry){
-      const {data,error}=await supabase.rpc("reschedule_schedule_entry_v2",{
+      if(deliveryEntry.starts_at===target.startsAt && deliveryEntry.ends_at===target.endsAt
+        && deliveryEntry.print_time_mode===target.mode
+        && (deliveryEntry.print_time_label_override||null)===target.printTimeLabelOverride) return;
+      const historicalLabel=target.printTimeLabelOverride && !deliveryPresetForOverride(target.printTimeLabelOverride);
+      const {data,error}=await supabase.rpc(historicalLabel ? "reschedule_schedule_entry_v2" : "reschedule_schedule_entry_delivery_label_v1",{
         p_entry_id:deliveryEntry.id,
         p_starts_at:target.startsAt,
         p_ends_at:target.endsAt,
         p_print_time_mode:target.mode,
+        ...(!historicalLabel ? {p_print_time_label_override:target.printTimeLabelOverride} : {}),
         p_is_waiting_service:false,
         p_stay_reason:stayReason.trim()||null,
         p_planned_delivery_date:deliveryDay,
@@ -472,7 +490,7 @@ export default function ScheduleEditPage(){
       if(error) throw error;
       const hard=Array.isArray(data?.hardErrors)?data.hardErrors.map(String):[];
       if(hard.length || !data?.updated) throw new Error(hard.join(" / ") || "納車予定を変更できませんでした。");
-      setDeliveryEntry({...deliveryEntry,starts_at:target.startsAt,ends_at:target.endsAt,print_time_mode:target.mode});
+      setDeliveryEntry({...deliveryEntry,starts_at:target.startsAt,ends_at:target.endsAt,print_time_mode:target.mode,print_time_label_override:target.printTimeLabelOverride});
     }else{
       const {data,error}=await supabase.from("schedule_entries").insert({
         vehicle_id:entry.vehicle_id,
@@ -481,7 +499,8 @@ export default function ScheduleEditPage(){
         starts_at:target.startsAt,
         ends_at:target.endsAt,
         print_time_mode:target.mode,
-      }).select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode").single();
+        print_time_label_override:target.printTimeLabelOverride,
+      }).select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override").single();
       if(error) throw error;
       setDeliveryEntry(data as Entry);
       const {error:syncError}=await supabase.from("work_orders").update({
@@ -733,15 +752,18 @@ export default function ScheduleEditPage(){
                 <label>納車予定日
                   <input type="date" value={deliveryDay} onChange={(e)=>{setDeliveryDay(e.target.value);resetWarningsForTargetChange();}} />
                 </label>
-                <label>納車指定
-                  <select value={deliveryMode} onChange={(e)=>{setDeliveryMode(e.target.value as "unspecified"|"exact");resetWarningsForTargetChange();}}>
-                    <option value="unspecified">中</option>
-                    <option value="exact">時間指定</option>
-                  </select>
+                <div role="group" aria-label="納車時間設定">納車時間設定
+                  {DELIVERY_TIME_PRESETS.map((choice)=><button type="button" key={choice.key}
+                    aria-pressed={deliveryChoiceKey===choice.key}
+                    onClick={()=>{setDeliveryChoiceKey(choice.key);setDeliveryMode(choice.mode);if(choice.time)setDeliveryTime(choice.time);resetWarningsForTargetChange();}}>{choice.label}</button>)}
+                  {deliveryChoiceKey==="historical" && <span>既存の指定: {deliveryEntry?.print_time_label_override}</span>}
+                </div>
+                <label>任意時刻
+                  <input type="time" min={DELIVERY_CUSTOM_TIME_MIN} max={DELIVERY_CUSTOM_TIME_MAX}
+                    step={DELIVERY_CUSTOM_TIME_STEP_SECONDS} value={deliveryTime}
+                    onFocus={()=>{setDeliveryChoiceKey("custom");setDeliveryMode("exact");resetWarningsForTargetChange();}}
+                    onChange={(e)=>{setDeliveryTime(e.target.value);setDeliveryChoiceKey("custom");setDeliveryMode("exact");resetWarningsForTargetChange();}} />
                 </label>
-                {deliveryMode==="exact" && <label>納車時間
-                  <input type="time" min="08:30" max="17:30" step="1800" value={deliveryTime} onChange={(e)=>{setDeliveryTime(e.target.value);resetWarningsForTargetChange();}} />
-                </label>}
               </div>}
             </div>
           )}
