@@ -49,6 +49,7 @@ export default function TimeSelection({
               onClick={choice.onSelect}
             >
               {choice.label}
+              {valueKey === choice.key && <span className="ml-1" aria-hidden="true">✓</span>}
             </button>
           ))}
         </div>

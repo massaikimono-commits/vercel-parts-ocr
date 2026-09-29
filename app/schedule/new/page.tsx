@@ -5,7 +5,8 @@ import { appLocation as location } from "../../lib/internal-navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
-import { DELIVERY_TIME_PRESETS, DELIVERY_CUSTOM_TIME_MIN, DELIVERY_CUSTOM_TIME_MAX, DELIVERY_CUSTOM_TIME_STEP_SECONDS, deliveryChoiceFromCustomTime } from "../delivery-time-ux";
+import { SCHEDULE_TIME_PRESETS, scheduleChoiceFromCustomRange, type ScheduleTimeChoice } from "../delivery-time-ux";
+import TimeSelection from "../time-selection";
 
 type EntryType = "delivery" | "pickup" | "customer_visit" | "onsite_repair";
 type Reason = "点検" | "車検" | "一般整備" | "板金塗装";
@@ -191,12 +192,16 @@ export default function ScheduleNewPage() {
   const [inspectionScheduleType, setInspectionScheduleType] = useState("schedule");
   const [timeOptions, setTimeOptions] = useState<TimeOption[]>([]);
   const [selectedTimeKey, setSelectedTimeKey] = useState("");
+  const [mainChoiceKey, setMainChoiceKey] = useState("");
+  const [mainCustomStart, setMainCustomStart] = useState("14:30");
+  const [mainCustomEnd, setMainCustomEnd] = useState("16:00");
   const [showAfternoonOptions, setShowAfternoonOptions] = useState(false);
 
   const [addDelivery, setAddDelivery] = useState(true);
   const [deliveryDay, setDeliveryDay] = useState(todayJst());
   const [deliveryTimeKey, setDeliveryTimeKey] = useState("unspecified");
-  const [deliveryCustomTime, setDeliveryCustomTime] = useState("15:00");
+  const [deliveryCustomStart, setDeliveryCustomStart] = useState("14:30");
+  const [deliveryCustomEnd, setDeliveryCustomEnd] = useState("16:00");
 
   const [capacity, setCapacity] = useState<Capacity | null>(null);
   const [pickupCapacity, setPickupCapacity] = useState<PickupCapacity | null>(null);
@@ -552,22 +557,32 @@ export default function ScheduleNewPage() {
     }
   }
 
-  const selectedTime = useMemo(
-    () => timeOptions.find((x) => x.key === selectedTimeKey) || null,
-    [timeOptions, selectedTimeKey]
-  );
+  const mainChoice = useMemo(() => mainChoiceKey === "custom"
+    ? scheduleChoiceFromCustomRange(mainCustomStart, mainCustomEnd)
+    : SCHEDULE_TIME_PRESETS.find((x) => x.key === mainChoiceKey) || null,
+    [mainChoiceKey, mainCustomStart, mainCustomEnd]);
+  const selectedTime = useMemo(() => {
+    if ((entryType === "pickup" || entryType === "delivery") && mainChoiceKey) {
+      if (!mainChoice) return null;
+      const startsAt = jstIso(day, mainChoice.time || "13:00");
+      return { key: mainChoice.key, label: mainChoice.label, mode: mainChoice.mode, startsAt,
+        endsAt: mainChoice.endTime ? jstIso(day, mainChoice.endTime) : plusMinutes(startsAt, mainChoice.mode === "unspecified" ? 60 : mainChoice.time === "17:00" ? 30 : 60),
+        printTimeLabelOverride: mainChoice.printTimeLabelOverride } as TimeOption;
+    }
+    return timeOptions.find((x) => x.key === selectedTimeKey) || null;
+  }, [entryType, mainChoiceKey, mainChoice, day, timeOptions, selectedTimeKey]);
 
   const selectedDelivery = useMemo(
     () => {
-      const custom = deliveryChoiceFromCustomTime(deliveryCustomTime);
-      const choice = custom && deliveryTimeKey === custom.key
-        ? custom : DELIVERY_TIME_PRESETS.find((x) => x.key === deliveryTimeKey);
+      const choice = deliveryTimeKey === "custom"
+        ? scheduleChoiceFromCustomRange(deliveryCustomStart, deliveryCustomEnd)
+        : SCHEDULE_TIME_PRESETS.find((x) => x.key === deliveryTimeKey);
       if (!choice) return null;
       const startsAt = jstIso(deliveryDay, choice.time || "13:00");
       return { key: choice.key, label: choice.label, mode: choice.mode, startsAt,
-        endsAt: plusMinutes(startsAt, 30), printTimeLabelOverride: choice.printTimeLabelOverride } as TimeOption;
+        endsAt: choice.endTime ? jstIso(deliveryDay, choice.endTime) : plusMinutes(startsAt, 30), printTimeLabelOverride: choice.printTimeLabelOverride } as TimeOption;
     },
-    [deliveryTimeKey, deliveryCustomTime, deliveryDay]
+    [deliveryTimeKey, deliveryCustomStart, deliveryCustomEnd, deliveryDay]
   );
 
   function mainTimes() {
@@ -744,6 +759,7 @@ export default function ScheduleNewPage() {
     setNotes("");
     setInspectionScheduleType("schedule");
     setSelectedTimeKey("");
+    setMainChoiceKey("");
     setShowAfternoonOptions(false);
     setAddDelivery(true);
     setDeliveryDay(day);
@@ -767,6 +783,14 @@ export default function ScheduleNewPage() {
     }
     setBusy(true);
     try {
+      if ((entryType === "pickup" || entryType === "delivery") && mainChoiceKey === "custom" && !mainChoice) {
+        setHardErrors(["時間帯は08:30～17:30の30分刻みで、開始を終了より前にしてください。"]); return;
+      }
+      if (!isWaitingService && addDelivery && entryType !== "delivery" && deliveryTimeKey === "custom" && !selectedDelivery) {
+        setHardErrors(["納車時間帯は08:30～17:30の30分刻みで、開始を終了より前にしてください。"]); return;
+      }
+      const mainLabelOverride = entryType === "pickup" || entryType === "delivery"
+        ? selectedTime?.printTimeLabelOverride || null : null;
       const deliveryLabelOverride = !isWaitingService && addDelivery && entryType !== "delivery"
         ? selectedDelivery?.printTimeLabelOverride || null : null;
       if (selectedVehicleIds.length > 1) {
@@ -814,6 +838,7 @@ export default function ScheduleNewPage() {
           notes: notes.trim() || null,
           inspectionScheduleType: reason === "点検" ? (inspectionScheduleType || null) : null,
           printTimeMode: check.main.printMode,
+          printTimeLabelOverride: mainLabelOverride,
           isUrgent,
           needsLoaner,
           isWaitingService,
@@ -823,11 +848,10 @@ export default function ScheduleNewPage() {
           deliveryStartsAt: !isWaitingService && addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
           deliveryEndsAt: !isWaitingService && addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
           deliveryPrintTimeMode: !isWaitingService && addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
-          ...(deliveryLabelOverride ? { deliveryPrintTimeLabelOverride: deliveryLabelOverride } : {}),
+          deliveryPrintTimeLabelOverride: deliveryLabelOverride,
         }));
 
-        const { data, error } = await supabase.rpc(deliveryLabelOverride
-          ? "create_schedule_registration_batch_delivery_label_v1" : "create_schedule_registration_batch_v1", {
+        const { data, error } = await supabase.rpc("create_schedule_registration_batch_time_label_v2", {
           p_day: day,
           p_items: batchItems,
           p_allow_warning_override: allowOverride,
@@ -880,8 +904,7 @@ export default function ScheduleNewPage() {
       const selectedCustomerForSubmitNow = existingCustomerId;
       const selectedVehicleForSubmitNow = existingVehicleId;
 
-      const { data, error } = await supabase.rpc(deliveryLabelOverride
-        ? "create_schedule_registration_delivery_label_v1" : "create_schedule_registration_v2", {
+      const { data, error } = await supabase.rpc("create_schedule_registration_time_label_v2", {
         p_customer_name: customerName.trim(),
         p_entry_type: entryType,
         p_reason: reason,
@@ -900,6 +923,7 @@ export default function ScheduleNewPage() {
         p_notes: notes.trim() || null,
         p_inspection_schedule_type: reason === "点検" ? (inspectionScheduleType || null) : null,
         p_print_time_mode: check.main.printMode,
+        p_print_time_label_override: mainLabelOverride,
         p_is_urgent: isUrgent,
         p_needs_loaner: needsLoaner,
         p_existing_customer_id: selectedCustomerForSubmitNow || null,
@@ -908,7 +932,7 @@ export default function ScheduleNewPage() {
         p_delivery_starts_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.startsAt || null : null,
         p_delivery_ends_at: addDelivery && entryType !== "delivery" ? selectedDelivery?.endsAt || null : null,
         p_delivery_print_time_mode: addDelivery && entryType !== "delivery" ? selectedDelivery?.mode || null : null,
-        ...(deliveryLabelOverride ? { p_delivery_print_time_label_override: deliveryLabelOverride } : {}),
+        p_delivery_print_time_label_override: deliveryLabelOverride,
         p_allow_warning_override: allowOverride,
       });
       if (error) throw error;
@@ -1084,7 +1108,7 @@ export default function ScheduleNewPage() {
         <h2>② 入庫内容</h2>
         <div className="grid">
           <label>区分
-            <select value={entryType} onChange={(e) => setEntryType(e.target.value as EntryType)}>
+            <select value={entryType} onChange={(e) => { const next=e.target.value as EntryType; setEntryType(next); setMainChoiceKey(next==="delivery"?"unspecified":""); }}>
               <option value="pickup">引取</option>
               <option value="customer_visit">来社</option>
               <option value="onsite_repair">出張整備</option>
@@ -1164,7 +1188,19 @@ export default function ScheduleNewPage() {
               <b>時間・空き状況</b>
               <span className="legend"><i className="dot openDot" />○ 空き　<i className="dot warnDot" />△ 要確認　<i className="dot blockedDot" />× 不可</span>
             </div>
-            {loadingOptions ? (
+            {(entryType === "pickup" || entryType === "delivery") ? (
+              <TimeSelection label={`${ENTRY_LABEL[entryType]}時間設定`} valueKey={mainChoiceKey || selectedTimeKey}
+                customStart={mainCustomStart} customEnd={mainCustomEnd}
+                onPresetChange={(choice: ScheduleTimeChoice) => { setMainChoiceKey(choice.key); setHardErrors([]); }}
+                onCustomStartChange={(value) => { setMainCustomStart(value); setMainChoiceKey("custom"); setHardErrors([]); }}
+                onCustomEndChange={(value) => { setMainCustomEnd(value); setMainChoiceKey("custom"); setHardErrors([]); }}
+                customError={mainChoiceKey === "custom" && !mainChoice ? "有効な開始・終了時刻を指定してください。" : null}
+                includeMorningChoices={entryType === "pickup" ? timeOptions.filter((x) => x.group === "morning").map((x) => ({
+                  key: x.key, label: `${x.availability === "blocked" ? "×" : x.availability === "warning" ? "△" : "○"} ${x.displayLabel || x.label}`,
+                  disabled: x.availability === "blocked",
+                  onSelect: () => { setSelectedTimeKey(x.key); setMainChoiceKey(""); },
+                })) : []} />
+            ) : loadingOptions ? (
               <div className="availabilityLoading">空き時間を確認中…</div>
             ) : !timeOptions.length ? (
               <div className="availabilityLoading">時間候補がありません。</div>
@@ -1251,22 +1287,12 @@ export default function ScheduleNewPage() {
           {addDelivery && (
             <div className="grid deliveryGrid">
               <label>納車日<input type="date" value={deliveryDay} onChange={(e) => setDeliveryDay(e.target.value)} /></label>
-              <div className="deliveryTimeChoices" role="group" aria-label="納車時間設定">
-                <span>納車時間設定</span>
-                {DELIVERY_TIME_PRESETS.map((choice) => <button type="button" key={choice.key}
-                  aria-pressed={deliveryTimeKey === choice.key}
-                  onClick={() => { setDeliveryTimeKey(choice.key); if (choice.time) setDeliveryCustomTime(choice.time); }}>
-                  {choice.label}
-                </button>)}
-                <label>任意時刻
-                  <input type="time" min={DELIVERY_CUSTOM_TIME_MIN} max={DELIVERY_CUSTOM_TIME_MAX}
-                    step={DELIVERY_CUSTOM_TIME_STEP_SECONDS} value={deliveryCustomTime}
-                    onFocus={() => { const choice = deliveryChoiceFromCustomTime(deliveryCustomTime); setDeliveryTimeKey(choice?.key || ""); }}
-                    onChange={(e) => { const choice = deliveryChoiceFromCustomTime(e.target.value); setDeliveryCustomTime(e.target.value);
-                      setDeliveryTimeKey(choice?.key || ""); }} />
-                </label>
-                {deliveryTimeKey.startsWith("custom_") && <span>指定時刻 {deliveryCustomTime}</span>}
-              </div>
+              <TimeSelection label="納車時間設定" valueKey={deliveryTimeKey}
+                customStart={deliveryCustomStart} customEnd={deliveryCustomEnd}
+                onPresetChange={(choice) => setDeliveryTimeKey(choice.key)}
+                onCustomStartChange={(value) => { setDeliveryCustomStart(value); setDeliveryTimeKey("custom"); }}
+                onCustomEndChange={(value) => { setDeliveryCustomEnd(value); setDeliveryTimeKey("custom"); }}
+                customError={deliveryTimeKey === "custom" && !selectedDelivery ? "有効な開始・終了時刻を指定してください。" : null} />
             </div>
           )}
         </section>

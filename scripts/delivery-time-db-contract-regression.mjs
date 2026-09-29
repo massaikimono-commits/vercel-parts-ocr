@@ -38,8 +38,10 @@ assert.match(detail, /print_time_label_override/, "detail already consumes overr
 assert.match(day, /print_time_label_override/, "one-day schedule already loads override");
 assert.match(week, /print_time_label_override/, "week schedule already loads override");
 
-assert.match(newPage, /deliveryLabelOverride \? \{ deliveryPrintTimeLabelOverride: deliveryLabelOverride \}/, "batch forwards delivery label");
-assert.match(newPage, /deliveryLabelOverride \? \{ p_delivery_print_time_label_override: deliveryLabelOverride \}/, "single forwards delivery label");
+assert.match(newPage, /deliveryPrintTimeLabelOverride: deliveryLabelOverride/, "batch forwards delivery label");
+assert.match(newPage, /p_delivery_print_time_label_override: deliveryLabelOverride/, "single forwards delivery label");
+assert.match(newPage, /printTimeLabelOverride: mainLabelOverride/, "batch forwards pickup label");
+assert.match(newPage, /p_print_time_label_override: mainLabelOverride/, "single forwards pickup label");
 assert.match(edit, /print_time_label_override:target\.printTimeLabelOverride/, "edit creates delivery with override");
 assert.match(edit, /p_print_time_label_override:target\.printTimeLabelOverride/, "edit updates delivery with override");
 assert.match(edit, /deliveryEntry\.print_time_label_override\|\|null/, "unchanged historical entry keeps override");
