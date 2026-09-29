@@ -42,4 +42,4 @@ console.log("- Netlify branch deploys remain skipped.");
 console.log("- Vercel Git auto-deploy remains allowlisted to preview/schedule-ux-20260903 only.");
 console.log("- Vercel main and unknown/unapproved Git branches remain blocked.");
 console.log("- Legacy Vercel ignoreCommand/[deploy] gate is absent.");
-console.log("- Direct Vercel deployment is allowed only in the structurally guarded workflow_dispatch one-shot Preview workflow.");
+console.log("- Direct Vercel deployment is allowed only in the structurally guarded one-shot Preview workflow, via manual dispatch or a successful Full regression workflow_run for candidate/*.");
