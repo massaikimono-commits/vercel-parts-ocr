@@ -15,13 +15,18 @@ on:
         description: Successful Full regression workflow run ID for expected SHA
         required: true
         type: string
+  workflow_run:
+    workflows:
+      - Full regression
+    types:
+      - completed
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: vercel-one-shot-preview-${{ inputs.expected_sha }}
+  group: vercel-one-shot-preview-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
   cancel-in-progress: false
 
 env:
@@ -31,27 +36,32 @@ env:
   EXPECTED_REPOSITORY: massaikimono-commits/vercel-parts-ocr
   EXPECTED_GITHUB_ORG: massaikimono-commits
   EXPECTED_GITHUB_REPO: vercel-parts-ocr
+  SOURCE_BRANCH: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || inputs.branch }}
+  SOURCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
+  REGRESSION_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.full_regression_run_id }}
 
 jobs:
   preview:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.name == 'Full regression' && github.event.workflow_run.head_branch != 'main' && startsWith(github.event.workflow_run.head_branch, 'candidate/')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Structural input guard
         env:
-          INPUT_BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          INPUT_BRANCH: ${{ env.SOURCE_BRANCH }}
+          EXPECTED_SHA: ${{ env.SOURCE_SHA }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
           test "$INPUT_BRANCH" != "main"
+          case "$INPUT_BRANCH" in candidate/*) ;; *) echo "Preview source must be candidate/*" >&2; exit 1 ;; esac
           echo "$EXPECTED_SHA" | grep -Eq '^[0-9a-f]{40}$'
 
       - name: Verify branch HEAD and Full regression evidence
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_BRANCH: ${{ inputs.branch }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
-          REGRESSION_RUN_ID: ${{ inputs.full_regression_run_id }}
+          INPUT_BRANCH: ${{ env.SOURCE_BRANCH }}
+          EXPECTED_SHA: ${{ env.SOURCE_SHA }}
+          REGRESSION_RUN_ID: ${{ env.REGRESSION_RUN_ID }}
         run: |
           set -euo pipefail
           branch_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$INPUT_BRANCH" --jq '.object.sha')"
@@ -85,7 +95,7 @@ jobs:
         id: duplicate
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ env.SOURCE_SHA }}
         run: |
           set -euo pipefail
           json="$(curl --fail-with-body -sS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&limit=100")"
@@ -102,7 +112,7 @@ jobs:
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ env.SOURCE_SHA }}
         run: |
           set -euo pipefail
           payload="$(jq -n \
@@ -133,8 +143,8 @@ jobs:
         id: inspect
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
-          INPUT_BRANCH: ${{ inputs.branch }}
+          EXPECTED_SHA: ${{ env.SOURCE_SHA }}
+          INPUT_BRANCH: ${{ env.SOURCE_BRANCH }}
           DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
         run: |
           set -euo pipefail
@@ -151,7 +161,8 @@ jobs:
       - name: Wait for READY and verify HTTP
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ env.SOURCE_SHA }}
+          INPUT_BRANCH: ${{ env.SOURCE_BRANCH }}
           DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
           PREVIEW_URL: ${{ steps.deploy.outputs.url }}
         run: |
@@ -169,4 +180,4 @@ jobs:
           test "$state" = "READY"
           code="$(curl -L -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL")"
           case "$code" in 2*|3*) ;; *) echo "Preview HTTP check failed: $code" >&2; exit 1 ;; esac
-          { echo '## ICB One-shot Preview'; echo "- Workflow run ID: $GITHUB_RUN_ID"; echo "- Source branch: ${{ inputs.branch }}"; echo "- Source SHA: ${{ inputs.expected_sha }}"; echo "- Vercel Project ID: $VERCEL_PROJECT_ID"; echo "- Deployment ID: $DEPLOYMENT_ID"; echo '- Ingestion: REST /v13/deployments gitSource'; echo '- Target: Preview / non-Production'; echo '- Build / State: READY'; echo "- Preview URL: $PREVIEW_URL"; echo "- HTTP: $code"; } >> "$GITHUB_STEP_SUMMARY"
+          { echo '## ICB One-shot Preview'; echo "- Workflow run ID: $GITHUB_RUN_ID"; echo "- Source branch: $INPUT_BRANCH"; echo "- Source SHA: $EXPECTED_SHA"; echo "- Full regression run ID: $REGRESSION_RUN_ID"; echo "- Vercel Project ID: $VERCEL_PROJECT_ID"; echo "- Deployment ID: $DEPLOYMENT_ID"; echo '- Ingestion: REST /v13/deployments gitSource'; echo '- Target: Preview / non-Production'; echo '- Build / State: READY'; echo "- Preview URL: $PREVIEW_URL"; echo "- HTTP: $code"; } >> "$GITHUB_STEP_SUMMARY"
