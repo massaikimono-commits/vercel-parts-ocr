@@ -15,9 +15,9 @@ type Props = {
 
 const buttonClass = (selected: boolean, disabled = false) =>
   [
-    "min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2",
-    selected ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-800",
+    "min-h-12 rounded-xl border px-2 py-2 text-sm font-semibold leading-tight transition",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2",
+    selected ? "border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-600" : "border-slate-300 bg-white text-blue-600",
     disabled ? "cursor-not-allowed opacity-45" : "active:scale-[0.99]",
   ].join(" ");
 
@@ -38,7 +38,7 @@ export default function TimeSelection({
       <legend className="text-sm font-bold text-slate-800">{label}</legend>
 
       {includeMorningChoices.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={`${label} 午前`}>
+        <div className="grid grid-cols-3 gap-2" aria-label={`${label} 午前`}>
           {includeMorningChoices.map((choice) => (
             <button
               key={choice.key}
@@ -55,7 +55,7 @@ export default function TimeSelection({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={`${label} 午後`}>
+      <div className="grid grid-cols-3 gap-2" aria-label={`${label} 午後`}>
         {SCHEDULE_TIME_PRESETS.map((choice) => (
           <button
             key={choice.key}
@@ -72,9 +72,9 @@ export default function TimeSelection({
 
       <div className="rounded-xl border border-slate-300 bg-slate-50 p-3">
         <div className="mb-2 text-sm font-semibold text-slate-800">任意時間帯</div>
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
           <label className="min-w-0">
-            <span className="sr-only">開始時刻</span>
+            <span className="mb-1 block text-xs font-semibold text-slate-600">開始時刻</span>
             <input
               type="time"
               min="08:30"
@@ -82,12 +82,12 @@ export default function TimeSelection({
               step={1800}
               value={customStart}
               onChange={(event) => onCustomStartChange(event.target.value)}
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-2 text-base text-slate-900"
+              className="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-base text-slate-900"
             />
           </label>
-          <span className="font-semibold text-slate-600" aria-hidden="true">～</span>
+          <span className="pb-3 font-semibold text-slate-600" aria-hidden="true">～</span>
           <label className="min-w-0">
-            <span className="sr-only">終了時刻</span>
+            <span className="mb-1 block text-xs font-semibold text-slate-600">終了時刻</span>
             <input
               type="time"
               min="08:30"
@@ -95,7 +95,7 @@ export default function TimeSelection({
               step={1800}
               value={customEnd}
               onChange={(event) => onCustomEndChange(event.target.value)}
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-2 text-base text-slate-900"
+              className="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-base text-slate-900"
             />
           </label>
         </div>
