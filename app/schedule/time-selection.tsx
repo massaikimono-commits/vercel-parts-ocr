@@ -13,9 +13,15 @@ type Props = {
   includeMorningChoices?: Array<{ key: string; label: string; disabled?: boolean; onSelect: () => void }>;
 };
 
+const compactGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "0.5rem",
+} as const;
+
 const buttonClass = (selected: boolean, disabled = false) =>
   [
-    "min-h-12 rounded-xl border px-2 py-2 text-sm font-semibold leading-tight transition",
+    "min-h-12 w-full min-w-0 rounded-xl border px-2 py-2 text-sm font-semibold leading-tight transition",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2",
     selected ? "border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-600" : "border-slate-300 bg-white text-blue-600",
     disabled ? "cursor-not-allowed opacity-45" : "active:scale-[0.99]",
@@ -38,7 +44,7 @@ export default function TimeSelection({
       <legend className="text-sm font-bold text-slate-800">{label}</legend>
 
       {includeMorningChoices.length > 0 && (
-        <div className="grid grid-cols-3 gap-2" aria-label={`${label} 午前`}>
+        <div className="grid grid-cols-3 gap-2" style={compactGridStyle} aria-label={`${label} 午前`} data-time-selection-grid="morning">
           {includeMorningChoices.map((choice) => (
             <button
               key={choice.key}
@@ -55,7 +61,7 @@ export default function TimeSelection({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2" aria-label={`${label} 午後`}>
+      <div className="grid grid-cols-3 gap-2" style={compactGridStyle} aria-label={`${label} 午後`} data-time-selection-grid="afternoon">
         {SCHEDULE_TIME_PRESETS.map((choice) => (
           <button
             key={choice.key}
