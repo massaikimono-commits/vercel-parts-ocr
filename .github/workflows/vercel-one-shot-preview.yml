@@ -98,11 +98,22 @@ jobs:
       - name: Install Vercel CLI
         if: steps.duplicate.outputs.found != 'true'
         run: npm install --global vercel@latest
+      - name: Link fixed Vercel project
+        if: steps.duplicate.outputs.found != 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          vercel link --yes --project="$VERCEL_PROJECT_ID" --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN"
+          test -f .vercel/project.json
+          test "$(jq -r '.projectId' .vercel/project.json)" = "$VERCEL_PROJECT_ID"
+          test "$(jq -r '.orgId' .vercel/project.json)" = "$VERCEL_ORG_ID"
       - name: Pull Preview environment
         if: steps.duplicate.outputs.found != 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+        run: vercel pull --yes --environment=preview --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN"
       - name: Deploy exactly once to Preview
         if: steps.duplicate.outputs.found != 'true'
         id: deploy
@@ -110,7 +121,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          url="$(vercel deploy --yes --token="$VERCEL_TOKEN")"
+          url="$(vercel deploy --yes --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
       - name: Resolve deployment URL
         id: resolved
