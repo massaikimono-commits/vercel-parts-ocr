@@ -9,8 +9,12 @@ const required = [
   "VERCEL_ORG_ID: team_GHd3ONZSRilQtxTq1q6NS1jT",
   "VERCEL_PROJECT_ID: prj_GUedEKT5z3vrL7NMLGhx04jgPeMK",
   "test \"$INPUT_BRANCH\" != \"main\"", "git rev-parse HEAD", "Full regression",
-  "VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}", "vercel pull --yes --environment=preview",
-  "vercel deploy --yes", "target\" != \"production\"", "githubCommitSha", "automatic retry is forbidden",
+  "VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}",
+  "vercel link --yes --project=\"$VERCEL_PROJECT_ID\" --scope=\"$VERCEL_ORG_ID\"",
+  "test \"$(jq -r '.projectId' .vercel/project.json)\" = \"$VERCEL_PROJECT_ID\"",
+  "test \"$(jq -r '.orgId' .vercel/project.json)\" = \"$VERCEL_ORG_ID\"",
+  "vercel pull --yes --environment=preview --scope=\"$VERCEL_ORG_ID\"",
+  "vercel deploy --yes --scope=\"$VERCEL_ORG_ID\"", "target\" != \"production\"", "githubCommitSha", "automatic retry is forbidden",
 ];
 for (const token of required) if (!body.includes(token)) throw new Error(`one-shot preview workflow missing required guard: ${token}`);
 
