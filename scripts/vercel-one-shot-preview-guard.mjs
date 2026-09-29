@@ -5,7 +5,10 @@ if (!fs.existsSync(path)) throw new Error(`${path} is missing`);
 const body = fs.readFileSync(path, "utf8");
 
 const required = [
-  "workflow_dispatch:", "branch:", "expected_sha:", "full_regression_run_id:",
+  "workflow_dispatch:", "workflow_run:", "workflows:", "- Full regression", "types:", "- completed",
+  "branch:", "expected_sha:", "full_regression_run_id:",
+  "github.event.workflow_run.head_branch", "github.event.workflow_run.head_sha", "github.event.workflow_run.id",
+  "github.event.workflow_run.conclusion == 'success'", "startsWith(github.event.workflow_run.head_branch, 'candidate/')",
   "VERCEL_ORG_ID: team_GHd3ONZSRilQtxTq1q6NS1jT",
   "VERCEL_PROJECT_ID: prj_GUedEKT5z3vrL7NMLGhx04jgPeMK",
   "VERCEL_PROJECT_NAME: vercel-parts-ocr",
@@ -13,6 +16,7 @@ const required = [
   "EXPECTED_GITHUB_ORG: massaikimono-commits",
   "EXPECTED_GITHUB_REPO: vercel-parts-ocr",
   "test \"$INPUT_BRANCH\" != \"main\"",
+  "case \"$INPUT_BRANCH\" in candidate/*)",
   "branch_sha=\"$(gh api",
   "test \"$branch_sha\" = \"$EXPECTED_SHA\"",
   "Full regression",
@@ -55,4 +59,4 @@ const forbidden = [
 ];
 for (const pattern of forbidden) if (pattern.test(body)) throw new Error(`one-shot preview workflow contains forbidden pattern: ${pattern}`);
 
-console.log("Vercel one-shot Preview REST gitSource structural guard: PASS");
+console.log("Vercel chained Preview REST gitSource structural guard: PASS");
