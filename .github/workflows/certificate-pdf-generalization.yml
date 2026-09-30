@@ -7,7 +7,11 @@ on:
   pull_request:
     paths:
       - 'app/lib/certificate-pdf-row-semantics.mjs'
+      - 'app/certificate-pdf-generalization-recovery.jsx'
+      - 'app/vehicle-workflow-v2/layout.tsx'
+      - 'app/vehicle-workflow-fast/layout.tsx'
       - 'scripts/certificate-pdf-generalization-regression.mjs'
+      - 'scripts/certificate-pdf-generalization-runtime-regression.mjs'
       - '.github/workflows/certificate-pdf-generalization.yml'
 
 permissions:
@@ -24,3 +28,5 @@ jobs:
           node-version: '20'
       - name: Post-5905 row semantic regression
         run: node scripts/certificate-pdf-generalization-regression.mjs
+      - name: Runtime integration regression
+        run: node scripts/certificate-pdf-generalization-runtime-regression.mjs
