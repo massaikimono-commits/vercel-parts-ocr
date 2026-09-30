@@ -9,9 +9,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase";
 import { parseRegistrationNumber } from "../lib/registration-number";
 import { expectedCertificateQrCount, normalizeCertificateCanvas } from "../lib/certificate-photo-normalize";
-import CertificatePdfWorkerLocalizer from "../certificate-pdf-worker-localizer";
-import CertificatePdfStructuredReaderV3 from "../certificate-pdf-structured-reader-v3";
-import CertificatePdfNativeReaderV2 from "../certificate-pdf-native-reader-v2";
 
 type FuelType = "EV" | "ガソリン" | "HV" | "ディーゼル" | "その他";
 type Cert = Record<string, string>;
@@ -255,9 +252,6 @@ export default function VehicleWorkflowFast({ newRegistrationMode = false }: { n
   function startOCR(){if(!vehicle.chassis&&!vehicle.registration){setMessage("先に車両を選択または保存してください。");return;}sessionStorage.setItem(ACTIVE_KEY,JSON.stringify(vehicle));try{const a=JSON.parse(localStorage.getItem("parts-data")||"[]");sessionStorage.setItem(BEFORE_KEY,JSON.stringify(Array.isArray(a)?a.map((x:any)=>x.id).filter(Boolean):[]));}catch{sessionStorage.setItem(BEFORE_KEY,"[]");}location.assign("/ocr/auto");}
 
   return <>
-    <CertificatePdfWorkerLocalizer />
-    <CertificatePdfStructuredReaderV3 />
-    <CertificatePdfNativeReaderV2 />
     <main className="page"><div className="top"><button onClick={()=>location.assign("/")}>← メインへ</button><strong>icb</strong></div>
     {newRegistrationMode ? <section className="card"><h1>新規車両登録</h1><div className="notice">新しい車両の車検証を読み取るか、下の項目を入力してください。</div></section> : <section className="card"><h1>作業車両を選択</h1><div className="notice">{busy?"車両一覧を読み込み中…":message}</div><input placeholder="ナンバー / 車台番号 / 型式" value={search} onChange={e=>setSearch(e.target.value)}/><div className="list">{filtered.map(v=><button key={v.id||v.number} className={`row ${vehicle.id===v.id&&v.id?"active":""}`} onClick={()=>select(v)}><b>{v.registration||v.number}</b><span>{v.model||"型式未入力"}　番号 {v.last4||"----"}</span><small>{v.chassis||v.number}</small></button>)}</div></section>}
     <section className="card"><h2>車検証から読み取る</h2><p>写真はQRを先に解析し、QRで埋まらない部分だけを帯域OCRします。PDFは文字レイヤーを直接利用します。</p><input ref={cam} className="hidden" type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files?.[0];if(f)onFile(f);e.currentTarget.value="";}}/><input ref={lib} className="hidden" type="file" accept="image/*,application/pdf" onChange={e=>{const f=e.target.files?.[0];if(f)onFile(f);e.currentTarget.value="";}}/><div className="actions"><button className="primary" disabled={docBusy} onClick={()=>cam.current?.click()}>📷 今撮影して読み取る</button><button disabled={docBusy} onClick={()=>lib.current?.click()}>📄 PDF / 写真から読み取る</button></div>{docBusy&&<><div className="progress"><div style={{width:`${progress}%`}}/></div><p>読み取り中 {progress}%</p></>}{preview&&<img className="preview" src={preview} alt="車検証"/>}{debug&&<details><summary>高速読み取り詳細（確認用）</summary><pre>{debug}</pre></details>}</section>

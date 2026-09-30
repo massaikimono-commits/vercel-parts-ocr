@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { isCurrentPdfRun, isPdfRunContinuation, pdfRunForEvent } from "./certificate-pdf-run-identity";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -229,9 +230,10 @@ export default function CertificatePdfRowCorrector() {
     if (!location.pathname.startsWith("/vehicle-workflow")) return;
     let dead = false;
     let correcting = false;
+    let rowRunId = 0;
 
     const applyCorrection = () => {
-      if (dead || correcting) return;
+      if (dead || correcting || !isCurrentPdfRun(rowRunId, "RowCorrector")) return;
       const base = window[PDF_PRIORITY_KEY];
       const row = window[ROW_PRIORITY_KEY];
       if (!base || !row || typeof base !== "object" || typeof row !== "object") return;
@@ -252,14 +254,17 @@ export default function CertificatePdfRowCorrector() {
       const file = input.files?.[0];
       if (!file) return;
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
-      window[ROW_PRIORITY_KEY] = null;
-      if (!isPdf) return;
+      if (!isPdf) { window[ROW_PRIORITY_KEY] = null; rowRunId = 0; return; }
+      if (isPdfRunContinuation(event)) return;
+      const runId = pdfRunForEvent(event);
+      rowRunId = runId;
       try {
         const result = await readRowPatch(file);
-        if (dead) return;
+        if (dead || !isCurrentPdfRun(runId, "RowCorrector")) return;
         window[ROW_PRIORITY_KEY] = result.patch;
         applyCorrection();
       } catch (error) {
+        if (dead || !isCurrentPdfRun(runId, "RowCorrector")) return;
         console.warn("PDF row correction skipped", error);
       }
     };
