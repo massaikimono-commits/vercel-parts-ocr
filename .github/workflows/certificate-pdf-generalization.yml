@@ -1,0 +1,26 @@
+name: Certificate PDF Generalization
+
+on:
+  push:
+    branches:
+      - candidate/certificate-pdf-current-main-integration-20260929
+  pull_request:
+    paths:
+      - 'app/lib/certificate-pdf-row-semantics.mjs'
+      - 'scripts/certificate-pdf-generalization-regression.mjs'
+      - '.github/workflows/certificate-pdf-generalization.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Post-5905 row semantic regression
+        run: node scripts/certificate-pdf-generalization-regression.mjs
