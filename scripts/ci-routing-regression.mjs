@@ -43,8 +43,14 @@ assert(!ocr.includes("npm run test:customer-migration-workflow"), "OCR workflow 
 assert(!ocr.includes("npm run build"), "OCR workflow must not run the full application regression");
 
 assert(full.includes("name: Full regression"), "explicit full regression workflow must exist");
-assert(full.includes("workflow_dispatch:"), "full regression must be manually dispatchable before Vercel Preview");
-assert(full.includes("full-regression") && full.includes("ready_for_review"), "draft PRs must have an explicit full-regression gate before preview/main merge");
+assert(full.includes("workflow_dispatch:"), "full regression must retain emergency manual fallback");
+assert(full.includes("- synchronize"), "approved candidate updates must be observable without Actions UI dispatch");
+assert(full.includes("startsWith(github.event.pull_request.head.ref, 'candidate/')"), "automatic full regression must be candidate-only");
+assert(full.includes("github.event.pull_request.state == 'open'"), "automatic full regression must reject closed PRs");
+assert(full.includes("github.event.action == 'ready_for_review'"), "ready-for-review approval path must remain");
+assert(full.includes("github.event.action == 'labeled' && github.event.label.name == 'full-regression'"), "full-regression label approval path must remain");
+assert(full.includes("github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'full-regression')"), "only durably approved synchronized PRs may auto-run");
+assert(full.includes('test "$PR_HEAD_SHA" = "$EVENT_SHA"'), "approved PR current HEAD must equal the workflow event SHA");
 assert(full.includes("push:") && full.includes("- main"), "full regression must run after changes reach main");
 assert(full.includes("run: npm run build"), "full regression must run the complete application regression/build");
 assert(full.includes("qr-photo-contrast-regression.mjs"), "full regression must include extended vehicle OCR fixtures");
