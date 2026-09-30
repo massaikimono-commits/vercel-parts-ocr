@@ -36,14 +36,19 @@ for (const [start, end] of [["14:30","14:30"],["16:00","14:30"],["08:00","09:00"
 }
 
 assert.match(componentSource, /SCHEDULE_TIME_PRESETS\.map/, "shared component renders common preset model");
-assert.match(componentSource, /任意時間帯/, "custom range remains visible");
+assert.doesNotMatch(componentSource, />\s*任意時間帯\s*</, "custom range must not restore the removed visible heading");
 assert.match(componentSource, /type="time"[\s\S]*type="time"/, "start/end time inputs remain visible");
+assert.match(componentSource, /<span className="sr-only">開始時刻<\/span>[\s\S]*aria-label="開始時刻"/, "start time keeps an accessibility-only label");
+assert.match(componentSource, /<span className="sr-only">終了時刻<\/span>[\s\S]*aria-label="終了時刻"/, "end time keeps an accessibility-only label");
+assert.doesNotMatch(componentSource, /<span(?![^>]*sr-only)[^>]*>\s*開始時刻\s*<\/span>|<label[^>]*>\s*開始時刻/, "start time must not restore a visible label");
+assert.doesNotMatch(componentSource, /<span(?![^>]*sr-only)[^>]*>\s*終了時刻\s*<\/span>|<label[^>]*>\s*終了時刻/, "end time must not restore a visible label");
 assert.match(componentSource, /aria-pressed/, "selected state is not color-only");
 assert.match(componentSource, /aria-hidden="true">✓/, "selected state keeps visible checkmark");
 assert.equal((componentSource.match(/grid grid-cols-3 gap-2/g) || []).length, 2, "morning and afternoon both use compact 3-column grid");
 assert.doesNotMatch(componentSource, /grid-cols-1|grid-cols-2|sm:grid-cols-4/, "preset UI cannot regress to one/two-column mobile or old responsive rule");
 assert.match(componentSource, /min-h-12[^\n]*text-sm/, "compact preset button sizing is shared");
 assert.match(componentSource, /grid-cols-\[minmax\(0,1fr\)_auto_minmax\(0,1fr\)\]/, "custom start/end remain compact side-by-side");
+assert.match(componentSource, /aria-hidden="true">～<\/span>/, "custom range keeps compact separator");
 assert.match(componentSource, /min="08:30"/, "opening time preserved");
 assert.match(componentSource, /max="17:30"/, "closing time preserved");
 assert.match(componentSource, /step=\{1800\}/, "30-minute step preserved");
