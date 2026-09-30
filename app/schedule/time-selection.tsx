@@ -23,7 +23,9 @@ const buttonClass = (selected: boolean, disabled = false) =>
   [
     "min-h-12 w-full min-w-0 rounded-xl border px-2 py-2 text-sm font-semibold leading-tight transition",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2",
-    selected ? "border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-600" : "border-slate-300 bg-white text-blue-600",
+    selected
+      ? "border-blue-600 bg-white text-blue-700 ring-2 ring-blue-600"
+      : "border-emerald-200 bg-emerald-50 text-emerald-800",
     disabled ? "cursor-not-allowed opacity-45" : "active:scale-[0.99]",
   ].join(" ");
 
@@ -76,38 +78,36 @@ export default function TimeSelection({
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-300 bg-slate-50 p-3">
-        <div className="mb-2 text-sm font-semibold text-slate-800">任意時間帯</div>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
-          <label className="min-w-0">
-            <span className="mb-1 block text-xs font-semibold text-slate-600">開始時刻</span>
-            <input
-              type="time"
-              min="08:30"
-              max="17:30"
-              step={1800}
-              value={customStart}
-              onChange={(event) => onCustomStartChange(event.target.value)}
-              className="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-base text-slate-900"
-            />
-          </label>
-          <span className="pb-3 font-semibold text-slate-600" aria-hidden="true">～</span>
-          <label className="min-w-0">
-            <span className="mb-1 block text-xs font-semibold text-slate-600">終了時刻</span>
-            <input
-              type="time"
-              min="08:30"
-              max="17:30"
-              step={1800}
-              value={customEnd}
-              onChange={(event) => onCustomEndChange(event.target.value)}
-              className="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-base text-slate-900"
-            />
-          </label>
-        </div>
-        <p className="mt-2 text-xs text-slate-600">08:30～17:30・30分刻み。開始時刻は終了時刻より前にしてください。</p>
-        {customError && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{customError}</p>}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2" data-time-selection-range="custom">
+        <label className="min-w-0">
+          <span className="sr-only">開始時刻</span>
+          <input
+            type="time"
+            min="08:30"
+            max="17:30"
+            step={1800}
+            value={customStart}
+            onChange={(event) => onCustomStartChange(event.target.value)}
+            aria-label="開始時刻"
+            className="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-base text-slate-900"
+          />
+        </label>
+        <span className="font-semibold text-slate-600" aria-hidden="true">～</span>
+        <label className="min-w-0">
+          <span className="sr-only">終了時刻</span>
+          <input
+            type="time"
+            min="08:30"
+            max="17:30"
+            step={1800}
+            value={customEnd}
+            onChange={(event) => onCustomEndChange(event.target.value)}
+            aria-label="終了時刻"
+            className="min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-base text-slate-900"
+          />
+        </label>
       </div>
+      {customError && <p role="alert" className="text-sm font-semibold text-red-700">{customError}</p>}
     </fieldset>
   );
 }
