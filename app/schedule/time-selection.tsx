@@ -74,7 +74,13 @@ export default function TimeSelection({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2" style={compactGridStyle} aria-label={`${label} 午後`} data-time-selection-grid="afternoon">
+      <div
+        className={`grid grid-cols-3 gap-2${includeMorningChoices.length > 0 ? " mt-4" : ""}`}
+        style={{ ...compactGridStyle, ...(includeMorningChoices.length > 0 ? { marginTop: "1rem" } : {}) }}
+        aria-label={`${label} 午後`}
+        data-time-selection-grid="afternoon"
+        data-morning-afternoon-gap={includeMorningChoices.length > 0 ? "true" : undefined}
+      >
         {SCHEDULE_TIME_PRESETS.map((choice) => {
           const selected = valueKey === choice.key;
           return (
