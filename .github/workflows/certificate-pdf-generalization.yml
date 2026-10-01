@@ -27,6 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
       - name: Post-5905 row semantic regression
         run: node scripts/certificate-pdf-generalization-regression.mjs
       - name: Runtime integration regression
