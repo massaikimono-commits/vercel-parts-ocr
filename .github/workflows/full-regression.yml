@@ -8,6 +8,7 @@ on:
     types:
       - labeled
       - ready_for_review
+      - synchronize
   push:
     branches:
       - main
@@ -17,11 +18,42 @@ permissions:
 
 jobs:
   full-regression:
-    if: ${{ github.event_name != 'pull_request' || github.event.action == 'ready_for_review' || github.event.label.name == 'full-regression' }}
+    # Approval contract:
+    # - ready_for_review is the one-time approval transition for a draft candidate PR.
+    # - full-regression label is the durable approval signal for an open candidate PR.
+    # - synchronize only auto-runs when that durable approval label is already present,
+    #   so a newly pushed CURRENT HEAD gets a fresh exact-SHA Full Regression without
+    #   any Actions UI dispatch. Unapproved PR pushes remain inert.
+    if: >-
+      ${{
+        github.event_name != 'pull_request' ||
+        (
+          startsWith(github.event.pull_request.head.ref, 'candidate/') &&
+          github.event.pull_request.state == 'open' &&
+          (
+            github.event.action == 'ready_for_review' ||
+            (github.event.action == 'labeled' && github.event.label.name == 'full-regression') ||
+            (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'full-regression'))
+          )
+        )
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
+      - name: Verify approved candidate identity
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          PR_STATE: ${{ github.event.pull_request.state }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$PR_STATE" = "open"
+          case "$PR_HEAD_REF" in candidate/*) ;; *) echo "Approved PR head must be candidate/*" >&2; exit 1 ;; esac
+          test "$PR_HEAD_SHA" = "$EVENT_SHA"
+
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
