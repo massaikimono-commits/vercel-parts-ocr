@@ -15,7 +15,17 @@ const pkg = JSON.parse(read("package.json"));
 const lock = JSON.parse(read("package-lock.json"));
 const ocrWorkflow = read(".github/workflows/vehicle-certificate-regression.yml");
 const coreWorkflow = read(".github/workflows/app-core-build.yml");
-const gitignore = read(".gitignore");
+// Vercel CLI excludes .gitignore from source uploads. Keep a tracked copy of
+// the policy for that artifact only; repository builds still validate the real file.
+const gitignorePolicy = read("scripts/security-gitignore-policy.txt");
+let gitignore;
+try {
+  gitignore = read(".gitignore");
+} catch (error) {
+  if (error.code !== "ENOENT" || process.env.VERCEL !== "1") throw error;
+  gitignore = gitignorePolicy;
+}
+pass("gitignore matches artifact security policy", gitignore === gitignorePolicy);
 const fileSecurity = read("app/lib/file-security.ts");
 const ocrDedicated = read("app/ocr/page.tsx");
 const ocrGeneral = read("app/ocr/general/page.tsx");
