@@ -45,6 +45,12 @@ jobs:
       - name: Validate shared PDF run isolation
         run: node scripts/certificate-pdf-run-isolation-regression.mjs
 
+      - name: Validate document integrity and structural recovery
+        run: |
+          node scripts/certificate-pdf-document-integrity-regression.mjs
+          node scripts/certificate-pdf-generalization-regression.mjs
+          node scripts/certificate-pdf-generalization-runtime-regression.mjs
+
       - name: Run full application regression and build
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co

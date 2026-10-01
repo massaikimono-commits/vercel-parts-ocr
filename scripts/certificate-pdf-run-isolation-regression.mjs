@@ -3,6 +3,7 @@ import fs from "node:fs";
 import ts from "typescript";
 import { createRequire } from "node:module";
 import { beginPdfRun, hasPdfRunMark, isCurrentPdfRun, isPdfRunContinuation, markPdfRunContinuation, pdfRunForEvent } from "../app/certificate-pdf-run-identity.js";
+import * as rowSemantics from "../app/lib/certificate-pdf-row-semantics.mjs";
 
 const require = createRequire(import.meta.url);
 const read = (path) => fs.readFileSync(new URL(`../app/${path}`, import.meta.url), "utf8");
@@ -36,6 +37,7 @@ function loadComponent(path, replacements = {}) {
   const module = { exports: {} };
   const mockRequire = (name) => name === "react" ? { useLayoutEffect: (callback) => { cleanups.push(callback()); } }
     : name === "./certificate-pdf-run-identity" ? { beginPdfRun, hasPdfRunMark, isCurrentPdfRun, isPdfRunContinuation, markPdfRunContinuation, pdfRunForEvent }
+      : name === "./lib/certificate-pdf-row-semantics.mjs" ? rowSemantics
       : require(name);
   new Function("require", "module", "exports", output)(mockRequire, module, module.exports);
   module.exports.default();
@@ -45,6 +47,7 @@ let cleanups = [];
 let changeCapture = [];
 let changeBubble = [];
 let authListeners = [];
+let weakFallbackListeners = [];
 let events = [];
 let deferred = new Map();
 let currentInput;
@@ -84,7 +87,7 @@ function select(id) {
 }
 function setup() {
   cleanups.forEach((cleanup) => cleanup?.()); cleanups = [];
-  changeCapture = []; changeBubble = []; authListeners = []; events = []; deferred = new Map();
+  changeCapture = []; changeBubble = []; authListeners = []; weakFallbackListeners = []; events = []; deferred = new Map();
   globalThis.HTMLInputElement = FakeInput;
   globalThis.Event = FakeEvent;
   globalThis.CustomEvent = FakeCustomEvent;
@@ -96,9 +99,9 @@ function setup() {
   };
   globalThis.window = {
     __vehicleCertificatePdfPriority: null, __vehicleCertificateQrPriority: null, __vehicleCertificatePdfRowPriority: null,
-    addEventListener(name, callback, capture) { if (name === "change" && capture) changeCapture.push(callback); else if (name === "vehicle-certificate-authoritative") authListeners.push(callback); },
-    removeEventListener(name, callback) { if (name === "change") changeCapture = changeCapture.filter((fn) => fn !== callback); else if (name === "vehicle-certificate-authoritative") authListeners = authListeners.filter((fn) => fn !== callback); },
-    dispatchEvent(event) { if (event.type === "vehicle-certificate-authoritative") { events.push(event.detail); for (const callback of [...authListeners]) callback(event); } return true; },
+    addEventListener(name, callback, capture) { if (name === "change" && capture) changeCapture.push(callback); else if (name === "vehicle-certificate-authoritative") authListeners.push(callback); else if (name === "certificate-pdf-weak-structured-fallback") weakFallbackListeners.push(callback); },
+    removeEventListener(name, callback) { if (name === "change") changeCapture = changeCapture.filter((fn) => fn !== callback); else if (name === "vehicle-certificate-authoritative") authListeners = authListeners.filter((fn) => fn !== callback); else if (name === "certificate-pdf-weak-structured-fallback") weakFallbackListeners = weakFallbackListeners.filter((fn) => fn !== callback); },
+    dispatchEvent(event) { if (event.type === "vehicle-certificate-authoritative") { events.push(event.detail); for (const callback of [...authListeners]) callback(event); } else if (event.type === "certificate-pdf-weak-structured-fallback") { for (const callback of [...weakFallbackListeners]) callback(event); } return true; },
     setInterval() { return 1; }, clearInterval() {},
   };
   currentInput = new FakeInput();
@@ -259,6 +262,31 @@ await flush();
 assert.equal(window.__certificatePdfRunDiagnostic.runId, v2PassRun);
 assert.equal(window.__vehicleCertificatePdfPriority?.registrationNumber, "v2-pass");
 
+// Weak V2 retains the legacy handoff, while a pending generic text-layer result
+// can still supply current-document fields without adopting a stale run.
+setup();
+globalThis.__testDocument = async () => fakePdf();
+globalThis.__testExtract = (file) => pause(file.id);
+loadComponent("certificate-pdf-generalization-recovery.jsx", {
+  extractGenericPatch: 'async function extractGenericPatch(file) { return globalThis.__testExtract(file); }',
+});
+loadComponent("certificate-pdf-native-reader-v2.jsx", {
+  loadPdfJs, choosePage, renderPage, hasQr,
+  parseNativeV2: 'function parseNativeV2() { return {confident:false,totalCount:1,patch:{}}; }',
+});
+const weakRun = select("weak");
+await flush();
+window.__vehicleCertificatePdfPriority = { fuel: "ガソリン", vehicleWeightKg: "2020" };
+emitAuth(window.__vehicleCertificatePdfPriority);
+deferred.get("weak").resolve({layout:"four-axis",pageNumber:1,patch:{heightCm:"181",frontFrontAxleWeightKg:"1110"}});
+await flush();
+assert.equal(window.__certificatePdfRunDiagnostic.runId, weakRun);
+assert.equal(window.__vehicleCertificatePdfPriority?.heightCm, "181");
+assert.equal(window.__vehicleCertificatePdfPriority?.frontFrontAxleWeightKg, "1110");
+assert.equal(window.__vehicleCertificatePdfPriority?.vehicleWeightKg, "2020");
+assert.equal(window.__vehicleCertificatePdfPriority?.fuel, "ガソリン");
+assert.equal(events.length, 2);
+
 // CASES 11–12: B remained current; all six A completions left its fields and AUTH unchanged.
 assert.equal(window.__certificatePdfRunDiagnostic.staleRunRejected, false);
-console.log("certificate-pdf-run-isolation-regression: 12 cases PASS, six actual writer completion paths PASS, fallback handoffs PASS, mount topology PASS");
+console.log("certificate-pdf-run-isolation-regression: 13 cases PASS, six actual writer completion paths PASS, weak fallback recovery PASS, mount topology PASS");

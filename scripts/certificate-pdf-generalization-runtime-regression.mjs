@@ -7,7 +7,9 @@ const fastLayout = fs.readFileSync(new URL("../app/vehicle-workflow-fast/layout.
 
 assert.match(recovery, /parseTwoAxleVehicleRows/);
 assert.match(recovery, /detectAxleLayout/);
-assert.match(recovery, /layout !== "two-axis"/);
+assert.match(recovery, /parseFourAxleVehicleRows/);
+assert.match(recovery, /"two-axis", "four-axis"/);
+assert.match(recovery, /Object\.entries\(patch\)\.filter/);
 assert.match(recovery, /isCurrentPdfRun\(runId, "GeneralizationRecovery"\)/);
 assert.match(recovery, /isPdfRunContinuation\(event\)/);
 assert.match(recovery, /new CustomEvent\(AUTH_EVENT/);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
-import { clusterPhysicalRows, detectAxleLayout, parseTwoAxleVehicleRows } from "./lib/certificate-pdf-row-semantics.mjs";
+import { clusterPhysicalRows, detectAxleLayout, parseTwoAxleVehicleRows, parseFourAxleVehicleRows } from "./lib/certificate-pdf-row-semantics.mjs";
 import { isCurrentPdfRun, isPdfRunContinuation, pdfRunForEvent } from "./certificate-pdf-run-identity";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
@@ -36,8 +36,8 @@ async function extractGenericPatch(file) {
       const score = layout === "two-axis" ? 20 : layout === "four-axis" ? 10 : 0;
       if (!best || score > best.score) best = { rows, layout, score, pageNumber };
     }
-    if (!best || best.layout !== "two-axis") return { patch: {}, layout: best?.layout || "unknown", pageNumber: best?.pageNumber || 1 };
-    return { patch: parseTwoAxleVehicleRows(best.rows), layout: best.layout, pageNumber: best.pageNumber };
+    if (!best || best.layout === "unknown") return { patch: {}, layout: best?.layout || "unknown", pageNumber: best?.pageNumber || 1 };
+    return { patch: best.layout === "two-axis" ? parseTwoAxleVehicleRows(best.rows) : parseFourAxleVehicleRows(best.rows), layout: best.layout, pageNumber: best.pageNumber };
   } finally {
     await pdf.destroy?.().catch?.(() => {});
   }
@@ -77,11 +77,13 @@ export default function CertificatePdfGeneralizationRecovery() {
       const runId = latestRunId;
       if (!runId || !isCurrentPdfRun(runId, "GeneralizationRecovery")) return;
       const result = latest || (pending ? await pending : null);
-      if (dead || !isCurrentPdfRun(runId, "GeneralizationRecovery") || result?.layout !== "two-axis") return;
+      if (dead || !isCurrentPdfRun(runId, "GeneralizationRecovery") || !["two-axis", "four-axis"].includes(result?.layout)) return;
       const patch = result?.patch || {};
       if (!Object.keys(patch).length) return;
-      const merged = { ...detail, ...patch, __pdfGeneralizationEvidence: { layout: result.layout, pageNumber: result.pageNumber, fields: Object.keys(patch) } };
-      if (JSON.stringify(merged) === JSON.stringify(detail)) return;
+      const current = { ...detail, ...(window[PDF_PRIORITY_KEY] || {}) };
+      const missing = Object.fromEntries(Object.entries(patch).filter(([key]) => !String(current[key] ?? "").trim()));
+      if (!Object.keys(missing).length) return;
+      const merged = { ...current, ...missing, __pdfGeneralizationEvidence: { layout: result.layout, pageNumber: result.pageNumber, fields: Object.keys(missing) } };
       dispatching = true;
       try {
         window[PDF_PRIORITY_KEY] = merged;
@@ -91,12 +93,21 @@ export default function CertificatePdfGeneralizationRecovery() {
       }
     };
 
+    const onWeakStructuredFallback = (event) => {
+      if (event?.detail?.runId !== latestRunId || !isCurrentPdfRun(latestRunId, "GeneralizationRecovery")) return;
+      // Preserve the legacy OCR handoff. The independent text-layer result only
+      // supplies missing current-document fields when its extraction settles.
+      void onAuthoritative({ detail: window[PDF_PRIORITY_KEY] || {} });
+    };
+
     window.addEventListener("change", onChange, true);
     window.addEventListener(AUTH_EVENT, onAuthoritative);
+    window.addEventListener("certificate-pdf-weak-structured-fallback", onWeakStructuredFallback);
     return () => {
       dead = true;
       window.removeEventListener("change", onChange, true);
       window.removeEventListener(AUTH_EVENT, onAuthoritative);
+      window.removeEventListener("certificate-pdf-weak-structured-fallback", onWeakStructuredFallback);
     };
   }, []);
   return null;

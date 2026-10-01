@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase";
 import { parseRegistrationNumber } from "../lib/registration-number";
 import { expectedCertificateQrCount, normalizeCertificateCanvas } from "../lib/certificate-photo-normalize";
+import { beginCertificatePdfDocumentVehicle } from "../lib/certificate-pdf-document-state.mjs";
 
 type FuelType = "EV" | "ガソリン" | "HV" | "ディーゼル" | "その他";
 type Cert = Record<string, string>;
@@ -35,6 +36,7 @@ const FIELDS = [
 const emptyCert=()=>Object.fromEntries(FIELDS.map(([k])=>[k,""])) as Cert;
 const EMPTY:Vehicle={number:"",registration:"",last4:"",chassis:"",model:"",type:"その他",weight:"",firstRegistration:"",customerId:"",certificate:emptyCert()};
 const AUTH_EVENT="vehicle-certificate-authoritative";
+const DOCUMENT_START_EVENT="certificate-pdf-document-started";
 const ACTIVE_KEY="parts-active-vehicle";
 const BEFORE_KEY="parts-before-ocr-ids";
 
@@ -157,6 +159,8 @@ export default function VehicleWorkflowFast({ newRegistrationMode = false }: { n
   const [message,setMessage]=useState("車検証を読み取るか、作業車両を選んでください。"),[busy,setBusy]=useState(true),[docBusy,setDocBusy]=useState(false),[progress,setProgress]=useState(0),[preview,setPreview]=useState(""),[debug,setDebug]=useState("");
 
   function mergePatch(patch:Patch){setVehicle(prev=>{const certificate={...prev.certificate};for(const [k,v] of Object.entries(patch))if(typeof v==="string"&&v.trim())certificate[k]=v.trim();const registration=certificate.registrationNumber||prev.registration,chassis=certificate.chassisNumber||prev.chassis,last4=serialFromRegistration(registration)||prev.last4;return{...prev,certificate,registration,chassis,last4,number:chassis||registration||prev.number,model:certificate.model||prev.model,weight:certificate.vehicleWeightKg||prev.weight,firstRegistration:certificate.firstRegistration||prev.firstRegistration,type:certificate.fuel?fuelType(certificate.fuel):prev.type};});}
+
+  useEffect(()=>{const start=()=>{setVehicle(prev=>beginCertificatePdfDocumentVehicle(prev,EMPTY));sessionStorage.removeItem(ACTIVE_KEY);setProgress(0);setDebug("");};window.addEventListener(DOCUMENT_START_EVENT,start);return()=>window.removeEventListener(DOCUMENT_START_EVENT,start);},[]);
 
   useEffect(()=>{if(newRegistrationMode){setVehicles([]);setMessage("新しい車両情報を入力してください。");setBusy(false);return;}(async()=>{try{const {data:{session}}=await supabase.auth.getSession();if(!session){setMessage("ログイン後に車両一覧を読み込みます。");return;}const {data,error}=await supabase.from("vehicles").select("*").order("created_at",{ascending:false});if(error)throw error;const list=(data||[]).map((v:any):Vehicle=>({id:v.id,number:v.vehicle_number||"",registration:v.registration_number||"",last4:v.registration_number_last4||"",chassis:v.chassis_number||"",model:v.model||"",type:(v.fuel_type||"その他") as FuelType,weight:v.vehicle_weight==null?"":String(v.vehicle_weight),firstRegistration:v.first_registration||"",customerId:v.customer_id||"",certificate:{...emptyCert(),...(v.certificate_fields||{})}}));setVehicles(list);}catch(e:any){setMessage(`車両一覧エラー: ${e?.message||e}`);}finally{setBusy(false);}})();},[newRegistrationMode]);
 

@@ -336,7 +336,7 @@ export default function CertificatePdfNativeReaderV2() {
           const chosen = await choosePage(pdf); const page = await pdf.getPage(chosen.pageNumber); const tokens = chosen.tokens.length ? chosen.tokens : await pageTokens(page); const parsed = parseNativeV2(tokens); const canvas = await renderPage(pdf, chosen.pageNumber, 1800); const qr = await hasQr(canvas); if (!active()) return;
           showPreview(canvas); showDebug(parsed, tokens.length);
           if (qr) { showStatus(`PDF ${chosen.pageNumber}ページ目: QRあり。既存のQR優先ルートへ引き継ぎます。`); passToExisting(input); return; }
-          if (!parsed.confident) { showStatus(`PDFネイティブ v2: 直接取得 ${parsed.totalCount}項目。確信度不足のため既存OCRへフォールバックします。`); passToExisting(input); return; }
+          if (!parsed.confident) { showStatus(`PDFネイティブ v2: 直接取得 ${parsed.totalCount}項目。確信度不足のため既存OCRへフォールバックします。`); window.dispatchEvent(new CustomEvent("certificate-pdf-weak-structured-fallback", { detail: { runId } })); passToExisting(input); return; }
           applyPatch(parsed.patch); showStatus(`PDFネイティブ v2 完了: OCR 0pass / ${parsed.totalCount}項目をPDF文字＋列位置から直接取得`, true); input.value = "";
         } finally { await pdf.destroy?.(); }
       } catch (e) { if (!active()) return; console.error("pdf native v2", e); showStatus("PDFネイティブ v2で直接解析できなかったため、既存OCRへ切り替えます。"); passToExisting(input); }

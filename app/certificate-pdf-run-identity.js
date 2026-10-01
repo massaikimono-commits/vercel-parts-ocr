@@ -11,6 +11,7 @@ export function beginPdfRun(event) {
   window.__vehicleCertificateQrPriority = null;
   window.__vehicleCertificatePdfRowPriority = null;
   window.__certificatePdfRunDiagnostic = { runId: currentRunId, producer: "run-owner", staleRunRejected: false };
+  window.dispatchEvent(new CustomEvent("certificate-pdf-document-started", { detail: { runId: currentRunId } }));
   return currentRunId;
 }
 

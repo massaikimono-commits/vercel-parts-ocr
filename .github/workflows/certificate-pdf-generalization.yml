@@ -12,6 +12,7 @@ on:
       - 'app/vehicle-workflow-fast/layout.tsx'
       - 'scripts/certificate-pdf-generalization-regression.mjs'
       - 'scripts/certificate-pdf-generalization-runtime-regression.mjs'
+      - 'scripts/certificate-pdf-document-integrity-regression.mjs'
       - '.github/workflows/certificate-pdf-generalization.yml'
 
 permissions:
@@ -30,3 +31,5 @@ jobs:
         run: node scripts/certificate-pdf-generalization-regression.mjs
       - name: Runtime integration regression
         run: node scripts/certificate-pdf-generalization-runtime-regression.mjs
+      - name: Document integrity regression
+        run: node scripts/certificate-pdf-document-integrity-regression.mjs
