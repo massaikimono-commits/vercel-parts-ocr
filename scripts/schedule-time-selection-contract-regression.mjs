@@ -45,6 +45,9 @@ assert.doesNotMatch(componentSource, />\s*終了時刻\s*</, "end time must not 
 assert.match(componentSource, /aria-pressed/, "selected state is not color-only");
 assert.match(componentSource, /aria-hidden="true">✓/, "selected state keeps visible checkmark");
 assert.equal((componentSource.match(/grid grid-cols-3 gap-2/g) || []).length, 2, "morning and afternoon both use compact 3-column grid");
+assert.match(componentSource, /includeMorningChoices\.length > 0 \? " mt-4" : ""/, "pickup afternoon grid gets boundary-only vertical spacing");
+assert.match(componentSource, /includeMorningChoices\.length > 0 \? \{ marginTop: "1rem" \} : \{\}/, "boundary spacing has rendered-layout fallback");
+assert.match(componentSource, /data-morning-afternoon-gap=\{includeMorningChoices\.length > 0 \? "true" : undefined\}/, "pickup-only morning/afternoon boundary remains explicit");
 assert.doesNotMatch(componentSource, /grid-cols-1|grid-cols-2|sm:grid-cols-4/, "preset UI cannot regress to one/two-column mobile or old responsive rule");
 assert.match(componentSource, /min-h-11[^\n]*whitespace-nowrap[^\n]*text-xs/, "compact preset sizing keeps iPhone labels on one line");
 assert.match(componentSource, /backgroundColor: "#ecfdf5"[\s\S]*color: "#047857"[\s\S]*borderColor: "#a7f3d0"/, "unselected preset uses explicit pale-green visual contract");
