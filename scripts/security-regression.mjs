@@ -49,7 +49,9 @@ pass("git ignores env and private keys", gitignore.includes(".env.*") && gitigno
 pass("CI blocks high dependency vulnerabilities", ocrWorkflow.includes("npm audit --omit=dev --audit-level=high") && coreWorkflow.includes("npm audit --omit=dev --audit-level=high"));
 pass("CI uses npm ci", ocrWorkflow.includes("npm ci --no-audit --no-fund") && coreWorkflow.includes("npm ci --no-audit --no-fund"));
 pass("security-patched jsPDF locked", lock.packages?.["node_modules/jspdf"]?.version === "4.2.1");
-pass("security-patched Next.js locked", lock.packages?.["node_modules/next"]?.version === "16.3.4");
+const nextVersion = lock.packages?.["node_modules/next"]?.version;
+const nextPatch = /^16\.3\.(\d+)$/.exec(nextVersion || "");
+pass("security-patched Next.js locked", pkg.dependencies.next === nextVersion && nextPatch !== null && Number(nextPatch[1]) >= 6);
 pass(
   "Tesseract vendored versions match lockfile",
   lock.packages?.["node_modules/tesseract.js"]?.version === "5.1.1" &&

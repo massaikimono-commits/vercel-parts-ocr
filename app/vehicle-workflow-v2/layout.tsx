@@ -10,23 +10,30 @@ import CertificatePdfRowCorrector from "../certificate-pdf-row-corrector";
 import CertificatePdfNativeReaderV2 from "../certificate-pdf-native-reader-v2";
 import CertificatePdfStructuredReaderV3 from "../certificate-pdf-structured-reader-v3";
 import CertificatePdfV3CompletionGuard from "../certificate-pdf-v3-completion-guard";
+import CertificatePdfInspectionRecordAdapter from "../certificate-pdf-inspection-record-adapter";
+import CertificatePdfSemanticRecovery from "../certificate-pdf-semantic-recovery";
+import CertificatePdfWeightDisplacementRecovery from "../certificate-pdf-weight-displacement-recovery";
+import CertificateOwnerSemantics from "../certificate-owner-semantics";
+import CertificateOwnerFieldsUi from "../certificate-owner-fields-ui";
 import CertificatePdfWorkerLocalizer from "../certificate-pdf-worker-localizer";
 import VehicleCertificateRouteEnhancers from "../vehicle-certificate-route-enhancers";
 
 // Vehicle certificate post-processing for /vehicle-workflow-v2.
-// The bundled PDF.js worker is initialized before the structured/native readers are used.
-// The completion guard is mounted before v3 so auxiliary QR decode cannot leave a PDF
-// change permanently stuck in the analyzing state on desktop browsers.
-// Structured PDF v3 gets the first chance: QR-less PDFs with a healthy text layer are
-// parsed as table rows and finish at OCR 0pass. QR PDFs or weak/image PDFs are then
-// handed to v2 / the existing QR + OCR pipeline.
+// Candidate-only inspection-record recovery is mounted before the adapter so it can
+// retain a private PDF copy before the input is cleared. It only merges values recovered
+// from their own semantic columns and never sources vehicle weights from axle weights.
 export default function VehicleWorkflowLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <CertificatePdfWorkerLocalizer />
       <CertificatePdfV3CompletionGuard />
+      <CertificatePdfSemanticRecovery />
+      <CertificatePdfWeightDisplacementRecovery />
+      <CertificatePdfInspectionRecordAdapter />
       <CertificatePdfStructuredReaderV3 />
       <CertificatePdfNativeReaderV2 />
+      <CertificateOwnerSemantics />
+      <CertificateOwnerFieldsUi />
       {children}
       <CertificatePdfRowCorrector />
       <CertificateFulltextFix />
