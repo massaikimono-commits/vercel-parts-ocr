@@ -19,7 +19,7 @@ for (const expected of [
   'setModel(row.model);',
   'selectedVehicleIds.includes(row.vehicleId)',
   '別のお客様・別車両',
-  'create_schedule_registration_batch_v1',
+  'create_schedule_registration_batch_time_label_v2',
   'p_items: batchItems',
   'customerId: row.customerId',
   'p_existing_customer_id: selectedCustomerForSubmitNow || null',

@@ -200,7 +200,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         stateWorkIds.length
           ? supabase
               .from("schedule_entries")
-              .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode")
+              .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode,print_time_label_override")
               .in("work_order_id", stateWorkIds)
               .in("entry_type", ["pickup", "customer_visit", "delivery"])
           : Promise.resolve({ data: [], error: null }),

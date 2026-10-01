@@ -22,7 +22,7 @@ expect(customer, "/customer-vehicles/lease-maintenance?vehicle=", "selected vehi
 
 expect(schedule, "selectedVehicleIds", "multi-vehicle schedule");
 expect(schedule, "toggleRegisteredVehicle", "multi-vehicle schedule");
-expect(schedule, "create_schedule_registration_batch_v1", "multi-vehicle schedule");
+expect(schedule, "create_schedule_registration_batch_time_label_v2", "multi-vehicle schedule");
 expect(schedule, "p_items: batchItems", "cross-customer JSONB batch schedule");
 expect(schedule, "customerId: row.customerId", "cross-customer JSONB batch schedule");
 expect(schedule, "別のお客様・別車両", "cross-customer multi-vehicle schedule");

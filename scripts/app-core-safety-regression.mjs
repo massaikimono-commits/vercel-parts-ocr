@@ -150,14 +150,14 @@ assert(scheduleNew.includes("sameDayVehicleScheduleWarnings"), "schedule registr
 assert(scheduleNew.includes('.from("schedule_entries")'), "same-day duplicate guard must inspect schedule entries");
 assert(scheduleNew.includes('"それでも登録する"'), "same-day duplicate warning must require explicit override");
 assert(!scheduleNew.includes('find_schedule_registration_duplicates'), "manual-entry customer/vehicle candidate duplicate flow must stay removed");
-assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_v2"'), "single schedule registration must remain atomic");
-assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_batch_v1"'), "multi-vehicle schedule registration must remain atomic");
+assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_time_label_v2"') && scheduleNew.includes('p_print_time_label_override: mainLabelOverride'), "single registration must use the atomic shared label-aware RPC");
+assert(scheduleNew.includes('supabase.rpc("create_schedule_registration_batch_time_label_v2"') && scheduleNew.includes('printTimeLabelOverride: mainLabelOverride'), "multi-vehicle registration must use the atomic shared label-aware RPC");
 assert(scheduleNew.includes("p_items: batchItems"), "multi-vehicle atomic registration must use the JSONB batch payload");
 assert(scheduleNew.includes("p_existing_vehicle_id"), "existing vehicle reuse must remain supported");
 assert(scheduleNew.includes("納車予定は入庫・作業予定の終了後"), "delivery must not precede inbound/work end");
 assert(!scheduleNew.includes('supabase.rpc("create_manual_schedule_registration"'), "legacy partial schedule RPC must not be used");
 assert(!scheduleNew.includes('.from("schedule_entries").insert({'), "delivery insert must stay inside atomic RPC");
-assert(scheduleEdit.includes('supabase.rpc("reschedule_schedule_entry_v2"'), "reschedule and stay details must be atomic");
+assert(scheduleEdit.includes('"reschedule_schedule_entry_time_label_v2" : "reschedule_schedule_entry_v2"') && scheduleEdit.includes('p_stay_reason:entry.work_order_id'), "reschedule and stay details must remain atomic for new and historical paths");
 assert(!scheduleEdit.includes("saveWorkDetails"), "separate stay write must not return");
 assert(inspectionPrint.includes("canFinalizeRecordTemplatePrint"), "record print must honor finalization gate");
 assert(inspectionPrint.includes("印刷完了を記録"), "printed status must require explicit user confirmation");
