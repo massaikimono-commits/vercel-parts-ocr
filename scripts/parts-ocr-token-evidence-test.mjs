@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {parsePageTsv,parsePageBlocks,extractPageTokens} from '../app/ocr/bakeoff/p5-token-evidence.mjs';
+const header='level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext';
+const word='5\t1\t1\t1\t1\t1\t10\t20\t30\t40\t90\t部品';
+const wanted=[{text:'部品',x1:10,y1:20,x2:40,y2:60,confidence:.9}];
+assert.deepEqual(parsePageTsv(header+'\n'+word),wanted);
+assert.deepEqual(parsePageTsv(word),wanted);
+assert.deepEqual(parsePageTsv('\uFEFF'+header+'\r\n'+word+'\r\n'),wanted);
+assert.deepEqual(parsePageTsv('1\t1\t0\t0\t0\t0\t0\t0\t2200\t1650\t-1\t\n'+word),wanted);
+for(const bad of [word.replace('\t10\t20','\t-10\t20'),word.replace('\t30\t40','\t0\t40'),word.replace('\t10\t20','\t\t20'),word+'\textra',null,{},'arbitrary\tcontent'])assert.deepEqual(parsePageTsv(bad),[]);
+assert.equal(parsePageTsv(word.replace('\t90\t','\t101\t'))[0].confidence,null);
+const blocks=[{paragraphs:[{lines:[{words:[{text:'部品',bbox:{x0:10,y0:20,x1:40,y1:60},confidence:90}]}]}]}];
+assert.deepEqual(parsePageBlocks(blocks),wanted);
+assert.deepEqual(parsePageBlocks([{paragraphs:{lines:'malformed'}}]),[]);
+assert.equal(extractPageTokens({tsv:word,blocks}).representation,'HEADERLESS_TSV');
+assert.equal(extractPageTokens({tsv:'bad',blocks}).representation,'BLOCK_WORDS');
+assert.equal(extractPageTokens({}).tokenSource,'none');
+console.log('Token evidence acquisition: 18 assertions PASS (headered/headerless/block/invalid geometry)');

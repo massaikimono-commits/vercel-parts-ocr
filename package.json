@@ -7,7 +7,10 @@
     "build": "npm run test:certificate && npm run test:parts && next build",
     "start": "next start",
     "test:certificate": "node scripts/vehicle-certificate-regression.mjs",
-    "test:parts": "node scripts/parts-slip-regression.mjs && node scripts/parts-layout-semantics-regression.mjs"
+    "test:parts": "node scripts/parts-slip-regression.mjs && node scripts/parts-layout-semantics-regression.mjs",
+    "test:parts-token-evidence": "node scripts/parts-ocr-token-evidence-test.mjs",
+    "test:parts-score-core": "node scripts/parts-ocr-score-core-test.mjs",
+    "test:parts-document-regions": "node scripts/parts-ocr-document-regions-test.mjs"
   },
   "dependencies": {
     "next": "14.2.25",
@@ -26,6 +29,8 @@
     "@types/node": "^20.17.24",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "@napi-rs/canvas": "0.1.100",
+    "esbuild": "0.28.1"
   }
 }

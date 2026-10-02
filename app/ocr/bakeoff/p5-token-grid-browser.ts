@@ -3,6 +3,7 @@
 
 import { orientedCanvas } from "../diagnostic/stage-a20/a19-table-crops";
 import { diagnoseHeaderCandidates, reconstructTokenGrid } from "./p5-token-grid-core.mjs";
+import { parsePageTsv as parseTsv, parsePageBlocks as parseBlocks } from "./p5-token-evidence.mjs";
 import type { P5Result, P5Token } from "./p5-token-grid-types";
 
 function canvasBlob(canvas: HTMLCanvasElement) {
@@ -94,53 +95,6 @@ function pixelStatistics(canvas: HTMLCanvasElement) {
     nonblankPixelRatio: n ? Number((nonblank / n).toFixed(6)) : null,
     sampledPixels: n,
   };
-}
-
-function parseTsv(tsv: string): P5Token[] {
-  const lines = String(tsv || "").split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-  const header = lines[0].split("\t");
-  const index = Object.fromEntries(header.map((value, i) => [value, i]));
-  const required = ["level", "left", "top", "width", "height", "conf", "text"];
-  if (required.some((key) => index[key] === undefined)) return [];
-  const out: P5Token[] = [];
-  for (const line of lines.slice(1)) {
-    const cells = line.split("\t");
-    if (Number(cells[index.level]) !== 5) continue;
-    const text = String(cells[index.text] ?? "").trim();
-    if (!text) continue;
-    const left = Number(cells[index.left]);
-    const top = Number(cells[index.top]);
-    const width = Number(cells[index.width]);
-    const height = Number(cells[index.height]);
-    if (![left, top, width, height].every(Number.isFinite) || width <= 0 || height <= 0) continue;
-    const confidenceRaw = Number(cells[index.conf]);
-    out.push({ text, x1: left, y1: top, x2: left + width, y2: top + height, confidence: Number.isFinite(confidenceRaw) ? confidenceRaw / 100 : null });
-  }
-  return out;
-}
-
-function parseBlocks(blocks: any): P5Token[] {
-  if (!Array.isArray(blocks)) return [];
-  const out: P5Token[] = [];
-  for (const block of blocks) {
-    for (const paragraph of Array.isArray(block?.paragraphs) ? block.paragraphs : []) {
-      for (const line of Array.isArray(paragraph?.lines) ? paragraph.lines : []) {
-        for (const word of Array.isArray(line?.words) ? line.words : []) {
-          const text = String(word?.text ?? "").trim();
-          const bbox = word?.bbox;
-          const x1 = Number(bbox?.x0);
-          const y1 = Number(bbox?.y0);
-          const x2 = Number(bbox?.x1);
-          const y2 = Number(bbox?.y1);
-          if (!text || ![x1, y1, x2, y2].every(Number.isFinite) || x2 <= x1 || y2 <= y1) continue;
-          const confidenceRaw = Number(word?.confidence);
-          out.push({ text, x1, y1, x2, y2, confidence: Number.isFinite(confidenceRaw) ? confidenceRaw / 100 : null });
-        }
-      }
-    }
-  }
-  return out;
 }
 
 const OUTPUT_OPTIONS = {
