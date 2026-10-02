@@ -21,12 +21,22 @@ function classify(raw) {
   return { rawValue: value, value, status: "VALUE" };
 }
 
+function sameAs(raw, source, phrase) {
+  if (norm(raw).replace(/\s/g, "") !== phrase) return classify(raw);
+  const resolved = classify(source);
+  return {
+    rawValue: norm(raw),
+    value: resolved.status === "VALUE" ? resolved.value : "",
+    status: resolved.status === "VALUE" ? "SAME_AS_USER" : "UNRESOLVED_SAME_AS_USER",
+  };
+}
+
 function normalizePatch(detail) {
   const patch = { ...detail };
-  const ownerName = classify(patch.ownerNameRaw ?? patch.ownerName ?? "");
-  const ownerAddress = classify(patch.ownerAddressRaw ?? patch.ownerAddress ?? "");
   const userName = classify(patch.userNameRaw ?? patch.userName ?? "");
   const userAddress = classify(patch.userAddressRaw ?? patch.userAddress ?? "");
+  const ownerName = sameAs(patch.ownerNameRaw ?? patch.ownerName ?? "", userName.value, "使用者に同じ");
+  const ownerAddress = sameAs(patch.ownerAddressRaw ?? patch.ownerAddress ?? "", userAddress.value, "使用者住所に同じ");
 
   const apply = (key, rawKey, stateKey, item) => {
     if (item.rawValue) patch[rawKey] = item.rawValue; else delete patch[rawKey];

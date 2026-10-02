@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { isCurrentPdfRun, markPdfRunContinuation, pdfRunForEvent } from "./certificate-pdf-run-identity";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -630,7 +631,7 @@ function applyPatch(patch) {
 
 function passToExisting(input) {
   input.dataset[PASS_KEY] = "1";
-  input.dispatchEvent(new Event("change", { bubbles: true }));
+  input.dispatchEvent(markPdfRunContinuation(new Event("change", { bubbles: true }), pdfRunForEvent()));
 }
 
 export default function CertificatePdfStructuredReaderV3() {
@@ -655,6 +656,9 @@ export default function CertificatePdfStructuredReaderV3() {
       if (!file) return;
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
       if (!isPdf) return;
+      const runId = pdfRunForEvent(event);
+      const active = () => !dead && isCurrentPdfRun(runId, "StructuredReaderV3");
+      if (!active()) return;
 
       // PDFはまずこのv3が判断する。十分に構造化できた時だけOCRを完全に止める。
       event.preventDefault();
@@ -664,6 +668,7 @@ export default function CertificatePdfStructuredReaderV3() {
 
       try {
         const pdfjs = await loadPdfJs();
+        if (!active()) return;
         const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
         try {
           const chosen = await choosePage(pdf);
@@ -671,7 +676,7 @@ export default function CertificatePdfStructuredReaderV3() {
           const parsed = parseStructured(buildLines(tokens));
           const canvas = await renderPage(pdf, chosen.pageNumber, 1800);
           const qrFound = await hasQr(canvas);
-          if (dead) return;
+          if (!active()) return;
 
           showPreview(canvas);
           showDebug(parsed, tokens.length);
@@ -690,7 +695,7 @@ export default function CertificatePdfStructuredReaderV3() {
 
           resetForm();
           await new Promise((resolve) => setTimeout(resolve, 0));
-          if (dead) return;
+          if (!active()) return;
           applyPatch(parsed.patch);
           showStatus(`PDF構造読み取り v3 完了: OCR 0pass / ${parsed.found}項目をPDF文字から直接確定。既存OCRは実行していません。`);
           input.value = "";
@@ -698,6 +703,7 @@ export default function CertificatePdfStructuredReaderV3() {
           await pdf.destroy?.().catch?.(() => {});
         }
       } catch (error) {
+        if (!active()) return;
         console.error("PDF structured v3", error);
         showStatus(`PDF構造読み取り v3 エラー: ${error?.message || error}。既存OCRへ切り替えます。`, true);
         passToExisting(input);

@@ -96,11 +96,17 @@ export default function CertificateOwnerFieldsUi() {
     };
 
     const onAuth = (event) => ensure(event?.detail || {});
+    const onDocumentStart = () => {
+      latest = {};
+      for (const input of document.querySelectorAll("[data-owner-input]")) input.value = "";
+    };
     window.addEventListener(AUTH_EVENT, onAuth);
+    window.addEventListener("certificate-pdf-document-started", onDocumentStart);
     const timer = setTimeout(() => ensure(window.__vehicleCertificatePdfPriority || {}), 0);
     return () => {
       clearTimeout(timer);
       window.removeEventListener(AUTH_EVENT, onAuth);
+      window.removeEventListener("certificate-pdf-document-started", onDocumentStart);
     };
   }, []);
   return null;

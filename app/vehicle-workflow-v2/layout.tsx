@@ -10,8 +10,10 @@ import CertificatePdfRowCorrector from "../certificate-pdf-row-corrector";
 import CertificatePdfNativeReaderV2 from "../certificate-pdf-native-reader-v2";
 import CertificatePdfStructuredReaderV3 from "../certificate-pdf-structured-reader-v3";
 import CertificatePdfV3CompletionGuard from "../certificate-pdf-v3-completion-guard";
+import CertificatePdfRunOwner from "../certificate-pdf-run-owner";
 import CertificatePdfInspectionRecordAdapter from "../certificate-pdf-inspection-record-adapter";
 import CertificatePdfSemanticRecovery from "../certificate-pdf-semantic-recovery";
+import CertificatePdfGeneralizationRecovery from "../certificate-pdf-generalization-recovery";
 import CertificatePdfWeightDisplacementRecovery from "../certificate-pdf-weight-displacement-recovery";
 import CertificateOwnerSemantics from "../certificate-owner-semantics";
 import CertificateOwnerFieldsUi from "../certificate-owner-fields-ui";
@@ -27,15 +29,17 @@ export default function VehicleWorkflowLayout({ children }: { children: React.Re
     <>
       <CertificatePdfWorkerLocalizer />
       <CertificatePdfV3CompletionGuard />
+      <CertificatePdfRunOwner />
       <CertificatePdfSemanticRecovery />
+      <CertificatePdfGeneralizationRecovery />
       <CertificatePdfWeightDisplacementRecovery />
+      <CertificatePdfRowCorrector />
       <CertificatePdfInspectionRecordAdapter />
       <CertificatePdfStructuredReaderV3 />
       <CertificatePdfNativeReaderV2 />
       <CertificateOwnerSemantics />
       <CertificateOwnerFieldsUi />
       {children}
-      <CertificatePdfRowCorrector />
       <CertificateFulltextFix />
       <CertificateClassificationNumberGuard />
       <CertificateFocusedRecovery />

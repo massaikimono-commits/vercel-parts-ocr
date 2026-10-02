@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { isCurrentPdfRun, markPdfRunContinuation, pdfRunForEvent } from "./certificate-pdf-run-identity";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
 const PDF_PRIORITY_KEY = "__vehicleCertificatePdfPriority";
@@ -313,7 +314,7 @@ function applyPatch(patch) {
   window[PDF_PRIORITY_KEY] = patch; window[QR_PRIORITY_KEY] = null; window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: patch }));
 }
 function passToExisting(input) {
-  input.dataset[OWN_PASS] = "1"; input.dataset[V1_PASS] = "1"; input.dispatchEvent(new Event("change", { bubbles: true }));
+  input.dataset[OWN_PASS] = "1"; input.dataset[V1_PASS] = "1"; input.dispatchEvent(markPdfRunContinuation(new Event("change", { bubbles: true }), pdfRunForEvent()));
 }
 function enhanceInputs() {
   if (!location.pathname.startsWith("/vehicle-workflow")) return;
@@ -327,20 +328,21 @@ export default function CertificatePdfNativeReaderV2() {
       const input = event.target; if (!(input instanceof HTMLInputElement) || input.type !== "file") return;
       if (input.dataset[OWN_PASS] === "1") { delete input.dataset[OWN_PASS]; return; }
       const file = input.files?.[0]; if (!file) return; const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || ""); if (!isPdf) return;
+      const runId = pdfRunForEvent(event); const active = () => !dead && isCurrentPdfRun(runId, "NativeReaderV2"); if (!active()) return;
       event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation?.(); showStatus("PDFネイティブ v2解析中… 表の列境界を直接読んでいます。");
       try {
-        const pdfjs = await loadPdfJs(); const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+        const pdfjs = await loadPdfJs(); if (!active()) return; const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
         try {
-          const chosen = await choosePage(pdf); const page = await pdf.getPage(chosen.pageNumber); const tokens = chosen.tokens.length ? chosen.tokens : await pageTokens(page); const parsed = parseNativeV2(tokens); const canvas = await renderPage(pdf, chosen.pageNumber, 1800); const qr = await hasQr(canvas); if (dead) return;
+          const chosen = await choosePage(pdf); const page = await pdf.getPage(chosen.pageNumber); const tokens = chosen.tokens.length ? chosen.tokens : await pageTokens(page); const parsed = parseNativeV2(tokens); const canvas = await renderPage(pdf, chosen.pageNumber, 1800); const qr = await hasQr(canvas); if (!active()) return;
           showPreview(canvas); showDebug(parsed, tokens.length);
           if (qr) { showStatus(`PDF ${chosen.pageNumber}ページ目: QRあり。既存のQR優先ルートへ引き継ぎます。`); passToExisting(input); return; }
-          if (!parsed.confident) { showStatus(`PDFネイティブ v2: 直接取得 ${parsed.totalCount}項目。確信度不足のため既存OCRへフォールバックします。`); passToExisting(input); return; }
+          if (!parsed.confident) { showStatus(`PDFネイティブ v2: 直接取得 ${parsed.totalCount}項目。確信度不足のため既存OCRへフォールバックします。`); window.dispatchEvent(new CustomEvent("certificate-pdf-weak-structured-fallback", { detail: { runId } })); passToExisting(input); return; }
           applyPatch(parsed.patch); showStatus(`PDFネイティブ v2 完了: OCR 0pass / ${parsed.totalCount}項目をPDF文字＋列位置から直接取得`, true); input.value = "";
         } finally { await pdf.destroy?.(); }
-      } catch (e) { console.error("pdf native v2", e); showStatus("PDFネイティブ v2で直接解析できなかったため、既存OCRへ切り替えます。"); passToExisting(input); }
+      } catch (e) { if (!active()) return; console.error("pdf native v2", e); showStatus("PDFネイティブ v2で直接解析できなかったため、既存OCRへ切り替えます。"); passToExisting(input); }
     };
     document.addEventListener("change", onChange);
-    return () => { dead = true; window.clearInterval(timer); document.removeEventListener("change", onChange, true); };
+    return () => { dead = true; window.clearInterval(timer); document.removeEventListener("change", onChange); };
   }, []);
   return null;
 }
