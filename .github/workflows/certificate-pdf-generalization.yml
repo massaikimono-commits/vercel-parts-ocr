@@ -7,6 +7,9 @@ on:
   pull_request:
     paths:
       - 'app/lib/certificate-pdf-row-semantics.mjs'
+      - 'app/lib/certificate-result-copy.mjs'
+      - 'app/vehicle-workflow-fast/page.tsx'
+      - 'scripts/certificate-result-copy-regression.mjs'
       - 'app/certificate-pdf-generalization-recovery.jsx'
       - 'app/vehicle-workflow-v2/layout.tsx'
       - 'app/vehicle-workflow-fast/layout.tsx'
@@ -31,6 +34,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Post-5905 row semantic regression
         run: node scripts/certificate-pdf-generalization-regression.mjs
+      - name: Authoritative read result copy regression
+        run: node scripts/certificate-result-copy-regression.mjs
       - name: Runtime integration regression
         run: node scripts/certificate-pdf-generalization-runtime-regression.mjs
       - name: Document integrity regression
