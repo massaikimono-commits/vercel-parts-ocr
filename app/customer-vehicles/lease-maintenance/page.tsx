@@ -198,6 +198,7 @@ export default function LeaseMaintenancePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ContractForm>(blankForm());
   const [busy, setBusy] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState("契約情報を読み込んでいます。");
@@ -234,6 +235,7 @@ export default function LeaseMaintenancePage() {
 
   async function loadInitial(id: string) {
     setBusy(true);
+    setLoaded(false);
     try {
       const [vehicleResult, contractResult] = await Promise.all([
         supabase
@@ -251,6 +253,7 @@ export default function LeaseMaintenancePage() {
         return;
       }
       setVehicle(vehicleResult.data as VehicleSummary);
+      setLoaded(true);
       setContracts(contractResult);
       setOffset(contractResult.length);
       setHasMore(contractResult.length === PAGE_SIZE);
@@ -492,7 +495,8 @@ export default function LeaseMaintenancePage() {
         </div>
       </section>
 
-      <div className="notice">{busy ? "読み込み中…" : message}</div>
+      <div role="status" aria-live="polite" className="notice">{busy ? "読み込み中…" : message}</div>
+      {!loaded && !busy && vehicleId && <button type="button" onClick={() => void loadInitial(vehicleId)}>再読み込み</button>}
 
       {vehicle && (
         <section className="continueCard card">
@@ -616,7 +620,7 @@ export default function LeaseMaintenancePage() {
           <div><span>車両別</span><h2>契約履歴</h2></div>
           <b>{contracts.length}件表示</b>
         </div>
-        {!contracts.length && !busy && <div className="empty">契約履歴はまだありません。</div>}
+        {loaded && !contracts.length && !busy && <div className="empty">契約履歴はまだありません。</div>}
         <div className="historyList">
           {contracts.map((contract, index) => (
             <article className={contract.id === editingId ? "history selected" : "history"} key={contract.id}>

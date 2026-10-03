@@ -154,6 +154,7 @@ export default function VehicleHistoryPage() {
   const [sourceHasMore, setSourceHasMore] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<(typeof SOURCE_FILTERS)[number]>("すべて");
   const [busy, setBusy] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [message, setMessage] = useState("履歴を読み込んでいます。");
 
   useEffect(() => {
@@ -176,6 +177,7 @@ export default function VehicleHistoryPage() {
 
   async function loadInitial(id: string) {
     setBusy(true);
+    setLoaded(false);
     try {
       const [vehicleResult, historyPages] = await Promise.all([
         supabase
@@ -195,6 +197,7 @@ export default function VehicleHistoryPage() {
 
       const merged = sortItems(historyPages.flatMap((page) => page.items));
       setVehicle(vehicleResult.data as VehicleSummary);
+      setLoaded(true);
       setItems(merged);
       setVisibleCount(DISPLAY_PAGE_SIZE);
       setSourceRound(1);
@@ -449,7 +452,8 @@ export default function VehicleHistoryPage() {
         <button onClick={() => location.assign("/customer-vehicles")}>顧客・車両管理</button>
       </section>
 
-      <div className="notice">{busy && !items.length ? "読み込み中…" : message}</div>
+      <div role="status" aria-live="polite" className="notice">{busy && !items.length ? "読み込み中…" : message}</div>
+      {!loaded && !busy && vehicleId && <button type="button" onClick={() => void loadInitial(vehicleId)}>再読み込み</button>}
 
       {vehicle && (
         <section className="continueCard card">
@@ -481,7 +485,7 @@ export default function VehicleHistoryPage() {
         </div>
         <p className="filterNote">読み込み済み履歴を種類ごとに絞り込みます。DBの再検索は行いません。</p>
 
-        {!busy && !visibleItems.length && (
+        {loaded && !busy && !visibleItems.length && (
           <div className="empty">この車両に紐付く既存履歴はまだありません。</div>
         )}
 

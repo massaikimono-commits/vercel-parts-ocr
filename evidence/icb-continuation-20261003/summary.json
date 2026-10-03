@@ -1,0 +1,99 @@
+{
+  "startBranch": "candidate/icb-app-overnight-20261003",
+  "startHead": "8b38adba491020cc58a5f8b0af1e8349c145d396",
+  "branch": "candidate/icb-continuation-20261003",
+  "workspace": "/private/tmp/icb-continuation-20261003",
+  "remoteMain": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+  "currentImplementationChecks": [
+    {
+      "area": "prior46",
+      "classification": "NO_OP_VERIFIED",
+      "evidence": "PR92 8b38adb retained; no cherry-pick or alternate implementation"
+    },
+    {
+      "area": "schedule-search-detail-navigation",
+      "classification": "REGRESSION_ONLY",
+      "evidence": "existing fixture checks reused"
+    },
+    {
+      "area": "schedule-new-edit-date",
+      "classification": "NO_OP_VERIFIED",
+      "evidence": "preflight/time selector and try/finally confirmed; no business change"
+    },
+    {
+      "area": "settings-staff-vendors",
+      "classification": "REMEDIATE",
+      "evidence": "false empty/error, rejection recovery, synchronous duplicate guard, Enter form, blank names"
+    },
+    {
+      "area": "vehicle-history-photos-lease",
+      "classification": "REMEDIATE",
+      "evidence": "false empty after query failure; explicit successful loaded state and retry"
+    },
+    {
+      "area": "customer-search",
+      "classification": "REMEDIATE",
+      "evidence": "false empty after errors/auth missing; retry and input accessible name"
+    },
+    {
+      "area": "customer-link-save",
+      "classification": "REMEDIATE",
+      "evidence": "duplicate writes and old selection overwrite; lock/ref guards"
+    },
+    {
+      "area": "vehicle-search-source-title",
+      "classification": "REMEDIATE",
+      "evidence": "CSS-generated visible title differed from source accessible heading"
+    },
+    {
+      "area": "separation-test",
+      "classification": "REGRESSION_ONLY",
+      "evidence": "old blanket assertion incorrectly rejected conditional history dock"
+    },
+    {
+      "area": "delivery-input",
+      "classification": "NO_OP_VERIFIED",
+      "evidence": "DB_REQUIRED_HOLD; new mutation contract absent, do not copy PR86 UI"
+    },
+    {
+      "area": "legal3m",
+      "classification": "NO_OP_VERIFIED",
+      "evidence": "DB_REQUIRED_HOLD preserved"
+    },
+    {
+      "area": "PDF-parts-OCR",
+      "classification": "NO_OP_VERIFIED",
+      "evidence": "specialist ownership preserved, only existing regressions"
+    },
+    {
+      "area": "Preview-real-device",
+      "classification": "NO_OP_VERIFIED",
+      "evidence": "USER_DEVICE_REQUIRED; implemented protected Preview is not unfinished UX"
+    }
+  ],
+  "DB_REQUIRED_HOLD": [
+    "delivery preset/custom input atomic RPC",
+    "legal_3m",
+    "photo write/delete lifecycle foundation"
+  ],
+  "USER_DEVICE_REQUIRED": [
+    "protected Vercel SSO Preview acceptance",
+    "real iPhone and physical print acceptance"
+  ],
+  "SPEC_DECISION_REQUIRED": [
+    "schedule search scope: current repo supports name/phone/registration; older request last4-only"
+  ],
+  "knownLimits": [
+    "fixture E2E is synthetic, no shared database reads or writes",
+    "fixed A3 daily-report preview overflow inherited; print dimensions preserved",
+    "standalone full ICB v1.3/v1.4 not found; current repo docs/tests used"
+  ],
+  "safety": {
+    "MAIN_CHANGED": false,
+    "PRODUCTION_CHANGED": false,
+    "DB_CHANGED": false,
+    "CREDENTIAL_CHANGED": false,
+    "FORCE_PUSH_USED": false,
+    "EXISTING_WORKTREE_DAMAGED": false
+  }
+}

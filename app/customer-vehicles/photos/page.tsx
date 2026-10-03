@@ -60,6 +60,7 @@ export default function VehiclePhotoHistoryPage() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [openingId, setOpeningId] = useState("");
   const [message, setMessage] = useState("写真履歴を読み込んでいます。");
 
@@ -76,6 +77,7 @@ export default function VehiclePhotoHistoryPage() {
 
   async function loadInitial(id: string) {
     setBusy(true);
+    setLoaded(false);
     try {
       const [{ data: vehicleData, error: vehicleError }, photoResult] = await Promise.all([
         supabase
@@ -94,6 +96,7 @@ export default function VehiclePhotoHistoryPage() {
         return;
       }
       setVehicle(vehicleData as VehicleSummary);
+      setLoaded(true);
       setPhotos(photoResult.rows);
       setOffset(photoResult.rows.length);
       setHasMore(photoResult.rows.length === PHOTO_PAGE_SIZE);
@@ -212,9 +215,10 @@ export default function VehiclePhotoHistoryPage() {
           <h2>写真履歴</h2>
           <span>表示中 {photos.length}件</span>
         </div>
-        <div className="notice">{busy && !photos.length ? "読み込み中…" : message}</div>
+        <div role="status" aria-live="polite" className="notice">{busy && !photos.length ? "読み込み中…" : message}</div>
+      {!loaded && !busy && vehicleId && <button type="button" onClick={() => void loadInitial(vehicleId)}>再読み込み</button>}
 
-        {!busy && !photos.length && (
+        {loaded && !busy && !photos.length && (
           <div className="empty">この車両には写真履歴がありません。</div>
         )}
 

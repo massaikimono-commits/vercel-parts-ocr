@@ -22,6 +22,8 @@ let alert = {severity:'warning',alert_code:'fixture-alert',occurred_at:day+'T01:
 let empty = false, detailFail = false, searchFail = false, historyFail = false, last4Reads = 0;
 const requests = [], errors = [], checks = [], routeAudit = [];
 let passed=false;
+let settingsFail=false, vehicleHistoryFail=false;
+let settingsRows=[];
 await context.route('https://example.supabase.co/**', async route => {
   const request = route.request(); const url = new URL(request.url());
   const path = url.pathname; requests.push({method:request.method(),path,query:url.search});
@@ -33,6 +35,13 @@ await context.route('https://example.supabase.co/**', async route => {
     if(historyFail){status=500;data={message:'fixture network failure'};}
     else data=[{occurred_at:day+'T01:00:00Z',event_type:'login_success',ip_address:'2001:db8::0123:4567:89ab:cdef',user_agent:'iPhone Safari',aal:'aal2'}];
   }
+  else if(path.endsWith('/staff_members') || path.endsWith('/external_vendors')) {
+    if(settingsFail){status=500;data={message:'fixture settings failure'};}
+    else if(request.method()==='POST') { await new Promise(r=>setTimeout(r,120)); settingsRows=[{id:'setting-1',...request.postDataJSON()}]; data=null; }
+    else if(request.method()==='PATCH') data=null;
+    else data=settingsRows;
+  }
+  else if(vehicleHistoryFail && /vehicle_action_history|vehicle_documents|lease_maintenance_contracts/.test(path)) {status=500;data={message:'fixture history failure'};}
   else if(path.endsWith('/schedule_time_availability')) data={options:[]};
   else if(path.endsWith('/schedule_day_capacity')) data={morning_count:0,afternoon_count:0,morning_inspection_count:0,morning_total_limit:15,afternoon_total_limit:10,morning_inspection_warning:4};
   else if(path.endsWith('/schedule_entries')) {
@@ -136,6 +145,51 @@ try {
   await page.locator('.desktopQuickNav').getByRole('link',{name:'今日',exact:true}).click();
   await page.waitForFunction(day=>document.querySelector('.datePicker')?.value===day,day);
   check('same-route Today/day controls and active navigation remain in sync');
+  searchFail=true; await page.goto(base+'/customer-vehicles'); await ready();
+  await page.getByRole('heading',{name:'車両検索',exact:true}).waitFor();
+  await page.getByRole('button',{name:'再検索',exact:true}).waitFor();
+  assert.equal(await page.getByText('該当する車両がありません。',{exact:false}).count(),0);
+  searchFail=false; await page.getByRole('button',{name:'再検索',exact:true}).click();
+  await page.locator('.vehicleList button').first().waitFor();
+  check('customer vehicle search failure differs from empty and retry recovers');
+  vehicleHistoryFail=true;
+  for(const [path,emptyText] of [['history','この車両に紐付く既存履歴はまだありません。'],['photos','この車両には写真履歴がありません。'],['lease-maintenance','契約履歴はまだありません。']]) {
+    await page.goto(base+'/customer-vehicles/'+path+'?vehicle=vehicle-1'); await ready();
+    await page.getByRole('button',{name:'再読み込み',exact:true}).waitFor();
+    assert.equal(await page.getByText(emptyText,{exact:true}).count(),0);
+    vehicleHistoryFail=false; await page.getByRole('button',{name:'再読み込み',exact:true}).click();
+    await page.getByText(emptyText,{exact:true}).waitFor();
+    vehicleHistoryFail=true; check(path+' initial failure avoids false empty and retry recovers');
+  }
+  vehicleHistoryFail=false;
+  for (const [path,label,emptyText] of [['staff','社員','社員がまだ登録されていません。'],['vendors','外注先','外注先がまだ登録されていません。']]) {
+    settingsRows=[]; settingsFail=true;
+    await page.goto(base+'/settings/'+path); await ready();
+    await page.getByRole('status').filter({hasText:'読み込み'}).waitFor();
+    assert.equal(await page.getByText(emptyText,{exact:true}).count(),0);
+    settingsFail=false; await page.getByRole('button',{name:'一覧を再読み込み'}).click();
+    await page.getByText(emptyText,{exact:true}).waitFor();
+    await page.getByLabel(label+'名',{exact:true}).fill('検証担当');
+    const before=requests.filter(r=>r.method==='POST' && /staff_members|external_vendors/.test(r.path)).length;
+    await page.getByLabel(label+'名',{exact:true}).evaluate(el=>{el.form.requestSubmit();el.form.requestSubmit();});
+    await page.getByRole('button',{name:'保存',exact:true}).waitFor();
+    assert.equal(requests.filter(r=>r.method==='POST' && /staff_members|external_vendors/.test(r.path)).length-before,1);
+    await page.getByLabel(label+'名',{exact:true}).last().fill('   ');
+    const updates=requests.filter(r=>r.method==='PATCH').length;
+    await page.getByRole('button',{name:'保存',exact:true}).click();
+    await page.getByRole('status').filter({hasText:label+'名を入力してください。'}).waitFor();
+    assert.equal(requests.filter(r=>r.method==='PATCH').length,updates);
+    check(path+' settings error/retry, keyboard form duplicate guard and blank-name validation');
+  }
+  for(const width of [390,768,1440]) {
+    await page.setViewportSize({width,height:1000});
+    for(const path of ['/customer-vehicles','/customer-vehicles/history?vehicle=vehicle-1','/customer-vehicles/photos?vehicle=vehicle-1','/customer-vehicles/lease-maintenance?vehicle=vehicle-1','/settings/staff','/settings/vendors']) {
+      await page.goto(base+path); await ready();
+      assert(!(await noOverflow()).overflow,path+' continuation overflow at '+width);
+      await page.screenshot({path:`${out}/continuation-${width}-${path.split('/').pop().split('?')[0]}.png`,fullPage:true});
+    }
+    check('continuation six routes responsive at '+width);
+  }
   assert.deepEqual(errors,[],'no browser page errors');
   passed=true;
 } finally {

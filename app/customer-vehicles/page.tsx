@@ -201,6 +201,11 @@ export default function CustomerVehiclesPage() {
   const [linkCustomerLoading, setLinkCustomerLoading] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [deletingCustomer, setDeletingCustomer] = useState(false);
+  const [vehiclesLoaded, setVehiclesLoaded] = useState(false);
+  const [linkingCustomer, setLinkingCustomer] = useState(false);
+  const linkMutationLock = useRef(false);
+  const customerSaveLock = useRef(false);
+  const selectedVehicleRef = useRef("");
   const vehicleLoadSeq = useRef(0);
   const partsLoadSeq = useRef(0);
   const linkCustomerLoadSeq = useRef(0);
@@ -245,6 +250,7 @@ export default function CustomerVehiclesPage() {
   async function loadVehicleList(searchText = "", append = false, searchMode: VehicleSearchMode = vehicleSearchMode) {
     const requestId = ++vehicleLoadSeq.current;
     setBusy(true);
+    if (!append) setVehiclesLoaded(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -337,6 +343,7 @@ export default function CustomerVehiclesPage() {
 
       if (requestId !== vehicleLoadSeq.current) return;
 
+      setVehiclesLoaded(true);
       const nextVehicles = dedupeVehicles(vehicleRows.map(normalizeVehicle));
       const nextCustomers = dedupeCustomers(customerRows.map(normalizeCustomer));
 
@@ -537,9 +544,11 @@ export default function CustomerVehiclesPage() {
   }, [localParts, selectedVehicle]);
 
   function selectVehicle(v: Vehicle, customerOverride?: Customer | null) {
+    if (customerSaveLock.current) return;
     const customer = customerOverride === undefined
       ? (v.customerId ? customerMap.get(v.customerId) || null : null)
       : customerOverride;
+    selectedVehicleRef.current = v.id;
     setSelectedVehicleId(v.id);
     setSelectedVehicleSnapshot(v);
     setSelectedCustomerSnapshot(customer);
@@ -606,7 +615,7 @@ export default function CustomerVehiclesPage() {
   }
 
   async function saveCustomer() {
-    if (!selectedVehicle) return;
+    if (!selectedVehicle || customerSaveLock.current || linkMutationLock.current || deletingCustomer) return;
     const displayName = customerForm.type === "company"
       ? (customerForm.companyName.trim() || customerForm.name.trim())
       : (customerForm.name.trim() || customerForm.companyName.trim());
@@ -615,6 +624,7 @@ export default function CustomerVehiclesPage() {
       return;
     }
 
+    customerSaveLock.current = true;
     setSavingCustomer(true);
     try {
       const payload = {
@@ -666,15 +676,19 @@ export default function CustomerVehiclesPage() {
     } catch (error: any) {
       setMessage(safeActionError("顧客情報の保存", error));
     } finally {
+      customerSaveLock.current = false;
       setSavingCustomer(false);
     }
   }
 
   async function linkExistingCustomer() {
+    if (linkMutationLock.current || savingCustomer || deletingCustomer) return;
     if (!selectedVehicle || !linkCustomerId) {
       setMessage("紐付ける顧客を選択してください。");
       return;
     }
+    linkMutationLock.current = true;
+    setLinkingCustomer(true);
     try {
       const { error } = await supabase.from("vehicles").update({ customer_id: linkCustomerId, updated_at: new Date().toISOString() }).eq("id", selectedVehicle.id);
       if (error) throw error;
@@ -682,12 +696,17 @@ export default function CustomerVehiclesPage() {
         || customers.find((row) => row.id === linkCustomerId)
         || null;
       setVehicles((prev) => prev.map((v) => v.id === selectedVehicle.id ? { ...v, customerId: linkCustomerId } : v));
-      setSelectedVehicleSnapshot({ ...selectedVehicle, customerId: linkCustomerId });
-      setSelectedCustomerSnapshot(customer);
+      if (selectedVehicleRef.current === selectedVehicle.id) {
+        setSelectedVehicleSnapshot({ ...selectedVehicle, customerId: linkCustomerId });
+        setSelectedCustomerSnapshot(customer);
+      }
       if (customer) setCustomers((prev) => dedupeCustomers([customer, ...prev]));
-      setMessage(`${customer ? customerLabel(customer) : "選択した顧客"} をこの車両へ紐付けました。`);
+      if (selectedVehicleRef.current === selectedVehicle.id) setMessage(`${customer ? customerLabel(customer) : "選択した顧客"} をこの車両へ紐付けました。`);
     } catch (error: any) {
-      setMessage(safeActionError("顧客と車両の紐付け", error));
+      if (selectedVehicleRef.current === selectedVehicle.id) setMessage(safeActionError("顧客と車両の紐付け", error));
+    } finally {
+      linkMutationLock.current = false;
+      setLinkingCustomer(false);
     }
   }
 
@@ -788,9 +807,10 @@ export default function CustomerVehiclesPage() {
       </div>
 
       <section className="card searchCard">
-        <h1>顧客・車両管理</h1>
+        <h1>車両検索</h1>
         <p className="searchIntro">検索方法を「下4桁・お客様名・電話番号」から選んで車両を探します。初期値は「下4桁」です。車両を開くと過去の部品OCR履歴まで確認でき、正式保存済み部品と端末の未確定データを分けて確認できます。</p>
-        <div className="notice">{busy ? "顧客・車両を検索中…" : message}</div>
+        <div role="status" aria-live="polite" className="notice">{busy ? "顧客・車両を検索中…" : message}</div>
+        {!vehiclesLoaded && !busy && <button type="button" onClick={() => void loadVehicleList(query)}>再検索</button>}
         <div className="vehicleSearchModes" aria-label="車両検索方法">
           <button type="button" className={vehicleSearchMode === "last4" ? "active" : ""} onClick={() => setVehicleSearchMode("last4")}>下4桁</button>
           <button type="button" className={vehicleSearchMode === "customer" ? "active" : ""} onClick={() => setVehicleSearchMode("customer")}>お客様名</button>
@@ -798,6 +818,7 @@ export default function CustomerVehiclesPage() {
         </div>
         <input
           className="search"
+          aria-label="車両検索条件"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           inputMode={vehicleSearchMode === "last4" ? "numeric" : vehicleSearchMode === "phone" ? "tel" : "text"}
@@ -818,12 +839,12 @@ export default function CustomerVehiclesPage() {
           <h2>車両一覧</h2>
           <span>{filteredVehicles.length}台</span>
         </div>
-        {!filteredVehicles.length && <div className="empty">該当する車両がありません。<div className="actions"><button type="button" onClick={() => location.assign("/vehicle-workflow")}>車両を登録・読取</button></div></div>}
+        {vehiclesLoaded && !busy && !filteredVehicles.length && <div className="empty">該当する車両がありません。<div className="actions"><button type="button" onClick={() => location.assign("/vehicle-workflow")}>車両を登録・読取</button></div></div>}
         <div className="vehicleList">
           {filteredVehicles.map((v) => {
             const c = customerMap.get(v.customerId);
             return (
-              <button key={v.id} className={`vehicle ${selectedVehicleId === v.id ? "selected" : ""}`} onClick={() => selectVehicle(v)}>
+              <button disabled={savingCustomer} key={v.id} className={`vehicle ${selectedVehicleId === v.id ? "selected" : ""}`} onClick={() => selectVehicle(v)}>
                 <div className="vehicleTitle"><b>{vehicleLabel(v)}</b><span>{naturalLast4(v.last4) || "----"} / 選択</span></div>
                 <div>{c ? customerLabel(c) : "顧客未割り当て"}</div>
                 <small>{[v.maker, v.model, v.chassis].filter(Boolean).join(" / ") || "車両情報未入力"}</small>
@@ -893,7 +914,7 @@ export default function CustomerVehiclesPage() {
                   {selectedCustomer && (
                     <button
                       className="danger"
-                      disabled={deletingCustomer}
+                      disabled={deletingCustomer || linkingCustomer}
                       onClick={() => void deleteSelectedCustomer()}
                     >
                       {deletingCustomer ? "削除中…" : "顧客情報を削除"}
@@ -921,7 +942,7 @@ export default function CustomerVehiclesPage() {
                       </option>
                     ))}
                   </select>
-                  <button onClick={linkExistingCustomer}>この顧客を車両へ紐付け</button>
+                  <button disabled={linkingCustomer || savingCustomer || deletingCustomer || linkCustomerLoading} onClick={linkExistingCustomer}>{linkingCustomer ? "紐付け中…" : "この顧客を車両へ紐付け"}</button>
                 </div>
               </>
             )}
@@ -940,7 +961,7 @@ export default function CustomerVehiclesPage() {
                 <label>住所<input value={customerForm.address} onChange={(e) => setCustomerForm((f) => ({ ...f, address: e.target.value }))} placeholder="住所" /></label>
                 <label className="wide">備考<textarea value={customerForm.notes} onChange={(e) => setCustomerForm((f) => ({ ...f, notes: e.target.value }))} placeholder="備考" /></label>
                 <div className="actions wide">
-                  <button className="primary" disabled={savingCustomer} onClick={saveCustomer}>{savingCustomer ? "保存中…" : customerForm.id ? "顧客情報を更新" : "新規顧客を保存して紐付け"}</button>
+                  <button className="primary" disabled={savingCustomer || linkingCustomer} onClick={saveCustomer}>{savingCustomer ? "保存中…" : customerForm.id ? "顧客情報を更新" : "新規顧客を保存して紐付け"}</button>
                   <button onClick={() => setCustomerEditing(false)}>キャンセル</button>
                 </div>
               </div>
