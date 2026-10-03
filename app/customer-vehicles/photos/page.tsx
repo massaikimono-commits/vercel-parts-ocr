@@ -2,8 +2,9 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { safeActionError } from "../../lib/client-security";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../../supabase";
 
 type VehicleSummary = {
@@ -54,6 +55,17 @@ function fileSize(value: number | null) {
 }
 
 export default function VehiclePhotoHistoryPage() {
+  return <Suspense fallback={<main role="status">車両情報を読み込み中…</main>}><VehiclePhotoHistoryPageRoute /></Suspense>;
+}
+
+function VehiclePhotoHistoryPageRoute() {
+  const id = useSearchParams().get("vehicle")?.trim() || "";
+  // A new vehicle gets a fresh form, pagination and loading state, including same-route navigation.
+  return <VehiclePhotoHistoryPageContent key={id} routeVehicleId={id} />;
+}
+
+function VehiclePhotoHistoryPageContent({ routeVehicleId }: { routeVehicleId: string }) {
+  const readLock = useRef(false);
   const [vehicleId, setVehicleId] = useState("");
   const [vehicle, setVehicle] = useState<VehicleSummary | null>(null);
   const [photos, setPhotos] = useState<VehiclePhotoRow[]>([]);
@@ -65,7 +77,7 @@ export default function VehiclePhotoHistoryPage() {
   const [message, setMessage] = useState("写真履歴を読み込んでいます。");
 
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("vehicle")?.trim() || "";
+    const id = routeVehicleId;
     setVehicleId(id);
     if (!id) {
       setBusy(false);
@@ -73,9 +85,11 @@ export default function VehiclePhotoHistoryPage() {
       return;
     }
     void loadInitial(id);
-  }, []);
+  }, [routeVehicleId]);
 
   async function loadInitial(id: string) {
+    if (readLock.current) return;
+    readLock.current = true;
     setBusy(true);
     setLoaded(false);
     try {
@@ -111,6 +125,7 @@ export default function VehiclePhotoHistoryPage() {
       setHasMore(false);
       setMessage(safeActionError("写真履歴の読み込み", error));
     } finally {
+      readLock.current = false;
       setBusy(false);
     }
   }
@@ -123,6 +138,7 @@ export default function VehiclePhotoHistoryPage() {
       .eq("document_type", "OTHER")
       .like("mime_type", "image/%")
       .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
       .range(start, start + PHOTO_PAGE_SIZE - 1);
     if (error) throw error;
     return { rows: (data || []) as VehiclePhotoRow[] };
@@ -144,17 +160,19 @@ export default function VehiclePhotoHistoryPage() {
   }
 
   async function loadMore() {
-    if (!vehicleId || busy || !hasMore) return;
+    if (!vehicleId || busy || !hasMore || readLock.current) return;
+    readLock.current = true;
     setBusy(true);
     try {
       const result = await loadPhotoPage(vehicleId, offset);
-      setPhotos((old) => [...old, ...result.rows]);
+      setPhotos((old) => [...new Map([...old, ...result.rows].map((row) => [row.id, row])).values()]);
       setOffset((old) => old + result.rows.length);
       setHasMore(result.rows.length === PHOTO_PAGE_SIZE);
       setMessage(`写真メタデータを${photos.length + result.rows.length}件表示しています。`);
     } catch (error: any) {
       setMessage(safeActionError("写真履歴の追加読み込み", error));
     } finally {
+      readLock.current = false;
       setBusy(false);
     }
   }

@@ -1,0 +1,45 @@
+{
+  "package": "braces",
+  "installedVersion": "3.0.3",
+  "direct": false,
+  "dependencyChain": [
+    "vinext@1.0.0-beta.9",
+    "vite-plugin-commonjs@0.10.4",
+    "vite-plugin-dynamic-import@1.6.0",
+    "fast-glob@3.3.3",
+    "micromatch@4.0.8",
+    "braces@3.0.3"
+  ],
+  "lockfileChanged": false,
+  "advisory": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+  "severity": "high",
+  "affected": "<=3.0.3",
+  "publishedPatch": null,
+  "npmProposedFix": {
+    "name": "vinext",
+    "version": "0.0.15",
+    "isSemVerMajor": true
+  },
+  "classification": {
+    "A_SAFE_PATCH_AVAILABLE": false,
+    "B_SAFE_UPGRADE_AVAILABLE": false,
+    "C_BREAKING_UPGRADE_REQUIRED": "npm proposes a breaking downgrade vinext0.0.15, not an acceptable safe upgrade",
+    "D_NO_PATCH_AVAILABLE": true,
+    "E_TRANSITIVE_ONLY": true,
+    "F_BUILD_ONLY": "observed chain imported by vinext config/next-config.js via vite-plugin-commonjs; package itself remains a prod dependency",
+    "G_RUNTIME_EXPOSED": "not demonstrated for ICB request/input; Cloudflare final deployed graph not audited, do not claim universally unreachable",
+    "H_GATE_POLICY_REVIEW_REQUIRED": true,
+    "I_FALSE_POSITIVE_CANDIDATE": false
+  },
+  "exposureEvidence": [
+    "app has no braces/micromatch/fast-glob/vinext imports",
+    "vite.config.ts imports vinext for build plugin",
+    "vinext cli imports config/next-config.js which imports vite-plugin-commonjs",
+    "wrangler fetch-handler imports virtual worker entry, no direct toolchain import",
+    "local Next build output traces: 41 trace files, 0 toolchain hits; does not prove Cloudflare deployed reachability"
+  ],
+  "ciGate": "npm audit --omit=dev --audit-level=high before app regression in full-regression and OCR workflow",
+  "securityPolicy": "fail closed; no weakening, suppressions, dependency reclassification or framework changes",
+  "status": "SECURITY_GATE_HOLD",
+  "remediation": "none safe under current published patch constraints"
+}

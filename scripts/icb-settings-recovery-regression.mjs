@@ -45,7 +45,7 @@ let rows = [{id:'vehicle-a',customerId:'old'}];
 const pending = new Promise(resolve => { release = resolve; });
 const lock = {current:false}, selection = {current:'vehicle-a'}, busy = [];
 const ctx = vm.createContext({
-  linkMutationLock:lock, selectedVehicleRef:selection, savingCustomer:false, deletingCustomer:false,
+  linkMutationLock:lock, customerSaveLock:{current:false},customerDeleteLock:{current:false}, selectedVehicleRef:selection, savingCustomer:false, deletingCustomer:false,
   selectedVehicle:{id:'vehicle-a',customerId:'old'}, linkCustomerId:'customer-new',
   linkCustomerOptions:[{id:'customer-new'}], customers:[],
   supabase:{from:()=>({update:()=>({eq:()=>{writes++;return pending;}})})},
@@ -73,7 +73,7 @@ visitSave(tree);
 let releaseSave, customerWrites=0;
 const savePending=new Promise(resolve=>{releaseSave=resolve;});
 const saveLock={current:false};
-const saveContext=vm.createContext({CUSTOMER_COLUMNS:'id,name',CUSTOMER_SEARCH_LIMIT:100,customerSaveLock:saveLock,linkMutationLock:{current:false},deletingCustomer:false,
+const saveContext=vm.createContext({CUSTOMER_COLUMNS:'id,name',CUSTOMER_SEARCH_LIMIT:100,customerSaveLock:saveLock,customerDeleteLock:{current:false},linkMutationLock:{current:false},deletingCustomer:false,
   selectedVehicle:{id:'vehicle-a'},customerForm:{id:'',type:'individual',name:'検証',companyName:'',phone:'',email:'',postalCode:'',address:'',notes:''},
   supabase:{from:()=>({insert:()=>({select:()=>({single:()=>{customerWrites++;return savePending;}})}),update:()=>({eq:async()=>({error:null})})})},
   setSavingCustomer:()=>{},setCustomers:()=>{},setVehicles:()=>{},setSelectedVehicleSnapshot:()=>{},setSelectedCustomerSnapshot:()=>{},setLinkCustomerOptions:()=>{},setLinkCustomerId:()=>{},setCustomerEditing:()=>{},setMessage:()=>{},dedupeCustomers:v=>v,customerLabel:()=>'',safeActionError:()=>''});

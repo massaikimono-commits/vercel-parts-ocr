@@ -2,7 +2,9 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { isCalendarDay } from "../../lib/calendar-day";
 import { supabase } from "../../supabase";
 import { dailyReportTimeLabel, prepareDailyReportSection } from "../print-rules";
 import { safeActionError } from "../../lib/client-security";
@@ -138,6 +140,13 @@ function weekTitle(start: string) {
 }
 
 export default function WeeklySchedulePage() {
+  return <Suspense fallback={<main role="status">予定を読み込み中…</main>}><WeeklySchedulePageContent /></Suspense>;
+}
+
+function WeeklySchedulePageContent() {
+  const queryDay = useSearchParams().get("day");
+  const loadSequence = useRef(0);
+  const [loaded, setLoaded] = useState(false);
   const [weekStart, setWeekStart] = useState(() => mondayOf(todayJst()));
   const [jumpDay, setJumpDay] = useState(todayJst());
   const [initialized, setInitialized] = useState(false);
@@ -154,21 +163,25 @@ export default function WeeklySchedulePage() {
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   useEffect(() => {
-    const q = new URLSearchParams(location.search).get("day");
-    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) {
+    const q = isCalendarDay(queryDay) ? queryDay : todayJst();
+    if (q) {
       setJumpDay(q);
       setWeekStart(mondayOf(q));
     }
     setInitialized(true);
-  }, []);
+  }, [queryDay]);
 
   useEffect(() => {
     if (!initialized) return;
     void loadWeek();
+    return () => { loadSequence.current += 1; };
   }, [initialized, weekStart]);
 
   async function loadWeek() {
+    const requestId = ++loadSequence.current;
     setBusy(true);
+    setLoaded(false);
+    setEntries([]); setWorks([]); setVehicles([]); setCustomers([]); setCalendar({}); setCapacities({});
     setMessage("1週間のスケジュールを読み込み中…");
     const endExclusive = addDays(weekStart, 7);
 
@@ -237,6 +250,8 @@ export default function WeeklySchedulePage() {
         nextCustomers = (data || []) as Customer[];
       }
 
+      if (requestId !== loadSequence.current) return;
+      setLoaded(true);
       setEntries(nextEntries);
       setWorks(nextWorks);
       setVehicles(nextVehicles);
@@ -245,9 +260,9 @@ export default function WeeklySchedulePage() {
       setCalendar(Object.fromEntries(((calendarRes.data || []) as CalendarDay[]).map((x) => [x.business_date, x])));
       setMessage(weekTitle(weekStart) + " の予定を表示しています。");
     } catch (error: any) {
-      setMessage(safeActionError("週間予定の読み込み", error));
+      if (requestId === loadSequence.current) setMessage(safeActionError("週間予定の読み込み", error));
     } finally {
-      setBusy(false);
+      if (requestId === loadSequence.current) setBusy(false);
     }
   }
 
@@ -395,7 +410,7 @@ export default function WeeklySchedulePage() {
     if (cal && !cal.is_business_day) {
       return { className: "closed", label: "休業日", detail: cal.label || "" };
     }
-    if (!c) return { className: "unknown", label: "空き確認中", detail: "" };
+    if (!c) return { className: "unknown", label: busy ? "空き確認中" : "空き未確認", detail: "" };
 
     const morningRaw = c.morning_total_limit - c.morning_count;
     const afternoonRaw = c.afternoon_total_limit - c.afternoon_count;
@@ -442,20 +457,23 @@ export default function WeeklySchedulePage() {
   }
 
   function jumpToWeek() {
-    if (!jumpDay) return;
+    if (!isCalendarDay(jumpDay)) return;
     setWeekStart(mondayOf(jumpDay));
+    location.replace("/schedule/week?day=" + jumpDay);
   }
 
   function moveWeek(delta: number) {
     const nextStart = addDays(weekStart, delta * 7);
     setWeekStart(nextStart);
     setJumpDay(nextStart);
+    location.replace("/schedule/week?day=" + nextStart);
   }
 
   function goCurrentWeek() {
     const today = todayJst();
     setJumpDay(today);
     setWeekStart(mondayOf(today));
+    location.replace("/schedule/week?day=" + today);
   }
 
   const weekStats = useMemo(() => {
@@ -514,7 +532,8 @@ export default function WeeklySchedulePage() {
         <div>
           <div className="eyebrow">1週間のスケジュール</div>
           <h1>{weekTitle(weekStart)}</h1>
-          <p>{busy ? "読み込み中…" : message}</p>
+          <p role="status" aria-live="polite">{busy ? "読み込み中…" : message}</p>
+          {!loaded && !busy && <button type="button" onClick={() => void loadWeek()}>再読み込み</button>}
         </div>
         <div className="weekNav">
           <button onClick={() => moveWeek(-1)}>← 前週</button>
@@ -526,7 +545,7 @@ export default function WeeklySchedulePage() {
 
       <section className="jumpBar">
         <label>日付から週を検索
-          <input type="date" value={jumpDay} onChange={(e) => setJumpDay(e.target.value)} />
+          <input aria-label="表示する週の日付" type="date" value={jumpDay} onChange={(e) => setJumpDay(e.target.value)} />
         </label>
         <button onClick={jumpToWeek}>この週を見る</button>
       </section>
@@ -592,7 +611,7 @@ export default function WeeklySchedulePage() {
               {overlap.count > 0 && <div className="overlapWarn">⚠ 点検・来社待ちの同時刻 {overlap.count}件</div>}
 
               <div className="dailyMiniReport">
-                {!dayRows.length && <div className="empty">予定なし</div>}
+                {loaded && !busy && !dayRows.length && <div className="empty">予定なし</div>}
                 {dayRows.length > 0 && (
                   <>
                     <section className="miniPeriod">

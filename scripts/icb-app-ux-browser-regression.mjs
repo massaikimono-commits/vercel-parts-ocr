@@ -24,6 +24,9 @@ const requests = [], errors = [], checks = [], routeAudit = [];
 let passed=false;
 let settingsFail=false, vehicleHistoryFail=false;
 let settingsRows=[];
+let calendarFail=false, rangeFail=false, historyRows=false, loanerFail=false, loanerOverflow=false;
+let leaseRows=[];
+let leaseRefreshFail=false, leaseWriteCompleted=false;
 await context.route('https://example.supabase.co/**', async route => {
   const request = route.request(); const url = new URL(request.url());
   const path = url.pathname; requests.push({method:request.method(),path,query:url.search});
@@ -45,6 +48,7 @@ await context.route('https://example.supabase.co/**', async route => {
   else if(path.endsWith('/schedule_time_availability')) data={options:[]};
   else if(path.endsWith('/schedule_day_capacity')) data={morning_count:0,afternoon_count:0,morning_inspection_count:0,morning_total_limit:15,afternoon_total_limit:10,morning_inspection_warning:4};
   else if(path.endsWith('/schedule_entries')) {
+    if(rangeFail){await route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({message:'fixture range failure'})});return;}
     const id=url.searchParams.get('id');
     if(id && detailFail){status=500;data={message:'fixture detail failure'};}
     else if(id) data=id==='eq.entry-1'?inbound:id==='eq.entry-2'?delivery:null;
@@ -52,11 +56,20 @@ await context.route('https://example.supabase.co/**', async route => {
   }
   else if(path.endsWith('/vehicles')) {
     if(url.searchParams.has('registration_number_last4')){last4Reads++; await new Promise(r=>setTimeout(r,120));}
-    if(searchFail){status=500;data={message:'fixture search failure'};}else data=empty?[]:[vehicle];
+    if(searchFail){status=500;data={message:'fixture search failure'};}else data=empty?[]:[url.searchParams.get('id')==='eq.vehicle-2'?{...vehicle,id:'vehicle-2',registration_number_last4:'0011'}:vehicle];
   }
   else if(path.endsWith('/customers')) data=[customer];
-  else if(path.endsWith('/work_orders')) data=[work];
-  else if(path.endsWith('/business_calendar')) data=[];
+  else if(path.endsWith('/work_orders')) data=url.searchParams.has('needs_loaner')?(loanerOverflow?Array.from({length:301},(_,i)=>({...work,id:'loaner-work-'+i,needs_loaner:true,planned_delivery_at:day+'T17:00:00+09:00'})):[{...work,needs_loaner:true,planned_delivery_at:day+'T17:00:00+09:00'}]):[work];
+  else if(path.endsWith('/business_calendar')) {if(calendarFail){status=500;data={message:'fixture calendar failure'};}else data=[];}
+  else if(path.endsWith('/loaner_vehicle_availability')) {
+    if(loanerFail){status=500;data={message:'fixture loaner failure'};} else data={vehicles:[]};
+  }
+  else if(path.endsWith('/vehicle_action_history') && historyRows) data=[{id:'action-1',action_type:'OTHER',created_at:day+'T00:00:00Z',details:{}}];
+  else if(path.endsWith('/lease_maintenance_contracts')) {
+    if(request.method()==='PATCH') {await new Promise(r=>setTimeout(r,180));const id=url.searchParams.get('id')?.replace(/^eq\./,'');data={...leaseRows.find(r=>r.id===id),...request.postDataJSON()};leaseRows=leaseRows.map(r=>r.id===id?data:r);leaseWriteCompleted=true;}
+    else if(leaseRefreshFail && leaseWriteCompleted){status=500;data={message:'fixture post-save refresh failure'};}
+    else data=leaseRows;
+  }
   if(request.headers()['accept']?.includes('vnd.pgrst.object') && Array.isArray(data)) data=data[0]||null;
   await route.fulfill({status,contentType:'application/json',body:JSON.stringify(data),headers:{'content-range':'0-0/1'}});
 });
@@ -189,6 +202,93 @@ try {
       await page.screenshot({path:`${out}/continuation-${width}-${path.split('/').pop().split('?')[0]}.png`,fullPage:true});
     }
     check('continuation six routes responsive at '+width);
+  }
+  for(const path of ['/schedule/week','/schedule/month']) {
+    await page.goto(base+path+'?day=2026-99-99');await ready();
+    if(path.endsWith('week')) assert.equal(await page.getByLabel('表示する週の日付').inputValue(),day);
+    else await page.getByRole('heading',{level:1}).waitFor();
+    await page.evaluate(path=>history.pushState(null,'',path+'?day=2026-12-31'),path);
+    if(path.endsWith('week')) await page.waitForFunction(()=>document.querySelector('input[type=date]')?.value==='2026-12-31');
+    else await page.getByRole('heading',{name:'2026年12月',exact:true}).waitFor();
+    await page.evaluate(path=>history.pushState(null,'',path+'?day=2027-01-01'),path);
+    if(path.endsWith('week')) await page.waitForFunction(()=>document.querySelector('input[type=date]')?.value==='2027-01-01');
+    else await page.getByRole('heading',{name:'2027年1月',exact:true}).waitFor();
+    check(path+' invalid date fallback and same-route year-boundary navigation');
+    if(path.endsWith('week')) {
+      await page.getByRole('button',{name:'← 前週',exact:true}).click();
+      await page.waitForURL('**/schedule/week?day=2026-12-21');
+      await page.reload();await page.getByLabel('表示する週の日付').waitFor();
+      assert.equal(await page.getByLabel('表示する週の日付').inputValue(),'2026-12-21');
+    } else {
+      await page.getByRole('button',{name:'← 前月',exact:true}).click();
+      await page.waitForURL('**/schedule/month?day=2026-12-01');
+      await page.reload();await page.getByRole('heading',{name:'2026年12月',exact:true}).waitFor();
+    }
+    check(path+' period controls persist in URL and survive reload');
+    rangeFail=true;await page.reload();await page.getByRole('button',{name:'再読み込み',exact:true}).waitFor();
+    if(path.endsWith('week')) assert.equal(await page.getByText('予定なし',{exact:true}).count(),0);
+    rangeFail=false;await page.getByRole('button',{name:'再読み込み',exact:true}).click();
+    await page.getByRole('status').filter({hasText:'予定を表示しています。'}).waitFor();
+    check(path+' read error/retry avoids false empty');
+  }
+  calendarFail=true;
+  for(const path of ['/settings/business-calendar','/settings/business-calendar/edit']) {
+    await page.goto(base+path);await ready();await page.getByRole('button',{name:'再読み込み',exact:true}).waitFor();
+    assert.equal(await page.locator('.monthsGrid,.missingCount').count(),0);
+    calendarFail=false;await page.getByRole('button',{name:'再読み込み',exact:true}).click();await page.locator('.monthsGrid').waitFor();
+    calendarFail=true;check(path+' failure is not a missing calendar and retry recovers');
+  }
+  calendarFail=false;
+  for(const path of ['history','photos','lease-maintenance']) {
+    await page.goto(base+'/customer-vehicles/'+path+'?vehicle=vehicle-1');await ready();
+    await page.getByRole('heading',{level:1}).filter({hasText:'車番 10'}).waitFor();
+    await page.evaluate(path=>history.pushState(null,'',path+'?vehicle=vehicle-2'),'/customer-vehicles/'+path);
+    await page.getByRole('heading',{level:1}).filter({hasText:'車番 11'}).waitFor();
+    check(path+' same-route vehicle query resets scoped state');
+  }
+  historyRows=true;await page.goto(base+'/customer-vehicles/history?vehicle=vehicle-1');await ready();
+  await page.locator('.sourceFilters').getByRole('button',{name:'記録簿',exact:true}).click();
+  await page.getByText('読み込み済み履歴に、この種類の履歴はありません。',{exact:true}).waitFor();
+  assert.equal(await page.getByText('この車両に紐付く既存履歴はまだありません。',{exact:true}).count(),0);
+  historyRows=false;check('history filtered-empty describes loaded subset');
+  const contract=(id,start)=>({id,vehicle_id:'vehicle-1',contract_number:id,contract_start_date:start,contract_end_date:'2028-12-31',created_at:'2026-01-01T00:00:00Z',needs_review:true,substitute_car_eligible_work_types:[],inspection_intervals_months:[],tire_maker_names:[]});
+  leaseRows=[contract('newer','2026-10-01'),contract('older','2026-01-01')];
+  await page.goto(base+'/customer-vehicles/lease-maintenance?vehicle=vehicle-1');await ready();
+  await page.locator('.historyCard').getByRole('button',{name:'内容を見る / 編集',exact:true}).nth(1).click();
+  await page.getByLabel('契約開始日',{exact:true}).fill('2027-01-01');
+  await page.getByRole('button',{name:'変更を保存（要確認に戻す）',exact:true}).click();
+  assert(await page.getByLabel('契約開始日',{exact:true}).isDisabled());
+  assert(await page.getByRole('button',{name:'＋ 新しい契約を登録',exact:true}).isDisabled());
+  await page.getByRole('status').filter({hasText:'契約内容を保存しました。'}).waitFor();
+  assert((await page.locator('.summary').innerText()).includes('2027-01-01'));
+  check('lease saving locks editor and updated contract becomes latest');
+  leaseRefreshFail=true;leaseWriteCompleted=false;
+  await page.getByLabel('契約開始日',{exact:true}).fill('2028-01-01');
+  await page.getByRole('button',{name:'変更を保存（要確認に戻す）',exact:true}).click();
+  await page.getByRole('status').filter({hasText:'契約内容は保存済みです。'}).waitFor();
+  const leaseWrites=requests.filter(r=>r.method==='PATCH' && r.path.endsWith('/lease_maintenance_contracts')).length;
+  leaseRefreshFail=false;await page.getByRole('button',{name:'契約履歴を再読み込み',exact:true}).click();
+  await page.getByRole('status').filter({hasText:'契約履歴を再読み込みました。'}).waitFor();
+  assert.equal(requests.filter(r=>r.method==='PATCH' && r.path.endsWith('/lease_maintenance_contracts')).length,leaseWrites);
+  leaseRows=[];check('lease committed write with failed refresh recovers via read-only retry');
+  loanerFail=true;await page.goto(base+'/schedule/loaners');await ready();
+  await page.getByRole('button',{name:'代車を割当',exact:true}).first().click();
+  await page.getByRole('status').filter({hasText:'代車空き確認'}).waitFor();
+  loanerFail=false;await page.getByRole('button',{name:'代車を割当',exact:true}).first().click();
+  await page.getByRole('status').filter({hasText:'空いている代車を選択してください。'}).waitFor();
+  check('loaner availability error/retry releases controls');
+  loanerOverflow=true;await page.reload();await page.getByRole('alert').filter({hasText:'表示上限300件を超えています。'}).waitFor();
+  assert.equal(await page.locator('.board .row').count(),300);loanerOverflow=false;
+  check('loaner sentinel warns that capped demand is incomplete');
+  for(const width of [390,768,1440]) {
+    await page.setViewportSize({width,height:1000});
+    for(const path of ['/schedule/week','/schedule/month','/schedule/loaners','/settings/business-calendar','/settings/business-calendar/edit']) {
+      await page.goto(base+path);await ready();
+      const dimensions=await noOverflow();
+      assert(!dimensions.overflow,path+' phase3 overflow at '+width+': '+JSON.stringify(dimensions));
+      await page.screenshot({path:`${out}/phase3-${width}-${path.replaceAll('/','-')}.png`,fullPage:true});
+    }
+    check('phase3 five routes responsive at '+width);
   }
   assert.deepEqual(errors,[],'no browser page errors');
   passed=true;

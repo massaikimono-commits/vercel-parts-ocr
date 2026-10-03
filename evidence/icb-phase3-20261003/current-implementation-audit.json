@@ -1,0 +1,48 @@
+{
+  "NO_OP_VERIFIED": [
+    "previous search/detail/back and request guards retained",
+    "business hours, capacity, inspection/print semantics unchanged",
+    "OCR architecture/algorithms unchanged",
+    "dependency versions and lockfile unchanged"
+  ],
+  "REGRESSION_ONLY": [
+    "28 existing core/print/PDF-entry routes and 404",
+    "prior fixture checks"
+  ],
+  "REMEDIATE": [
+    "customer delete preflight serialization and selection guard",
+    "week/month latest-response ownership, invalid dates, URL period persistence and read recovery",
+    "vehicle-scoped history/photos/lease query remount and stable pagination order",
+    "photo page ID deduplication and filtered history empty wording",
+    "lease canonical ordering, mutation serialization, saved-page offset reset and read-only recovery",
+    "business-calendar stale response and false-empty recovery",
+    "loaner availability rejection recovery, synchronous guard and bounded-query disclosure"
+  ],
+  "IMPLEMENT": [],
+  "SPEC_MATCH": [
+    "existing business, database and printing contracts preserved"
+  ],
+  "IMPLEMENTATION_AHEAD": [
+    "defensive state/error controls and explicit bounded-query disclosure"
+  ],
+  "HISTORICAL_ONLY": [
+    "prior ledger entries do not establish current deployed acceptance"
+  ],
+  "DB_REQUIRED_HOLD": [
+    "delivery-input DB-required UX",
+    "legal_3m apply"
+  ],
+  "USER_DEVICE_REQUIRED": [
+    "authenticated device acceptance",
+    "Safari/iPhone/iPad",
+    "physical print acceptance"
+  ],
+  "SPEC_DECISION_REQUIRED": [
+    "inherited search-scope ambiguity"
+  ],
+  "KNOWN_LIMITATIONS": [
+    "offset pagination does not provide a concurrent database snapshot",
+    "loaner summary intentionally bounded to 300 displayed rows",
+    "inherited A3 print preview horizontal width on desktop remains"
+  ]
+}

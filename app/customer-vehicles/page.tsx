@@ -205,6 +205,7 @@ export default function CustomerVehiclesPage() {
   const [linkingCustomer, setLinkingCustomer] = useState(false);
   const linkMutationLock = useRef(false);
   const customerSaveLock = useRef(false);
+  const customerDeleteLock = useRef(false);
   const selectedVehicleRef = useRef("");
   const vehicleLoadSeq = useRef(0);
   const partsLoadSeq = useRef(0);
@@ -544,7 +545,7 @@ export default function CustomerVehiclesPage() {
   }, [localParts, selectedVehicle]);
 
   function selectVehicle(v: Vehicle, customerOverride?: Customer | null) {
-    if (customerSaveLock.current) return;
+    if (customerSaveLock.current || customerDeleteLock.current) return;
     const customer = customerOverride === undefined
       ? (v.customerId ? customerMap.get(v.customerId) || null : null)
       : customerOverride;
@@ -615,7 +616,7 @@ export default function CustomerVehiclesPage() {
   }
 
   async function saveCustomer() {
-    if (!selectedVehicle || customerSaveLock.current || linkMutationLock.current || deletingCustomer) return;
+    if (!selectedVehicle || customerSaveLock.current || linkMutationLock.current || customerDeleteLock.current) return;
     const displayName = customerForm.type === "company"
       ? (customerForm.companyName.trim() || customerForm.name.trim())
       : (customerForm.name.trim() || customerForm.companyName.trim());
@@ -682,7 +683,7 @@ export default function CustomerVehiclesPage() {
   }
 
   async function linkExistingCustomer() {
-    if (linkMutationLock.current || savingCustomer || deletingCustomer) return;
+    if (linkMutationLock.current || customerSaveLock.current || customerDeleteLock.current) return;
     if (!selectedVehicle || !linkCustomerId) {
       setMessage("紐付ける顧客を選択してください。");
       return;
@@ -711,23 +712,24 @@ export default function CustomerVehiclesPage() {
   }
 
   async function deleteSelectedCustomer() {
-    if (!selectedCustomer || deletingCustomer) return;
-    const label = customerLabel(selectedCustomer);
-    const { count: linkedCount, error: countError } = await supabase
-      .from("vehicles")
-      .select("id", { count: "exact", head: true })
-      .eq("customer_id", selectedCustomer.id);
-    if (countError) {
-      setMessage(safeActionError("紐づく車両数の確認", countError));
-      return;
-    }
-    const ok = window.confirm(
-      `${label} の顧客情報を削除しますか？\n\n紐づく車両 ${linkedCount || 0}台・予定・作業履歴は削除せず、顧客だけを削除します。車両は「顧客未割り当て」になります。`
-    );
-    if (!ok) return;
-
+    if (!selectedCustomer || customerDeleteLock.current || customerSaveLock.current || linkMutationLock.current) return;
+    customerDeleteLock.current = true;
     setDeletingCustomer(true);
     try {
+      const label = customerLabel(selectedCustomer);
+      const { count: linkedCount, error: countError } = await supabase
+        .from("vehicles")
+        .select("id", { count: "exact", head: true })
+        .eq("customer_id", selectedCustomer.id);
+      if (countError) {
+        setMessage(safeActionError("紐づく車両数の確認", countError));
+        return;
+      }
+      const ok = window.confirm(
+        `${label} の顧客情報を削除しますか？\n\n紐づく車両 ${linkedCount || 0}台・予定・作業履歴は削除せず、顧客だけを削除します。車両は「顧客未割り当て」になります。`
+      );
+      if (!ok) return;
+
       const { error } = await supabase.from("customers").delete().eq("id", selectedCustomer.id);
       if (error) throw error;
 
@@ -745,6 +747,7 @@ export default function CustomerVehiclesPage() {
     } catch (error: any) {
       setMessage(safeActionError("顧客情報の削除", error));
     } finally {
+      customerDeleteLock.current = false;
       setDeletingCustomer(false);
     }
   }
@@ -844,7 +847,7 @@ export default function CustomerVehiclesPage() {
           {filteredVehicles.map((v) => {
             const c = customerMap.get(v.customerId);
             return (
-              <button disabled={savingCustomer} key={v.id} className={`vehicle ${selectedVehicleId === v.id ? "selected" : ""}`} onClick={() => selectVehicle(v)}>
+              <button disabled={savingCustomer || deletingCustomer} key={v.id} className={`vehicle ${selectedVehicleId === v.id ? "selected" : ""}`} onClick={() => selectVehicle(v)}>
                 <div className="vehicleTitle"><b>{vehicleLabel(v)}</b><span>{naturalLast4(v.last4) || "----"} / 選択</span></div>
                 <div>{c ? customerLabel(c) : "顧客未割り当て"}</div>
                 <small>{[v.maker, v.model, v.chassis].filter(Boolean).join(" / ") || "車両情報未入力"}</small>
@@ -914,7 +917,7 @@ export default function CustomerVehiclesPage() {
                   {selectedCustomer && (
                     <button
                       className="danger"
-                      disabled={deletingCustomer || linkingCustomer}
+                      disabled={deletingCustomer || linkingCustomer || savingCustomer}
                       onClick={() => void deleteSelectedCustomer()}
                     >
                       {deletingCustomer ? "削除中…" : "顧客情報を削除"}
@@ -961,7 +964,7 @@ export default function CustomerVehiclesPage() {
                 <label>住所<input value={customerForm.address} onChange={(e) => setCustomerForm((f) => ({ ...f, address: e.target.value }))} placeholder="住所" /></label>
                 <label className="wide">備考<textarea value={customerForm.notes} onChange={(e) => setCustomerForm((f) => ({ ...f, notes: e.target.value }))} placeholder="備考" /></label>
                 <div className="actions wide">
-                  <button className="primary" disabled={savingCustomer || linkingCustomer} onClick={saveCustomer}>{savingCustomer ? "保存中…" : customerForm.id ? "顧客情報を更新" : "新規顧客を保存して紐付け"}</button>
+                  <button className="primary" disabled={savingCustomer || linkingCustomer || deletingCustomer} onClick={saveCustomer}>{savingCustomer ? "保存中…" : customerForm.id ? "顧客情報を更新" : "新規顧客を保存して紐付け"}</button>
                   <button onClick={() => setCustomerEditing(false)}>キャンセル</button>
                 </div>
               </div>

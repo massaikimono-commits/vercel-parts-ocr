@@ -2,8 +2,9 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { safeActionError } from "../../lib/client-security";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../../supabase";
 
 type VehicleSummary = {
@@ -146,6 +147,17 @@ function sortItems(items: TimelineItem[]) {
 }
 
 export default function VehicleHistoryPage() {
+  return <Suspense fallback={<main role="status">車両情報を読み込み中…</main>}><VehicleHistoryPageRoute /></Suspense>;
+}
+
+function VehicleHistoryPageRoute() {
+  const id = useSearchParams().get("vehicle")?.trim() || "";
+  // A new vehicle gets a fresh form, pagination and loading state, including same-route navigation.
+  return <VehicleHistoryPageContent key={id} routeVehicleId={id} />;
+}
+
+function VehicleHistoryPageContent({ routeVehicleId }: { routeVehicleId: string }) {
+  const readLock = useRef(false);
   const [vehicleId, setVehicleId] = useState("");
   const [vehicle, setVehicle] = useState<VehicleSummary | null>(null);
   const [items, setItems] = useState<TimelineItem[]>([]);
@@ -158,7 +170,7 @@ export default function VehicleHistoryPage() {
   const [message, setMessage] = useState("履歴を読み込んでいます。");
 
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("vehicle")?.trim() || "";
+    const id = routeVehicleId;
     setVehicleId(id);
     if (!id) {
       setBusy(false);
@@ -166,7 +178,7 @@ export default function VehicleHistoryPage() {
       return;
     }
     void loadInitial(id);
-  }, []);
+  }, [routeVehicleId]);
 
   const filteredItems = useMemo(
     () => sourceFilter === "すべて" ? items : items.filter((item) => item.source === sourceFilter),
@@ -176,6 +188,8 @@ export default function VehicleHistoryPage() {
   const canShowMore = visibleCount < filteredItems.length || sourceHasMore;
 
   async function loadInitial(id: string) {
+    if (readLock.current) return;
+    readLock.current = true;
     setBusy(true);
     setLoaded(false);
     try {
@@ -210,6 +224,7 @@ export default function VehicleHistoryPage() {
     } catch (error: any) {
       setMessage(safeActionError("車両履歴の読み込み", error));
     } finally {
+      readLock.current = false;
       setBusy(false);
     }
   }
@@ -231,36 +246,42 @@ export default function VehicleHistoryPage() {
         .select("id,action_type,work_order_id,inspection_record_id,details,created_at")
         .eq("vehicle_id", id)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(start, end),
       supabase
         .from("work_order_completion_events")
         .select("id,event_type,previous_status,new_status,actor,created_at,work_order:work_orders!inner(id,vehicle_id,reason)")
         .eq("work_order.vehicle_id", id)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(start, end),
       supabase
         .from("work_order_presence_events")
         .select("id,event_type,actor,created_at,work_order:work_orders!inner(id,vehicle_id,reason)")
         .eq("work_order.vehicle_id", id)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(start, end),
       supabase
         .from("work_order_schedule_changes")
         .select("id,change_type,old_value,new_value,changed_by,changed_at,work_order:work_orders!inner(id,vehicle_id,reason)")
         .eq("work_order.vehicle_id", id)
         .order("changed_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(start, end),
       supabase
         .from("inspection_record_audit")
         .select("id,event_type,field_name,old_value,new_value,actor,source,created_at,inspection_job:inspection_jobs!inner(id,vehicle_id,work_order_id,record_type)")
         .eq("inspection_job.vehicle_id", id)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(start, end),
       supabase
         .from("inspection_distance_omission_history")
         .select("id,item_code,inspection_date,odometer_km,omitted_for_distance,consecutive_omission_count,created_at")
         .eq("vehicle_id", id)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(start, end),
     ]);
 
@@ -403,12 +424,13 @@ export default function VehicleHistoryPage() {
   }
 
   async function showMore() {
-    if (busy) return;
+    if (busy || readLock.current) return;
 
     // Any source that filled its last page may still contain rows newer than
     // buffered rows from another source. Load the next bounded source round
     // before exposing the next unified page so global newest-first order stays correct.
     if (sourceHasMore && vehicleId) {
+      readLock.current = true;
       setBusy(true);
       try {
         const pages = await loadSourceRound(vehicleId, sourceRound);
@@ -424,6 +446,7 @@ export default function VehicleHistoryPage() {
       } catch (error: any) {
         setMessage(safeActionError("車両履歴の追加読み込み", error));
       } finally {
+        readLock.current = false;
         setBusy(false);
       }
       return;
@@ -486,7 +509,7 @@ export default function VehicleHistoryPage() {
         <p className="filterNote">読み込み済み履歴を種類ごとに絞り込みます。DBの再検索は行いません。</p>
 
         {loaded && !busy && !visibleItems.length && (
-          <div className="empty">この車両に紐付く既存履歴はまだありません。</div>
+          <div className="empty">{sourceFilter === "すべて" ? "この車両に紐付く既存履歴はまだありません。" : "読み込み済み履歴に、この種類の履歴はありません。"}</div>
         )}
 
         <div className="timeline">

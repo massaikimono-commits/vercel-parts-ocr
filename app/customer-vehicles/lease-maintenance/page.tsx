@@ -2,8 +2,10 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { sortLeaseContracts } from "../../lib/lease-contract-order";
 import { safeActionError } from "../../lib/client-security";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../../supabase";
 
 type FourState = "yes" | "no" | "not_stated" | "needs_review";
@@ -190,6 +192,17 @@ function StateSelect({ value, onChange }: { value: FourState; onChange: (value: 
 }
 
 export default function LeaseMaintenancePage() {
+  return <Suspense fallback={<main role="status">車両情報を読み込み中…</main>}><LeaseMaintenancePageRoute /></Suspense>;
+}
+
+function LeaseMaintenancePageRoute() {
+  const id = useSearchParams().get("vehicle")?.trim() || "";
+  // A new vehicle gets a fresh form, pagination and loading state, including same-route navigation.
+  return <LeaseMaintenancePageContent key={id} routeVehicleId={id} />;
+}
+
+function LeaseMaintenancePageContent({ routeVehicleId }: { routeVehicleId: string }) {
+  const readLock = useRef(false);
   const [vehicleId, setVehicleId] = useState("");
   const [vehicle, setVehicle] = useState<VehicleSummary | null>(null);
   const [contracts, setContracts] = useState<LeaseContract[]>([]);
@@ -199,12 +212,14 @@ export default function LeaseMaintenancePage() {
   const [form, setForm] = useState<ContractForm>(blankForm());
   const [busy, setBusy] = useState(true);
   const [loaded, setLoaded] = useState(false);
+  const [historyRefreshFailed, setHistoryRefreshFailed] = useState(false);
+  const contractMutationLock = useRef(false);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState("契約情報を読み込んでいます。");
 
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("vehicle")?.trim() || "";
+    const id = routeVehicleId;
     setVehicleId(id);
     if (!id) {
       setBusy(false);
@@ -212,7 +227,7 @@ export default function LeaseMaintenancePage() {
       return;
     }
     void loadInitial(id);
-  }, []);
+  }, [routeVehicleId]);
 
   const latest = contracts[0] || null;
   const editingContract = useMemo(
@@ -228,12 +243,15 @@ export default function LeaseMaintenancePage() {
       .order("contract_start_date", { ascending: false, nullsFirst: false })
       .order("contract_end_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
       .range(start, start + PAGE_SIZE - 1);
     if (error) throw error;
     return (data || []) as unknown as LeaseContract[];
   }
 
   async function loadInitial(id: string) {
+    if (readLock.current) return;
+    readLock.current = true;
     setBusy(true);
     setLoaded(false);
     try {
@@ -269,27 +287,55 @@ export default function LeaseMaintenancePage() {
     } catch (error: any) {
       setMessage(safeActionError("リースメンテ契約の読み込み", error));
     } finally {
+      readLock.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function reloadContractHistory(selected?: LeaseContract) {
+    if (readLock.current) return false;
+    readLock.current = true;
+    setBusy(true);
+    setHistoryRefreshFailed(false);
+    try {
+      const rows = await loadContractPage(vehicleId, 0);
+      // Keep the saved editor record even if it moved outside the first page.
+      const combined = selected && !rows.some((row) => row.id === selected.id) ? [...rows, selected] : rows;
+      setContracts(sortLeaseContracts(combined));
+      setOffset(rows.length);
+      setHasMore(rows.length === PAGE_SIZE);
+      return true;
+    } catch (error) {
+      setHasMore(false);
+      setHistoryRefreshFailed(true);
+      setMessage(safeActionError("契約履歴の再読み込み", error));
+      return false;
+    } finally {
+      readLock.current = false;
       setBusy(false);
     }
   }
 
   async function loadMore() {
-    if (!vehicleId || busy || !hasMore) return;
+    if (!vehicleId || busy || !hasMore || readLock.current || contractMutationLock.current) return;
+    readLock.current = true;
     setBusy(true);
     try {
       const rows = await loadContractPage(vehicleId, offset);
-      setContracts((old) => [...old, ...rows]);
+      setContracts((old) => sortLeaseContracts([...new Map([...old, ...rows].map((row) => [row.id, row])).values()]));
       setOffset((old) => old + rows.length);
       setHasMore(rows.length === PAGE_SIZE);
       setMessage(`契約履歴を${contracts.length + rows.length}件表示しています。`);
     } catch (error: any) {
       setMessage(safeActionError("契約履歴の追加読み込み", error));
     } finally {
+      readLock.current = false;
       setBusy(false);
     }
   }
 
   function startNew() {
+    if (contractMutationLock.current) return;
     setEditingId(null);
     setForm(blankForm());
     setMessage("新しい契約を入力してください。保存時は「要確認」で登録します。");
@@ -297,6 +343,7 @@ export default function LeaseMaintenancePage() {
   }
 
   function editContract(contract: LeaseContract) {
+    if (contractMutationLock.current) return;
     setEditingId(contract.id);
     setForm(toForm(contract));
     setMessage("契約内容を編集中です。保存すると確認状態は「要確認」に戻ります。");
@@ -313,12 +360,13 @@ export default function LeaseMaintenancePage() {
   }
 
   async function saveContract() {
-    if (!vehicleId || saving) return;
+    if (!vehicleId || !loaded || contractMutationLock.current || readLock.current) return;
     if (form.contract_start_date && form.contract_end_date && form.contract_end_date < form.contract_start_date) {
       setMessage("契約終了日は契約開始日以降にしてください。");
       return;
     }
 
+    contractMutationLock.current = true;
     setSaving(true);
     try {
       const payload = {
@@ -363,21 +411,26 @@ export default function LeaseMaintenancePage() {
 
       if (result.error) throw result.error;
       const saved = result.data as unknown as LeaseContract;
-      setContracts((old) => editingId
+      setContracts((old) => sortLeaseContracts(editingId
         ? old.map((row) => row.id === saved.id ? saved : row)
-        : [saved, ...old]);
+        : [saved, ...old]));
       setEditingId(saved.id);
       setForm(toForm(saved));
-      setMessage("契約内容を保存しました。内容確認後に「確認済みにする」を実行してください。");
+      const refreshed = await reloadContractHistory(saved);
+      setMessage(refreshed
+        ? "契約内容を保存しました。内容確認後に「確認済みにする」を実行してください。"
+        : "契約内容は保存済みです。履歴の再読み込みに失敗しました。契約履歴だけを再読み込みしてください。");
     } catch (error: any) {
       setMessage(safeActionError("リースメンテ契約の保存", error));
     } finally {
+      contractMutationLock.current = false;
       setSaving(false);
     }
   }
 
   async function confirmContract() {
-    if (!editingId || confirming) return;
+    if (!editingId || !loaded || contractMutationLock.current || readLock.current) return;
+    contractMutationLock.current = true;
     setConfirming(true);
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -417,11 +470,12 @@ export default function LeaseMaintenancePage() {
       if (error) throw error;
 
       const saved = data as unknown as LeaseContract;
-      setContracts((old) => old.map((row) => row.id === saved.id ? saved : row));
+      setContracts((old) => sortLeaseContracts(old.map((row) => row.id === saved.id ? saved : row)));
       setMessage(`${reviewer} さんの確認済みとして記録しました。`);
     } catch (error: any) {
       setMessage(safeActionError("契約確認", error));
     } finally {
+      contractMutationLock.current = false;
       setConfirming(false);
     }
   }
@@ -490,7 +544,7 @@ export default function LeaseMaintenancePage() {
         </div>
 
         <div className="summaryActions">
-          <button className="primary" onClick={startNew}>＋ 新しい契約を登録</button>
+          <button disabled={busy || saving || confirming || !loaded} className="primary" onClick={startNew}>＋ 新しい契約を登録</button>
           {latest?.source_document_id && <button onClick={() => void openSourceDocument(latest)}>元契約書を開く</button>}
         </div>
       </section>
@@ -509,6 +563,7 @@ export default function LeaseMaintenancePage() {
       )}
 
       <section className="card editor">
+        <fieldset aria-label="リース契約内容" disabled={busy || saving || confirming || !loaded} style={{border:0,padding:0,margin:0,minWidth:0}}>
         <div className="sectionHead">
           <div>
             <span>{editingId ? "契約編集" : "新規契約"}</span>
@@ -604,7 +659,7 @@ export default function LeaseMaintenancePage() {
         </details>
 
         <div className="saveActions">
-          <button className="primary" disabled={saving || !vehicleId} onClick={() => void saveContract()}>
+          <button className="primary" disabled={saving || confirming || busy || !loaded || !vehicleId} onClick={() => void saveContract()}>
             {saving ? "保存中…" : editingId ? "変更を保存（要確認に戻す）" : "契約を登録（要確認）"}
           </button>
           {editingId && (
@@ -613,9 +668,13 @@ export default function LeaseMaintenancePage() {
             </button>
           )}
         </div>
+      </fieldset>
       </section>
 
       <section className="card historyCard">
+        {historyRefreshFailed && <button type="button" disabled={busy || saving || confirming} onClick={async () => {
+          if (await reloadContractHistory(editingContract || undefined)) setMessage("契約履歴を再読み込みました。");
+        }}>契約履歴を再読み込み</button>}
         <div className="sectionHead">
           <div><span>車両別</span><h2>契約履歴</h2></div>
           <b>{contracts.length}件表示</b>
@@ -637,7 +696,7 @@ export default function LeaseMaintenancePage() {
                 </div>
               </div>
               <div className="historyActions">
-                <button onClick={() => editContract(contract)}>内容を見る / 編集</button>
+                <button disabled={saving || confirming || busy} onClick={() => editContract(contract)}>内容を見る / 編集</button>
                 {contract.source_document_id && <button onClick={() => void openSourceDocument(contract)}>元契約書</button>}
               </div>
             </article>
@@ -645,7 +704,7 @@ export default function LeaseMaintenancePage() {
         </div>
         {hasMore && (
           <div className="more">
-            <button disabled={busy} onClick={() => void loadMore()}>
+            <button disabled={busy || saving || confirming} onClick={() => void loadMore()}>
               {busy ? "読み込み中…" : `さらに${PAGE_SIZE}件表示`}
             </button>
           </div>
