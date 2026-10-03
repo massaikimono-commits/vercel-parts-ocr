@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+import { weekDaysForViewport } from "./lib/week-view";
+import { useSecurityAlertAcknowledgement } from "./lib/security-alert-acknowledgement";
+
 import { appLocation as location } from "./lib/internal-navigation";
 
 import { useEffect, useMemo, useState } from "react";
@@ -127,6 +130,15 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
   const [loadError, setLoadError] = useState("");
   const [securityAlerts, setSecurityAlerts] = useState<LoginSecurityAlert[]>([]);
   const [securityAlert, setSecurityAlert] = useState<SecurityAlert | null>(null);
+  const [compactWeek, setCompactWeek] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width:760px)");
+    const update = () => setCompactWeek(media.matches);
+    update(); media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  const securityAcknowledgement = useSecurityAlertAcknowledgement(securityAlert);
 
   useEffect(() => {
     void loadToday();
@@ -200,7 +212,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         stateWorkIds.length
           ? supabase
               .from("schedule_entries")
-              .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode")
+              .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode,print_time_label_override")
               .in("work_order_id", stateWorkIds)
               .in("entry_type", ["pickup", "customer_visit", "delivery"])
           : Promise.resolve({ data: [], error: null }),
@@ -368,10 +380,10 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         <button className="logout" onClick={() => void onLogout()}>ログアウト</button>
       </header>
 
-      {securityAlert && (
+      {securityAlert && !securityAcknowledgement.acknowledged && (
         <button
           className="notice"
-          style={{ width: "100%", textAlign: "left", marginBottom: 12 }}
+          style={{ width: "100%", textAlign: "left", margin: "0 0 12px" }}
           onClick={() => location.assign("/settings/login-history")}
         >
           <strong>⚠ セキュリティ確認</strong><br />
@@ -417,7 +429,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           </div>
         </div>
         <div className="homeWeekGrid">
-          {currentWeekDays.map((day) => {
+          {weekDaysForViewport(currentWeekDays, todayJst(), compactWeek).map((day) => {
             const rows = weekRowsByDay.get(day) || [];
             const visitRows = rows.filter(({ entry, work }) =>
               entry.entry_type === "customer_visit" && work?.reason === "点検"
@@ -522,7 +534,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
           <button onClick={() => location.assign("/ocr/auto")}>部品伝票読取</button>
           <button onClick={() => location.assign("/inspection/select")}>記録簿作成</button>
           <button onClick={() => location.assign("/vehicle-workflow")}>車検証読取</button>
-          <button onClick={() => location.assign("/customer-vehicles")}>顧客・車両管理</button>
+          <button onClick={() => location.assign("/customer-vehicles")}>車両検索</button>
           <button onClick={() => location.assign("/settings/login-history")}>ログイン履歴</button>
         </div>
       </section>
@@ -553,7 +565,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
 
         <div className="dateSearch">
           <div><b>予定の日付検索</b><small>見たい日を選んで1日の予定を開く</small></div>
-          <input type="date" value={searchDay} onChange={(e) => setSearchDay(e.target.value)} />
+          <input aria-label="予定を表示する日付" type="date" value={searchDay} onChange={(e) => setSearchDay(e.target.value)} />
           <button disabled={!searchDay} onClick={() => openDay(searchDay)}>この日の予定を見る</button>
           <button disabled={!searchDay} onClick={() => location.assign("/schedule/week?day=" + searchDay)}>この週の予定を見る</button>
           <button disabled={!searchDay} onClick={() => registerDay(searchDay)}>＋ この日に予定登録</button>
@@ -562,12 +574,12 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         <div className="desktopTools">
           <button className="uxDailyReportShortcut" onClick={() => location.assign(`/schedule/print?day=${todayJst()}`)}><b>日報を開く</b><small>今日の日報・A3印刷</small></button>
           <button onClick={() => location.assign("/schedule/search")}><b>予定即検索</b><small>名前・電話・下4桁</small></button>
-          <button onClick={() => location.assign("/settings/business-calendar")}><b>営業日カレンダー</b><small>営業日・休業日を管理</small></button>
+          <button className="calendarShortcut" onClick={() => location.assign("/settings/business-calendar")}><b>営業日カレンダー</b><small>営業日・休業日を管理</small></button>
           <button onClick={() => location.assign("/loaners")}><b>代車管理</b><small>空き・貸出・返却予定</small></button>
           <button onClick={() => location.assign("/ocr/auto")}><b>部品伝票読取</b><small>3番目によく使う</small></button>
           <button onClick={() => location.assign("/inspection/select")}><b>記録簿作成</b><small>記録簿を選んで作成</small></button>
           <button onClick={() => location.assign("/vehicle-workflow")}><b>車検証読取</b><small>必要なときだけ</small></button>
-          <button onClick={() => location.assign("/customer-vehicles")}><b>顧客・車両管理</b><small>検索・編集</small></button>
+          <button className="vehicleSearchAction" onClick={() => location.assign("/customer-vehicles")}><b>車両検索</b><small>検索・編集</small></button>
           <button onClick={() => location.assign("/settings/login-history")}><b>ログイン履歴</b><small>不審なアクセスを確認</small></button>
         </div>
       </section>
@@ -603,6 +615,7 @@ export default function HomeDashboard({ onLogout }: { onLogout: () => void | Pro
         .homeWorkloadGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
         .homeWorker{display:grid;gap:3px;text-align:left;color:#172033;border-color:#dbe3ee;padding:11px}
         .homeWorker>b{font-size:15px;display:flex;align-items:center;justify-content:space-between;gap:8px}.homeWorker span{font-size:12px;color:#5d6878}.homeWorker span strong{font-size:20px;color:#172033}.homeWorker small{font-size:11px;color:#718096}.homeWorker.unassigned{border-color:#e6aa5a;background:#fff9e8}.homeWorker.urgent{border-color:#e4a099;background:#fff8f7}.urgentBadge{font-size:10px;font-style:normal;background:#b8493e;color:white;border-radius:999px;padding:3px 6px;white-space:nowrap}
+        @media(max-width:760px){.homeWeekRows{min-height:64px!important}.homeWeekEmpty{padding:12px 4px}.homeWeekGrid{grid-template-columns:repeat(7,minmax(160px,1fr))}}
         @media(max-width:780px){.homeWorkloadGrid{grid-template-columns:1fr 1fr}}
         @media(max-width:380px){.statusTile span{font-size:10px}.statusTile strong{font-size:24px}}
       `}</style>

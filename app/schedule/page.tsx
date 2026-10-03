@@ -2,7 +2,8 @@
 "use client";
 import { appLocation as location } from "../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../supabase";
 import { dailyReportTimeLabel } from "./print-rules";
 import { buildDailyReportPreviewModel } from "./daily-report-print-model";
@@ -143,7 +144,7 @@ function addDay(day: string, delta: number) {
   return localDateString(d);
 }
 
-export default function SchedulePage() {
+function ScheduleContent() {
   const [day, setDay] = useState(() => localDateString());
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [stateEntries, setStateEntries] = useState<BusinessScheduleEntry[]>([]);
@@ -155,6 +156,22 @@ export default function SchedulePage() {
   const [initialized, setInitialized] = useState(false);
   const [message, setMessage] = useState("当日の入出庫予定を読み込みます。");
   const [focusWorkId, setFocusWorkId] = useState("");
+  const params = useSearchParams();
+  const query = params.toString();
+  const loadSequence = useRef(0);
+
+  function validDay(value: string | null): value is string {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(value + "T00:00:00Z");
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0,10) === value;
+  }
+
+  function selectDay(value: string) {
+    if (!validDay(value)) return;
+    const next = new URLSearchParams(query);
+    next.set("day", value); next.delete("focus");
+    location.replace("/schedule?" + next.toString());
+  }
 
   useEffect(() => {
     void loadLayout();
@@ -189,16 +206,17 @@ export default function SchedulePage() {
   }
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const q = params.get("day");
-    setFocusWorkId(params.get("focus") || "");
-    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDay(q);
+    const search = new URLSearchParams(query);
+    const q = search.get("day");
+    setFocusWorkId(search.get("focus") || "");
+    setDay(validDay(q) ? q : localDateString());
     setInitialized(true);
-  }, []);
+  }, [query]);
 
   useEffect(() => {
     if (!initialized) return;
     void load();
+    return () => { loadSequence.current += 1; };
   }, [initialized, day]);
 
   useEffect(() => {
@@ -208,7 +226,9 @@ export default function SchedulePage() {
   }, [busy, focusWorkId, entries]);
 
   async function load() {
+    const sequence = ++loadSequence.current;
     setBusy(true);
+    setEntries([]); setStateEntries([]); setWorkOrders([]); setVehicles([]); setCustomers([]);
     const { start, end } = jstBounds(day);
     const workColumns = "id,vehicle_id,reason,status,worker_name,outsource_vendor_name,expected_completion_date,work_completed,checked_out_at,stay_reason,is_urgent,needs_loaner,is_waiting_service";
 
@@ -261,7 +281,7 @@ export default function SchedulePage() {
         stateWorkIds.length
           ? supabase
               .from("schedule_entries")
-              .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode")
+              .select("id,vehicle_id,work_order_id,entry_type,starts_at,print_time_mode,print_time_label_override")
               .in("work_order_id", stateWorkIds)
               .in("entry_type", ["pickup", "customer_visit", "delivery"])
           : Promise.resolve({ data: [], error: null }),
@@ -291,6 +311,7 @@ export default function SchedulePage() {
         nextWorksById.set(work.id, work);
       }
 
+      if (sequence !== loadSequence.current) return;
       setEntries(nextEntries);
       setStateEntries((stateEntryRes.data || []) as BusinessScheduleEntry[]);
       setWorkOrders([...nextWorksById.values()]);
@@ -298,9 +319,10 @@ export default function SchedulePage() {
       setCustomers((customerRes.data || []) as Customer[]);
       setMessage(`${nextEntries.length}件の予定があります。`);
     } catch (error: any) {
+      if (sequence !== loadSequence.current) return;
       setMessage(safeActionError("予定の読み込み", error));
     } finally {
-      setBusy(false);
+      if (sequence === loadSequence.current) setBusy(false);
     }
   }
 
@@ -747,12 +769,12 @@ export default function SchedulePage() {
 
       <div className="dateNav noPrint">
         <div className="dayNavRow" aria-label="日付移動">
-          <button onClick={() => setDay(addDay(day, -1))}>← 前日</button>
-          <button onClick={() => setDay(localDateString())}>今日</button>
-          <button onClick={() => setDay(addDay(day, 1))}>明日 →</button>
+          <button onClick={() => selectDay(addDay(day, -1))}>← 前日</button>
+          <button onClick={() => selectDay(localDateString())}>今日</button>
+          <button onClick={() => selectDay(addDay(day, 1))}>明日 →</button>
         </div>
         <div className="secondaryNavRow">
-          <input className="datePicker" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+          <input aria-label="表示する予定日" className="datePicker" type="date" value={day} onChange={(e) => selectDay(e.target.value)} />
         </div>
         <div className="quickNavRow">
           <button onClick={() => location.assign(`/schedule/week?day=${day}`)}>1週間</button>
@@ -832,4 +854,8 @@ export default function SchedulePage() {
       `}</style>
     </main>
   );
+}
+
+export default function SchedulePage() {
+  return <Suspense fallback={<main role="status">1日の予定を読み込み中…</main>}><ScheduleContent /></Suspense>;
 }

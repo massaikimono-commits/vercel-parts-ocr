@@ -2,7 +2,7 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
 
@@ -45,6 +45,7 @@ type ScheduleEntry = {
   starts_at: string;
   ends_at: string;
   print_time_mode: "exact" | "morning" | "unspecified";
+  print_time_label_override: string | null;
 };
 
 type SearchRow = {
@@ -145,6 +146,7 @@ function scheduleEntryTimeLabel(entry: ScheduleEntry) {
   const day = new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo", month: "numeric", day: "numeric",
   }).format(new Date(entry.starts_at));
+  if (entry.print_time_label_override?.trim()) return `${day} ${entry.print_time_label_override.trim()}`;
   if (entry.print_time_mode === "morning") return `${day} A中`;
   if (entry.print_time_mode === "unspecified") return `${day} 中`;
   const time = new Intl.DateTimeFormat("ja-JP", {
@@ -169,15 +171,36 @@ export default function ScheduleSearchPage() {
   const [message, setMessage] = useState("お客様名・電話番号・ナンバー下4桁で検索できます。");
   const [range, setRange] = useState<SearchRange>("future");
 
-  async function search(nextRange: SearchRange = range) {
-    const q = normalizeSearchInput(query);
+  const searching = useRef(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem("icb-schedule-search") || "null");
+      if (saved && typeof saved.query === "string" && ["future", "past", "all"].includes(saved.range)) {
+        setQuery(saved.query);
+        setRange(saved.range);
+        void search(saved.range, saved.query);
+      }
+    } catch {}
+  }, []);
+
+  async function search(nextRange: SearchRange = range, input = query) {
+    if (searching.current) return;
+    const q = normalizeSearchInput(input);
     setRange(nextRange);
     if (!q) {
       setRows([]);
       setMessage("検索する文字を入力してください。");
       return;
     }
+    searching.current = true;
     setBusy(true);
+    setRows([]);
+    setHasSearched(true);
+    setSearchFailed(false);
+    try { sessionStorage.setItem("icb-schedule-search", JSON.stringify({ query: q, range: nextRange })); } catch {}
     setMessage(`${RANGE_LABEL[nextRange]}を検索中…`);
 
     try {
@@ -277,7 +300,7 @@ export default function ScheduleSearchPage() {
       if (workIds.length) {
         const { data, error } = await supabase
           .from("schedule_entries")
-          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
+          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override")
           .in("work_order_id", workIds)
           .order("starts_at", { ascending: true })
           .limit(500);
@@ -287,7 +310,7 @@ export default function ScheduleSearchPage() {
 
       let q2 = supabase
         .from("schedule_entries")
-        .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
+        .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override")
         .in("vehicle_id", vehicleIds)
         .order("starts_at", { ascending: nextRange === "future" })
         .limit(300);
@@ -346,9 +369,11 @@ export default function ScheduleSearchPage() {
       setRows(filteredRows);
       setMessage(`${RANGE_LABEL[nextRange]}が${[...rowsBySet.values()].filter(matchesRange).length}件見つかりました。`);
     } catch (error: any) {
+      setSearchFailed(true);
       setRows([]);
       setMessage(safeActionError("予定検索", error));
     } finally {
+      searching.current = false;
       setBusy(false);
     }
   }
@@ -403,22 +428,25 @@ export default function ScheduleSearchPage() {
       <section className="searchCard">
         <div className="eyebrow">電話対応用</div>
         <h1>予定を即検索</h1>
-        <div className="searchRow">
+        <form className="searchRow" onSubmit={(event) => { event.preventDefault(); void search(range); }}>
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") void search(range); }}
+            aria-label="予定を検索する文字"
+            disabled={busy}
             placeholder="お客様名 / 電話番号 / ナンバー下4桁"
           />
-          <button className="primary" disabled={busy} onClick={() => void search(range)}>
+          <button type="submit" className="primary" disabled={busy}>
             {busy ? "検索中…" : "検索"}
           </button>
-        </div>
+        </form>
         <div className="rangeTabs" aria-label="予定の期間">
           {(["future", "past", "all"] as SearchRange[]).map((value) => (
             <button
               key={value}
+              type="button"
+              aria-pressed={range === value}
               className={range === value ? "active" : ""}
               disabled={busy}
               onClick={() => void search(value)}
@@ -428,10 +456,10 @@ export default function ScheduleSearchPage() {
           ))}
         </div>
         <div className="searchHint">数字1〜4桁だけの入力はナンバー下4桁専用検索です。例：10 → 下4桁「10」（0010）。それ以外は名前・電話・登録番号から検索します。</div>
-        <div className="notice">{message}</div>
+        <div className="notice" role="status" aria-live="polite">{message}</div>
       </section>
 
-      <section className="results">
+      <section className="results" aria-label="予定検索結果" aria-busy={busy}>
         {grouped.map(([day, daySets]) => (
           <article className="dayGroup" key={day}>
             <div className="dayTitle">
@@ -487,14 +515,15 @@ export default function ScheduleSearchPage() {
             </div>
           </article>
         ))}
-        {!busy && rows.length === 0 && <div className="empty">検索結果はここに表示されます。<div className="actions"><button type="button" onClick={() => location.assign("/schedule/new")}>＋ 予定登録</button></div></div>}
+        {!busy && rows.length === 0 && <div className="empty">{searchFailed ? "検索を完了できませんでした。上の検索ボタンから再試行してください。" : hasSearched ? "一致する予定がありません。検索条件や期間を変更してください。" : "検索結果はここに表示されます。"}<div className="actions"><button type="button" onClick={() => location.assign("/schedule/new")}>＋ 予定登録</button></div></div>}
       </section>
 
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}
         .searchPage{max-width:1050px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
-        .searchCard,.dayGroup{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.eyebrow{font-weight:800;color:#2674e8}.searchCard h1{margin:4px 0 14px;font-size:31px}.searchRow{display:grid;grid-template-columns:1fr auto;gap:8px}.searchRow input{border:2px solid #b9c6d8;border-radius:12px;padding:14px;font-size:18px}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4;min-width:100px}.rangeTabs{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.rangeTabs button{color:#526176;background:#f8fafc}.rangeTabs button.active{background:#172033;color:#fff;border-color:#172033}.searchHint{margin-top:9px;font-size:11px;color:#78869a}.notice{margin-top:6px;color:#647184}
+        .searchCard,.dayGroup{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.eyebrow{font-weight:800;color:#2674e8}.searchCard h1{margin:4px 0 14px;font-size:31px}.searchRow{display:grid;grid-template-columns:1fr auto;gap:8px}.searchRow input{min-width:0;border:2px solid #b9c6d8;border-radius:12px;padding:14px;font-size:18px}.primary{background:#2f6fe4;color:#fff;border-color:#2f6fe4;min-width:100px}.rangeTabs{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.rangeTabs button{color:#526176;background:#f8fafc}.rangeTabs button.active{background:#172033;color:#fff;border-color:#172033}.searchHint{margin-top:9px;font-size:11px;color:#78869a}.notice{margin-top:6px;color:#647184}
         .dayTitle{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #edf0f4;padding-bottom:10px}.dayTitle>div{display:flex;gap:6px}.resultList{display:grid;gap:7px;margin-top:10px}.resultRow{display:grid;grid-template-columns:minmax(150px,.9fr) minmax(180px,1.2fr) minmax(180px,1fr) auto auto;gap:10px;align-items:center;border:1px solid #e0e6ef;border-radius:12px;padding:11px}.schedulePair{display:grid;gap:5px}.scheduleLeg{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 7px;border-radius:8px;background:#f4f7fb;font-size:12px}.scheduleLeg b{color:#3e5f86}.scheduleLeg span{font-weight:800}.deliveryLeg{background:#f7f4fb}.main{display:grid}.main span,.meta{color:#697587;font-size:12px}.meta{display:flex;gap:5px;flex-wrap:wrap}.meta span{background:#f2f5f8;border-radius:999px;padding:4px 6px}.meta .elapsed{background:#fff4d8;color:#8a5a00;font-weight:900}.state{font-size:12px;font-weight:900;border-radius:999px;padding:5px 8px;background:#f1f3f6;white-space:nowrap}.resultActions{display:grid;grid-template-columns:1fr 1fr;gap:7px;min-width:172px}.editBtn,.cancelBtn{font-size:12px;padding:9px 10px;white-space:nowrap}.cancelBtn{color:#b42318;border-color:#e4a39d;background:#fff8f7}.empty{background:#fff;border-radius:16px;padding:28px;text-align:center;color:#8c98a8}
+        @media(min-width:721px) and (max-width:980px){.resultRow{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.schedulePair{grid-column:1}.main{grid-column:2;min-width:0;overflow-wrap:anywhere}.meta{grid-column:1/-1}.state{grid-column:1;justify-self:start}.resultActions{grid-column:2;min-width:0}}
         @media(max-width:720px){.resultRow{grid-template-columns:1fr}.schedulePair,.main,.meta,.state,.resultActions{grid-column:1}.resultActions{width:100%;min-width:0}.editBtn,.cancelBtn{min-height:44px;font-size:14px}.searchRow{grid-template-columns:1fr}.primary{width:100%}.dayTitle{align-items:flex-start;flex-direction:column}.rangeTabs{display:grid;grid-template-columns:1fr 1fr 1fr}.rangeTabs button{padding:10px 6px;font-size:12px}}
       `}</style>
     </main>

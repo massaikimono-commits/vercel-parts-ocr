@@ -22,9 +22,8 @@ assert(day.includes('/schedule/print?day=${day}'), "one-day report action must r
 assert(!controller.includes("addDailyReportShortcuts"), "report shortcut DOM injection must be removed");
 assert(!controller.includes("reportDay()"), "report-day DOM helper must be removed");
 assert(!controller.includes('replaceAll("予約変更"'), "global reservation wording replacement must remain absent");
-assert(controller.includes('const observeSecurityDom = pathname === "/" || pathname === "/settings/login-history"'), "MutationObserver must be scoped to security routes");
-assert(controller.includes("observeSecurityDom ? new MutationObserver(requestApplyUx) : null"), "MutationObserver must not run on normal routes");
-assert(controller.includes("requestAnimationFrame") && controller.includes("if (disposed || applyFrame) return"), "remaining security observer must stay coalesced and re-entry guarded");
+assert(!controller.includes("MutationObserver") && !controller.includes("supabase.rpc"), "responsive controller must not mutate security DOM or duplicate alert queries");
+assert(home.includes("useSecurityAlertAcknowledgement"), "home acknowledgement must be source-owned");
 assert(home.includes('role="alert"') && home.includes('onClick={() => void loadToday()}') && home.includes('今日の予定を開く'), "home load error must expose retry and next action");
 assert(search.includes('検索結果はここに表示されます。') && search.includes('location.assign("/schedule/new")'), "schedule-search empty state must expose registration action");
 assert(vehicles.includes('該当する車両がありません。') && vehicles.includes('車両を登録・読取'), "vehicle empty state must expose existing registration route");

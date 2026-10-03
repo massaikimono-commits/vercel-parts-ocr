@@ -65,10 +65,7 @@ assert(!controller.includes("const WEEK_HINT ="), "weekly hint must no longer de
 assert(!controller.includes("hint && hint.textContent !== WEEK_HINT"), "weekly hint DOM mutation must stay removed");
 assert(week.includes("予定カードから予定詳細を開けます。"), "weekly hint must be source-defined");
 assert(week.includes('/schedule/detail?entry='), "weekly cards must open schedule detail from source");
-assert(controller.includes("new MutationObserver(requestApplyUx)"), "DOM observer must use the guarded scheduler");
-assert(controller.includes("window.requestAnimationFrame"), "DOM observer updates must be coalesced per animation frame");
-assert(controller.includes("if (disposed || applyFrame) return"), "observer scheduler must block re-entrant frame storms");
-assert(controller.includes("window.cancelAnimationFrame(applyFrame)"), "observer frame must be cleaned up on route change");
+assert(!controller.includes("MutationObserver"), "security DOM observer must stay removed");
 assert(week.includes("setBusy(true)"), "weekly load must enter loading state");
 assert(week.includes("setEntries(nextEntries)"), "weekly success/empty result must commit entries");
 assert(week.includes('setMessage(safeActionError("週間予定の読み込み", error))'), "weekly query failure must transition to an error message");
@@ -95,9 +92,10 @@ assert(controller.includes("@media screen and (max-width:760px)"), "mobile densi
 assert(controller.includes("@media screen and (min-width:761px) and (max-width:1100px)"), "tablet density must be explicitly audited");
 assert(controller.includes("@media screen and (min-width:1101px)"), "desktop density must be explicitly audited");
 
-assert(controller.includes("SECURITY_ACK_KEY"), "security warning acknowledgement must use local persistence");
-assert(controller.includes("alert_code") && controller.includes("occurred_at") && controller.includes("message"), "security acknowledgement fingerprint must distinguish new events");
-assert(controller.includes("確認済みにする"), "login history must expose an acknowledgement action");
+const acknowledgement = fs.readFileSync("app/lib/security-alert-acknowledgement.ts", "utf8");
+assert(acknowledgement.includes("SECURITY_ACK_KEY"), "security acknowledgement must retain persistence");
+assert(acknowledgement.includes("alert_code") && acknowledgement.includes("occurred_at") && acknowledgement.includes("message"), "fingerprint must distinguish new alerts");
+assert(loginHistory.includes("確認済みにする"), "login history must expose a React acknowledgement action");
 assert(controller.includes('body[data-ux-route="/settings/login-history"]'), "login history must have compact density rules");
 assert(loginHistory.includes('my_login_security_alerts'), "existing security detection must remain active");
 assert(loginHistory.includes('signOut({ scope: "global" })'), "global sign-out must remain available");
