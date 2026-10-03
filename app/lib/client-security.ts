@@ -7,6 +7,7 @@ export function safeActionError(action: string, error?: unknown) {
 
 export function clearSensitiveLocalState() {
   try {
+    sessionStorage.removeItem("icb-schedule-search");
     sessionStorage.removeItem("parts-active-vehicle");
     sessionStorage.removeItem("parts-before-ocr-ids");
     // 旧バージョンで残った一時キーも掃除する。

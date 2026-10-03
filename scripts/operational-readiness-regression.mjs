@@ -63,7 +63,7 @@ assert(customerVehicles.includes("SEARCH_STATE_KEY") && customerVehicles.include
 assert(history.includes("SOURCE_PAGE_SIZE = 25") && parts.includes("FORMAL_PAGE_SIZE = 50"), "history/parts loading must remain bounded");
 assert(day.includes('"← 前日"') || day.includes("← 前日"), "daily schedule must preserve 前日 wording");
 assert(day.includes("明日 →"), "daily schedule must preserve 明日 wording");
-assert(controller.includes("new MutationObserver(requestApplyUx)") && controller.includes("requestAnimationFrame"), "existing DOM observer must remain re-entry guarded until a source-level migration is completed");
+assert(!controller.includes("MutationObserver"), "source migration must remove the security DOM observer");
 
 console.log("Operational readiness regression: PASS");
 console.log("- slow/offline recovery: PASS");

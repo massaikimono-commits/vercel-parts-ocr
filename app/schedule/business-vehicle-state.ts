@@ -7,6 +7,7 @@ export type BusinessScheduleEntry = {
   entry_type: BusinessEntryType;
   starts_at: string;
   print_time_mode?: string | null;
+  print_time_label_override?: string | null;
 };
 
 export type BusinessWorkOrder = {
@@ -117,6 +118,8 @@ export function classifyVehicleBusinessStates<TWork extends BusinessWorkOrder>(
 
 export function deliveryTimeLabel(entry: BusinessScheduleEntry | null) {
   if (!entry) return "";
+  const override = entry.print_time_label_override?.trim();
+  if (override) return override;
   if (entry.print_time_mode === "unspecified") return "中";
   if (entry.print_time_mode === "morning") return "A中";
   return new Intl.DateTimeFormat("ja-JP", {

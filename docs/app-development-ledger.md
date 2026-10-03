@@ -430,3 +430,14 @@ Before an app-development chat finishes a batch:
 - Waiting-service has no delivery plan/entry, is excluded from staying vehicles, body-shop vehicles, and planned deliveries, and remains labeled `来社待ち` in the daily report.
 - Exact-time duplicate warning is reason-independent: both entries must be customer_visit + waiting-service + exact + identical start time. Warning text: `来社・作業待ちが同じ時刻に重複しています`.
 - No new column and no backfill. Migration source: `database/waiting-service-customer-visit-v13.sql`.
+
+### 2026-10-03 — Independent overnight app-core UX candidate
+
+- Based on remote main `f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4`; isolated fresh workspace `/private/tmp/icb-overnight-20261003`, branch `candidate/icb-app-overnight-20261003`. Existing worktrees were read-only.
+- React-owned security acknowledgement removes duplicate alert RPC / MutationObserver button injection. Search now handles duplicate submit, busy/error/empty states and detail→back condition restoration, with logout cleanup.
+- Schedule detail and one-day date navigation react to query changes and reject obsolete reads. Today shortcuts track the selected date. Source-managed mobile weekly ordering puts today first without dropping seven-day coverage.
+- Mobile/tablet overflow and login-history layout repaired; shared loading/404 recovery added. Desktop wording is source-owned with semantic CSS classes.
+- Reused only delivery PR #86's DB-independent stored-label display contract. New preset/custom-time mutation UX remains DB_REQUIRED_HOLD alongside legal_3m. PDF PR #87 and parts OCR logic/architecture were not modified.
+- Full local build (50 regression stages + Next build) and isolated synthetic Chromium UX E2E pass. Three widths: 390/768/1440. Evidence, screenshots, start state, candidate/parent-spec audit and known inherited issues: `evidence/icb-overnight-20261003/README.md`.
+- Current repo v1.3 waiting eligibility remains all customer_visit reasons; inspection-only special duplicate warning is preserved. Schedule-search scope discrepancy is documented as spec HOLD.
+- Normal candidate push/Draft PR/CI and Preview are the next verification step. This entry is source status, not a claim that main or Production changed. Shared DB and credentials remain untouched.

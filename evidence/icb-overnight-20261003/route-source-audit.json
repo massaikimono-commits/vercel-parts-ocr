@@ -1,0 +1,631 @@
+[
+  {
+    "route": "/customer-vehicles/bulk-import",
+    "source": "app/customer-vehicles/bulk-import/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": false,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/customer-vehicles/history",
+    "source": "app/customer-vehicles/history/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/customer-vehicles/lease-maintenance",
+    "source": "app/customer-vehicles/lease-maintenance/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/customer-vehicles",
+    "source": "app/customer-vehicles/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/customer-vehicles/photos",
+    "source": "app/customer-vehicles/photos/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": false,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/inspection",
+    "source": "app/inspection/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": false,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/inspection/print",
+    "source": "app/inspection/print/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": false,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/inspection/select",
+    "source": "app/inspection/select/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": false,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/loaners",
+    "source": "app/loaners/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": false
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/loaners/week",
+    "source": "app/loaners/week/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": false,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": false
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/ocr/auto",
+    "source": "app/ocr/auto/page.tsx",
+    "ownershipExcluded": true,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": false,
+      "navigation": true,
+      "labels": false,
+      "keyboard": true,
+      "focus": false,
+      "responsive": false,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/ocr/general",
+    "source": "app/ocr/general/page.tsx",
+    "ownershipExcluded": true,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": false,
+      "labels": false,
+      "keyboard": true,
+      "focus": false,
+      "responsive": false,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/ocr",
+    "source": "app/ocr/page.tsx",
+    "ownershipExcluded": true,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": false,
+      "keyboard": true,
+      "focus": false,
+      "responsive": false,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/",
+    "source": "app/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": false,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": false,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/parts-data",
+    "source": "app/parts-data/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": false,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/parts-print",
+    "source": "app/parts-print/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": false,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": false
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/parts-review",
+    "source": "app/parts-review/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/active",
+    "source": "app/schedule/active/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/detail",
+    "source": "app/schedule/detail/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/edit",
+    "source": "app/schedule/edit/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/loaners",
+    "source": "app/schedule/loaners/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": false,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/month",
+    "source": "app/schedule/month/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/new",
+    "source": "app/schedule/new/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule",
+    "source": "app/schedule/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": true,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/print",
+    "source": "app/schedule/print/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": false,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": false
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/search",
+    "source": "app/schedule/search/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": true,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/week",
+    "source": "app/schedule/week/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": true,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/schedule/workload",
+    "source": "app/schedule/workload/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/settings/business-calendar/edit",
+    "source": "app/settings/business-calendar/edit/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/settings/business-calendar",
+    "source": "app/settings/business-calendar/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/settings/login-history",
+    "source": "app/settings/login-history/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": false,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/settings/staff",
+    "source": "app/settings/staff/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": false,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": false
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/settings/vendors",
+    "source": "app/settings/vendors/page.tsx",
+    "ownershipExcluded": false,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": false,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": false
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/vehicle-workflow",
+    "source": "app/vehicle-workflow/page.tsx",
+    "ownershipExcluded": true,
+    "sourceSignals": {
+      "loading": false,
+      "error": false,
+      "empty": false,
+      "navigation": false,
+      "labels": false,
+      "keyboard": false,
+      "focus": false,
+      "responsive": false,
+      "finally": false
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/vehicle-workflow-fast",
+    "source": "app/vehicle-workflow-fast/page.tsx",
+    "ownershipExcluded": true,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/vehicle-workflow-v2",
+    "source": "app/vehicle-workflow-v2/page.tsx",
+    "ownershipExcluded": true,
+    "sourceSignals": {
+      "loading": false,
+      "error": false,
+      "empty": false,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": false
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  },
+  {
+    "route": "/vehicle-workflow-v3",
+    "source": "app/vehicle-workflow-v3/page.tsx",
+    "ownershipExcluded": true,
+    "sourceSignals": {
+      "loading": true,
+      "error": true,
+      "empty": true,
+      "navigation": true,
+      "labels": true,
+      "keyboard": true,
+      "focus": false,
+      "responsive": true,
+      "finally": true
+    },
+    "note": "Static signals are audit leads, not behavioral pass/fail; shared loading/error/styles also apply."
+  }
+]

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const HIDDEN_PREFIXES = ["/parts-print", "/inspection/print", "/schedule/print"];
 const ITEMS = [
@@ -20,20 +20,17 @@ function isActive(pathname: string, href: string) {
 function todayJst() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
-export default function DesktopQuickNav() {
+function DesktopQuickNavContent() {
   const pathname = usePathname() || "/";
   const router = useRouter();
-  const [todayActive, setTodayActive] = useState(false);
+  const params = useSearchParams();
+  const selectedDay = params.get("day");
+  const todayActive = pathname === "/schedule" && (!selectedDay || selectedDay === todayJst());
   const todayHref = `/schedule?day=${todayJst()}`;
   useEffect(() => {
     for (const item of ITEMS) router.prefetch(item.href);
     router.prefetch(todayHref);
   }, [router, todayHref]);
-  useEffect(() => {
-    if (pathname !== "/schedule") return setTodayActive(false);
-    const selectedDay = new URLSearchParams(location.search).get("day");
-    setTodayActive(!selectedDay || selectedDay === todayJst());
-  }, [pathname]);
   if (pathname === "/") return null;
   if (HIDDEN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return null;
   return <>
@@ -53,3 +50,5 @@ export default function DesktopQuickNav() {
     `}</style>
   </>;
 }
+
+export default function DesktopQuickNav() { return <Suspense fallback={null}><DesktopQuickNavContent /></Suspense>; }

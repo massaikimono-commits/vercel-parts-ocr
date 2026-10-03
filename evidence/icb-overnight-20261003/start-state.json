@@ -1,0 +1,35 @@
+{
+  "repository": "massaikimono-commits/vercel-parts-ocr",
+  "auditDate": "2026-10-03 JST",
+  "remoteMain": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+  "localStartHead": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+  "originalWorkspace": "/Users/massa_ikimono/Developer/vercel-parts-ocr",
+  "originalStatus": "clean at first audit",
+  "originalBranch": "main",
+  "remote": "https://github.com/massaikimono-commits/vercel-parts-ocr.git",
+  "workingWorkspace": "/private/tmp/icb-overnight-20261003",
+  "isolation": "fresh independent clone --no-hardlinks; no existing worktree edited",
+  "workingBranch": "candidate/icb-app-overnight-20261003",
+  "originalWorktrees": [
+    {
+      "path": "/Users/massa_ikimono/Developer/vercel-parts-ocr",
+      "head": "f00bd12",
+      "branch": "main"
+    },
+    {
+      "path": "/Users/massa_ikimono/Developer/vercel-parts-ocr-delivery-gate",
+      "head": "5870d86",
+      "branch": "detached"
+    },
+    {
+      "path": "/Users/massa_ikimono/Developer/vercel-parts-ocr-preview-final",
+      "head": "13c32f5",
+      "branch": "detached"
+    },
+    {
+      "path": "/Users/massa_ikimono/Developer/worktrees/vercel-parts-ocr-certificate-current",
+      "head": "5ca65e7",
+      "branch": "candidate/certificate-pdf-current-main-integration-20260929"
+    }
+  ]
+}

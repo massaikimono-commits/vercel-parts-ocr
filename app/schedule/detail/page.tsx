@@ -2,7 +2,8 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
 
@@ -94,7 +95,7 @@ function workStateLabel(work:WorkOrder|null){
   return "作業未実施";
 }
 
-export default function ScheduleDetailPage(){
+function ScheduleDetailContent(){
   const [entry,setEntry]=useState<Entry|null>(null);
   const [entries,setEntries]=useState<Entry[]>([]);
   const [work,setWork]=useState<WorkOrder|null>(null);
@@ -104,18 +105,27 @@ export default function ScheduleDetailPage(){
   const [busy,setBusy]=useState(true);
   const [workStateBusy,setWorkStateBusy]=useState(false);
 
+  const params = useSearchParams();
+  const entryId = params.get("entry");
+  const loadSequence = useRef(0);
+  const [loadFailed, setLoadFailed] = useState(false);
+
   useEffect(()=>{
-    const id=new URLSearchParams(location.search).get("entry");
-    if(!id){
+    if(!entryId){
+      setEntry(null); setEntries([]); setWork(null); setVehicle(null); setCustomer(null);
       setBusy(false);
       setMessage("表示する予定が指定されていません。");
-      return;
+    } else {
+      void loadDetail(entryId);
     }
-    void loadDetail(id);
-  },[]);
+    return () => { loadSequence.current += 1; };
+  },[entryId]);
 
   async function loadDetail(id:string){
+    const sequence = ++loadSequence.current;
     setBusy(true);
+    setLoadFailed(false);
+    setEntry(null); setEntries([]); setWork(null); setVehicle(null); setCustomer(null);
     try{
       const {data:entryData,error:entryError}=await supabase
         .from("schedule_entries")
@@ -124,12 +134,12 @@ export default function ScheduleDetailPage(){
         .maybeSingle();
       if(entryError) throw entryError;
       const current=(entryData||null) as Entry|null;
+      if(sequence !== loadSequence.current) return;
       if(!current){
         setMessage("予定が見つかりません。");
         setBusy(false);
         return;
       }
-      setEntry(current);
 
       let workOrder:WorkOrder|null=null;
       let scheduleSet:Entry[]=[current];
@@ -151,8 +161,8 @@ export default function ScheduleDetailPage(){
         scheduleSet=((setData||[]) as Entry[]);
       }
 
-      setWork(workOrder);
-      setEntries(scheduleSet);
+      let nextVehicle:Vehicle|null=null;
+      let nextCustomer:Customer|null=null;
 
       const vehicleId=current.vehicle_id || workOrder?.vehicle_id || scheduleSet.find(x=>x.vehicle_id)?.vehicle_id || null;
       if(vehicleId){
@@ -163,7 +173,7 @@ export default function ScheduleDetailPage(){
           .maybeSingle();
         if(vehicleError) throw vehicleError;
         const v=(vehicleData||null) as Vehicle|null;
-        setVehicle(v);
+        nextVehicle=v;
 
         if(v?.customer_id){
           const {data:customerData,error:customerError}=await supabase
@@ -172,15 +182,20 @@ export default function ScheduleDetailPage(){
             .eq("id",v.customer_id)
             .maybeSingle();
           if(customerError) throw customerError;
-          setCustomer((customerData||null) as Customer|null);
+          nextCustomer=(customerData||null) as Customer|null;
         }
       }
 
+      if(sequence !== loadSequence.current) return;
+      setEntry(current); setEntries(scheduleSet); setWork(workOrder);
+      setVehicle(nextVehicle); setCustomer(nextCustomer);
       setMessage("予定・車両詳細");
     }catch(error:any){
+      if(sequence !== loadSequence.current) return;
+      setLoadFailed(true);
       setMessage(safeActionError("予定・車両詳細の読み込み",error));
     }finally{
-      setBusy(false);
+      if(sequence === loadSequence.current) setBusy(false);
     }
   }
 
@@ -315,10 +330,11 @@ export default function ScheduleDetailPage(){
         <b>icb</b>
       </header>
 
-      <section className="card">
+      <section className="card" aria-busy={busy}>
         <div className="headline">
           <div>
-            <small>{busy ? "読み込み中…" : message}</small>
+            <small role={loadFailed ? "alert" : "status"}>{busy ? "読み込み中…" : message}</small>
+            {loadFailed && entryId && <button type="button" disabled={busy} onClick={() => void loadDetail(entryId)}>再試行</button>}
             <h1>{customerLabel(customer)}</h1>
           </div>
           <button
@@ -404,4 +420,8 @@ export default function ScheduleDetailPage(){
       `}</style>
     </main>
   );
+}
+
+export default function ScheduleDetailPage() {
+  return <Suspense fallback={<main role="status">予定・車両詳細を読み込み中…</main>}><ScheduleDetailContent /></Suspense>;
 }

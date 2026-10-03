@@ -2,119 +2,12 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { supabase } from "./supabase";
-
-const SECURITY_ACK_KEY = "icb-security-alert-ack-v1";
-const SECURITY_PENDING_KEY = "icb-security-alert-pending-v1";
-
-type SecurityAlert = {
-  severity: "warning" | "high";
-  alert_code: string;
-  occurred_at: string | null;
-  message: string;
-};
-
-function fingerprint(alert: SecurityAlert | null) {
-  if (!alert) return "";
-  return [alert.alert_code, alert.occurred_at || "", alert.message].join("|");
-}
-
-function makeButton(label: string, className: string, onClick: () => void) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = className;
-  button.textContent = label;
-  button.addEventListener("click", onClick);
-  return button;
-}
-
 export default function ResponsiveUxController() {
   const pathname = usePathname() || "/";
 
   useEffect(() => {
     document.body.dataset.uxRoute = pathname;
-    let latestAlert: SecurityAlert | null = null;
-    let disposed = false;
-    let applyFrame = 0;
-
-    async function loadLatestSecurityAlert() {
-      if (pathname !== "/" && pathname !== "/settings/login-history") return;
-      const { data, error } = await supabase.rpc("my_login_security_alerts", { p_limit: 1 });
-      if (disposed || error) return;
-      latestAlert = ((data || [])[0] || null) as SecurityAlert | null;
-      applyUx();
-    }
-
-    function applySecurityAcknowledgement() {
-      if (!latestAlert) return;
-      const current = fingerprint(latestAlert);
-      if (pathname === "/") {
-        const notice = Array.from(document.querySelectorAll<HTMLElement>(".notice"))
-          .find((element) => element.textContent?.includes("セキュリティ確認"));
-        if (!notice) return;
-        const acknowledged = localStorage.getItem(SECURITY_ACK_KEY) || "";
-        const nextDisplay = acknowledged === current ? "none" : "";
-        if (notice.style.display !== nextDisplay) notice.style.display = nextDisplay;
-        if (notice.dataset.securityFingerprint !== current) notice.dataset.securityFingerprint = current;
-      }
-      if (pathname === "/settings/login-history") {
-        const alertCard = Array.from(document.querySelectorAll<HTMLElement>(".notice"))
-          .find((element) => element.textContent?.includes("自動検知した要注意ログイン"));
-        if (!alertCard || alertCard.querySelector(".uxSecurityAck")) return;
-        const ack = makeButton("確認済みにする", "uxSecurityAck", () => {
-          localStorage.setItem(SECURITY_ACK_KEY, current);
-          sessionStorage.removeItem(SECURITY_PENDING_KEY);
-          ack.textContent = "確認済み";
-          ack.setAttribute("disabled", "true");
-        });
-        const already = localStorage.getItem(SECURITY_ACK_KEY) === current;
-        if (already) {
-          ack.textContent = "確認済み";
-          ack.setAttribute("disabled", "true");
-        }
-        alertCard.appendChild(ack);
-      }
-    }
-
-    function applyUx() {
-      applySecurityAcknowledgement();
-    }
-
-    function requestApplyUx() {
-      if (disposed || applyFrame) return;
-      applyFrame = window.requestAnimationFrame(() => {
-        applyFrame = 0;
-        if (!disposed) applyUx();
-      });
-    }
-
-    function captureClick(event: MouseEvent) {
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-
-      if (pathname === "/") {
-        const securityNotice = target.closest<HTMLElement>(".notice");
-        if (securityNotice?.textContent?.includes("セキュリティ確認") && latestAlert) {
-          sessionStorage.setItem(SECURITY_PENDING_KEY, fingerprint(latestAlert));
-        }
-
-      }
-    }
-
-    const observeSecurityDom = pathname === "/" || pathname === "/settings/login-history";
-    document.addEventListener("click", captureClick, true);
-    const observer = observeSecurityDom ? new MutationObserver(requestApplyUx) : null;
-    observer?.observe(document.body, { childList: true, subtree: true });
-    applyUx();
-    void loadLatestSecurityAlert();
-
-    return () => {
-      disposed = true;
-      observer?.disconnect();
-      if (applyFrame) window.cancelAnimationFrame(applyFrame);
-      document.removeEventListener("click", captureClick, true);
-      delete document.body.dataset.uxRoute;
-    };
+    return () => { delete document.body.dataset.uxRoute; };
   }, [pathname]);
 
   return (

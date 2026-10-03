@@ -1,0 +1,58 @@
+{
+  "startHead": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+  "branch": "candidate/icb-app-overnight-20261003",
+  "workspace": "/private/tmp/icb-overnight-20261003",
+  "finalHead": "Recorded by final execution report / Draft PR; self hash cannot be embedded in a commit.",
+  "tests": {
+    "fullBuild": "PASS",
+    "regressionStages": 50,
+    "functionalAndSourceUXRegression": "PASS",
+    "browserFixtureE2E": "PASS",
+    "browserPageErrors": [],
+    "responsiveWidths": [
+      390,
+      768,
+      1440
+    ],
+    "routeSmokeAdditional": 28,
+    "fixtureOnly": true
+  },
+  "holds": {
+    "DB_REQUIRED_HOLD": [
+      "delivery preset/custom-range write UI / new atomic RPC contract",
+      "legal_3m"
+    ],
+    "SPEC_REQUIRED_HOLD": [
+      "full parent-spec document unavailable on main",
+      "schedule-search scope discrepancy"
+    ],
+    "USER_DEVICE_REQUIRED": [
+      "real iPhone Safari / native time UI",
+      "real PDF/camera/QR documents",
+      "physical A3/A4 print",
+      "deployed authenticated DB mutation acceptance"
+    ]
+  },
+  "candidateReuse": {
+    "deliveryPR86": "read-only stored-label display subset only",
+    "desktopCompact": "already integrated; no cherry-pick",
+    "PDFPR87": "specialist ownership + existing vehicle certificate CI failure; untouched"
+  },
+  "safety": {
+    "mainUntouched": true,
+    "originalWorkspaceUntouched": true,
+    "otherWorktreesUntouched": true,
+    "databaseUntouched": true,
+    "productionUntouchedByRun": true,
+    "partsOCRUntouched": true,
+    "forcePush": false,
+    "credentialsChanged": false
+  },
+  "ci": "PENDING remote candidate push",
+  "preview": "PENDING exact-SHA Full Regression safety chain",
+  "knownIssues": [
+    "Inherited standalone vehicle-search-registration-separation assertion failure",
+    "Fixed A3 print-preview horizontal overflow preserved"
+  ],
+  "nextPhase": "Review app-core candidate; separately resolve parent-spec and DB contract / real-device acceptance before main or Production GO."
+}
