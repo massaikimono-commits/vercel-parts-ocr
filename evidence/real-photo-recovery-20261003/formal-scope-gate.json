@@ -1,0 +1,177 @@
+{
+  "scoringOnly": true,
+  "runtimeUse": false,
+  "formalAdoptionAllowed": false,
+  "findings": [
+    {
+      "imageId": "IMG_0675",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 6,
+      "availableAnnotationRows": 6,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0676",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 6,
+      "availableAnnotationRows": 6,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0677",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 5,
+      "availableAnnotationRows": 6,
+      "status": "HOLD",
+      "reasons": [
+        "ROW_GT_COUNT_CONFLICT",
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0678",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 5,
+      "availableAnnotationRows": 5,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0679",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 5,
+      "availableAnnotationRows": 5,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0680",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 2,
+      "availableAnnotationRows": 2,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0681",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 2,
+      "availableAnnotationRows": 2,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0682",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 2,
+      "availableAnnotationRows": 2,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0683",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 2,
+      "availableAnnotationRows": 2,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0684",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 8,
+      "availableAnnotationRows": 8,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0685",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 8,
+      "availableAnnotationRows": 8,
+      "status": "HOLD",
+      "reasons": [
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0686",
+      "subset": "YELLOW_FORMAL",
+      "expectedRows": 3,
+      "availableAnnotationRows": 8,
+      "status": "HOLD",
+      "reasons": [
+        "ROW_GT_COUNT_CONFLICT",
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0699",
+      "subset": "WHITE_FORMAL",
+      "expectedRows": 3,
+      "availableAnnotationRows": 5,
+      "status": "HOLD",
+      "reasons": [
+        "ROW_GT_COUNT_CONFLICT",
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0700",
+      "subset": "WHITE_FORMAL",
+      "expectedRows": 3,
+      "availableAnnotationRows": 5,
+      "status": "HOLD",
+      "reasons": [
+        "ROW_GT_COUNT_CONFLICT",
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    },
+    {
+      "imageId": "IMG_0701",
+      "subset": "WHITE_FORMAL",
+      "expectedRows": 3,
+      "availableAnnotationRows": 5,
+      "status": "HOLD",
+      "reasons": [
+        "ROW_GT_COUNT_CONFLICT",
+        "FORMAL_PHOTO_IDENTITY_UNPROVEN",
+        "ANNOTATION_NOT_FORMAL"
+      ]
+    }
+  ]
+}

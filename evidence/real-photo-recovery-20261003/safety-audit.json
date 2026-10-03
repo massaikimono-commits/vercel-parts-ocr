@@ -1,0 +1,200 @@
+{
+  "sources": [
+    {
+      "filename": "IMG_0675.HEIC",
+      "sha256": "d33fb8c5f91c81d289ea8ffcc037019bc560f17c28a94f10fbe99860b72c68e6",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0676.HEIC",
+      "sha256": "4752c2247ff4a7650121dcb70cf7fce91754d26e9b9088b2daa189be6f7772c0",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0677.HEIC",
+      "sha256": "837e542b0cd9a42e17cb984f33b7b9a5f06ffdf298944e8a20685c97870d2a11",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0678.HEIC",
+      "sha256": "ed308a7478f2efe4dd75bed2a1c1c385f41db8593eeb3c7e95f2d0370c68a3b7",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0679.HEIC",
+      "sha256": "e910c797a23e9522cc4a971f2702dd259184eb017b3ae07b628200e980a88bb8",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0680.HEIC",
+      "sha256": "400e99e694fed18edb6e5fc2378bc015dc4f9c2867e7d72e34a421f3365df21a",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0681.HEIC",
+      "sha256": "13e3ca5b0e8cc0d866e49a591f2dbfcbc0f6cafd11d336cbb0cba0710d4cfcec",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0682.HEIC",
+      "sha256": "2ebbddbe08b0f85a720dfab55baaeff1e8bf37da4a49b5c5cc33076b5e97df58",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0683.HEIC",
+      "sha256": "fd04f02ae86a54da6c75403147c5e1f08b2cef991156eb5ab790c2771c7685af",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0684.HEIC",
+      "sha256": "1d39ca83e4dbbf7339c926f5e7e2bd0b5eab44e068156dde54cc12835b8e58c0",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0685.HEIC",
+      "sha256": "1d9bafb1b95dc28bb66c72fbaf65891fb0188de89e52e391c5af8f015e278a77",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0686.HEIC",
+      "sha256": "d6f43ee09c478992dad876e62ede8fc7d8a048798e6fc83838eb198d0be56eeb",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0699.HEIC",
+      "sha256": "065eb520b24e290ff36758e11ee5fc6136759eed1268d2e71e85fa7f088c06f2",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0700.HEIC",
+      "sha256": "dca6d41950c07228376e782ff0ff0ed662e571e2ee65ea4212ad6428edbaa870",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    },
+    {
+      "filename": "IMG_0701.HEIC",
+      "sha256": "2907822a5a1dd0cf1b1d42c4fcfd415ee55b4493660364b4f770195444228678",
+      "hashUnchanged": true,
+      "mtimeUnchanged": true,
+      "bytesUnchanged": true,
+      "dimensions": {
+        "pixelWidth": "4032",
+        "pixelHeight": "3024"
+      },
+      "formalStatus": "UNMAPPED_REAL_PHOTO"
+    }
+  ],
+  "allOriginalsUnchanged": true,
+  "protectedWorktrees": [
+    {
+      "workspace": "main-worktree",
+      "head": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+      "status": ""
+    },
+    {
+      "workspace": "existing-parts-worktree",
+      "head": "865aa7ab941831ceab8b883434cb5478a72b1af8",
+      "status": ""
+    }
+  ],
+  "changedAppRuntimeFiles": [],
+  "frozenBaselineRef": "6a31ec4b9028410e90a8dbd9c8b40d53de7742d2",
+  "mainRef": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4"
+}

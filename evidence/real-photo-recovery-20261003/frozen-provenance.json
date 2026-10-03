@@ -1,0 +1,52 @@
+{
+  "extractedRunHashes": [
+    {
+      "kind": "dedicated",
+      "runOCRSha256": "87c3c0922fe0bfbb740aded3be8a1ca9886bdf5e609c08045008d103dd72ac0a",
+      "exactSourceSubstringVerified": true
+    },
+    {
+      "kind": "general",
+      "runOCRSha256": "8bcd153d14f5910b9f2dd809de9a751f6741594f999f6488ea9f39a95caf5358",
+      "exactSourceSubstringVerified": true
+    }
+  ],
+  "nodeVersion": "v24.21.0",
+  "models": [
+    {
+      "language": "jpn",
+      "sha256": "2b63ebfbf1484de4a08ce53b29ef98a1c17658a93cbd38acb665d7d316d0be88"
+    },
+    {
+      "language": "eng",
+      "sha256": "45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91"
+    }
+  ],
+  "ref": "6a31ec4b9028410e90a8dbd9c8b40d53de7742d2",
+  "runtimeGtUsed": false,
+  "sourceFiles": [
+    {
+      "path": "app/ocr/page.tsx",
+      "sha256": "0c428c77f50f3207a6724ed515d99f521593f174983246d49a8a50e7a2c82f85"
+    },
+    {
+      "path": "app/ocr/general/page.tsx",
+      "sha256": "05c9c7c0f9cfbcd1dbddb9bb2a082d41f2f64ab0ad9610834cd74c61c9efdadc"
+    },
+    {
+      "path": "app/ocr/transfer.ts",
+      "sha256": "28adcf506539e0c91e7405eeb27b528db2d9e14c0f0027cf6955c1a5d8c1de86"
+    },
+    {
+      "path": "app/ocr/general/slip-profiles.ts",
+      "sha256": "0e3e2755c70bda598cc0db5cae42052e7330e8bed0ffbdfc85c3f8d33085573f"
+    }
+  ],
+  "transform": "TypeScript AST: remove imports/default React component; preserve top-level helpers and exact runOCR function; inject state-setter capture; bundle original transfer/profile modules; local Tesseract language path; Blob/canvas Skia shims",
+  "limitations": [
+    "Node Skia canvas differs from browser canvas",
+    "Inherited fixed geometry and SUPPLIER_PARTS MC-E133 dictionary preserved for baseline only",
+    "Catch handlers swallow execution errors; captured console errors classified by wrapper"
+  ],
+  "inheritedAnswerDictionary": true
+}

@@ -1,0 +1,22 @@
+name: Parts OCR recovery evidence integrity
+on:
+  push:
+    branches: [eval/parts-real-photo-recovery-20261003]
+permissions:
+  contents: read
+jobs:
+  scoring-and-runtime-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/parts-ocr-recovery-scope-test.mjs
+      - run: node scripts/parts-ocr-score-core-test.mjs
+      - run: node scripts/parts-ocr-token-evidence-test.mjs
+      - run: node scripts/parts-ocr-document-regions-test.mjs
+      - run: node scripts/parts-ocr-p5-token-grid-poc-test.mjs
+      - run: node scripts/parts-ocr-p5-semantic-candidates-safety.mjs
+      - run: node scripts/parts-ocr-bakeoff-contract-audit.mjs

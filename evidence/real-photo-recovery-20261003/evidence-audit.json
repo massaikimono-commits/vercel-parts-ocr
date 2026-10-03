@@ -1,0 +1,125 @@
+{
+  "schema": "icb.parts-recovery-evidence-audit.v1",
+  "audit_date": "2026-10-03",
+  "current_runs": {
+    "P5_PSM3": {
+      "result_files": 15,
+      "expected_manifest_images": 15,
+      "missing_image_ids": [],
+      "extra_image_ids": [],
+      "derived_sha256_matches": 15,
+      "derived_sha256_mismatches": 0,
+      "runtime_gt_used_all_false": true,
+      "timeouts": 0,
+      "errors": 0,
+      "token_count_total": 1541,
+      "processing_ms_total": 27756
+    },
+    "P5_PSM6": {
+      "result_files": 15,
+      "expected_manifest_images": 15,
+      "missing_image_ids": [],
+      "extra_image_ids": [],
+      "derived_sha256_matches": 15,
+      "derived_sha256_mismatches": 0,
+      "runtime_gt_used_all_false": true,
+      "timeouts": 0,
+      "errors": 0,
+      "token_count_total": 6042,
+      "processing_ms_total": 104029
+    },
+    "P6_PSM3": {
+      "result_files": 15,
+      "expected_manifest_images": 15,
+      "missing_image_ids": [],
+      "extra_image_ids": [],
+      "derived_sha256_matches": 15,
+      "derived_sha256_mismatches": 0,
+      "runtime_gt_used_all_false": true,
+      "timeouts": 0,
+      "errors": 0,
+      "token_count_total": 1960,
+      "processing_ms_total": 43123
+    }
+  },
+  "input_integrity": {
+    "source_images": 15,
+    "source_sha256_match_current_inventory": 15,
+    "source_sha256_mismatch": 0,
+    "derived_sha256_manifest_matches": 45,
+    "derived_sha256_checks": 45,
+    "originals_read_only": true,
+    "originals_unchanged_in_inherited_manifest": true,
+    "source_paths_omitted": true
+  },
+  "runtime": {
+    "candidate": "offline local P5/P6 Tesseract.js",
+    "tesseract_js": "5.1.1",
+    "tesseract_js_core": "5.1.1",
+    "tesseract_model_files": {
+      "jpn.traineddata.gz": {
+        "sha256": "2b63ebfbf1484de4a08ce53b29ef98a1c17658a93cbd38acb665d7d316d0be88",
+        "bytes": 2030256
+      },
+      "eng.traineddata.gz": {
+        "sha256": "45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91",
+        "bytes": 2952873
+      }
+    },
+    "languages": "jpn+eng",
+    "code_audit": {
+      "runner": "scripts/parts-ocr-local-regression.mjs",
+      "runner_declares_gt_never_read": true,
+      "P0_P1_bundle_rejects_GT_related_inputs": true,
+      "source_gate_regex": "formal-gt|evaluation/parts|ground.?truth",
+      "P5_PSM6_and_P6_PSM3_runtime_gt_used_false_in_all_results": true,
+      "GT_values_used_for_runtime": false
+    }
+  },
+  "inherited_comparison": {
+    "previous_p5_psm6_runner_images": 15,
+    "previous_p5_psm6_runtime_gt_used": false,
+    "previous_p5_psm6_token_count": 0,
+    "previous_p5_psm6_processing_ms": 98930,
+    "previous_scored_p5_psm6_aggregates": [
+      {
+        "subset": "YELLOW",
+        "images": 12,
+        "expected_rows": 60,
+        "detected_rows": 45,
+        "matched_rows": 0,
+        "timeouts": 0,
+        "errors": 0,
+        "processing_ms": 90500
+      },
+      {
+        "subset": "WHITE_SESSION",
+        "images": 3,
+        "expected_rows": 15,
+        "detected_rows": 43,
+        "matched_rows": 0,
+        "timeouts": 0,
+        "errors": 0,
+        "processing_ms": 12652
+      }
+    ],
+    "previous_p5_psm6_runner_validity": "INVALID_HEADERLESS_TSV_ACQUISITION; excluded from scored comparisons",
+    "previous_scored_p5_psm6_source": "p5-valid-before-psm6 (distinct corrected token acquisition run)"
+  },
+  "adoption_status": {
+    "scoring_only": true,
+    "formal_adoption_allowed": false,
+    "user_expected_yellow_rows": 54,
+    "corrected_manifest_rows": 60,
+    "white_images": 3,
+    "white_rows": 15,
+    "white_historical_jpeg_identity": "UNVERIFIED",
+    "formal_adoption": "WAITING_HUMAN_SOURCE_OF_TRUTH_CONFLICT",
+    "yellow54_white9_resolved": false
+  },
+  "limitations": [
+    "P5_PSM6 is complete for all 15 manifest inputs; zero errors and timeouts.",
+    "Source images remain pending visual identity audit; hashes establish byte identity only.",
+    "This report audits data completeness, identity and runtime GT dependencies; it does not claim row accuracy or resolve formal row-count conflicts."
+  ]
+}
