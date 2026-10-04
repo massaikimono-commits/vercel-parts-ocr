@@ -2,7 +2,10 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { isCalendarDay } from "../../lib/calendar-day";
+import { safeActionError } from "../../lib/client-security";
 import { supabase } from "../../supabase";
 
 type DayBoard = {
@@ -92,6 +95,11 @@ function needsAttention(row: DayBoard) {
 }
 
 export default function WeeklyLoanerPage() {
+  return <Suspense fallback={<main role="status">代車状況を読み込み中…</main>}><WeeklyLoanerContent /></Suspense>;
+}
+function WeeklyLoanerContent() {
+  const params=useSearchParams();
+  const dayParam=params.get("day");
   const [weekStart, setWeekStart] = useState(() => mondayOf(todayJst()));
   const [rows, setRows] = useState<DayBoard[]>([]);
   const [busy, setBusy] = useState(true);
@@ -103,17 +111,28 @@ export default function WeeklyLoanerPage() {
     [weekStart]
   );
 
+  const loadSequence=useRef(0);
+  const [loaded,setLoaded]=useState(false);
+  const [demandCapped,setDemandCapped]=useState(false);
   useEffect(() => {
-    const q = new URLSearchParams(location.search).get("day");
-    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setWeekStart(mondayOf(q));
-  }, []);
+    setWeekStart(mondayOf(isCalendarDay(dayParam)?dayParam!:todayJst()));
+  }, [dayParam]);
 
   useEffect(() => {
     void loadWeek();
+    return ()=>{loadSequence.current++;};
   }, [weekStart]);
 
+  function selectWeek(day:string){
+    if(!isCalendarDay(day)) return;
+    const monday=mondayOf(day);
+    setWeekStart(monday);location.replace("/loaners/week?day="+monday);
+  }
   async function loadWeek() {
+    const request=++loadSequence.current;
+    setRows([]);setLoaded(false);setDemandCapped(false);
     setBusy(true);
+    try{
     setMessage("1週間の代車状況を読み込み中…");
 
     const weekEnd = days[days.length - 1];
@@ -128,10 +147,12 @@ export default function WeeklyLoanerPage() {
         .eq("needs_loaner", true)
         .is("checked_out_at", null)
         .neq("status", "cancelled")
-        .limit(300);
+        .order("id",{ascending:true}).limit(301);
       if (workError) throw workError;
 
-      const works = (workData || []) as LoanerNeedWork[];
+      const rawWorks=(workData||[]) as LoanerNeedWork[];
+      if(request===loadSequence.current)setDemandCapped(rawWorks.length>300);
+      const works = rawWorks.slice(0,300);
       if (!works.length) return demand;
 
       const { data: scheduleData, error: scheduleError } = await supabase
@@ -250,7 +271,8 @@ export default function WeeklyLoanerPage() {
       } as DayBoard;
     });
 
-    setRows(next);
+    if(request!==loadSequence.current) return;
+    setRows(next);setLoaded(true);
     const shortageDays = next.filter((x) => !x.error && x.shortage > 0).length;
     setMessage(
       next.some((x) => x.error)
@@ -259,7 +281,8 @@ export default function WeeklyLoanerPage() {
           ? `⚠ 代車不足の見込みが ${shortageDays}日あります。`
           : "1週間の代車空きと必要台数を表示しています。"
     );
-    setBusy(false);
+    }catch(error){if(request===loadSequence.current)setMessage(safeActionError("週間代車状況の読み込み",error));}
+    finally{if(request===loadSequence.current)setBusy(false);}
   }
 
   const shortageSummary = useMemo(() => {
@@ -283,25 +306,28 @@ export default function WeeklyLoanerPage() {
       </header>
 
       <section className="controls">
-        <button disabled={busy} onClick={() => setWeekStart(addDays(weekStart, -7))}>← 前の週</button>
+        <button disabled={busy} onClick={() => selectWeek(addDays(weekStart, -7))}>← 前の週</button>
         <input
+          aria-label="表示する代車週の日付"
           type="date"
           value={weekStart}
-          onChange={(e) => e.target.value && setWeekStart(mondayOf(e.target.value))}
+          onChange={(e) => selectWeek(e.target.value)}
         />
-        <button disabled={busy} onClick={() => setWeekStart(mondayOf(todayJst()))}>今週</button>
-        <button disabled={busy} onClick={() => setWeekStart(addDays(weekStart, 7))}>次の週 →</button>
+        <button disabled={busy} onClick={() => selectWeek(todayJst())}>今週</button>
+        <button disabled={busy} onClick={() => selectWeek(addDays(weekStart, 7))}>次の週 →</button>
       </section>
 
-      <p className="message">{busy ? "読み込み中…" : message}</p>
+      <p className="message" role="status" aria-live="polite">{busy ? "読み込み中…" : message}</p>
 
-      <section className={`shortageSummary ${shortageSummary.days > 0 ? "hasShortage" : ""}`}>
+      {!busy && (!loaded || rows.some(row=>row.error)) && <button type="button" onClick={()=>void loadWeek()}>週間代車状況を再読み込み</button>}
+      {demandCapped && loaded && <p role="alert">需要の表示上限300件を超えています。必要台数・不足見込みは先頭300件からの集計であり、全件の集計ではありません。</p>}
+      {loaded && !busy && !rows.some(row=>row.error) && <section className={`shortageSummary ${shortageSummary.days > 0 ? "hasShortage" : ""}`}>
         <div><span>不足見込み</span><b>{shortageSummary.days}日</b></div>
         <div><span>最大不足</span><b>{shortageSummary.max}台</b></div>
         <div><span>週間の未割当必要数</span><b>{shortageSummary.unassigned}台日</b></div>
-      </section>
+      </section>}
 
-      <section className="attentionControls">
+      {loaded && !busy && <section className="attentionControls">
         <button
           className={showAttentionOnly ? "active" : ""}
           disabled={busy}
@@ -316,7 +342,7 @@ export default function WeeklyLoanerPage() {
           最初の要確認日を開く
         </button>
         <span>不足・未割当・返却日未定・取消待ち・空き1台以下を要確認として表示</span>
-      </section>
+      </section>}
 
       <section className="weekGrid">
         {displayRows.map((row) => {
@@ -351,7 +377,7 @@ export default function WeeklyLoanerPage() {
             </button>
           );
         })}
-        {!busy && displayRows.length === 0 && (
+        {loaded && !busy && displayRows.length === 0 && (
           <div className="noAttention">この週に要確認の代車日はありません。</div>
         )}
       </section>

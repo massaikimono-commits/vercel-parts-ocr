@@ -25,13 +25,34 @@ let passed=false;
 let settingsFail=false, vehicleHistoryFail=false;
 let settingsRows=[];
 let calendarFail=false, rangeFail=false, historyRows=false, loanerFail=false, loanerOverflow=false;
+let optionFail=false,assignmentFail=false,editWorkFail=false,activeWriteFail=false,weeklyDemandFail=false;
+let workStateFail=false;
+let loanerMainFail=false,loanerStatusFail=false,loanerRows=[];
 let leaseRows=[];
 let leaseRefreshFail=false, leaseWriteCompleted=false;
 await context.route('https://example.supabase.co/**', async route => {
   const request = route.request(); const url = new URL(request.url());
   const path = url.pathname; requests.push({method:request.method(),path,query:url.search});
   let data = [], status = 200;
-  if(path.includes('/auth/')) data = {user:{id:userId},access_token:'fixture'};
+  if(path.endsWith('/schedule_time_options')) {
+    const args=request.postDataJSON();
+    if(optionFail){status=500;data={message:'fixture option failure'};}
+    else data={options:[{key:'exact_0900',label:'9:00',group:'morning',mode:'exact',startsAt:args.p_day+'T09:00:00+09:00',endsAt:args.p_day+'T10:00:00+09:00'},{key:'exact_1600',label:'16:00',group:'afternoon',mode:'exact',startsAt:args.p_day+'T16:00:00+09:00',endsAt:args.p_day+'T16:30:00+09:00'}]};
+  }
+  else if(path.endsWith('/set_work_order_progress_state') || path.endsWith('/complete_work_order_one_tap') || path.endsWith('/reopen_work_order')){
+    await new Promise(r=>setTimeout(r,150));
+    if(workStateFail){status=500;data={message:'fixture work update failure'};}
+    else{const args=request.postDataJSON();work.status=args.p_state || (path.endsWith('/complete_work_order_one_tap')?'completed':'scheduled');work.work_completed=work.status==='completed';data={status:work.status};}
+  }
+  else if(path.endsWith('/set_work_order_worker')){await new Promise(r=>setTimeout(r,150));const args=request.postDataJSON();work.worker_staff_id=args.p_staff_id;work.worker_name='検証社員';data={workerName:work.worker_name};}
+  else if(path.endsWith('/schedule_slot_check_v2')) data={allowed:true,warnings:[],hard_errors:[],override_required:false};
+  else if(path.endsWith('/reschedule_schedule_entry_v2')) {await new Promise(r=>setTimeout(r,150));data={updated:true,hardErrors:[],warnings:[]};}
+  else if(path.endsWith('/set_work_order_assignment')) {if(assignmentFail){status=500;data={message:'fixture assignment failure'};}else data={updated:true};}
+  else if(path.endsWith('/cancel_schedule_entry_v1')) data={cancelled:true};
+  else if(path.endsWith('/loaner_day_board')) {if(loanerMainFail){status=500;data={message:'fixture board read failure'};}else data={vehicles:loanerRows,counts:{companyVehiclesActive:loanerRows.length}};}
+  else if(path.endsWith('/set_loaner_vehicle_operational_status') || path.endsWith('/update_loaner_reservation_status')){if(loanerStatusFail){status=500;data={message:'fixture state update failure'};}else data={updated:true};}
+  else if(path.endsWith('/loaner_vehicles') && request.method()==='POST'){await new Promise(r=>setTimeout(r,150));loanerRows=[{loanerVehicleId:'loaner-1',displayName:request.postDataJSON().display_name,sourceType:'company_vehicle',sourceLabel:'自社代車',operationalStatus:'active',reservations:[]}];data=null;}
+  else if(path.includes('/auth/')) data = {user:{id:userId},access_token:'fixture'};
   else if(path.endsWith('/app_user_profiles')) data = {is_active:true};
   else if(path.endsWith('/my_login_security_alerts')) data = [alert];
   else if(path.endsWith('/my_login_security_history')) {
@@ -48,17 +69,19 @@ await context.route('https://example.supabase.co/**', async route => {
   else if(path.endsWith('/schedule_time_availability')) data={options:[]};
   else if(path.endsWith('/schedule_day_capacity')) data={morning_count:0,afternoon_count:0,morning_inspection_count:0,morning_total_limit:15,afternoon_total_limit:10,morning_inspection_warning:4};
   else if(path.endsWith('/schedule_entries')) {
+    if(request.method()==='POST' && activeWriteFail){await route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({message:'fixture inbound insert failure'})});return;}
     if(rangeFail){await route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({message:'fixture range failure'})});return;}
     const id=url.searchParams.get('id');
     if(id && detailFail){status=500;data={message:'fixture detail failure'};}
     else if(id) data=id==='eq.entry-1'?inbound:id==='eq.entry-2'?delivery:null;
-    else data=empty?[]:[inbound,delivery];
+    else data=empty?[]:url.searchParams.get('entry_type')==='eq.delivery'?[delivery]:url.searchParams.get('entry_type')?.startsWith('in.')?[inbound]:[inbound,delivery];
   }
   else if(path.endsWith('/vehicles')) {
     if(url.searchParams.has('registration_number_last4')){last4Reads++; await new Promise(r=>setTimeout(r,120));}
     if(searchFail){status=500;data={message:'fixture search failure'};}else data=empty?[]:[url.searchParams.get('id')==='eq.vehicle-2'?{...vehicle,id:'vehicle-2',registration_number_last4:'0011'}:vehicle];
   }
   else if(path.endsWith('/customers')) data=[customer];
+  else if(path.endsWith('/work_orders') && (editWorkFail || (weeklyDemandFail && url.searchParams.has('needs_loaner')))){status=500;data={message:'fixture work read failure'};}
   else if(path.endsWith('/work_orders')) data=url.searchParams.has('needs_loaner')?(loanerOverflow?Array.from({length:301},(_,i)=>({...work,id:'loaner-work-'+i,needs_loaner:true,planned_delivery_at:day+'T17:00:00+09:00'})):[{...work,needs_loaner:true,planned_delivery_at:day+'T17:00:00+09:00'}]):[work];
   else if(path.endsWith('/business_calendar')) {if(calendarFail){status=500;data={message:'fixture calendar failure'};}else data=[];}
   else if(path.endsWith('/loaner_vehicle_availability')) {
@@ -289,6 +312,77 @@ try {
       await page.screenshot({path:`${out}/phase3-${width}-${path.replaceAll('/','-')}.png`,fullPage:true});
     }
     check('phase3 five routes responsive at '+width);
+  }
+  // Overnight checkpoint: no new business/schema assumptions; all writes intercepted.
+  await page.setViewportSize({width:1440,height:1000});
+  await page.goto(base+'/schedule/search');await page.getByRole('textbox',{name:'予定を検索する文字'}).fill('山田');
+  const readsBefore=requests.length;await page.getByRole('button',{name:'検索',exact:true}).click();await ready();
+  assert.equal(requests.length,readsBefore,'invalid schedule search makes no backend query');
+  assert((await page.locator('main').innerText()).includes('1〜4桁'));check('night last4-only search rejects name without backend query');
+  editWorkFail=true;await page.goto(base+'/schedule/edit?id=entry-1');await page.getByRole('button',{name:'予定情報を再読み込み',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'空きチェックして変更',exact:true}).count(),0);editWorkFail=false;
+  await page.getByRole('button',{name:'予定情報を再読み込み',exact:true}).click();await page.getByRole('status').filter({hasText:'日付・時間を確認して変更してください。'}).waitFor();check('night edit related-read failure hides partial form and retry recovers');
+  await page.evaluate(()=>history.pushState(null,'','/schedule/edit?id=entry-2'));await page.getByRole('heading',{name:'納車',exact:true}).waitFor();
+  await page.getByRole('button',{name:'来社予定で作業待ちを変更',exact:true}).waitFor();
+  assert.equal(await page.getByRole('checkbox',{name:'作業待ち（来社したお客様が作業完了まで待つ）',exact:true}).count(),0);
+  check('night same-route edit remount and delivery waiting action routes to inbound');
+  optionFail=true;await page.goto(base+'/schedule/edit?id=entry-1');await page.getByRole('button',{name:'予定情報を再読み込み',exact:true}).waitFor();
+  assert(await page.locator('.editFields').evaluate(el=>el.disabled));optionFail=false;await page.getByRole('button',{name:'予定情報を再読み込み',exact:true}).click();await page.getByRole('status').filter({hasText:'日付・時間を確認して変更してください。'}).waitFor();check('night edit option failure preserves retry and disables saving');
+  assignmentFail=true;const editsBefore=requests.filter(r=>r.path.endsWith('/reschedule_schedule_entry_v2')).length;
+  await page.getByRole('button',{name:'空きチェックして変更',exact:true}).evaluate(el=>{el.click();el.click();});
+  await page.getByRole('status').filter({hasText:'予定の日時は変更済みですが'}).waitFor();
+  assert.equal(requests.filter(r=>r.path.endsWith('/reschedule_schedule_entry_v2')).length-editsBefore,1);
+  assert.equal(await page.getByRole('button',{name:'空きチェックして変更',exact:true}).count(),0);
+  assignmentFail=false;await page.getByRole('button',{name:'予定情報を再読み込み',exact:true}).click();await page.getByRole('status').filter({hasText:'日付・時間を確認して変更してください。'}).waitFor();
+  check('night duplicate edit serialized and partial-save reread recovers without repeat mutation');
+  await page.evaluate(()=>localStorage.setItem('parts-active-vehicle',JSON.stringify({id:'vehicle-1'})));
+  activeWriteFail=true;await page.goto(base+'/schedule/active');await page.getByRole('heading',{name:'検証 太郎',exact:true}).waitFor();
+  await page.getByRole('combobox',{name:/^入庫要因/}).selectOption('一般整備');await page.getByRole('checkbox',{name:'作業待ち',exact:true}).check();
+  await page.waitForFunction(()=>!document.querySelector('button.primary')?.disabled);
+  const workInserts=requests.filter(r=>r.path.endsWith('/work_orders')&&r.method==='POST').length;
+  await page.getByRole('button',{name:'この車両で予定を登録',exact:true}).evaluate(el=>{el.click();el.click();});
+  await page.getByRole('button',{name:'この車両の履歴を確認',exact:true}).waitFor();
+  assert.equal(requests.filter(r=>r.path.endsWith('/work_orders')&&r.method==='POST').length-workInserts,1);
+  assert(await page.locator('.activeFields').evaluate(el=>el.disabled));activeWriteFail=false;check('night active partial registration blocks duplicate retry and exposes history recovery');
+  weeklyDemandFail=true;await page.goto(base+'/loaners/week?day=2026-99-99');await page.getByRole('button',{name:'週間代車状況を再読み込み',exact:true}).waitFor();
+  assert.equal(await page.locator('.shortageSummary').count(),0);assert.equal(await page.locator('.noAttention').count(),0);
+  weeklyDemandFail=false;await page.getByRole('button',{name:'週間代車状況を再読み込み',exact:true}).click();await page.locator('.dayCard').first().waitFor();check('night invalid loaner week fallback and demand failure retry avoid false zero');
+  await page.evaluate(()=>history.pushState(null,'','/loaners/week?day=2027-01-01'));await page.waitForFunction(()=>document.querySelector('input[type=date]')?.value==='2026-12-28');
+  await page.getByRole('button',{name:'次の週 →',exact:true}).click();await page.waitForURL(/day=2027-01-04/);await page.reload();await page.waitForFunction(()=>document.querySelector('input[type=date]')?.value==='2027-01-04');check('night loaner week same-route period and URL reload persistence');
+  loanerMainFail=true;await page.goto(base+'/loaners?day=2026-99-99');await page.getByRole('button',{name:'代車一覧を再読み込み',exact:true}).waitFor();
+  assert.equal(await page.locator('.summary').count(),0);assert.equal(await page.locator('.empty').count(),0);loanerMainFail=false;
+  await page.getByRole('button',{name:'代車一覧を再読み込み',exact:true}).click();await page.getByText('代車がまだ登録されていません。',{exact:true}).waitFor();check('night loaner main error/retry separates unknown availability from empty');
+  await page.getByLabel('表示名',{exact:true}).fill('検証代車');const addsBefore=requests.filter(r=>r.path.endsWith('/loaner_vehicles')&&r.method==='POST').length;
+  await page.getByLabel('表示名',{exact:true}).press('Enter');await page.getByRole('button',{name:'＋ 代車を追加',exact:true}).evaluate(el=>el.click());
+  await page.getByText('検証代車',{exact:true}).waitFor();assert.equal(requests.filter(r=>r.path.endsWith('/loaner_vehicles')&&r.method==='POST').length-addsBefore,1);check('night loaner Enter and duplicate-click add writes once');
+  loanerStatusFail=true;await page.getByRole('button',{name:'整備中',exact:true}).click();await page.getByRole('status').filter({hasText:'代車状態の更新'}).waitFor();
+  assert((await page.getByRole('status').innerText()).includes('代車状態の更新'));assert.equal(await page.getByRole('button',{name:'整備中',exact:true}).isDisabled(),false);loanerStatusFail=false;
+  check('night loaner status error remains visible and releases controls');
+  await page.evaluate(()=>history.pushState(null,'','/loaners?day=2027-01-01'));await page.waitForFunction(()=>document.querySelector('.dateBar input')?.value==='2027-01-01');
+  await page.reload();await page.waitForFunction(()=>document.querySelector('.dateBar input')?.value==='2027-01-01');check('night loaner main same-route date and reload stay synchronized');
+  await page.goto(base+'/schedule?day='+day);await page.locator('.workState:visible').first().waitFor();
+  const progressBefore=requests.filter(r=>r.path.endsWith('/set_work_order_progress_state')).length;
+  await page.locator('.workState:visible').first().evaluate(el=>{el.click();el.click();});
+  await page.getByRole('status').filter({hasText:'作業中にしました。'}).waitFor();
+  assert.equal(requests.filter(r=>r.path.endsWith('/set_work_order_progress_state')).length-progressBefore,1);check('night daily work-state duplicate action writes once');
+  workStateFail=true;await page.locator('.workState:visible').first().click();await page.getByRole('status').filter({hasText:'作業状態の保存'}).waitFor();
+  assert.equal(await page.locator('.workState:visible').first().isDisabled(),false);assert.equal(work.status,'in_progress');workStateFail=false;work.status='scheduled';work.work_completed=false;
+  check('night daily work-state rejected write releases controls and preserves state');
+  editWorkFail=true;await page.goto(base+'/schedule/workload');await page.getByRole('status').filter({hasText:'負荷表の読み込み'}).waitFor();
+  assert.equal(await page.locator('.summary').count(),0);assert.equal(await page.getByText('現在の出庫前作業はありません。',{exact:true}).count(),0);
+  editWorkFail=false;settingsRows=[{id:'staff-1',display_name:'検証社員',is_active:true}];await page.getByRole('button',{name:'再読込',exact:true}).click();await page.locator('.workCard').first().waitFor();check('night workload failure avoids false-zero summary and retry recovers');
+  await page.getByRole('combobox',{name:/^担当変更/}).first().selectOption('staff-1');await page.getByRole('status').filter({hasText:'担当を 検証社員 に変更しました。'}).waitFor();assert.equal(await page.getByRole('combobox',{name:/^担当変更/}).first().inputValue(),'staff-1');check('night workload assignment updates current row and releases controls');
+  await page.evaluate(()=>history.pushState(null,'','/schedule/workload?worker=検証社員&filter=all'));await page.getByRole('heading',{name:'検証社員 / すべて 1台',exact:true}).waitFor();
+  await page.getByRole('button',{name:'作業中',exact:true}).last().click();await page.waitForURL(/filter=inProgress/);await page.reload();await page.getByRole('heading',{name:/検証社員 \/ 作業中/}).waitFor();check('night workload query filter and selection survive reload');
+  settingsRows=[];
+  loanerRows=[{loanerVehicleId:'long',displayName:'長い代車名'.repeat(30),sourceType:'company_vehicle',sourceLabel:'自社代車',operationalStatus:'active',reservations:[{loanerReservationId:'malformed',status:'returned',startsAt:'malformed',endsAt:null,customerName:'長いお客様名'.repeat(15)}]}];
+  for(const width of [390,768,1440]){
+    await page.setViewportSize({width,height:1000});
+    for(const path of ['/schedule/edit?id=entry-1','/schedule/edit?id=entry-1&mode=cancel','/schedule/active','/loaners/week','/loaners','/schedule/workload']){
+      await page.goto(base+path);await ready();const dimensions=await noOverflow();assert(!dimensions.overflow,path+' night overflow '+width+': '+JSON.stringify(dimensions));
+      await page.screenshot({path:`${out}/night-${width}-${path.replaceAll('/','-').replaceAll('?','-').replaceAll('&','-')}.png`,fullPage:true});
+    }
+    check('night edit/cancel/active/loaner-week/main long-data responsive at '+width);
   }
   assert.deepEqual(errors,[],'no browser page errors');
   passed=true;

@@ -2,7 +2,9 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { isCalendarDay } from "../../lib/calendar-day";
 import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
 
@@ -115,6 +117,15 @@ const LABEL:Record<string,string>={delivery:"納車",pickup:"引取",customer_vi
 const STAY_REASON_SUGGESTIONS=["部品待ち","外注作業待ち","見積確認待ち","お客様連絡待ち"];
 
 export default function ScheduleEditPage(){
+  return <Suspense fallback={<main role="status">予約情報を読み込み中…</main>}><ScheduleEditRoute /></Suspense>;
+}
+function ScheduleEditRoute(){
+  const params=useSearchParams();
+  const targetId=params.get("id")||"";
+  const directCancel=params.get("mode")==="cancel";
+  return <ScheduleEditContent key={`${targetId}:${directCancel}`} targetId={targetId} directCancel={directCancel} />;
+}
+function ScheduleEditContent({targetId,directCancel}:{targetId:string;directCancel:boolean}){
   const [entry,setEntry]=useState<Entry|null>(null);
   const [day,setDay]=useState("");
   const [options,setOptions]=useState<TimeOption[]>([]);
@@ -144,34 +155,49 @@ export default function ScheduleEditPage(){
   const [cancelReason,setCancelReason]=useState("");
   const [busy,setBusy]=useState(true);
 
+  const [loaded,setLoaded]=useState(false);
+  const [optionsBusy,setOptionsBusy]=useState(false);
+  const actionLock=useRef(false);
+  const loadLock=useRef(false);
+  const optionRequest=useRef(0);
+  const mounted=useRef(true);
+  const redirectTimer=useRef<number|null>(null);
   useEffect(()=>{
-    const params=new URLSearchParams(location.search);
-    const targetId=params.get("id");
-    const directCancel=params.get("mode")==="cancel";
+    mounted.current=true;
     setCancelMode(directCancel);
     setShowCancel(directCancel);
-    void loadAssignments();
     if(targetId) void loadEntry(targetId); else { setBusy(false); setMessage("変更する予定が指定されていません。"); }
-  },[]);
+    return ()=>{ mounted.current=false; optionRequest.current++; if(redirectTimer.current) window.clearTimeout(redirectTimer.current); };
+  },[targetId,directCancel]);
 
   async function loadAssignments(){
     const [staffRes,vendorRes]=await Promise.all([
       supabase.from("staff_members").select("id,display_name,short_name").eq("is_active",true).order("display_order",{ascending:true}).order("display_name",{ascending:true}),
       supabase.from("external_vendors").select("id,display_name,short_name").eq("is_active",true).order("display_order",{ascending:true}).order("display_name",{ascending:true}),
     ]);
+    if(staffRes.error) throw staffRes.error;
+    if(vendorRes.error) throw vendorRes.error;
+    if(!mounted.current) return;
     if(!staffRes.error) setStaffMembers((staffRes.data||[]) as StaffMember[]);
     if(!vendorRes.error) setVendors((vendorRes.data||[]) as ExternalVendor[]);
   }
 
   async function loadEntry(entryId:string){
-    setBusy(true);
+    if(loadLock.current || actionLock.current) return;
+    loadLock.current=true;
+    setBusy(true); setLoaded(false); setEntry(null); setWarnings([]);
+    try{
+    await loadAssignments();
     const {data,error}=await supabase.from("schedule_entries")
       .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
       .eq("id",entryId).single();
-    if(error){setMessage(safeActionError("予定の読み込み", error));setBusy(false);return;}
+    if(error) throw error;
+    if(!data) throw new Error("指定された予定が見つかりません。");
+    if(!mounted.current) return;
     const e=data as Entry;
     setEntry(e);
     let loadedReason="";
+    let loadedWaiting=false;
     if(e.work_order_id){
       const [
         {data:workData,error:workError},
@@ -196,10 +222,15 @@ export default function ScheduleEditPage(){
           .limit(1)
           .maybeSingle(),
       ]);
-      if(workError){setMessage("作業情報の読み込みエラー: "+workError.message);setBusy(false);return;}
-      if(deliveryError){setMessage("納車予定の読み込みエラー: "+deliveryError.message);setBusy(false);return;}
-      if(inboundError){setMessage("入庫予定の読み込みエラー: "+inboundError.message);setBusy(false);return;}
+      if(workError) throw workError;
+      if(!mounted.current) return;
+      if(deliveryError) throw deliveryError;
+      if(!mounted.current) return;
+      if(inboundError) throw inboundError;
+      if(!mounted.current) return;
       const work=(workData||null) as WorkOrder|null;
+      if(!work) throw new Error("関連する作業情報が見つかりません。");
+      loadedWaiting=Boolean(work.is_waiting_service);
       const delivery=(deliveryData||null) as Entry|null;
       const relatedInbound=(inboundData||null) as Entry|null;
       setRelatedInboundEntry(relatedInbound);
@@ -224,7 +255,8 @@ export default function ScheduleEditPage(){
           .select("id,customer_id,registration_number_last4")
           .eq("id",vehicleId)
           .maybeSingle();
-        if(vehicleError){setMessage("車両情報の読み込みエラー: "+vehicleError.message);setBusy(false);return;}
+        if(vehicleError) throw vehicleError;
+      if(!mounted.current) return;
         const vehicle=(vehicleData||null) as VehicleSummary|null;
         setVehicleSummary(vehicle);
         if(vehicle?.customer_id){
@@ -233,7 +265,8 @@ export default function ScheduleEditPage(){
             .select("id,name,company_name,schedule_display_name")
             .eq("id",vehicle.customer_id)
             .maybeSingle();
-          if(customerError){setMessage("お客様情報の読み込みエラー: "+customerError.message);setBusy(false);return;}
+          if(customerError) throw customerError;
+      if(!mounted.current) return;
           setCustomerSummary((customerData||null) as CustomerSummary|null);
         }else{
           setCustomerSummary(null);
@@ -246,12 +279,17 @@ export default function ScheduleEditPage(){
     const d=dateKey(e.starts_at);
     setDay(d);
     setShowAfternoonOptions(false);
-    await loadOptions(d,e,loadedReason);
-    setBusy(false);
+    const optionsReady=directCancel || await loadOptions(d,e,loadedReason,loadedWaiting);
+    if(mounted.current){ setLoaded(Boolean(optionsReady)); if(optionsReady) setMessage("日付・時間を確認して変更してください。"); }
+    }catch(error){ if(mounted.current){ setEntry(null); setMessage(safeActionError("予定の読み込み",error)); } }
+    finally{ loadLock.current=false; if(mounted.current) setBusy(false); }
   }
 
-  async function loadOptions(targetDay:string,base=entry,targetReason=reason){
-    if(!base) return;
+  async function loadOptions(targetDay:string,base=entry,targetReason=reason,targetWaiting=isWaitingService){
+    const request=++optionRequest.current;
+    setOptions([]); setSelected("");
+    if(!base || !isCalendarDay(targetDay)){ setOptionsBusy(false); return; }
+    setOptionsBusy(true);
 
     const checkedOption=async(option:TimeOption):Promise<TimeOption>=>{
       const {data,error}=await supabase.rpc("schedule_slot_check_v2",{
@@ -261,7 +299,7 @@ export default function ScheduleEditPage(){
         p_reason:targetReason||null,
         p_exclude_entry_id:base.id,
         p_print_time_mode:option.mode,
-        p_is_waiting_service:isWaitingService,
+        p_is_waiting_service:targetWaiting,
       });
       if(error) throw error;
       const availability:TimeOption["availability"]=!Boolean(data?.allowed)
@@ -355,6 +393,7 @@ export default function ScheduleEditPage(){
         opts=await Promise.all(opts.map(checkedOption));
       }
 
+      if(!mounted.current || request!==optionRequest.current) return;
       setOptions(opts);
       const current=timeKey(base.starts_at);
       const sameDay=dateKey(base.starts_at)===targetDay;
@@ -369,11 +408,14 @@ export default function ScheduleEditPage(){
         || opts.find(x=>x.availability==="open")?.key
         || opts.find(x=>x.availability==="warning")?.key
         || "");
+      return true;
     }catch(error:any){
+      if(!mounted.current || request!==optionRequest.current) return;
       setOptions([]);
       setSelected("");
       setMessage(safeActionError("時間候補の読み込み", error));
-    }
+      return false;
+    }finally{ if(mounted.current && request===optionRequest.current) setOptionsBusy(false); }
   }
 
   function resetWarningsForTargetChange(){
@@ -402,7 +444,7 @@ export default function ScheduleEditPage(){
 
   function buildDeliveryTarget():DeliveryTarget|null {
     if(!deliveryEnabled) return null;
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDay)) throw new Error("納車予定日を入力してください。");
+    if(!isCalendarDay(deliveryDay)) throw new Error("納車予定日を入力してください。");
     const time=deliveryMode==="unspecified" ? "13:00" : deliveryTime;
     if(deliveryMode==="exact" && !/^\d{2}:\d{2}$/.test(time)) throw new Error("納車時間を入力してください。");
     const startsAt=jstIso(deliveryDay,time);
@@ -495,10 +537,20 @@ export default function ScheduleEditPage(){
   }
 
   async function save(override=false){
-    if(!entry){return;}
+    if(actionLock.current || loadLock.current || !loaded || optionsBusy || !entry) return;
+    if(!isCalendarDay(day) || (selectedOption && dateKey(selectedOption.startsAt)!==day)){
+      setMessage("変更日と時間候補をもう一度確認してください。"); return;
+    }
+    if(isWaitingService && entry.entry_type==="delivery"){
+      setMessage("作業待ちの変更は、関連する来社予定から行ってください。"); return;
+    }
     if(!selectedOption){
       setMessage("変更先の時間を選択してください。");return;
     }
+    actionLock.current=true;
+    let primaryUpdated=false;
+    let mutationStarted=false;
+    let complete=false;
     setBusy(true);
     setWarnings([]);
     try{
@@ -516,6 +568,7 @@ export default function ScheduleEditPage(){
         if(!(await preflightDelivery(deliveryTarget,override))) return;
       }
 
+      mutationStarted=true;
       const {data,error}=await supabase.rpc("reschedule_schedule_entry_v2",{
         p_entry_id:entry.id,
         p_starts_at:startsAt,
@@ -539,6 +592,7 @@ export default function ScheduleEditPage(){
         return;
       }
       if(data?.updated){
+        primaryUpdated=true;
         if(entry.work_order_id){
           const {error:assignmentError}=await supabase.rpc("set_work_order_assignment",{
             p_work_order_id:entry.work_order_id,
@@ -550,18 +604,28 @@ export default function ScheduleEditPage(){
           if(assignmentError) throw assignmentError;
           if(entry.entry_type!=="delivery") await syncDeliveryPlan(deliveryTarget);
         }
+        complete=true;
         setMessage("予約と納車予定を変更しました。滞留判定は納車予定の有無から自動更新されます。");
-        window.setTimeout(()=>location.assign("/schedule?day="+day),350);
-      }
+        redirectTimer.current=window.setTimeout(()=>location.assign("/schedule?day="+day),350);
+      }else{ setMessage("予定は変更されませんでした。時間候補を確認してください。"); }
     }catch(error:any){
-      setMessage(safeActionError("予約変更", error));
+      if(primaryUpdated){
+        setLoaded(false); setEntry(null);
+        setMessage("予定の日時は変更済みですが、関連情報の更新に失敗しました。予定情報を再読み込みして保存状態を確認してください。");
+      }else if(mutationStarted){
+        setLoaded(false); setEntry(null);
+        setMessage("変更処理の結果を確認できません。予定情報を再読み込みして保存状態を確認してください。");
+      }else setMessage(safeActionError("予約変更", error));
     }finally{
-      setBusy(false);
+      if(!complete) actionLock.current=false;
+      if(mounted.current) setBusy(false);
     }
   }
 
   async function cancelReservation(){
-    if(!entry) return;
+    if(actionLock.current || loadLock.current || !loaded || !entry) return;
+    actionLock.current=true;
+    let complete=false;
     setBusy(true);
     try{
       const {data,error}=await supabase.rpc("cancel_schedule_entry_v1",{
@@ -570,6 +634,8 @@ export default function ScheduleEditPage(){
         p_actor:"schedule-edit",
       });
       if(error) throw error;
+      if(!data?.cancelled && !data?.rentalCancellationPending) throw new Error("取消結果を確認できません。");
+      complete=true;
       if(data?.rentalCancellationPending && data?.cancelled===false){
         setShowCancel(false);
         setMessage("取消手続きを開始しました。レンタカーは業者への取消連絡待ちのため、入庫予定一式はまだ取消確定していません。");
@@ -577,20 +643,22 @@ export default function ScheduleEditPage(){
       }
       if(data?.rentalCancellationPending){
         setMessage("入庫予定一式は取消済みです。レンタカーは業者への取消連絡待ちです。");
-        window.setTimeout(()=>location.assign("/schedule?day="+day),1200);
+        redirectTimer.current=window.setTimeout(()=>location.assign("/schedule?day="+day),1200);
         return;
       }
       setMessage(entry.work_order_id
         ? "入庫予定一式を取消しました。関連する入庫・納車予定と代車予約も更新しました。"
         : "予定を取消しました。");
-      window.setTimeout(()=>location.assign("/schedule?day="+day),700);
+      redirectTimer.current=window.setTimeout(()=>location.assign("/schedule?day="+day),700);
     }catch(error:any){
+      setLoaded(false); setEntry(null);
       const detail=String(error?.message||"");
       setMessage(detail.includes("started work cannot be cancelled")
         ? "入庫済み・作業中・作業完了の予約は、この画面から取消できません。"
         : safeActionError("予約取消", error));
     }finally{
-      setBusy(false);
+      if(!complete) actionLock.current=false;
+      if(mounted.current) setBusy(false);
     }
   }
 
@@ -603,8 +671,11 @@ export default function ScheduleEditPage(){
     <section className="card">
       <div className="eyebrow">{cancelMode ? "入庫予定一式の取消" : "かんたん予約変更"}</div>
       <h1>{cancelMode ? "予約取消" : (entry ? LABEL[entry.entry_type] || entry.entry_type : "予約変更")}</h1>
-      <div className="notice">{busy?"処理中…":message}</div>
-      {entry && !cancelMode && <>
+      <div className="notice" role="status" aria-live="polite">{busy?"処理中…":message}</div>
+      {!busy && !loaded && targetId && <button type="button" onClick={()=>void loadEntry(targetId)}>予定情報を再読み込み</button>}
+      {loaded && !cancelMode && !optionsBusy && !options.length && <button type="button" disabled={busy || actionLock.current} onClick={()=>void loadOptions(day,entry,reason)}>時間候補を再読み込み</button>}
+      <fieldset disabled={busy || optionsBusy || actionLock.current || !loaded} className="editFields">
+      {loaded && entry && !cancelMode && <>
         <div className="current">現在：<b>{dateKey(entry.starts_at)} {timeKey(entry.starts_at)}</b></div>
         <div className="grid">
           <label>変更日<input type="date" value={day} onChange={(e)=>void changeDay(e.target.value)} /></label>
@@ -622,7 +693,7 @@ export default function ScheduleEditPage(){
                 <span className="legend"><i className="dot openDot" />○ 空き　<i className="dot warnDot" />△ 要確認　<i className="dot blockedDot" />× 不可</span>
               </div>
               {!options.length ? (
-                <div className="availabilityLoading">時間候補がありません。</div>
+                <div className="availabilityLoading">{optionsBusy ? "時間候補を確認中…" : "時間候補がありません。"}</div>
               ) : (
                 <>
                   <div className="timeGrid">
@@ -702,13 +773,14 @@ export default function ScheduleEditPage(){
         </section>}
         {entry.work_order_id && <section className="stayBox">
           <b>滞留・納車情報</b>
-          {(entry.entry_type==="customer_visit" || relatedInboundEntry?.entry_type==="customer_visit") && (
+          {entry.entry_type!=="delivery" && (entry.entry_type==="customer_visit" || relatedInboundEntry?.entry_type==="customer_visit") && (
             <label className="deliveryToggle waitingServiceToggle">
               <input type="checkbox" checked={isWaitingService} onChange={(ev)=>{
                 const next=ev.target.checked;
                 setIsWaitingService(next);
                 if(next) setDeliveryEnabled(false);
                 resetWarningsForTargetChange();
+                void loadOptions(day,entry,reason,next);
               }} />
               作業待ち（来社したお客様が作業完了まで待つ）
             </label>
@@ -719,6 +791,7 @@ export default function ScheduleEditPage(){
               <datalist id="stay-reasons">{STAY_REASON_SUGGESTIONS.map(x=><option key={x} value={x} />)}</datalist>
             </label>
           </div>
+          {entry.entry_type==="delivery" && relatedInboundEntry?.entry_type==="customer_visit" && <button type="button" onClick={()=>location.assign("/schedule/edit?id="+relatedInboundEntry.id)}>来社予定で作業待ちを変更</button>}
           {isWaitingService ? (
             <div className="deliveryEditNotice">来社・作業待ちは納車予定なしで扱います。</div>
           ) : entry.entry_type==="delivery" ? (
@@ -751,7 +824,7 @@ export default function ScheduleEditPage(){
         <button className="primary" disabled={busy} onClick={()=>void save(false)}>空きチェックして変更</button>
 
       </>}
-      {entry && cancelMode && showCancel && (
+      {loaded && entry && cancelMode && showCancel && (
         <section className="cancelBox directCancelBox">
           <b>予約取消の確認</b>
           <h3>{cancelSetLabel}</h3>
@@ -772,13 +845,15 @@ export default function ScheduleEditPage(){
           </div>
         </section>
       )}
-      {entry && cancelMode && !showCancel && (
+      </fieldset>
+      {loaded && entry && cancelMode && !showCancel && (
         <div className="cancelResultActions">
           <button type="button" onClick={()=>history.back()}>予定検索へ戻る</button>
         </div>
       )}
     </section>
     <style jsx global>{`
+      .editFields{border:0;padding:0;margin:0;min-width:0}.editFields:disabled{opacity:.7}
       *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select,textarea{font:inherit}
       .editPage{max-width:760px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top button,button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:20px}.eyebrow{color:#2674e8;font-weight:800}h1{margin:4px 0 12px}.notice{background:#eef6ff;border-radius:12px;padding:11px;color:#48627f}.current{margin:14px 0;background:#f7f9fc;padding:12px;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:5px;font-weight:800;color:#627083}.grid input,.grid select{border:1px solid #cbd6e3;border-radius:10px;padding:12px;background:#fff}.grid .wide{grid-column:1/-1}.availabilityBlock{display:grid;gap:9px}.availabilityTitle{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.legend{font-size:12px;color:#68778a}.dot{display:inline-block;width:9px;height:9px;border-radius:999px;margin:0 3px 0 7px}.openDot{background:#5eaf76}.warnDot{background:#d5a238}.blockedDot{background:#c76a64}.timeGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.timeSlot{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;color:#315678}.timeSlot.open{border-color:#b7d8c0}.timeSlot.warning{border-color:#e2c36f;background:#fffaf0}.timeSlot.blocked{opacity:.55}.timeSlot.selected{border-color:#2674e8;background:#eaf3ff;color:#145dc0;box-shadow:0 0 0 1px #2674e8 inset}.afternoonSelector{border-style:dashed}.afternoonChoices{margin-top:4px;padding-top:12px;border-top:1px dashed #cad5e3}.afternoonChoicesTitle{font-size:13px;font-weight:800;color:#53647b;margin-bottom:8px}.timeMeaning{font-size:12px;color:#64748b;margin-top:8px}.availabilityLoading{font-size:13px;color:#68778a;padding:8px 0}.targetPreview{margin-top:12px;padding:13px;border:1px solid #c8ddfb;border-radius:13px;background:#f5f9ff;display:grid;gap:4px}.targetPreview span{font-size:12px;font-weight:900;color:#2674e8}.targetPreview b{font-size:18px}.targetPreview small{color:#627083;line-height:1.5}.stayBox{margin-top:14px;padding:14px;border:1px solid #dbe3ed;border-radius:14px;background:#fafcff}.stayGrid{margin-top:9px}.stayBox small{display:block;margin-top:7px;color:#7a8798}.deliveryPlan{margin-top:12px;padding-top:12px;border-top:1px solid #dbe3ed}.deliveryToggle{display:flex!important;grid-template-columns:auto 1fr!important;align-items:center;justify-content:flex-start;gap:8px!important;font-weight:900!important;color:#2f5f9f!important}.deliveryToggle input{width:20px;height:20px}.deliveryEditNotice{margin-top:12px;padding:10px 12px;border-radius:10px;background:#eef6ff;color:#45637f;font-weight:700}.primary{margin-top:14px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;width:100%;padding:13px}.warnings{margin-top:12px;background:#fff7e8;border:1px solid #e7c27d;border-radius:12px;padding:12px;color:#7c560d}.warnings button{margin-top:8px}.manageLinks{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.manageLinks button{padding:8px 10px}.cancelBox{margin-top:14px;padding:14px;border:1px solid #efb5af;border-radius:14px;background:#fff7f6}.cancelBox h3{margin:8px 0 10px;color:#9b2c25}.cancelSummary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px}.cancelSummary>div{display:grid;gap:3px;padding:9px 10px;border:1px solid #efcbc7;border-radius:10px;background:#fff}.cancelSummary span{font-size:11px;color:#8a5a56;font-weight:800}.cancelSummary b{font-size:14px;color:#4f2f2c}.cancelBox p{color:#7a3d37;line-height:1.5}.cancelBox label{display:grid;gap:6px;font-weight:800;color:#7a3d37}.cancelBox textarea{min-height:86px;resize:vertical;border:1px solid #d9a6a0;border-radius:10px;padding:11px;background:#fff}.cancelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.cancelActions .danger{background:#c4322b;border-color:#c4322b;color:#fff}.directCancelBox{margin-top:12px}.cancelResultActions{margin-top:14px}.cancelResultActions button{width:100%}.cancelActions button:disabled{opacity:.5}@media(max-width:600px){.grid{grid-template-columns:1fr}.cancelSummary{grid-template-columns:1fr}}
     `}</style>

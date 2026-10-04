@@ -2,7 +2,9 @@
 "use client";
 import { appLocation as location } from "../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { isCalendarDay } from "../lib/calendar-day";
 import { supabase } from "../supabase";
 import { safeActionError } from "../lib/client-security";
 
@@ -39,6 +41,7 @@ function todayJst() {
 }
 
 function timeLabel(value:string) {
+  if(!value || !Number.isFinite(Date.parse(value))) return "時刻未登録";
   return new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(value));
 }
 
@@ -69,6 +72,10 @@ function isAvailable(v:LoanerVehicle) {
 }
 
 export default function LoanerPage() {
+  return <Suspense fallback={<main role="status">代車状況を読み込み中…</main>}><LoanerContent /></Suspense>;
+}
+function LoanerContent() {
+  const params=useSearchParams();const dayParam=params.get("day");
   const [day,setDay] = useState(todayJst());
   const [vehicles,setVehicles] = useState<LoanerVehicle[]>([]);
   const [counts,setCounts] = useState<any>({});
@@ -81,78 +88,63 @@ export default function LoanerPage() {
   const [maker,setMaker] = useState("");
   const [model,setModel] = useState("");
 
-  useEffect(()=>{
-    const q = new URLSearchParams(location.search).get("day");
-    if(q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDay(q);
-  },[]);
-
-  useEffect(()=>{ void load(); },[day]);
-
-  async function load() {
-    setBusy(true);
-    const {data,error} = await supabase.rpc("loaner_day_board",{p_day:day});
-    if(error){
-      setMessage(safeActionError("代車一覧の読み込み", error));
-    }else{
-      setVehicles((data?.vehicles || []) as LoanerVehicle[]);
-      setCounts(data?.counts || {});
-      setMessage(day+" の代車状況");
-    }
-    setBusy(false);
+  const loadSequence=useRef(0),actionLock=useRef(false),readPending=useRef(false);
+  const [loaded,setLoaded]=useState(false);
+  useEffect(()=>{setDay(isCalendarDay(dayParam)?dayParam!:todayJst());},[dayParam]);
+  useEffect(()=>{void load();return ()=>{loadSequence.current++;};},[day]);
+  function selectDay(next:string){
+    if(actionLock.current || !isCalendarDay(next)) return;
+    setDay(next);location.replace("/loaners?day="+next);
   }
-
+  async function load(savedMessage="") {
+    const request=++loadSequence.current;
+    readPending.current=true;setLoaded(false);setVehicles([]);setCounts({});setBusy(true);
+    try{
+      const {data,error}=await supabase.rpc("loaner_day_board",{p_day:day});
+      if(error) throw error;
+      if(request!==loadSequence.current) return;
+      setVehicles((Array.isArray(data?.vehicles)?data.vehicles:[]) as LoanerVehicle[]);
+      setCounts(data?.counts||{});setLoaded(true);
+      setMessage(savedMessage || day+" の代車状況");
+    }catch(error){if(request===loadSequence.current)setMessage((savedMessage?savedMessage+" 一覧の再読み込みに失敗しました。 ":"")+safeActionError("代車一覧の読み込み",error));}
+    finally{if(request===loadSequence.current){readPending.current=false;setBusy(false);}}
+  }
   async function addVehicle() {
-    if(!name.trim()){
-      setMessage("代車名を入力してください。");
-      return;
-    }
-    setBusy(true);
-    const {error} = await supabase.from("loaner_vehicles").insert({
-      display_name:name.trim(),
-      source_type:sourceType,
-      provider_name:sourceType==="rental_company" ? provider.trim() || null : null,
-      registration_last4:last4.replace(/\D/g,"").slice(-4) || null,
-      maker:maker.trim() || null,
-      model:model.trim() || null,
-      operational_status:"active",
-      updated_at:new Date().toISOString(),
-    });
-    if(error){
-      setMessage(safeActionError("代車追加", error));
-      setBusy(false);
-      return;
-    }
-    setName(""); setProvider(""); setLast4(""); setMaker(""); setModel("");
-    setMessage("代車を追加しました。");
-    await load();
+    if(actionLock.current || readPending.current || !loaded) return;
+    if(!name.trim()){setMessage("代車名を入力してください。");return;}
+    actionLock.current=true;setBusy(true);
+    try{
+      const {error}=await supabase.from("loaner_vehicles").insert({
+        display_name:name.trim(),source_type:sourceType,
+        provider_name:sourceType==="rental_company"?provider.trim()||null:null,
+        registration_last4:last4.normalize("NFKC").replace(/\D/g,"").slice(-4)||null,
+        maker:maker.trim()||null,model:model.trim()||null,operational_status:"active",updated_at:new Date().toISOString(),
+      });
+      if(error) throw error;
+      setName("");setProvider("");setLast4("");setMaker("");setModel("");
+      await load("代車を追加済みです。");
+    }catch(error){setLoaded(false);setVehicles([]);setCounts({});setMessage("追加結果を確認できません。一覧を再読み込みして登録状態を確認してください。 "+safeActionError("代車追加",error));}
+    finally{actionLock.current=false;setBusy(false);}
   }
-
   async function setStatus(id:string,status:string) {
-    setBusy(true);
-    const {error}=await supabase.rpc("set_loaner_vehicle_operational_status",{
-      p_loaner_vehicle_id:id,
-      p_status:status,
-      p_actor:"staff",
-    });
-    if(error) setMessage(safeActionError("代車状態の更新", error));
-    else setMessage("代車状態を更新しました。");
-    await load();
+    if(actionLock.current || readPending.current || !loaded) return;
+    actionLock.current=true;setBusy(true);
+    try{
+      const {error}=await supabase.rpc("set_loaner_vehicle_operational_status",{p_loaner_vehicle_id:id,p_status:status,p_actor:"staff"});
+      if(error) throw error;
+      await load("代車状態を更新済みです。");
+    }catch(error){setMessage(safeActionError("代車状態の更新",error));}
+    finally{actionLock.current=false;setBusy(false);}
   }
-
   async function updateReservationStatus(id:string,status:"reserved"|"checked_out"|"returned"|"cancelled") {
-    setBusy(true);
-    const {error}=await supabase.rpc("update_loaner_reservation_status",{
-      p_reservation_id:id,
-      p_status:status,
-      p_actor:"staff",
-    });
-    if(error){
-      setMessage("貸出状態の更新エラー: "+error.message);
-      setBusy(false);
-      return;
-    }
-    setMessage(status==="checked_out"?"代車を貸出中にしました。":status==="returned"?"代車を返却済みにしました。":"代車予約の状態を更新しました。");
-    await load();
+    if(actionLock.current || readPending.current || !loaded) return;
+    actionLock.current=true;setBusy(true);
+    try{
+      const {error}=await supabase.rpc("update_loaner_reservation_status",{p_reservation_id:id,p_status:status,p_actor:"staff"});
+      if(error) throw error;
+      await load(status==="checked_out"?"代車を貸出中に変更済みです。":status==="returned"?"代車を返却済みに変更しました。":"代車予約の状態を更新済みです。");
+    }catch(error){setMessage(safeActionError("貸出状態の更新",error));}
+    finally{actionLock.current=false;setBusy(false);}
   }
 
   const availableCount = useMemo(()=>vehicles.filter(isAvailable).length,[vehicles]);
@@ -174,22 +166,24 @@ export default function LoanerPage() {
         <div>
           <div className="eyebrow">代車ボード</div>
           <h1>{day}</h1>
-          <div className="notice">{busy?"読み込み中…":message}</div>
+          <div className="notice" role="status" aria-live="polite">{busy?"読み込み中…":message}</div>
         </div>
-        <div className="summary">
+        {loaded && !busy && <div className="summary">
           <div><small>空き合計</small><b>{availableCount}</b></div>
           <div className="availableBreakdown"><small>自社空き</small><b>{availableBySource.company}<em> / {counts.companyVehiclesActive ?? 0}</em></b></div>
           <div className="availableBreakdown"><small>レンタカー空き</small><b>{availableBySource.rental}<em> / {counts.rentalCompanyVehiclesActive ?? 0}</em></b></div>
           <div><small>予約/貸出</small><b>{counts.reservedOnDay ?? 0}</b></div>
           {(counts.rentalCancellationPending ?? 0)>0 && <div className="warningCount"><small>取消連絡待ち</small><b>{counts.rentalCancellationPending}</b></div>}
-        </div>
+        </div>}
       </section>
 
+      {!busy && !loaded && <button type="button" onClick={()=>void load()}>代車一覧を再読み込み</button>}
       <section className="dateBar">
-        <input type="date" value={day} onChange={(e)=>setDay(e.target.value)} />
-        <button onClick={()=>setDay(todayJst())}>今日</button>
+        <input aria-label="代車状況の日付" disabled={actionLock.current} type="date" value={day} onChange={(e)=>selectDay(e.target.value)} />
+        <button disabled={actionLock.current} onClick={()=>selectDay(todayJst())}>今日</button>
       </section>
 
+      <fieldset className="loanerFields" disabled={busy || actionLock.current || !loaded}>
       <section className="board">
         {vehicles.map(v=>{
           const activeReservations=(v.reservations||[]).filter(r=>r.status!=="returned" && r.status!=="cancelled");
@@ -247,11 +241,12 @@ export default function LoanerPage() {
             </article>
           );
         })}
-        {!vehicles.length && !busy && <div className="empty">代車がまだ登録されていません。</div>}
+        {loaded && !vehicles.length && !busy && <div className="empty">代車がまだ登録されていません。</div>}
       </section>
 
       <section className="addCard">
         <h2>代車を追加</h2>
+        <form className="addForm" onSubmit={(event)=>{event.preventDefault();void addVehicle();}}>
         <div className="grid">
           <label>種類
             <select value={sourceType} onChange={(e)=>setSourceType(e.target.value as any)}>
@@ -261,14 +256,17 @@ export default function LoanerPage() {
           </label>
           <label>表示名<input value={name} onChange={(e)=>setName(e.target.value)} placeholder="例：N-BOX 1号車" /></label>
           {sourceType==="rental_company" && <label>レンタカー会社<input value={provider} onChange={(e)=>setProvider(e.target.value)} /></label>}
-          <label>ナンバー下4桁<input inputMode="numeric" maxLength={4} value={last4} onChange={(e)=>setLast4(e.target.value.replace(/\D/g,"").slice(-4))} /></label>
+          <label>ナンバー下4桁<input inputMode="numeric" maxLength={4} value={last4} onChange={(e)=>setLast4(e.target.value.normalize("NFKC").replace(/\D/g,"").slice(-4))} /></label>
           <label>メーカー<input value={maker} onChange={(e)=>setMaker(e.target.value)} /></label>
           <label>車種<input value={model} onChange={(e)=>setModel(e.target.value)} /></label>
         </div>
-        <button className="primary" disabled={busy} onClick={()=>void addVehicle()}>＋ 代車を追加</button>
+        <button type="submit" className="primary" disabled={busy}>＋ 代車を追加</button>
+        </form>
       </section>
+      </fieldset>
 
       <style jsx global>{`
+        .loanerFields{border:0;padding:0;margin:0;min-width:0}.loanerFields:disabled{opacity:.7}.loanerPage :focus-visible{outline:3px solid #2674e8;outline-offset:2px}.loanerCard{overflow-wrap:anywhere}
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}
         .loanerPage{max-width:1100px;margin:0 auto;padding:16px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}
         .hero,.addCard{background:#fff;border:1px solid #d9e0ea;border-radius:18px;padding:18px;margin-bottom:12px}.hero{display:flex;justify-content:space-between;gap:12px}.eyebrow{color:#2674e8;font-weight:800}.hero h1{margin:3px 0}.notice{color:#667487}.summary{display:flex;gap:7px;flex-wrap:wrap}.summary>div{background:#f6f8fb;border-radius:12px;padding:10px;min-width:80px;display:grid}.summary b{font-size:22px}.summary small{color:#78869a}.summary .availableBreakdown{background:#eef8f1}.summary .availableBreakdown b{color:#25703c}.summary .availableBreakdown em{font-size:12px;color:#6c7888;font-style:normal}.summary .warningCount{background:#fff0db}.summary .warningCount b{color:#925b08}
