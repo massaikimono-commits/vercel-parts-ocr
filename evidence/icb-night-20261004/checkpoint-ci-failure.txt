@@ -3,7 +3,7 @@ full-regression	Audit production dependencies	2026-10-04T00:52:07.3517063Z ^[[36
 full-regression	Audit production dependencies	2026-10-04T00:52:07.3589459Z shell: /usr/bin/bash -e {0}
 full-regression	Audit production dependencies	2026-10-04T00:52:07.3589810Z ##[endgroup]
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1941732Z # npm audit report
-full-regression	Audit production dependencies	2026-10-04T00:52:08.1942245Z 
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1942245Z
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1942423Z braces  *
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1942786Z Severity: high
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1944193Z braces vulnerable to stack-exhaustion denial of service through deeply nested patterns - https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
@@ -28,9 +28,9 @@ full-regression	Audit production dependencies	2026-10-04T00:52:08.1956271Z      
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1956863Z             @vinext/cloudflare  0.0.1 || >=1.0.0-beta.0
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1957519Z             Depends on vulnerable versions of vinext
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1958138Z             node_modules/@vinext/cloudflare
-full-regression	Audit production dependencies	2026-10-04T00:52:08.1958528Z 
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1958528Z
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1958811Z 7 high severity vulnerabilities
-full-regression	Audit production dependencies	2026-10-04T00:52:08.1959139Z 
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1959139Z
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1959561Z To address all issues (including breaking changes), run:
 full-regression	Audit production dependencies	2026-10-04T00:52:08.1960882Z   npm audit fix --force
 full-regression	Audit production dependencies	2026-10-04T00:52:08.2065817Z ##[error]Process completed with exit code 1.
