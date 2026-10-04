@@ -20,7 +20,7 @@ assert.match(source, /setRegistrationLast4\(""\)/, "last4 resets");
 assert.match(source, /setStaffId\(""\)/, "staff selection resets");
 assert.match(source, /setNotes\(""\)/, "notes reset");
 assert.match(source, /setRegisteredSearch\(""\)/, "vehicle search resets");
-assert.match(source, /setDeliveryTimeKey\(""\)/, "delivery time selection resets");
+assert.match(source, /setDeliveryTimeKey\("unspecified"\)/, "delivery time selection resets to the supported default");
 assert.match(source, /setDeliveryDay\(day\)/, "delivery date resets from the kept registration day");
 
 assert.match(source, /useState<EntryType>\("pickup"\)/, "initial entry type defaults to pickup");

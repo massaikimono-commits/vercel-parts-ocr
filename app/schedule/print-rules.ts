@@ -29,7 +29,7 @@ function isMorningJst(value: string) {
 }
 
 export function dailyReportTimeLabel(row: DailyReportEntryLike) {
-  if (row.print_time_label_override) return row.print_time_label_override;
+  if (row.print_time_label_override?.trim()) return row.print_time_label_override.trim();
   if (row.print_time_mode === "exact") {
     const parts = new Intl.DateTimeFormat("ja-JP", {
       timeZone: "Asia/Tokyo",

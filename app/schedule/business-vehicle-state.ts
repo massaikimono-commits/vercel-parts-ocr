@@ -7,6 +7,7 @@ export type BusinessScheduleEntry = {
   entry_type: BusinessEntryType;
   starts_at: string;
   print_time_mode?: string | null;
+  print_time_label_override?: string | null;
 };
 
 export type BusinessWorkOrder = {
@@ -99,16 +100,11 @@ export function classifyVehicleBusinessStates<TWork extends BusinessWorkOrder>(
     if (isWaitingVisit) continue;
 
     if (isBodyShopReason(work.reason)) {
-      // 板金は引取/来社の予定日から、納車予定日の前日まで継続。
-      // 納車当日は上部納車欄を優先するため、板金欄へは出さない。
       if (!deliveryDay || deliveryDay > reportDay) bodyShopVehicles.push(state);
     } else {
-      // 滞留は「納車予定が未登録」の時だけ。
-      // checked_in/out・作業完了系は業務判定へ混ぜない。
       if (!deliveryEntry) stayingVehicles.push(state);
     }
 
-    // 納車予定車両は、入庫開始済みかつ納車日が翌日以降の車両。
     if (deliveryDay && deliveryDay > reportDay) plannedDeliveries.push(state);
   }
 
@@ -117,6 +113,8 @@ export function classifyVehicleBusinessStates<TWork extends BusinessWorkOrder>(
 
 export function deliveryTimeLabel(entry: BusinessScheduleEntry | null) {
   if (!entry) return "";
+  const override = entry.print_time_label_override?.trim();
+  if (override) return override;
   if (entry.print_time_mode === "unspecified") return "中";
   if (entry.print_time_mode === "morning") return "A中";
   return new Intl.DateTimeFormat("ja-JP", {

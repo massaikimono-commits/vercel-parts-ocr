@@ -45,6 +45,7 @@ type ScheduleEntry = {
   starts_at: string;
   ends_at: string;
   print_time_mode: "exact" | "morning" | "unspecified";
+  print_time_label_override: string | null;
 };
 
 type SearchRow = {
@@ -145,6 +146,7 @@ function scheduleEntryTimeLabel(entry: ScheduleEntry) {
   const day = new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo", month: "numeric", day: "numeric",
   }).format(new Date(entry.starts_at));
+  if (entry.print_time_label_override?.trim()) return `${day} ${entry.print_time_label_override.trim()}`;
   if (entry.print_time_mode === "morning") return `${day} A中`;
   if (entry.print_time_mode === "unspecified") return `${day} 中`;
   const time = new Intl.DateTimeFormat("ja-JP", {
@@ -277,7 +279,7 @@ export default function ScheduleSearchPage() {
       if (workIds.length) {
         const { data, error } = await supabase
           .from("schedule_entries")
-          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
+          .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override")
           .in("work_order_id", workIds)
           .order("starts_at", { ascending: true })
           .limit(500);
@@ -287,7 +289,7 @@ export default function ScheduleSearchPage() {
 
       let q2 = supabase
         .from("schedule_entries")
-        .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode")
+        .select("id,vehicle_id,work_order_id,entry_type,starts_at,ends_at,print_time_mode,print_time_label_override")
         .in("vehicle_id", vehicleIds)
         .order("starts_at", { ascending: nextRange === "future" })
         .limit(300);
