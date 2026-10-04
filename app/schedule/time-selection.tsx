@@ -83,20 +83,27 @@ export default function TimeSelection({
       >
         {SCHEDULE_TIME_PRESETS.map((choice) => {
           const selected = valueKey === choice.key;
+          const startsAfterGroup = choice.key === "after_1500";
           return (
-            <button
+            <div
               key={choice.key}
-              type="button"
-              aria-pressed={selected}
-              className={buttonClass(selected)}
-              style={buttonVisualStyle(selected)}
-              onClick={() => onPresetChange(choice)}
+              data-time-preset-group={choice.key.startsWith("until_") ? "until" : choice.key.startsWith("after_") ? "after" : "other"}
+              data-time-preset-group-boundary={startsAfterGroup ? "true" : undefined}
+              style={startsAfterGroup ? { boxSizing: "border-box", borderLeft: "2px solid #94a3b8", paddingLeft: "0.25rem" } : undefined}
             >
-              <span className="inline-flex items-center justify-center whitespace-nowrap">
-                {selected && <span className="mr-0.5" aria-hidden="true">✓</span>}
-                {choice.label}
-              </span>
-            </button>
+              <button
+                type="button"
+                aria-pressed={selected}
+                className={buttonClass(selected)}
+                style={buttonVisualStyle(selected)}
+                onClick={() => onPresetChange(choice)}
+              >
+                <span className="inline-flex items-center justify-center whitespace-nowrap">
+                  {selected && <span className="mr-0.5" aria-hidden="true">✓</span>}
+                  {choice.label}
+                </span>
+              </button>
+            </div>
           );
         })}
       </div>

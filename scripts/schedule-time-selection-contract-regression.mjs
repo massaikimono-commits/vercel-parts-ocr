@@ -36,6 +36,9 @@ for (const [start, end] of [["14:30","14:30"],["16:00","14:30"],["08:00","09:00"
 }
 
 assert.match(componentSource, /SCHEDULE_TIME_PRESETS\.map/, "shared component renders common preset model");
+assert.match(componentSource, /choice\.key\.startsWith\("until_"\) \? "until" : choice\.key\.startsWith\("after_"\) \? "after"/, "afternoon presets expose their meaning groups for the visual boundary");
+assert.match(componentSource, /choice\.key === "after_1500"/, "visual divider begins at the first 以降 preset");
+assert.match(componentSource, /borderLeft: "2px solid #94a3b8", paddingLeft: "0\.25rem"/, "compact vertical divider separates まで and 以降 without changing preset semantics");
 assert.doesNotMatch(componentSource, />\s*任意時間帯\s*</, "custom range must not restore the removed visible heading");
 assert.match(componentSource, /type="time"[\s\S]*type="time"/, "start/end time inputs remain visible");
 assert.match(componentSource, /aria-label="開始時刻"/, "start time keeps accessibility label");
