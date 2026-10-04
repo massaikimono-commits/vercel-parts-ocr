@@ -1,0 +1,9 @@
+# Frozen source review
+
+Read-only review of revision `4ab51bad` on 2026-10-04. No real photo, GT value, or diagnostic score was inspected. No runtime source was changed in this review.
+
+The seven prefreeze findings are addressed in source. Yellow border hue no longer blocks geometry polarity; synthetic white/yellow geometry agrees. Graph header expansion accepts provider character boxes that omit whitespace. Tied cardinal and multiple rectangle hypotheses return no top-level rows. Graph, row-first, and projective outputs carry source-frame regions. Nonempty rejected numeric OCR is marked `invalid`. The cell cap is enforced before crop files are written, skipped cells retain `budget-exhausted` status, and native OCR batches are limited to 12 cells. Completed variants are checkpointed for child timeout recovery. Source inspection confirms no branch silently selects the first tied orientation or rectangle for top-level rows.
+
+Verification: 14 row-first geometry checks, 98 spatial-graph synthetic cases, source-coordinate contract, and cardinal-orientation contract pass. These checks do not establish real-photo accuracy, mobile latency, or cross-engine confidence calibration.
+
+Remaining diagnostic limits: cost-column absence is a header/schema hypothesis, not physical proof; an unreadable header could still hide a column. The graph requires a recognized numeric token to propose a data row. Row-first requires complete axis-aligned rule topology and abstains on skew/broken tables. The orientation score and 0.9 tie rule are fixed document-internal heuristics, not calibrated probabilities. Rectification uses a single Vision rectangle when exactly one is returned, without independent paper-identity proof. All variants require manual review and auto-confirm zero rows. These limits support keeping adoption and the unresolved formal 54/9 scope on HOLD while reporting the frozen diagnostic run in full.

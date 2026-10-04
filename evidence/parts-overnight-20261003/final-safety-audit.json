@@ -1,0 +1,99 @@
+{
+  "schema": "icb.parts-overnight-final-safety-audit.v1",
+  "date": "2026-10-04",
+  "modelRouting": {
+    "role": "Luna Fast Path",
+    "basis": "parent task assignment",
+    "repositoryExecutionLogFound": false
+  },
+  "checkout": {
+    "branch": "candidate/parts-ocr-generalization-overnight-20261003",
+    "head": "4ab51badb77842ee36637dca9c25639fc0bc93d7",
+    "worktreeClean": true
+  },
+  "freeze": {
+    "path": "evidence/parts-overnight-20261003/runtime-freeze.json",
+    "freezeCreatedAt": "2026-10-04T01:08:56.086509+00:00",
+    "sourceHead": "a6e84cda32677c1d5a1f120b1ab48c21531e42eb",
+    "runtimeFilesListed": 9,
+    "runtimeFileHashesMatched": 9,
+    "nativeBinaryHashMatched": true,
+    "modelHashes": "match freeze metadata for jpn and eng",
+    "runtimeGtUsed": false,
+    "noFurtherRuntimeEditsAfterRealScoring": true,
+    "runtimeFreezeHashMatchesBothFinalIndexes": true
+  },
+  "originalSourceIntegrity": {
+    "manifest": "/private/tmp/icb-parts-recovery-20261003/.eval-private/recovery/inventory.json",
+    "manifestRecords": 100,
+    "originalFilesPresentAndSha256Matched": 100,
+    "originalsUnchanged": true,
+    "pathsAndImageHashesOmittedFromThisReport": true,
+    "note": "Run-result sourceHash values cover the derived PNG inputs, while the earlier inventory covers original HEIC bytes; these are distinct byte representations and were not directly equated."
+  },
+  "frozenRuns": {
+    "real": {
+      "resultRecords": 15,
+      "variantOutputs": 105,
+      "acquisitionRecords": 199,
+      "totalProcessingMs": 202744,
+      "timeouts": 0,
+      "errors": 0,
+      "runtimeGtUsedFalseForAll": true,
+      "source": ".eval-private/overnight/real-frozen-results/"
+    },
+    "synthetic": {
+      "resultRecords": 8,
+      "variantOutputs": 56,
+      "acquisitionRecords": 102,
+      "totalProcessingMs": 40249,
+      "timeouts": 0,
+      "errors": 0,
+      "runtimeGtUsedFalseForAll": true,
+      "source": ".eval-private/overnight/synthetic-frozen-results/"
+    },
+    "excluded": [
+      ".eval-private/overnight/synthetic-first-probe/ (old probe run)",
+      ".eval-private/overnight/synthetic-native-development/ (mutable development run)",
+      ".eval-private/overnight/synthetic-dev/dev-standard.png (mutable development input)"
+    ],
+    "dataReadBoundary": "Counts, errors/timeouts, timing, image identifiers, hashes and runtime GT flags only; no OCR text, scoring-only scalar values, or raw photographs inspected."
+  },
+  "runtimeBoundaryReview": {
+    "scoringModuleImports": false,
+    "formalGtImports": false,
+    "imageIdConditioningFound": false,
+    "filenameRulesFound": false,
+    "novelAnswerDictionary": false,
+    "customAnswerDictionaryConfigured": false,
+    "manualReviewRequired": true,
+    "autoConfirmAllowed": false,
+    "method": "source scan of only frozen runtime and overnight runner files; output review limited to summary metadata"
+  },
+  "governance": {
+    "icbSpecV14ArchitectureGate": "NOT_FOUND_IN_CHECKED_OUT_TREE_OR_AVAILABLE_REFS",
+    "adoption": "HOLD",
+    "formalGate": "HOLD_UNMAPPED_54_9",
+    "noGateCriteriaInferred": true,
+    "ResetTicketUsed": false,
+    "newArchitectureLoop": "STOPPED_AFTER_FROZEN_MEASUREMENTS; no further runtime edits"
+  },
+  "protectedWorktrees": [
+    {
+      "path": "/private/tmp/icb-parts-recovery-20261003",
+      "branch": "eval/parts-real-photo-recovery-20261003",
+      "worktreeClean": true
+    },
+    {
+      "path": "/Users/massa_ikimono/Developer/vercel-parts-ocr",
+      "branch": "main",
+      "worktreeClean": true
+    },
+    {
+      "path": "/Users/massa_ikimono/Developer/first-class-mechanic-trainer",
+      "branch": "candidate/autonomous-integration-20261003",
+      "worktreeClean": true
+    }
+  ],
+  "runtimeChangedByThisAudit": false
+}
