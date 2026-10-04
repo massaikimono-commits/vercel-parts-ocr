@@ -10,5 +10,7 @@
   "started_at": "2026-10-04T16:40:05.537014+00:00",
   "ended_at": "2026-10-04T16:40:19.380468+00:00",
   "environment": "CI public dummy Supabase values; no secrets; no DB calls",
-  "log": "build-baseline.txt"
+  "log": "build-baseline.txt",
+  "log_normalization": "Committed txt removes terminal CR, expands indentation tabs and strips trailing whitespace; raw ignored .log retained locally.",
+  "raw_log_sha256": "18a99d3a51533b7f4ab7d4bc423f738fd82a3f90b7b33de1a5dca8505d13fceb"
 }

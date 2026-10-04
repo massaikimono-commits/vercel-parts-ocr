@@ -495,19 +495,19 @@ PASS customer migration workflow regression
   We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
   The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
 
-  	- allowJs was set to true
-  	- include was updated to add '.next/dev/types/**/*.ts'
+    - allowJs was set to true
+    - include was updated to add '.next/dev/types/**/*.ts'
 
   The following mandatory changes were made to your tsconfig.json:
 
-  	- jsx was set to react-jsx (next.js uses the React automatic runtime)
+    - jsx was set to react-jsx (next.js uses the React automatic runtime)
 
   Finished TypeScript in 3.3s ...
   Collecting page data using 9 workers ...
   Generating static pages using 9 workers (0/39) ...
-  Generating static pages using 9 workers (9/39) 
-  Generating static pages using 9 workers (19/39) 
-  Generating static pages using 9 workers (29/39) 
+  Generating static pages using 9 workers (9/39)
+  Generating static pages using 9 workers (19/39)
+  Generating static pages using 9 workers (29/39)
 ✓ Generating static pages using 9 workers (39/39) in 203ms
   Finalizing page optimization ...
 
@@ -554,4 +554,3 @@ Route (app)
 
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
-

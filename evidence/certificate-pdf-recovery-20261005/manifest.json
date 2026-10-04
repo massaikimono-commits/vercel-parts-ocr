@@ -13,13 +13,13 @@
     },
     {
       "path": "evidence/certificate-pdf-recovery-20261005/build-baseline.json",
-      "bytes": 373,
-      "sha256": "56dffb4f36d9df4ae2b501d28e22149a7ac596d72519ed7ebf07a55c1a50b600"
+      "bytes": 614,
+      "sha256": "48309045c8ab1a745bf4b9bfac731f20270ab0d8a33a90eb8667d1e2d523cde6"
     },
     {
       "path": "evidence/certificate-pdf-recovery-20261005/build-baseline.txt",
-      "bytes": 23555,
-      "sha256": "18a99d3a51533b7f4ab7d4bc423f738fd82a3f90b7b33de1a5dca8505d13fceb"
+      "bytes": 23551,
+      "sha256": "bb7fcda6ae9a40484492b2807776683707d7dde5366c5598ca557473fbe207c0"
     },
     {
       "path": "evidence/certificate-pdf-recovery-20261005/bulk-pdf-native-parity-regression.txt",
