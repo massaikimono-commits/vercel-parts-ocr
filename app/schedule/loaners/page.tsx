@@ -2,7 +2,8 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { safeActionError } from "../../lib/client-security";
 import { supabase } from "../../supabase";
 
 type WorkOrder = {
@@ -161,12 +162,19 @@ export default function LoanerDemandPage() {
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("代車が必要な予約を読み込みます。");
   const [allocation, setAllocation] = useState<AllocationState | null>(null);
+  const actionLock = useRef(false);
+  const [loaded, setLoaded] = useState(false);
+  const [sourceTruncated, setSourceTruncated] = useState(false);
 
   useEffect(() => {
     void load();
   }, []);
 
   async function load() {
+    if (actionLock.current) return;
+    actionLock.current = true;
+    setLoaded(false);
+    setAllocation(null);
     setBusy(true);
     setMessage("代車予約を確認中…");
     try {
@@ -175,12 +183,15 @@ export default function LoanerDemandPage() {
         .select("id,vehicle_id,reason,worker_name,status,work_completed,needs_loaner,planned_delivery_at,planned_delivery_date,checked_in_at,checked_out_at")
         .eq("needs_loaner", true)
         .is("checked_out_at", null)
-        .limit(300);
+        .order("id", { ascending: true })
+        .limit(301);
       if (workError) throw workError;
-      const works = (workData || []) as WorkOrder[];
+      setSourceTruncated((workData || []).length > 300);
+      const works = (workData || []).slice(0, 300) as WorkOrder[];
 
       if (!works.length) {
         setRows([]);
+        setLoaded(true);
         setAllocation(null);
         setMessage("現在、代車が必要な予約はありません。");
         return;
@@ -270,16 +281,19 @@ export default function LoanerDemandPage() {
       });
 
       setRows(nextRows);
+      setLoaded(true);
       setMessage(`${nextRows.length}件中、未割当 ${nextRows.filter((x) => !x.assignment).length}件です。`);
     } catch (error: any) {
       setRows([]);
       setMessage("代車予約の読み込みエラー: " + (error?.message || error));
     } finally {
+      actionLock.current = false;
       setBusy(false);
     }
   }
 
   async function openAllocation(row: Row) {
+    if (actionLock.current) return;
     if (row.assignment) {
       setMessage("この予約にはすでに代車が割り当てられています。");
       return;
@@ -299,17 +313,15 @@ export default function LoanerDemandPage() {
       return;
     }
 
+    actionLock.current = true;
     setBusy(true);
     setMessage("対象期間の代車空きを確認中…");
+    try {
     const { data, error } = await supabase.rpc("loaner_vehicle_availability", {
       p_starts_at: startsAt,
       p_ends_at: endsAt,
     });
-    if (error) {
-      setMessage("代車空き確認エラー: " + error.message);
-      setBusy(false);
-      return;
-    }
+    if (error) throw error;
     setAllocation({
       row,
       startsAt,
@@ -317,11 +329,17 @@ export default function LoanerDemandPage() {
       vehicles: ((data?.vehicles || []) as AvailableLoaner[]),
     });
     setMessage("空いている代車を選択してください。");
-    setBusy(false);
+    } catch (error) {
+      setMessage(safeActionError("代車空き確認", error));
+    } finally {
+      actionLock.current = false;
+      setBusy(false);
+    }
   }
 
   async function assignLoaner(vehicle: AvailableLoaner) {
-    if (!allocation || !vehicle.available) return;
+    if (!allocation || !vehicle.available || actionLock.current) return;
+    actionLock.current = true;
     setBusy(true);
     setMessage(`${vehicle.displayName} の空きを再確認しています…`);
 
@@ -365,9 +383,12 @@ export default function LoanerDemandPage() {
 
       setAllocation(null);
       setMessage(`${vehicle.displayName} を代車として割り当てました。`);
+      actionLock.current = false;
       await load();
     } catch (error: any) {
-      setMessage("代車割当エラー: " + (error?.message || error));
+      setMessage(safeActionError("代車割当", error));
+    } finally {
+      actionLock.current = false;
       setBusy(false);
     }
   }
@@ -429,7 +450,7 @@ export default function LoanerDemandPage() {
         <div>
           <div className="eyebrow">既存予約から自動抽出</div>
           <h1>代車が必要な予約</h1>
-          <p>{busy ? "処理中…" : message}</p>
+          <p role="status" aria-live="polite">{busy ? "処理中…" : message}</p>
         </div>
         <div className="heroActions">
           <button onClick={() => location.assign("/loaners")}>実在庫ボード</button>
@@ -437,15 +458,16 @@ export default function LoanerDemandPage() {
         </div>
       </section>
 
-      <section className={`summary ${summary.unassigned > 0 ? "hasWarning" : ""}`}>
+      {loaded && sourceTruncated && <p role="alert">表示上限300件を超えています。件数・14日間の需要は表示中の300件のみで、全予約の合計ではありません。</p>}
+      {loaded && !busy && <section className={`summary ${summary.unassigned > 0 ? "hasWarning" : ""}`}>
         <div><b>{summary.unassigned}</b><span>未割当</span></div>
         <div><b>{summary.waiting}</b><span>予約・入庫待ち</span></div>
         <div><b>{summary.active}</b><span>作業中</span></div>
         <div><b>{summary.returnWait}</b><span>返却待ち候補</span></div>
         <div><b>{peakDemand}</b><span>14日最大必要台数</span></div>
-      </section>
+      </section>}
 
-      <section className="demandPanel">
+      {loaded && !busy && <section className="demandPanel">
         <div className="sectionTitle">
           <div><b>今後14日の代車需要</b><span>日付を押すと、その週の実在庫を確認できます</span></div>
         </div>
@@ -463,7 +485,7 @@ export default function LoanerDemandPage() {
             </button>
           ))}
         </div>
-      </section>
+      </section>}
 
       {allocation && (
         <section className="allocationPanel">
@@ -525,7 +547,7 @@ export default function LoanerDemandPage() {
             </article>
           );
         })}
-        {!busy && rows.length === 0 && <div className="empty">代車が必要な予約はありません。</div>}
+        {loaded && !busy && rows.length === 0 && <div className="empty">代車が必要な予約はありません。</div>}
       </section>
 
       <div className="note">未割当の予約は「代車を割当」から対象期間の空きだけを表示します。割当直前にも空きを再確認し、二重予約を避けます。</div>

@@ -117,19 +117,6 @@ function searchDigits(text: string) {
   return normalizeSearchInput(text).replace(/[^0-9]/g, "");
 }
 
-function safeLike(text: string) {
-  return normalizeSearchInput(text).replace(/[,%()]/g, " ").trim();
-}
-
-function phoneSearchPatterns(digits: string) {
-  if (!digits) return [];
-  const patterns = [`phone.ilike.%${digits}%`];
-  if (digits.length >= 3) {
-    patterns.push(`phone.ilike.%${digits.split("").join("%")}%'`.slice(0, -1));
-  }
-  return patterns;
-}
-
 function isShortPlateNumberQuery(text: string) {
   return /^\d{1,4}$/.test(normalizeSearchInput(text));
 }
@@ -168,7 +155,7 @@ export default function ScheduleSearchPage() {
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState<SearchRow[]>([]);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("お客様名・電話番号・ナンバー下4桁で検索できます。");
+  const [message, setMessage] = useState("ナンバー下4桁で予定を検索できます。");
   const [range, setRange] = useState<SearchRange>("future");
 
   const searching = useRef(false);
@@ -190,9 +177,9 @@ export default function ScheduleSearchPage() {
     if (searching.current) return;
     const q = normalizeSearchInput(input);
     setRange(nextRange);
-    if (!q) {
+    if (!isShortPlateNumberQuery(q)) {
       setRows([]);
-      setMessage("検索する文字を入力してください。");
+      setMessage("ナンバー下4桁を1〜4桁の数字で入力してください。");
       return;
     }
     searching.current = true;
@@ -204,13 +191,10 @@ export default function ScheduleSearchPage() {
     setMessage(`${RANGE_LABEL[nextRange]}を検索中…`);
 
     try {
-      const like = safeLike(q);
-      const digits = searchDigits(q);
       const shortPlateQuery = isShortPlateNumberQuery(q);
       const nowIso = new Date().toISOString();
 
-      let customers: Customer[] = [];
-      let vehiclesByCustomer: Vehicle[] = [];
+      const customers: Customer[] = [];
       const vehicleDirectRows: Vehicle[] = [];
 
       if (shortPlateQuery) {
@@ -224,60 +208,10 @@ export default function ScheduleSearchPage() {
           .limit(200);
         if (error) throw error;
         vehicleDirectRows.push(...((data || []) as Vehicle[]));
-      } else {
-        const customerFilters = [
-          `name.ilike.%${like}%`,
-          `company_name.ilike.%${like}%`,
-          `schedule_display_name.ilike.%${like}%`,
-          ...(digits ? phoneSearchPatterns(digits) : [`phone.ilike.%${like}%`]),
-        ];
-
-        const customerPromise = supabase
-          .from("customers")
-          .select("id,name,company_name,schedule_display_name,phone")
-          .or(customerFilters.join(","))
-          .limit(100);
-
-        const vehicleQueries = [
-          supabase
-            .from("vehicles")
-            .select("id,customer_id,registration_number,registration_number_last4,maker,model")
-            .ilike("registration_number", `%${like}%`)
-            .limit(100),
-        ];
-        if (digits) {
-          vehicleQueries.push(
-            supabase
-              .from("vehicles")
-              .select("id,customer_id,registration_number,registration_number_last4,maker,model")
-              .ilike("registration_number_last4", `%${digits.slice(-4)}%`)
-              .limit(100)
-          );
-        }
-
-        const [customerRes, ...vehicleDirectRes] = await Promise.all([customerPromise, ...vehicleQueries]);
-        if (customerRes.error) throw customerRes.error;
-        for (const result of vehicleDirectRes) {
-          if (result.error) throw result.error;
-          vehicleDirectRows.push(...((result.data || []) as Vehicle[]));
-        }
-
-        customers = (customerRes.data || []) as Customer[];
-        const customerIds = customers.map((x) => x.id);
-        if (customerIds.length) {
-          const { data, error } = await supabase
-            .from("vehicles")
-            .select("id,customer_id,registration_number,registration_number_last4,maker,model")
-            .in("customer_id", customerIds)
-            .limit(200);
-          if (error) throw error;
-          vehiclesByCustomer = (data || []) as Vehicle[];
-        }
       }
 
       const vehicleMap = new Map<string, Vehicle>();
       for (const v of vehicleDirectRows) vehicleMap.set(v.id, v);
-      for (const v of vehiclesByCustomer) vehicleMap.set(v.id, v);
       const vehicles = [...vehicleMap.values()];
       const vehicleIds = vehicles.map((x) => x.id);
 
@@ -331,10 +265,11 @@ export default function ScheduleSearchPage() {
 
       const missingCustomerIds = [...new Set(vehicles.map((x) => x.customer_id).filter((id) => id && !customerMap.has(id)))];
       if (missingCustomerIds.length) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("customers")
           .select("id,name,company_name,schedule_display_name,phone")
           .in("id", missingCustomerIds as string[]);
+        if(error) throw error;
         for (const c of ((data || []) as Customer[])) customerMap.set(c.id,c);
       }
 
@@ -421,7 +356,7 @@ export default function ScheduleSearchPage() {
     <main className="searchPage">
       <header className="top">
         <button onClick={() => location.assign("/")}>← メインへ</button>
-        <div><b>予定検索</b><span>名前・電話・下4桁</span></div>
+        <div><b>予定検索</b><span>ナンバー下4桁専用</span></div>
         <strong>icb</strong>
       </header>
 
@@ -434,8 +369,9 @@ export default function ScheduleSearchPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="予定を検索する文字"
+            inputMode="numeric"
             disabled={busy}
-            placeholder="お客様名 / 電話番号 / ナンバー下4桁"
+            placeholder="ナンバー下4桁（例：10）"
           />
           <button type="submit" className="primary" disabled={busy}>
             {busy ? "検索中…" : "検索"}
@@ -455,7 +391,7 @@ export default function ScheduleSearchPage() {
             </button>
           ))}
         </div>
-        <div className="searchHint">数字1〜4桁だけの入力はナンバー下4桁専用検索です。例：10 → 下4桁「10」（0010）。それ以外は名前・電話・登録番号から検索します。</div>
+        <div className="searchHint"><button type="button" onClick={() => location.assign("/customer-vehicles")}>顧客車両検索へ</button> 数字1〜4桁だけの入力はナンバー下4桁専用検索です。例：10 → 下4桁「10」（0010）。名前・電話番号は顧客車両検索で検索してください。</div>
         <div className="notice" role="status" aria-live="polite">{message}</div>
       </section>
 

@@ -1,0 +1,36 @@
+full-regression	Audit production dependencies	﻿2026-10-04T00:52:07.3516562Z ##[group]Run npm audit --omit=dev --audit-level=high
+full-regression	Audit production dependencies	2026-10-04T00:52:07.3517063Z ^[[36;1mnpm audit --omit=dev --audit-level=high^[[0m
+full-regression	Audit production dependencies	2026-10-04T00:52:07.3589459Z shell: /usr/bin/bash -e {0}
+full-regression	Audit production dependencies	2026-10-04T00:52:07.3589810Z ##[endgroup]
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1941732Z # npm audit report
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1942245Z
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1942423Z braces  *
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1942786Z Severity: high
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1944193Z braces vulnerable to stack-exhaustion denial of service through deeply nested patterns - https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1945511Z fix available via `npm audit fix --force`
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1946295Z Will install vinext@0.0.15, which is a breaking change
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1946937Z node_modules/braces
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1947331Z   micromatch  >=0.2.0
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1947831Z   Depends on vulnerable versions of braces
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1948365Z   node_modules/micromatch
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1948811Z     fast-glob  *
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1949295Z     Depends on vulnerable versions of micromatch
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1949947Z     node_modules/fast-glob
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1950497Z       vite-plugin-dynamic-import  >=0.2.0
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1951416Z       Depends on vulnerable versions of fast-glob
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1952108Z       node_modules/vite-plugin-dynamic-import
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1952858Z         vite-plugin-commonjs  0.5.0 - 0.5.2 || >=0.7.0
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1953659Z         Depends on vulnerable versions of vite-plugin-dynamic-import
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1954425Z         node_modules/vite-plugin-commonjs
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1954962Z           vinext  >=0.0.16
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1955616Z           Depends on vulnerable versions of vite-plugin-commonjs
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1956271Z           node_modules/vinext
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1956863Z             @vinext/cloudflare  0.0.1 || >=1.0.0-beta.0
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1957519Z             Depends on vulnerable versions of vinext
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1958138Z             node_modules/@vinext/cloudflare
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1958528Z
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1958811Z 7 high severity vulnerabilities
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1959139Z
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1959561Z To address all issues (including breaking changes), run:
+full-regression	Audit production dependencies	2026-10-04T00:52:08.1960882Z   npm audit fix --force
+full-regression	Audit production dependencies	2026-10-04T00:52:08.2065817Z ##[error]Process completed with exit code 1.

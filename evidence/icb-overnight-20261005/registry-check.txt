@@ -1,0 +1,4 @@
+npm view braces version -> 3.0.3
+npm view vinext version -> 1.0.1
+npm view @vinext/cloudflare version -> 1.0.1
+Current audit: braces <=3.0.3 is vulnerable; latest queried braces release remains in the affected range.

@@ -2,7 +2,8 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
 
@@ -73,7 +74,7 @@ function dayKey(value: string) {
 }
 
 function elapsedStayDays(checkedInAt: string | null) {
-  if (!checkedInAt) return null;
+  if (!checkedInAt || !Number.isFinite(Date.parse(checkedInAt))) return null;
   const start = Date.parse(dayKey(checkedInAt) + "T00:00:00Z");
   const today = Date.parse(dayKey(new Date().toISOString()) + "T00:00:00Z");
   if (!Number.isFinite(start) || !Number.isFinite(today) || today < start) return null;
@@ -81,6 +82,10 @@ function elapsedStayDays(checkedInAt: string | null) {
 }
 
 export default function WorkloadPage() {
+  return <Suspense fallback={<main role="status">担当者負荷を読み込み中…</main>}><WorkloadContent /></Suspense>;
+}
+function WorkloadContent() {
+  const params=useSearchParams();const queryString=params.toString();
   const [works, setWorks] = useState<WorkOrder[]>([]);
   const [scheduleLinks, setScheduleLinks] = useState<ScheduleLink[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -92,18 +97,24 @@ export default function WorkloadPage() {
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("担当者の負荷を読み込みます。");
 
+  const loadSequence=useRef(0),assignmentLock=useRef(false);
+  const [loaded,setLoaded]=useState(false);
+  const [capped,setCapped]=useState(false);
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(queryString);
     const worker = params.get("worker");
     const filter = params.get("filter");
-    if (worker) setSelectedWorker(worker);
+    setSelectedWorker(worker || "全担当");
     if (filter && ["all","unfinished","notStarted","inProgress","urgent","completedWaiting","staying"].includes(filter)) {
       setSelectedFilter(filter as WorkFilter);
-    }
-    void load();
-  }, []);
+    }else setSelectedFilter("unfinished");
+  }, [queryString]);
+  useEffect(()=>{void load();return ()=>{loadSequence.current++;};},[]);
 
   async function load() {
+    if(assignmentLock.current) return;
+    const request=++loadSequence.current;
+    setLoaded(false);setCapped(false);setWorks([]);setScheduleLinks([]);setVehicles([]);setCustomers([]);setStaffMembers([]);
     setBusy(true);
     setMessage("担当者の負荷を読み込み中…");
     try {
@@ -112,10 +123,10 @@ export default function WorkloadPage() {
         .select("id,vehicle_id,worker_name,worker_staff_id,status,work_completed,checked_in_at,checked_out_at,reason,is_urgent")
         .is("checked_out_at", null)
         .neq("status", "cancelled")
-        .limit(500);
+        .order("id",{ascending:true}).limit(501);
       if (error) throw error;
-      const nextWorks = (data || []) as WorkOrder[];
-      setWorks(nextWorks);
+      const rawWorks=(data||[]) as WorkOrder[];
+      const nextWorks=rawWorks.slice(0,500);
 
       const { data: staffData, error: staffError } = await supabase
         .from("staff_members")
@@ -123,7 +134,7 @@ export default function WorkloadPage() {
         .eq("is_active", true)
         .order("display_name", { ascending: true });
       if (staffError) throw staffError;
-      setStaffMembers((staffData || []) as StaffMember[]);
+      const nextStaff=(staffData||[]) as StaffMember[];
 
       const workIds = nextWorks.map((work) => work.id);
       const vehicleIds = [...new Set(nextWorks.map((work) => work.vehicle_id).filter(Boolean))];
@@ -157,11 +168,14 @@ export default function WorkloadPage() {
         nextCustomers = (customerData || []) as Customer[];
       }
 
+      if(request!==loadSequence.current) return;
+      setWorks(nextWorks);setStaffMembers(nextStaff);setCapped(rawWorks.length>500);setLoaded(true);
       setScheduleLinks((scheduleRes.data || []) as ScheduleLink[]);
       setVehicles(nextVehicles);
       setCustomers(nextCustomers);
       setMessage("現在出庫前の作業を担当者別に集計しています。");
     } catch (error: any) {
+      if(request!==loadSequence.current) return;
       setWorks([]);
       setScheduleLinks([]);
       setVehicles([]);
@@ -169,7 +183,7 @@ export default function WorkloadPage() {
       setStaffMembers([]);
       setMessage(safeActionError("負荷表の読み込み", error));
     } finally {
-      setBusy(false);
+      if(request===loadSequence.current)setBusy(false);
     }
   }
 
@@ -293,14 +307,17 @@ export default function WorkloadPage() {
   function chooseWorker(name: string, filter: WorkFilter = "unfinished") {
     setSelectedWorker(name);
     setSelectedFilter(filter);
+    location.replace("/schedule/workload?"+new URLSearchParams({worker:name,filter}).toString());
     requestAnimationFrame(() => document.getElementById("workload-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   async function assignWorker(workId: string, staffId: string) {
-    if (!staffId || assigningWorkId) return;
+    if (!staffId || assignmentLock.current || busy || !loaded) return;
     const staff = staffMembers.find((member) => member.id === staffId);
     if (!staff) return;
 
+    assignmentLock.current=true;
+    const request=loadSequence.current;
     setAssigningWorkId(workId);
     try {
       const { data, error } = await supabase.rpc("set_work_order_worker", {
@@ -309,6 +326,7 @@ export default function WorkloadPage() {
         p_actor: "workload",
       });
       if (error) throw error;
+      if(request!==loadSequence.current) return;
       setWorks((current) => current.map((work) => work.id === workId ? {
         ...work,
         worker_staff_id: staffId,
@@ -316,8 +334,9 @@ export default function WorkloadPage() {
       } : work));
       setMessage(`担当を ${data?.workerName || staff.display_name} に変更しました。`);
     } catch (error: any) {
-      setMessage("担当変更エラー: " + (error?.message || error));
+      if(request===loadSequence.current)setMessage(safeActionError("担当変更",error));
     } finally {
+      assignmentLock.current=false;
       setAssigningWorkId("");
     }
   }
@@ -334,11 +353,13 @@ export default function WorkloadPage() {
         <div>
           <div className="eyebrow">作業負荷表</div>
           <h1>担当者ごとの現在負荷</h1>
-          <p>{busy ? "読み込み中…" : message}</p>
+          <p role="status" aria-live="polite">{busy ? "読み込み中…" : message}</p>
         </div>
-        <button className="reload" disabled={busy} onClick={() => void load()}>再読込</button>
+        <button className="reload" disabled={busy || Boolean(assigningWorkId)} onClick={() => void load()}>再読込</button>
       </section>
 
+      {loaded && !busy && capped && <p role="alert">負荷表の表示上限500件を超えています。件数と担当者別の集計は先頭500件が対象です。</p>}
+      {loaded && !busy && <>
       <section className="summary">
         <button onClick={() => chooseWorker("全担当", "all")}><span>出庫前</span><b>{totals.total}</b></button>
         <button className="unfinishedSummary" onClick={() => chooseWorker("全担当", "unfinished")}><span>未完了</span><b>{totals.unfinished}</b></button>
@@ -394,7 +415,7 @@ export default function WorkloadPage() {
               <button
                 key={filter}
                 className={selectedFilter === filter ? "active" : ""}
-                onClick={() => setSelectedFilter(filter)}
+                onClick={() => chooseWorker(selectedWorker,filter)}
               >
                 {filterLabel(filter)}
               </button>
@@ -424,7 +445,7 @@ export default function WorkloadPage() {
                     <span>担当変更</span>
                     <select
                       value={work.worker_staff_id || ""}
-                      disabled={assigningWorkId === work.id}
+                      disabled={Boolean(assigningWorkId) || busy || !loaded}
                       onChange={(event) => void assignWorker(work.id, event.target.value)}
                     >
                       <option value="">{work.worker_name?.trim() ? `現在: ${work.worker_name}` : "担当を選択"}</option>
@@ -448,6 +469,7 @@ export default function WorkloadPage() {
 
       <div className="hint">未完了は「未実施＋作業中」の台数です。担当者名や各台数を押すと該当車両だけを下に表示し、そのまま予約変更画面へ進めます。同じ作業を複数予定に登録していても、work_orders単位で1台として集計します。</div>
 
+      </>}
       <style jsx global>{`
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button{font:inherit}
         .loadPage{max-width:1180px;margin:0 auto;padding:16px 14px 50px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.top>div{display:grid;text-align:center}.top span{font-size:12px;color:#78869a}.top button,.reload{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:9px 12px;font-weight:800}

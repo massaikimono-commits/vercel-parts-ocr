@@ -2,7 +2,8 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { isCalendarDay } from "../../lib/calendar-day";
 import { supabase } from "../../supabase";
 import { safeActionError } from "../../lib/client-security";
 
@@ -60,6 +61,11 @@ function todayJst() {
 
 function jstIso(day: string, time: string) {
   return new Date(`${day}T${time}:00+09:00`).toISOString();
+}
+
+function optionMatchesDay(value:string,day:string){
+  if(!isCalendarDay(day) || !Number.isFinite(Date.parse(value))) return false;
+  return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(value))===day;
 }
 
 function plusMinutes(iso: string, minutes: number) {
@@ -126,10 +132,19 @@ export default function ActiveVehicleSchedulePage() {
   const [message, setMessage] = useState("選択中の既存車両へ予定を登録します。");
   const [busy, setBusy] = useState(false);
 
+  const actionLock=useRef(false);
+  const mainRequest=useRef(0),deliveryRequest=useRef(0);
+  const mounted=useRef(true);
+  const redirectTimer=useRef<number|null>(null);
+  const [registrationBlocked,setRegistrationBlocked]=useState(false);
+  const [mainOptionsBusy,setMainOptionsBusy]=useState(false);
+  const [deliveryOptionsBusy,setDeliveryOptionsBusy]=useState(false);
   useEffect(() => {
+    mounted.current=true;
     void loadActiveVehicle();
     void loadStaff();
     void loadVendors();
+    return ()=>{mounted.current=false;mainRequest.current++;deliveryRequest.current++;if(redirectTimer.current)window.clearTimeout(redirectTimer.current);};
   }, []);
 
   useEffect(() => {
@@ -172,9 +187,11 @@ export default function ActiveVehicleSchedulePage() {
 
   useEffect(() => {
     if (addDelivery && !isWaitingService) void loadDeliveryOptions();
+    else{deliveryRequest.current++;setDeliveryOptions([]);setDeliveryKey("");setDeliveryOptionsBusy(false);}
   }, [deliveryDay, addDelivery, reason, isWaitingService]);
 
   async function loadActiveVehicle() {
+    setVehicle(null); setCustomer(null);
     try {
       const saved = JSON.parse(localStorage.getItem(ACTIVE_KEY) || "null");
       if (!saved?.id) {
@@ -187,7 +204,8 @@ export default function ActiveVehicleSchedulePage() {
         .eq("id", saved.id)
         .single();
       if (vehicleError) throw vehicleError;
-      setVehicle(vehicleData as Vehicle);
+      if(!vehicleData) throw new Error("選択した車両が見つかりません。");
+      let loadedCustomer:Customer|null=null;
 
       if (vehicleData.customer_id) {
         const { data: customerData, error: customerError } = await supabase
@@ -196,69 +214,70 @@ export default function ActiveVehicleSchedulePage() {
           .eq("id", vehicleData.customer_id)
           .single();
         if (customerError) throw customerError;
-        setCustomer(customerData as Customer);
+        loadedCustomer=customerData as Customer;
       }
+      if(mounted.current){setCustomer(loadedCustomer);setVehicle(vehicleData as Vehicle);}
     } catch (error: any) {
+      if(!mounted.current) return;
       setMessage(safeActionError("作業車両の読み込み", error));
     }
   }
 
   async function loadStaff() {
+    try {
     const { data, error } = await supabase
       .from("staff_members")
       .select("id,display_name,short_name")
       .eq("is_active", true)
       .order("display_order", { ascending: true });
-    if (!error) setStaff((data || []) as Staff[]);
+    if(error) throw error;
+    if(mounted.current) setStaff((data || []) as Staff[]);
+    }catch(error){if(mounted.current)setMessage(safeActionError("社員名の読み込み",error));}
   }
 
   async function loadVendors() {
+    try {
     const { data, error } = await supabase
       .from("external_vendors")
       .select("id,display_name,short_name")
       .eq("is_active", true)
       .order("display_order", { ascending: true })
       .order("display_name", { ascending: true });
-    if (!error) setVendors((data || []) as ExternalVendor[]);
+    if(error) throw error;
+    if(mounted.current) setVendors((data || []) as ExternalVendor[]);
+    }catch(error){if(mounted.current)setMessage(safeActionError("外注先の読み込み",error));}
   }
 
   async function loadMainOptions() {
-    if (entryType === "onsite_repair") {
-      setTimeOptions([]);
-      setTimeKey("");
-      return;
-    }
-    const { data, error } = await supabase.rpc("schedule_time_options", {
-      p_day: day,
-      p_entry_type: entryType,
-    });
-    if (error) {
-      setMessage(safeActionError("時間候補の読み込み", error));
-      return;
-    }
-    const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
-    setTimeOptions(options);
-    setTimeKey((old) => options.some((x) => x.key === old) ? old : options[0]?.key || "");
+    const request=++mainRequest.current;
+    setTimeOptions([]);setTimeKey("");setMainOptionsBusy(false);
+    if(entryType==="onsite_repair" || !isCalendarDay(day)) return;
+    setMainOptionsBusy(true);
+    try{
+      const {data,error}=await supabase.rpc("schedule_time_options",{p_day:day,p_entry_type:entryType});
+      if(error) throw error;
+      if(!mounted.current || request!==mainRequest.current) return;
+      const options=Array.isArray(data?.options)?data.options as TimeOption[]:[];
+      setTimeOptions(options);setTimeKey(options[0]?.key||"");
+    }catch(error){if(mounted.current && request===mainRequest.current)setMessage(safeActionError("時間候補の読み込み",error));}
+    finally{if(mounted.current && request===mainRequest.current)setMainOptionsBusy(false);}
   }
 
   async function loadDeliveryOptions() {
-    const { data, error } = await supabase.rpc("schedule_time_options", {
-      p_day: deliveryDay,
-      p_entry_type: "delivery",
-    });
-    if (error) {
-      setMessage(safeActionError("納車時間候補の読み込み", error));
-      return;
-    }
-    const options = Array.isArray(data?.options) ? data.options as TimeOption[] : [];
-    setDeliveryOptions(options);
-    setDeliveryKey((old) => {
-      if (options.some((x) => x.key === old)) return old;
-      const preferredBroad = (reason === "点検" || reason === "車検")
-        ? options.find((x) => x.mode === "unspecified")
-        : null;
-      return preferredBroad?.key || options[0]?.key || "";
-    });
+    const request=++deliveryRequest.current;
+    setDeliveryOptions([]);setDeliveryKey("");setDeliveryOptionsBusy(false);
+    if(!isCalendarDay(deliveryDay)) return;
+    setDeliveryOptionsBusy(true);
+    try{
+      const {data,error}=await supabase.rpc("schedule_time_options",{p_day:deliveryDay,p_entry_type:"delivery"});
+      if(error) throw error;
+      if(!mounted.current || request!==deliveryRequest.current) return;
+      const options=Array.isArray(data?.options)?data.options as TimeOption[]:[];
+      setDeliveryOptions(options);
+      const preferredBroad=(reason==="点検" || reason==="車検")?options.find(x=>x.mode==="unspecified"):null;
+      setDeliveryKey(preferredBroad?.key||options[0]?.key||"");
+    }catch(error){if(mounted.current && request===deliveryRequest.current)setMessage(safeActionError("納車時間候補の読み込み",error));}
+    finally{if(mounted.current && request===deliveryRequest.current)setDeliveryOptionsBusy(false);}
   }
 
   const selectedTime = useMemo(() => timeOptions.find((x) => x.key === timeKey) || null, [timeOptions, timeKey]);
@@ -302,16 +321,21 @@ export default function ActiveVehicleSchedulePage() {
   }
 
   async function submit(allowOverride = false) {
+    if(actionLock.current || registrationBlocked || mainOptionsBusy || deliveryOptionsBusy) return;
     setWarnings([]);
     setErrors([]);
     if (!vehicle) {
       setErrors(["作業車両を選択してください。"]);
       return;
     }
+    if(!isCalendarDay(day)){setErrors(["入庫日を入力してください。"]);return;}
     const main = mainTimes();
     if (!main) {
       setErrors(["時間を選択してください。"]);
       return;
+    }
+    if(!optionMatchesDay(main.startsAt,day)){
+      setErrors(["入庫日と時間候補をもう一度確認してください。"]);return;
     }
     const waitingService = entryType === "customer_visit" && isWaitingService;
     if (!waitingService && addDelivery && !selectedDelivery) {
@@ -319,6 +343,11 @@ export default function ActiveVehicleSchedulePage() {
       return;
     }
 
+    if(!waitingService && addDelivery && selectedDelivery && !optionMatchesDay(selectedDelivery.startsAt,deliveryDay)){
+      setErrors(["納車日と時間候補をもう一度確認してください。"]);return;
+    }
+    actionLock.current=true;
+    let mutationStarted=false,complete=false;
     setBusy(true);
     try {
       const mainCheck = await checkSlot(entryType, main.startsAt, main.endsAt, main.printMode, waitingService);
@@ -339,6 +368,7 @@ export default function ActiveVehicleSchedulePage() {
         return;
       }
 
+      mutationStarted=true;
       const { data: work, error: workError } = await supabase
         .from("work_orders")
         .insert({
@@ -391,12 +421,17 @@ export default function ActiveVehicleSchedulePage() {
         if (deliveryError) throw deliveryError;
       }
 
+      complete=true;
       setMessage("既存車両へ予定を登録しました。顧客・車両を重複作成していません。");
-      window.setTimeout(() => location.assign(`/schedule?day=${day}`), 450);
+      redirectTimer.current=window.setTimeout(() => location.assign(`/schedule?day=${day}`), 450);
     } catch (error: any) {
-      setMessage(safeActionError("予定登録", error));
+      if(mutationStarted){
+        setRegistrationBlocked(true);
+        setMessage("登録処理の一部が保存された可能性があります。重複登録を避けるため、この画面からの再登録を停止しました。車両の履歴と予定を確認してください。");
+      }else setMessage(safeActionError("予定登録", error));
     } finally {
-      setBusy(false);
+      if(!complete) actionLock.current=false;
+      if(mounted.current) setBusy(false);
     }
   }
 
@@ -414,18 +449,21 @@ export default function ActiveVehicleSchedulePage() {
         <div className="eyebrow">既存車両の入出庫登録</div>
         <h1>{customerName}</h1>
         <div className="vehicleName">{registration} {[vehicle?.maker, vehicle?.model].filter(Boolean).join(" / ")}</div>
-        <div className="notice">{message}</div>
+        <div className="notice" role="status" aria-live="polite">{message}</div>
+        {registrationBlocked && vehicle && <button type="button" onClick={()=>location.assign("/customer-vehicles/history?vehicle="+vehicle.id)}>この車両の履歴を確認</button>}
+        {!vehicle && <button type="button" onClick={()=>void loadActiveVehicle()}>車両情報を再読み込み</button>}
         {!vehicle && <button onClick={() => location.assign("/customer-vehicles")}>車両を選択する</button>}
         {!!errors.length && <div className="errors">{errors.map((x, i) => <div key={i}>・{x}</div>)}</div>}
         {!!warnings.length && (
           <div className="warnings">
             <b>確認が必要です</b>
             {warnings.map((x, i) => <div key={i}>・{x}</div>)}
-            <button disabled={busy} onClick={() => void submit(true)}>警告を確認して登録</button>
+            <button disabled={busy || registrationBlocked || actionLock.current} onClick={() => void submit(true)}>警告を確認して登録</button>
           </div>
         )}
       </section>
 
+      <fieldset className="activeFields" disabled={busy || registrationBlocked || actionLock.current}>
       <section className="card">
         <h2>① 入庫予定</h2>
         <div className="grid">
@@ -470,11 +508,13 @@ export default function ActiveVehicleSchedulePage() {
       </section>
 
       <section className="card">
-        <button className="primary" disabled={busy || !vehicle} onClick={() => void submit(false)}>{busy ? "登録中…" : "この車両で予定を登録"}</button>
+        <button className="primary" disabled={busy || !vehicle || registrationBlocked || mainOptionsBusy || deliveryOptionsBusy} onClick={() => void submit(false)}>{busy ? "登録中…" : "この車両で予定を登録"}</button>
         <p className="footnote">営業時間・昼休み・重複・午前/午後上限・午前車検台数は既存のチェックRPCで確認します。既存車両を使うため、顧客・車両の仮データは新規作成しません。</p>
       </section>
 
+      </fieldset>
       <style jsx global>{`
+        .activeFields{border:0;padding:0;margin:0;min-width:0}.activeFields:disabled{opacity:.7}
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{max-width:900px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{background:#fff;border:1px solid #d9e0ea;border-radius:20px;padding:21px;margin-bottom:15px}button,input,select,textarea{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:11px;padding:10px 13px;font-weight:800}.eyebrow{font-weight:800;color:#2674e8}h1{margin:4px 0 6px}h2{margin:0 0 14px}.vehicleName{color:#697689;margin-bottom:12px}.notice{background:#edf7ef;border:1px solid #c3e4cb;border-radius:11px;padding:11px 13px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:grid;gap:6px;font-weight:700;color:#5c6878}.wide{grid-column:1/-1}input,select,textarea{width:100%;border:1px solid #cbd6e3;border-radius:10px;padding:11px;background:#fff;color:#172033}textarea{min-height:85px}.flags{display:flex;gap:16px;align-items:center;border:1px solid #e0e6ef;border-radius:11px;padding:11px}.flags label,.switch{display:flex;gap:7px;align-items:center;font-weight:800}.flags input,.switch input{width:auto}.delivery{margin-top:12px}.primary{width:100%;padding:15px;background:#2f6fe4;color:#fff;border-color:#2f6fe4;font-size:17px}.errors,.warnings{margin-top:12px;border-radius:11px;padding:12px;line-height:1.7}.errors{background:#fff0f0;border:1px solid #efbcbc;color:#8f2f2f}.warnings{background:#fff8df;border:1px solid #ecd98d;color:#6d5912}.warnings button{margin-top:8px}.footnote{color:#6f7c8e;line-height:1.6;margin-bottom:0}@media(max-width:650px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}}
       `}</style>
     </main>

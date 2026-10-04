@@ -1,0 +1,51 @@
+{
+  "status": "SECURITY_GATE_HOLD",
+  "candidate_head_audited": "3cfbcd9b10e0c4e80ebfe513891a69131536762a",
+  "command": "npm audit --omit=dev --audit-level=high",
+  "result": {
+    "high": 7,
+    "moderate": 0,
+    "low": 0,
+    "critical": 0,
+    "dependency_count": 342,
+    "affected_nodes": [
+      "node_modules/braces",
+      "node_modules/micromatch",
+      "node_modules/fast-glob",
+      "node_modules/vite-plugin-dynamic-import",
+      "node_modules/vite-plugin-commonjs",
+      "node_modules/vinext",
+      "node_modules/@vinext/cloudflare"
+    ]
+  },
+  "advisory": {
+    "id": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces",
+    "severity": "high",
+    "affected_range": "<=3.0.3",
+    "latest_registry_version_checked": "3.0.3",
+    "patched_release_found": false,
+    "cvss": 7.5
+  },
+  "dependency_path": "@vinext/cloudflare -> vinext -> vite-plugin-commonjs -> vite-plugin-dynamic-import -> fast-glob -> micromatch -> braces",
+  "classification": [
+    "D_NO_PATCH_AVAILABLE for braces at registry latest 3.0.3",
+    "E_TRANSITIVE_ONLY for braces/micromatch/fast-glob path",
+    "F_BUILD_OR_DEPLOY_TOOLCHAIN_PATH: Vinext is used by explicit Vinext build/dev/deploy scripts; runtime reachability was not established",
+    "G_RUNTIME_EXPOSED: not demonstrated; not asserted absent",
+    "H_GATE_POLICY_REVIEW_REQUIRED: automated gate remains enabled and failing"
+  ],
+  "npm_fix_proposal": {
+    "vinext": "0.0.15",
+    "semver_major": true,
+    "safe_candidate_remediation": false
+  },
+  "direct_runtime_assessment": "Normal Next app route source does not import braces or the Vinext packages directly. Candidate package metadata declares Vinext packages as dependencies and npm production audit includes them. The actual deployment/runtime exposure therefore remains unproven.",
+  "remediation": "None. No audit ignore, severity threshold change, workflow weakening, gate removal, dependency suppression, or breaking downgrade was made.",
+  "main_pr_90_relationship": "PR #90 fixed separate advisories and is already in this candidate's ancestry. Candidate package.json/package-lock.json/security regression assertions match those dependency fixes; reapplying them would be duplicate work and would not resolve braces.",
+  "evidence_files": [
+    "dependency-audit.json",
+    "prior-ci-failed.log",
+    "registry-check.txt"
+  ]
+}

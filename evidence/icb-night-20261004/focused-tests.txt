@@ -1,0 +1,19 @@
+PASS night shared edit save/cancel synchronous guard
+PASS night mismatched-date and delivery-row waiting mutation rejected
+PASS night partial edit save blocks blind retry and requires canonical reread
+PASS night uncertain mutation response fails closed
+PASS night successful cancel cannot be repeated during delayed navigation
+PASS night options latest-response ownership and explicit waiting payload
+PASS night schedule search rejects name/phone/full plate without database traffic
+PASS night query-owned edit form and fail-closed fieldset wiring
+PASS night active registration serialized through preflight and delayed redirect; waiting has no delivery insert
+PASS night active partial registration blocks duplicate retry
+PASS night active stale time options cannot replace current day
+PASS night weekly loaner demand error releases loading
+PASS night weekly loaner stale snapshots ignored
+PASS night loaner main thrown network error releases controls and stale board
+PASS night loaner main date ownership ignores old board
+PASS night loaner creation/status/reservation share synchronous mutation guard and NFKC
+PASS night per-work status serialization, stale-day reload and rejection release
+PASS night workload failed reads remain unknown and malformed stay dates do not crash
+PASS night workload same-tick assignment serialized and rejection releases guard

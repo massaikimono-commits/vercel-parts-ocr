@@ -2,7 +2,9 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { isCalendarDay } from "../../lib/calendar-day";
 import { supabase } from "../../supabase";
 import { dailyReportTimeLabel } from "../print-rules";
 import { safeActionError } from "../../lib/client-security";
@@ -124,6 +126,13 @@ function customerName(customer: Customer | null) {
 }
 
 export default function MonthlySchedulePage() {
+  return <Suspense fallback={<main role="status">予定を読み込み中…</main>}><MonthlySchedulePageContent /></Suspense>;
+}
+
+function MonthlySchedulePageContent() {
+  const queryDay = useSearchParams().get("day");
+  const loadSequence = useRef(0);
+  const [loaded, setLoaded] = useState(false);
   const [monthStart, setMonthStart] = useState(() => firstOfMonth(todayJst()));
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [works, setWorks] = useState<WorkOrder[]>([]);
@@ -134,16 +143,20 @@ export default function MonthlySchedulePage() {
   const [message, setMessage] = useState("月間予定を読み込みます。");
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("day");
-    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setMonthStart(firstOfMonth(q));
-  }, []);
+    const q = isCalendarDay(queryDay) ? queryDay : todayJst();
+    setMonthStart(firstOfMonth(q));
+  }, [queryDay]);
 
   useEffect(() => {
     void loadMonth();
+    return () => { loadSequence.current += 1; };
   }, [monthStart]);
 
   async function loadMonth() {
+    const requestId = ++loadSequence.current;
     setBusy(true);
+    setLoaded(false);
+    setEntries([]); setWorks([]); setVehicles([]); setCustomers([]); setCalendar({});
     setMessage("月間予定を読み込み中…");
     const nextMonth = addMonths(monthStart, 1);
     try {
@@ -202,6 +215,8 @@ export default function MonthlySchedulePage() {
         nextCustomers = (data || []) as Customer[];
       }
 
+      if (requestId !== loadSequence.current) return;
+      setLoaded(true);
       setEntries(nextEntries);
       setWorks(nextWorks);
       setVehicles(nextVehicles);
@@ -209,9 +224,9 @@ export default function MonthlySchedulePage() {
       setCalendar(Object.fromEntries(((calendarRes.data || []) as CalendarDay[]).map((x) => [x.business_date, x])));
       setMessage(monthTitle(monthStart) + " の予定を表示しています。");
     } catch (error: any) {
-      setMessage(safeActionError("月間予定の読み込み", error));
+      if (requestId === loadSequence.current) setMessage(safeActionError("月間予定の読み込み", error));
     } finally {
-      setBusy(false);
+      if (requestId === loadSequence.current) setBusy(false);
     }
   }
 
@@ -286,6 +301,12 @@ export default function MonthlySchedulePage() {
     return out;
   }, [monthStart]);
 
+  function selectMonth(day: string) {
+    if (!isCalendarDay(day)) return;
+    setMonthStart(firstOfMonth(day));
+    location.replace("/schedule/month?day=" + day);
+  }
+
   function openDay(day: string) {
     location.assign("/schedule?day=" + day);
   }
@@ -302,12 +323,13 @@ export default function MonthlySchedulePage() {
         <div>
           <div className="eyebrow">月全体の予定</div>
           <h1>{monthTitle(monthStart)}</h1>
-          <p>{busy ? "読み込み中…" : message}</p>
+          <p role="status" aria-live="polite">{busy ? "読み込み中…" : message}</p>
+          {!loaded && !busy && <button type="button" onClick={() => void loadMonth()}>再読み込み</button>}
         </div>
         <div className="monthNav">
-          <button onClick={() => setMonthStart(addMonths(monthStart, -1))}>← 前月</button>
-          <button onClick={() => setMonthStart(firstOfMonth(todayJst()))}>今月</button>
-          <button onClick={() => setMonthStart(addMonths(monthStart, 1))}>翌月 →</button>
+          <button onClick={() => selectMonth(addMonths(monthStart, -1))}>← 前月</button>
+          <button onClick={() => selectMonth(firstOfMonth(todayJst()))}>今月</button>
+          <button onClick={() => selectMonth(addMonths(monthStart, 1))}>翌月 →</button>
           <button onClick={() => { location.assign("/schedule/week?day=" + monthStart); }}>週間</button>
         </div>
       </section>

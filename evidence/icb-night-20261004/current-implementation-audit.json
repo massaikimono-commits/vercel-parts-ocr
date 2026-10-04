@@ -1,0 +1,67 @@
+{
+  "CURRENT_IMPLEMENTATION_CHECK": {
+    "NO_OP_VERIFIED": [
+      "previous search/detail/back and customer-vehicle guards reused",
+      "new and active waiting eligibility remains any customer_visit reason",
+      "responsive controller performs dataset routing + CSS, no semantic DOM rewriting",
+      "OCR architecture and frozen algorithms unchanged",
+      "printing contracts unchanged"
+    ],
+    "REMEDIATE": [
+      "schedule search constrained to last4-only per latest explicit instruction",
+      "schedule edit query ownership, partial-read isolation, waiting flags, option races, save/cancel serialization and uncertain-save read recovery",
+      "delivery edit routes waiting changes to inbound customer_visit to avoid retaining a delivery row",
+      "active-vehicle registration duplicate guard and partial-save stop",
+      "daily work status serialization and canonical reread on navigation",
+      "daily/weekly loaner date validation, URL synchronization, stale-read isolation, error recovery and mutation guards",
+      "workload false-zero reads, assignment duplicate guard, query persistence and malformed timestamp recovery"
+    ],
+    "IMPLEMENT": []
+  },
+  "PARENT_SPEC_AUDIT": {
+    "basis": [
+      "latest explicit user contract",
+      "docs/app-development-ledger.md waiting v1.3 correction",
+      "tracked database RPC source (read-only; deployed revision not proven)",
+      "existing regression scripts and previous evidence"
+    ],
+    "SPEC_MATCH": [
+      "customer/vehicle name/phone/last4 search unchanged",
+      "name + last4 initial arrival unchanged",
+      "business hours, lunch exclusion, arrival limits unchanged",
+      "work_order cancellation scope unchanged",
+      "waiting remains reason-independent and forbids delivery",
+      "A4/A3 printing, blank parts slip and no printed total unchanged"
+    ],
+    "REMEDIATED": [
+      "schedule search last4-only (previous SPEC_DECISION_REQUIRED resolved by latest user instruction)",
+      "waiting mutation from a linked delivery row diverted to inbound route"
+    ],
+    "DB_REQUIRED_HOLD": [
+      "delivery preset/custom-time DB-required UX",
+      "legal_3m apply",
+      "atomic multi-RPC schedule edit and active registration (no schema/RPC changes applied)"
+    ],
+    "USER_DEVICE_REQUIRED": [
+      "authenticated live backend acceptance",
+      "iPhone/iPad/Safari",
+      "physical print acceptance"
+    ],
+    "HISTORICAL_ONLY": [
+      "prior inspection-only waiting text superseded by current correction"
+    ],
+    "FORMAL_SPEC_LIMITATION": "No new full formal spec imported; comparison uses current repository evidence and explicit user rules."
+  },
+  "REMAINING_LIMITATIONS": [
+    "multi-RPC writes remain non-atomic; stop/re-read avoids blind current-page retry but is not transactionality",
+    "active registration stop is current-page protection; manual reload is not an idempotency guarantee",
+    "loaner demand bounded to 300; workload bounded to 500, with explicit sentinel disclosure",
+    "generic external concurrent offset pagination has no snapshot guarantee",
+    "inherited A3 screen-preview width remains"
+  ],
+  "MODEL_ROUTING": {
+    "Luna": "read-only route/spec audits",
+    "Sol": "complex race/partial-save review",
+    "Codex": "implementation, fixtures, tests, build, Git and evidence"
+  }
+}

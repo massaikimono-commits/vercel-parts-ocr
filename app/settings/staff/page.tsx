@@ -4,7 +4,7 @@ import { appLocation as location } from "../../lib/internal-navigation";
 
 import { safeActionError } from "../../lib/client-security";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../supabase";
 
 type StaffMember = {
@@ -21,12 +21,23 @@ export default function StaffSettingsPage() {
   const [name, setName] = useState("");
   const [shortName, setShortName] = useState("");
   const [message, setMessage] = useState("入社・退職に合わせて社員名を管理できます。");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const actionLock = useRef(false);
 
-  useEffect(() => { void load(); }, []);
-
-  async function load() {
+  async function runAction(action: () => Promise<void>) {
+    if (actionLock.current) return;
+    actionLock.current = true;
     setBusy(true);
+    try { await action(); }
+    catch (error) { setMessage(safeActionError("設定の処理", error)); }
+    finally { actionLock.current = false; setBusy(false); }
+  }
+
+  useEffect(() => { void runAction(load); }, []);
+
+  async function load(preserveMessage = false) {
+    setLoaded(false);
     const { data, error } = await supabase
       .from("staff_members")
       .select("id,display_name,short_name,is_active,quick_select,display_order")
@@ -34,8 +45,11 @@ export default function StaffSettingsPage() {
       .order("display_order", { ascending: true })
       .order("display_name", { ascending: true });
     if (error) setMessage(safeActionError("社員一覧の読み込み", error));
-    else setStaff((data || []) as StaffMember[]);
-    setBusy(false);
+    else {
+      setStaff((data || []) as StaffMember[]);
+      setLoaded(true);
+      if (!preserveMessage) setMessage("一覧を読み込みました。");
+    }
   }
 
   async function addStaff() {
@@ -44,7 +58,6 @@ export default function StaffSettingsPage() {
       setMessage("社員名を入力してください。");
       return;
     }
-    setBusy(true);
     const maxOrder = staff.reduce((max, x) => Math.max(max, x.display_order || 0), 0);
     const { error } = await supabase.from("staff_members").insert({
       display_name: display,
@@ -56,13 +69,12 @@ export default function StaffSettingsPage() {
     });
     if (error) {
       setMessage(safeActionError("社員の追加", error));
-      setBusy(false);
       return;
     }
     setName("");
     setShortName("");
     setMessage(display + " を追加しました。");
-    await load();
+    await load(true);
   }
 
   function patchMember(id: string, patch: Partial<StaffMember>) {
@@ -70,7 +82,7 @@ export default function StaffSettingsPage() {
   }
 
   async function saveMember(member: StaffMember) {
-    setBusy(true);
+    if (!member.display_name.trim()) { setMessage("社員名を入力してください。"); return; }
     const { error } = await supabase
       .from("staff_members")
       .update({
@@ -82,11 +94,9 @@ export default function StaffSettingsPage() {
       })
       .eq("id", member.id);
     setMessage(error ? safeActionError("社員情報の保存", error) : member.display_name + " を保存しました。");
-    setBusy(false);
   }
 
   async function toggleActive(member: StaffMember) {
-    setBusy(true);
     const next = !member.is_active;
     const { error } = await supabase
       .from("staff_members")
@@ -94,7 +104,7 @@ export default function StaffSettingsPage() {
       .eq("id", member.id);
     if (error) setMessage(safeActionError("社員情報の更新", error));
     else setMessage(next ? member.display_name + " を在籍に戻しました。" : member.display_name + " を退職扱いにしました。過去の担当者名は残ります。");
-    await load();
+    await load(true);
   }
 
   return (
@@ -108,30 +118,31 @@ export default function StaffSettingsPage() {
         <div style={{ fontWeight: 800, color: "#2674e8" }}>社員名設定</div>
         <h1>担当者を管理</h1>
         <p className="settingsIntro">予定登録では在籍中の社員だけを表示します。退職扱いにしても、過去の作業記録に保存済みの担当者名は残ります。</p>
-        <div className="settingsNotice" style={{ padding: 12, borderRadius: 12, background: "#edf7ef", marginBottom: 14 }}>{busy ? "処理中…" : message}</div>
-        <div className="settingsAddForm" style={{ display: "grid", gap: 9 }}>
-          <label>社員名<input value={name} onChange={(e) => setName(e.target.value)} placeholder="例：山田 太郎" /></label>
-          <label>一覧表示名<input value={shortName} onChange={(e) => setShortName(e.target.value)} placeholder="例：山田" /></label>
-          <button onClick={() => void addStaff()} disabled={busy}>＋ 社員を追加</button>
-        </div>
+        <div role="status" aria-live="polite" className="settingsNotice" style={{ padding: 12, borderRadius: 12, background: "#edf7ef", marginBottom: 14 }}>{busy ? "処理中…" : message}</div>
+        <form onSubmit={(event) => { event.preventDefault(); void runAction(addStaff); }} className="settingsAddForm" style={{ display: "grid", gap: 9 }}>
+          <label>社員名<input disabled={busy} value={name} onChange={(e) => setName(e.target.value)} placeholder="例：山田 太郎" /></label>
+          <label>一覧表示名<input disabled={busy} value={shortName} onChange={(e) => setShortName(e.target.value)} placeholder="例：山田" /></label>
+          <button type="submit" disabled={busy}>＋ 社員を追加</button>
+        </form>
       </section>
 
       <section className="settingsListCard" style={{ background: "#fff", border: "1px solid #d9e0ea", borderRadius: 22, padding: 22 }}>
+        <button type="button" disabled={busy} onClick={() => void runAction(load)}>一覧を再読み込み</button>
         <h2>社員一覧</h2>
-        {!staff.length && <div>社員がまだ登録されていません。</div>}
+        {loaded && !busy && !staff.length && <div>社員がまだ登録されていません。</div>}
         <div style={{ display: "grid", gap: 10 }}>
           {staff.map((member) => (
             <article className="settingsRow" key={member.id} style={{ border: "1px solid #dbe3ee", borderRadius: 14, padding: 14, opacity: member.is_active ? 1 : 0.6 }}>
               <div style={{ display: "grid", gap: 8 }}>
-                <label>社員名<input value={member.display_name} onChange={(e) => patchMember(member.id, { display_name: e.target.value })} /></label>
-                <label>表示名<input value={member.short_name || ""} onChange={(e) => patchMember(member.id, { short_name: e.target.value })} /></label>
-                <label>並び順<input inputMode="numeric" value={member.display_order} onChange={(e) => patchMember(member.id, { display_order: Number(e.target.value) || 0 })} /></label>
-                <label><input type="checkbox" checked={member.quick_select} onChange={(e) => patchMember(member.id, { quick_select: e.target.checked })} /> 通常候補に表示</label>
+                <label>社員名<input disabled={busy} value={member.display_name} onChange={(e) => patchMember(member.id, { display_name: e.target.value })} /></label>
+                <label>表示名<input disabled={busy} value={member.short_name || ""} onChange={(e) => patchMember(member.id, { short_name: e.target.value })} /></label>
+                <label>並び順<input disabled={busy} inputMode="numeric" value={member.display_order} onChange={(e) => patchMember(member.id, { display_order: Number(e.target.value) || 0 })} /></label>
+                <label><input disabled={busy} type="checkbox" checked={member.quick_select} onChange={(e) => patchMember(member.id, { quick_select: e.target.checked })} /> 通常候補に表示</label>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                 <strong>{member.is_active ? "在籍" : "退職"}</strong>
-                <button onClick={() => void saveMember(member)} disabled={busy}>保存</button>
-                <button onClick={() => void toggleActive(member)} disabled={busy}>{member.is_active ? "退職扱いにする" : "在籍に戻す"}</button>
+                <button onClick={() => void runAction(() => saveMember(member))} disabled={busy}>保存</button>
+                <button onClick={() => void runAction(() => toggleActive(member))} disabled={busy}>{member.is_active ? "退職扱いにする" : "在籍に戻す"}</button>
               </div>
             </article>
           ))}

@@ -1,0 +1,4206 @@
+{
+  "status": "PASS",
+  "fixtureOnly": true,
+  "sharedDatabaseTouched": false,
+  "checks": [
+    "home source-owned security alert",
+    "acknowledged event hides on home",
+    "new security event reappears",
+    "NFKC last4 search, duplicate Enter guard, one work-order result",
+    "persisted delivery label override stays visible",
+    "search → detail → back restores search and reloads current results",
+    "detail failure prevents partial actions and retry recovers",
+    "same-route entry query change loads the new detail",
+    "search failure and retry are distinct from empty",
+    "search empty state after real query",
+    "responsive no page overflow at 390",
+    "responsive no page overflow at 768",
+    "responsive no page overflow at 1440",
+    "login history failure differs from empty",
+    "28 additional real core/print/PDF-entry routes and 404 recovery smoke audit",
+    "same-route Today/day controls and active navigation remain in sync",
+    "customer vehicle search failure differs from empty and retry recovers",
+    "history initial failure avoids false empty and retry recovers",
+    "photos initial failure avoids false empty and retry recovers",
+    "lease-maintenance initial failure avoids false empty and retry recovers",
+    "staff settings error/retry, keyboard form duplicate guard and blank-name validation",
+    "vendors settings error/retry, keyboard form duplicate guard and blank-name validation",
+    "continuation six routes responsive at 390",
+    "continuation six routes responsive at 768",
+    "continuation six routes responsive at 1440",
+    "/schedule/week invalid date fallback and same-route year-boundary navigation",
+    "/schedule/week period controls persist in URL and survive reload",
+    "/schedule/week read error/retry avoids false empty",
+    "/schedule/month invalid date fallback and same-route year-boundary navigation",
+    "/schedule/month period controls persist in URL and survive reload",
+    "/schedule/month read error/retry avoids false empty",
+    "/settings/business-calendar failure is not a missing calendar and retry recovers",
+    "/settings/business-calendar/edit failure is not a missing calendar and retry recovers",
+    "history same-route vehicle query resets scoped state",
+    "photos same-route vehicle query resets scoped state",
+    "lease-maintenance same-route vehicle query resets scoped state",
+    "history filtered-empty describes loaded subset",
+    "lease saving locks editor and updated contract becomes latest",
+    "lease committed write with failed refresh recovers via read-only retry",
+    "loaner availability error/retry releases controls",
+    "loaner sentinel warns that capped demand is incomplete",
+    "phase3 five routes responsive at 390",
+    "phase3 five routes responsive at 768",
+    "phase3 five routes responsive at 1440"
+  ],
+  "errors": [],
+  "routeAudit": [
+    {
+      "path": "/schedule",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "2026年10月3日(土)"
+      ]
+    },
+    {
+      "path": "/schedule/week",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "9/28 〜 10/4"
+      ]
+    },
+    {
+      "path": "/schedule/month",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "2026年10月"
+      ]
+    },
+    {
+      "path": "/schedule/new",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "予定を追加"
+      ]
+    },
+    {
+      "path": "/schedule/edit",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "予約変更"
+      ]
+    },
+    {
+      "path": "/schedule/active",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "顧客未割り当て"
+      ]
+    },
+    {
+      "path": "/schedule/workload",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "担当者ごとの現在負荷"
+      ]
+    },
+    {
+      "path": "/schedule/loaners",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "代車が必要な予約"
+      ]
+    },
+    {
+      "path": "/customer-vehicles",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "車両検索"
+      ]
+    },
+    {
+      "path": "/customer-vehicles/history",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "車両"
+      ]
+    },
+    {
+      "path": "/customer-vehicles/photos",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "車両"
+      ]
+    },
+    {
+      "path": "/customer-vehicles/bulk-import",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "車検証PDFをまとめて登録"
+      ]
+    },
+    {
+      "path": "/customer-vehicles/lease-maintenance",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "車両"
+      ]
+    },
+    {
+      "path": "/loaners",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "2026-10-03"
+      ]
+    },
+    {
+      "path": "/loaners/week",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": []
+    },
+    {
+      "path": "/inspection",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "車両未選択"
+      ]
+    },
+    {
+      "path": "/inspection/select",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "車両未選択"
+      ]
+    },
+    {
+      "path": "/settings/staff",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "担当者を管理"
+      ]
+    },
+    {
+      "path": "/settings/vendors",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "外注先を管理"
+      ]
+    },
+    {
+      "path": "/settings/business-calendar",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "年間カレンダー取込",
+        "2026年度 営業日カレンダー"
+      ]
+    },
+    {
+      "path": "/settings/business-calendar/edit",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "年間カレンダー取込",
+        "2026年度 営業日カレンダー"
+      ]
+    },
+    {
+      "path": "/schedule/print",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1512,
+        "overflow": true
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": []
+    },
+    {
+      "path": "/inspection/print",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "点検整備記録簿"
+      ]
+    },
+    {
+      "path": "/parts-print",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "部品出庫伝票へ印刷"
+      ]
+    },
+    {
+      "path": "/vehicle-workflow?mode=new",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "画面を読み込み中…"
+      ]
+    },
+    {
+      "path": "/vehicle-workflow-fast?mode=new",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "作業車両を選択"
+      ]
+    },
+    {
+      "path": "/vehicle-workflow-v2?mode=new",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "画面を読み込み中…"
+      ]
+    },
+    {
+      "path": "/vehicle-workflow-v3?mode=new",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "作業車両を選択"
+      ]
+    },
+    {
+      "path": "/this-page-does-not-exist",
+      "main": 1,
+      "dimensions": {
+        "width": 1440,
+        "scroll": 1440,
+        "overflow": false
+      },
+      "title": "部品伝票OCR・印刷",
+      "headings": [
+        "ページが見つかりません"
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-03T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_history",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-03T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-03T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cmaker%2Cmodel&registration_number_last4=in.%2810%2C0010%29&limit=200"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cwork_completed%2Cstay_reason%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&vehicle_id=in.%28vehicle-1%29&limit=300"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&order=starts_at.asc&limit=500"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&vehicle_id=in.%28vehicle-1%29&order=starts_at.asc&limit=300&starts_at=gte.2026-10-03T05%3A23%3A35.148Z"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&id=eq.entry-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cnotes%2Cwork_completed%2Cplanned_delivery_date%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&id=eq.work-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=eq.work-1&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cvehicle_type%2Cmodel_code%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=eq.customer-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cmaker%2Cmodel&registration_number_last4=in.%2810%2C0010%29&limit=200"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cwork_completed%2Cstay_reason%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&vehicle_id=in.%28vehicle-1%29&limit=300"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&order=starts_at.asc&limit=500"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&vehicle_id=in.%28vehicle-1%29&order=starts_at.asc&limit=300&starts_at=gte.2026-10-03T05%3A23%3A35.443Z"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&id=eq.entry-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cnotes%2Cwork_completed%2Cplanned_delivery_date%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&id=eq.work-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=eq.work-1&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cvehicle_type%2Cmodel_code%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=eq.customer-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&id=eq.entry-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&id=eq.entry-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cnotes%2Cwork_completed%2Cplanned_delivery_date%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&id=eq.work-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=eq.work-1&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cvehicle_type%2Cmodel_code%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=eq.customer-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&id=eq.entry-2"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cnotes%2Cwork_completed%2Cplanned_delivery_date%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&id=eq.work-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=eq.work-1&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cvehicle_type%2Cmodel_code%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=eq.customer-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cmaker%2Cmodel&registration_number_last4=in.%2810%2C0010%29&limit=200"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cmaker%2Cmodel&registration_number_last4=in.%2810%2C0010%29&limit=200"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cwork_completed%2Cstay_reason%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&vehicle_id=in.%28vehicle-1%29&limit=300"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&order=starts_at.asc&limit=500"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&vehicle_id=in.%28vehicle-1%29&order=starts_at.asc&limit=300&starts_at=gte.2026-10-03T05%3A23%3A36.088Z"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cmaker%2Cmodel&registration_number_last4=in.%2810%2C0010%29&limit=200"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-03T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cmaker%2Cmodel&registration_number_last4=in.%2810%2C0010%29&limit=200"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cwork_completed%2Cstay_reason%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&vehicle_id=in.%28vehicle-1%29&limit=300"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&order=starts_at.asc&limit=500"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&vehicle_id=in.%28vehicle-1%29&order=starts_at.asc&limit=300&starts_at=gte.2026-10-03T05%3A23%3A36.927Z"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&id=eq.entry-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cnotes%2Cwork_completed%2Cplanned_delivery_date%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&id=eq.work-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=eq.work-1&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cvehicle_type%2Cmodel_code%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=eq.customer-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_history",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-03T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cmaker%2Cmodel&registration_number_last4=in.%2810%2C0010%29&limit=200"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cwork_completed%2Cstay_reason%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&vehicle_id=in.%28vehicle-1%29&limit=300"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&order=starts_at.asc&limit=500"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&vehicle_id=in.%28vehicle-1%29&order=starts_at.asc&limit=300&starts_at=gte.2026-10-03T05%3A23%3A38.279Z"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&id=eq.entry-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cnotes%2Cwork_completed%2Cplanned_delivery_date%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&id=eq.work-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=eq.work-1&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cvehicle_type%2Cmodel_code%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=eq.customer-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_history",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-03T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cchecked_out_at%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cmaker%2Cmodel&registration_number_last4=in.%2810%2C0010%29&limit=200"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cwork_completed%2Cstay_reason%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&vehicle_id=in.%28vehicle-1%29&limit=300"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&order=starts_at.asc&limit=500"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&vehicle_id=in.%28vehicle-1%29&order=starts_at.asc&limit=300&starts_at=gte.2026-10-03T05%3A23%3A39.651Z"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&id=eq.entry-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cnotes%2Cwork_completed%2Cplanned_delivery_date%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&id=eq.work-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=eq.work-1&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cvehicle_type%2Cmodel_code%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name%2Cphone&id=eq.customer-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_history",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_history",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/my_login_security_alerts",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_settings",
+      "query": "?select=setting_value&setting_key=eq.schedule_layout"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-10-02T15%3A00%3A00.000Z&starts_at=lt.2026-10-03T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-03T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cchassis_number%2Cmaker%2Cmodel&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cphone%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-09-28&business_date=lte.2026-10-04"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-30T15%3A00%3A00.000Z&starts_at=lt.2026-10-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-10-01&business_date=lt.2026-11-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_pickup_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_time_availability",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_time_availability",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name&is_active=eq.true&order=display_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name&is_active=eq.true&order=display_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cchassis_number%2Cmaker%2Cmodel%2Cvehicle_number&order=updated_at.desc&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Ccustomer_type%2Cname%2Ccompany_name%2Cphone%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_slot_check_v2",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_slot_check_v2",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_slot_check_v2",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_slot_check_v2",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_slot_check_v2",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name&is_active=eq.true&order=display_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name&is_active=eq.true&order=display_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name&is_active=eq.true&order=display_order.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name&is_active=eq.true&order=display_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_time_options",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date&business_date=gt.2026-10-03&is_business_day=eq.true&order=business_date.asc&limit=1"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_time_options",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_time_options",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Cworker_name%2Cworker_staff_id%2Cstatus%2Cwork_completed%2Cchecked_in_at%2Cchecked_out_at%2Creason%2Cis_urgent&checked_out_at=is.null&status=neq.cancelled&limit=500"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name&is_active=eq.true&order=display_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cwork_order_id%2Centry_type%2Cstarts_at&work_order_id=in.%28work-1%29&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Cstatus%2Cwork_completed%2Cneeds_loaner%2Cplanned_delivery_at%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&needs_loaner=eq.true&checked_out_at=is.null&order=id.asc&limit=301"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cwork_order_id%2Cvehicle_id%2Centry_type%2Cstarts_at&work_order_id=in.%28work-1%29&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/loaner_reservations",
+      "query": "?select=id%2Cwork_order_id%2Cloaner_vehicle_id%2Cstatus%2Cstarts_at%2Cends_at&work_order_id=in.%28work-1%29&status=in.%28reserved%2Cchecked_out%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customer_booking_requests",
+      "query": "?select=id%2Cwork_order_id&work_order_id=in.%28work-1%29&status=neq.cancelled&status=neq.rejected"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cvehicle_number%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cchassis_number%2Cmodel%2Cmodel_code%2Cmaker%2Cfuel_type%2Cvehicle_type%2Cvehicle_weight%2Ccurb_weight_kg&order=updated_at.desc&offset=0&limit=30"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Ccustomer_type%2Cname%2Ccompany_name%2Cphone%2Cemail%2Cpostal_code%2Caddress%2Cnotes&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_day_board",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_day_board",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_day_board",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_day_board",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_day_board",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_day_board",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_day_board",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_day_board",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cchecked_in_at%2Cplanned_delivery_at%2Cplanned_delivery_date&needs_loaner=eq.true&checked_out_at=is.null&status=neq.cancelled&limit=300"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=work_order_id%2Centry_type%2Cstarts_at&work_order_id=in.%28work-1%29&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order%2Cnotes&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Ccompleted%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-10-02T15%3A00%3A00.000Z&starts_at=lt.2026-10-03T15%3A00%3A00.000Z"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cinspection_schedule_type%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cstay_reason%2Cstatus%2Cwork_completed%2Cwork_completed_at%2Cis_waiting_service&status=neq.cancelled"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_settings",
+      "query": "?select=setting_value&setting_key=eq.daily_report_template"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=*&order=created_at.desc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=*&order=created_at.desc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_settings",
+      "query": "?select=setting_value&setting_key=eq.schedule_layout"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-30T15%3A00%3A00.000Z&starts_at=lt.2026-10-01T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-01T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cchassis_number%2Cmaker%2Cmodel&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cphone%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-10-02T15%3A00%3A00.000Z&starts_at=lt.2026-10-03T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-03T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cchassis_number%2Cmaker%2Cmodel&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cphone%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-10-01T15%3A00%3A00.000Z&starts_at=lt.2026-10-02T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-02T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cchassis_number%2Cmaker%2Cmodel&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cphone%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cnotes%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-10-02T15%3A00%3A00.000Z&starts_at=lt.2026-10-03T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service%2Cinbound%3Aschedule_entries%21inner%28%29%2Cdelivery%3Aschedule_entries%28%29&status=neq.cancelled&inbound.entry_type=in.%28pickup%2Ccustomer_visit%29&inbound.starts_at=lt.2026-10-03T15%3A00%3A00.000Z&delivery.entry_type=eq.delivery&delivery=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cworker_name%2Coutsource_vendor_name%2Cexpected_completion_date%2Cwork_completed%2Cchecked_out_at%2Cstay_reason%2Cis_urgent%2Cneeds_loaner%2Cis_waiting_service&status=neq.cancelled&status=neq.completed&work_completed=eq.false&checked_out_at=is.null"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cprint_time_mode%2Cprint_time_label_override&work_order_id=in.%28work-1%29&entry_type=in.%28pickup%2Ccustomer_visit%2Cdelivery%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number%2Cregistration_number_last4%2Cvehicle_number%2Cchassis_number%2Cmaker%2Cmodel&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cphone%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cvehicle_number%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cchassis_number%2Cmodel%2Cmodel_code%2Cmaker%2Cfuel_type%2Cvehicle_type%2Cvehicle_weight%2Ccurb_weight_kg&order=updated_at.desc&offset=0&limit=30"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cvehicle_number%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cchassis_number%2Cmodel%2Cmodel_code%2Cmaker%2Cfuel_type%2Cvehicle_type%2Cvehicle_weight%2Ccurb_weight_kg&order=updated_at.desc&offset=0&limit=30"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Ccustomer_type%2Cname%2Ccompany_name%2Cphone%2Cemail%2Cpostal_code%2Caddress%2Cnotes&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_action_history",
+      "query": "?select=id%2Caction_type%2Cwork_order_id%2Cinspection_record_id%2Cdetails%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_completion_events",
+      "query": "?select=id%2Cevent_type%2Cprevious_status%2Cnew_status%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_presence_events",
+      "query": "?select=id%2Cevent_type%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_schedule_changes",
+      "query": "?select=id%2Cchange_type%2Cold_value%2Cnew_value%2Cchanged_by%2Cchanged_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=changed_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_record_audit",
+      "query": "?select=id%2Cevent_type%2Cfield_name%2Cold_value%2Cnew_value%2Cactor%2Csource%2Ccreated_at%2Cinspection_job%3Ainspection_jobs%21inner%28id%2Cvehicle_id%2Cwork_order_id%2Crecord_type%29&inspection_job.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_distance_omission_history",
+      "query": "?select=id%2Citem_code%2Cinspection_date%2Codometer_km%2Comitted_for_distance%2Cconsecutive_omission_count%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_action_history",
+      "query": "?select=id%2Caction_type%2Cwork_order_id%2Cinspection_record_id%2Cdetails%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_completion_events",
+      "query": "?select=id%2Cevent_type%2Cprevious_status%2Cnew_status%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_presence_events",
+      "query": "?select=id%2Cevent_type%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_schedule_changes",
+      "query": "?select=id%2Cchange_type%2Cold_value%2Cnew_value%2Cchanged_by%2Cchanged_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=changed_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_record_audit",
+      "query": "?select=id%2Cevent_type%2Cfield_name%2Cold_value%2Cnew_value%2Cactor%2Csource%2Ccreated_at%2Cinspection_job%3Ainspection_jobs%21inner%28id%2Cvehicle_id%2Cwork_order_id%2Crecord_type%29&inspection_job.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_distance_omission_history",
+      "query": "?select=id%2Citem_code%2Cinspection_date%2Codometer_km%2Comitted_for_distance%2Cconsecutive_omission_count%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_documents",
+      "query": "?select=id%2Cvehicle_id%2Cstorage_path%2Coriginal_filename%2Cmime_type%2Cfile_size_bytes%2Csource_type%2Cstatus%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&document_type=eq.OTHER&mime_type=like.image%2F%25&order=created_at.desc%2Cid.desc&offset=0&limit=24"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_documents",
+      "query": "?select=id%2Cvehicle_id%2Cstorage_path%2Coriginal_filename%2Cmime_type%2Cfile_size_bytes%2Csource_type%2Cstatus%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&document_type=eq.OTHER&mime_type=like.image%2F%25&order=created_at.desc%2Cid.desc&offset=0&limit=24"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/staff_members",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order%2Cnotes&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order%2Cnotes&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/external_vendors",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order%2Cnotes&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cvehicle_number%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cchassis_number%2Cmodel%2Cmodel_code%2Cmaker%2Cfuel_type%2Cvehicle_type%2Cvehicle_weight%2Ccurb_weight_kg&order=updated_at.desc&offset=0&limit=30"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Ccustomer_type%2Cname%2Ccompany_name%2Cphone%2Cemail%2Cpostal_code%2Caddress%2Cnotes&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_action_history",
+      "query": "?select=id%2Caction_type%2Cwork_order_id%2Cinspection_record_id%2Cdetails%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_completion_events",
+      "query": "?select=id%2Cevent_type%2Cprevious_status%2Cnew_status%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_presence_events",
+      "query": "?select=id%2Cevent_type%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_schedule_changes",
+      "query": "?select=id%2Cchange_type%2Cold_value%2Cnew_value%2Cchanged_by%2Cchanged_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=changed_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_record_audit",
+      "query": "?select=id%2Cevent_type%2Cfield_name%2Cold_value%2Cnew_value%2Cactor%2Csource%2Ccreated_at%2Cinspection_job%3Ainspection_jobs%21inner%28id%2Cvehicle_id%2Cwork_order_id%2Crecord_type%29&inspection_job.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_distance_omission_history",
+      "query": "?select=id%2Citem_code%2Cinspection_date%2Codometer_km%2Comitted_for_distance%2Cconsecutive_omission_count%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_documents",
+      "query": "?select=id%2Cvehicle_id%2Cstorage_path%2Coriginal_filename%2Cmime_type%2Cfile_size_bytes%2Csource_type%2Cstatus%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&document_type=eq.OTHER&mime_type=like.image%2F%25&order=created_at.desc%2Cid.desc&offset=0&limit=24"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order%2Cnotes&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cvehicle_number%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cchassis_number%2Cmodel%2Cmodel_code%2Cmaker%2Cfuel_type%2Cvehicle_type%2Cvehicle_weight%2Ccurb_weight_kg&order=updated_at.desc&offset=0&limit=30"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Ccustomer_type%2Cname%2Ccompany_name%2Cphone%2Cemail%2Cpostal_code%2Caddress%2Cnotes&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_action_history",
+      "query": "?select=id%2Caction_type%2Cwork_order_id%2Cinspection_record_id%2Cdetails%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_completion_events",
+      "query": "?select=id%2Cevent_type%2Cprevious_status%2Cnew_status%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_presence_events",
+      "query": "?select=id%2Cevent_type%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_schedule_changes",
+      "query": "?select=id%2Cchange_type%2Cold_value%2Cnew_value%2Cchanged_by%2Cchanged_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=changed_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_record_audit",
+      "query": "?select=id%2Cevent_type%2Cfield_name%2Cold_value%2Cnew_value%2Cactor%2Csource%2Ccreated_at%2Cinspection_job%3Ainspection_jobs%21inner%28id%2Cvehicle_id%2Cwork_order_id%2Crecord_type%29&inspection_job.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_distance_omission_history",
+      "query": "?select=id%2Citem_code%2Cinspection_date%2Codometer_km%2Comitted_for_distance%2Cconsecutive_omission_count%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_documents",
+      "query": "?select=id%2Cvehicle_id%2Cstorage_path%2Coriginal_filename%2Cmime_type%2Cfile_size_bytes%2Csource_type%2Cstatus%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&document_type=eq.OTHER&mime_type=like.image%2F%25&order=created_at.desc%2Cid.desc&offset=0&limit=24"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order%2Cnotes&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cvehicle_number%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cchassis_number%2Cmodel%2Cmodel_code%2Cmaker%2Cfuel_type%2Cvehicle_type%2Cvehicle_weight%2Ccurb_weight_kg&order=updated_at.desc&offset=0&limit=30"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Ccustomer_type%2Cname%2Ccompany_name%2Cphone%2Cemail%2Cpostal_code%2Caddress%2Cnotes&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_action_history",
+      "query": "?select=id%2Caction_type%2Cwork_order_id%2Cinspection_record_id%2Cdetails%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_completion_events",
+      "query": "?select=id%2Cevent_type%2Cprevious_status%2Cnew_status%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_presence_events",
+      "query": "?select=id%2Cevent_type%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_schedule_changes",
+      "query": "?select=id%2Cchange_type%2Cold_value%2Cnew_value%2Cchanged_by%2Cchanged_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=changed_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_record_audit",
+      "query": "?select=id%2Cevent_type%2Cfield_name%2Cold_value%2Cnew_value%2Cactor%2Csource%2Ccreated_at%2Cinspection_job%3Ainspection_jobs%21inner%28id%2Cvehicle_id%2Cwork_order_id%2Crecord_type%29&inspection_job.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_distance_omission_history",
+      "query": "?select=id%2Citem_code%2Cinspection_date%2Codometer_km%2Comitted_for_distance%2Cconsecutive_omission_count%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_documents",
+      "query": "?select=id%2Cvehicle_id%2Cstorage_path%2Coriginal_filename%2Cmime_type%2Cfile_size_bytes%2Csource_type%2Cstatus%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&document_type=eq.OTHER&mime_type=like.image%2F%25&order=created_at.desc%2Cid.desc&offset=0&limit=24"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/staff_members",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/external_vendors",
+      "query": "?select=id%2Cdisplay_name%2Cshort_name%2Cis_active%2Cquick_select%2Cdisplay_order%2Cnotes&order=is_active.desc%2Cdisplay_order.asc%2Cdisplay_name.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-09-28&business_date=lte.2026-10-04"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-12-27T15%3A00%3A00.000Z&starts_at=lt.2027-01-03T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-28&business_date=lte.2027-01-03"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-12-20T15%3A00%3A00.000Z&starts_at=lt.2026-12-27T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-21&business_date=lte.2026-12-27"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-12-20T15%3A00%3A00.000Z&starts_at=lt.2026-12-27T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-21&business_date=lte.2026-12-27"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-12-20T15%3A00%3A00.000Z&starts_at=lt.2026-12-27T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-21&business_date=lte.2026-12-27"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-12-20T15%3A00%3A00.000Z&starts_at=lt.2026-12-27T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-21&business_date=lte.2026-12-27"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-30T15%3A00%3A00.000Z&starts_at=lt.2026-10-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-10-01&business_date=lt.2026-11-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-11-30T15%3A00%3A00.000Z&starts_at=lt.2026-12-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-01&business_date=lt.2027-01-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-12-31T15%3A00%3A00.000Z&starts_at=lt.2027-01-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2027-01-01&business_date=lt.2027-02-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-11-30T15%3A00%3A00.000Z&starts_at=lt.2026-12-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-01&business_date=lt.2027-01-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-30T15%3A00%3A00.000Z&starts_at=lt.2026-10-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-10-01&business_date=lt.2026-11-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-11-30T15%3A00%3A00.000Z&starts_at=lt.2026-12-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-01&business_date=lt.2027-01-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-30T15%3A00%3A00.000Z&starts_at=lt.2026-10-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-10-01&business_date=lt.2026-11-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-11-30T15%3A00%3A00.000Z&starts_at=lt.2026-12-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-01&business_date=lt.2027-01-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-11-30T15%3A00%3A00.000Z&starts_at=lt.2026-12-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-12-01&business_date=lt.2027-01-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_action_history",
+      "query": "?select=id%2Caction_type%2Cwork_order_id%2Cinspection_record_id%2Cdetails%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_completion_events",
+      "query": "?select=id%2Cevent_type%2Cprevious_status%2Cnew_status%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_presence_events",
+      "query": "?select=id%2Cevent_type%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_schedule_changes",
+      "query": "?select=id%2Cchange_type%2Cold_value%2Cnew_value%2Cchanged_by%2Cchanged_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=changed_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_record_audit",
+      "query": "?select=id%2Cevent_type%2Cfield_name%2Cold_value%2Cnew_value%2Cactor%2Csource%2Ccreated_at%2Cinspection_job%3Ainspection_jobs%21inner%28id%2Cvehicle_id%2Cwork_order_id%2Crecord_type%29&inspection_job.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_distance_omission_history",
+      "query": "?select=id%2Citem_code%2Cinspection_date%2Codometer_km%2Comitted_for_distance%2Cconsecutive_omission_count%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_action_history",
+      "query": "?select=id%2Caction_type%2Cwork_order_id%2Cinspection_record_id%2Cdetails%2Ccreated_at&vehicle_id=eq.vehicle-2&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_completion_events",
+      "query": "?select=id%2Cevent_type%2Cprevious_status%2Cnew_status%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-2&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_presence_events",
+      "query": "?select=id%2Cevent_type%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-2&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_schedule_changes",
+      "query": "?select=id%2Cchange_type%2Cold_value%2Cnew_value%2Cchanged_by%2Cchanged_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-2&order=changed_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_record_audit",
+      "query": "?select=id%2Cevent_type%2Cfield_name%2Cold_value%2Cnew_value%2Cactor%2Csource%2Ccreated_at%2Cinspection_job%3Ainspection_jobs%21inner%28id%2Cvehicle_id%2Cwork_order_id%2Crecord_type%29&inspection_job.vehicle_id=eq.vehicle-2&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_distance_omission_history",
+      "query": "?select=id%2Citem_code%2Cinspection_date%2Codometer_km%2Comitted_for_distance%2Cconsecutive_omission_count%2Ccreated_at&vehicle_id=eq.vehicle-2&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-2"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_documents",
+      "query": "?select=id%2Cvehicle_id%2Cstorage_path%2Coriginal_filename%2Cmime_type%2Cfile_size_bytes%2Csource_type%2Cstatus%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&document_type=eq.OTHER&mime_type=like.image%2F%25&order=created_at.desc%2Cid.desc&offset=0&limit=24"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_documents",
+      "query": "?select=id%2Cvehicle_id%2Cstorage_path%2Coriginal_filename%2Cmime_type%2Cfile_size_bytes%2Csource_type%2Cstatus%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-2&document_type=eq.OTHER&mime_type=like.image%2F%25&order=created_at.desc%2Cid.desc&offset=0&limit=24"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cvehicle_number%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-2"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-2&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-2"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicle_action_history",
+      "query": "?select=id%2Caction_type%2Cwork_order_id%2Cinspection_record_id%2Cdetails%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_completion_events",
+      "query": "?select=id%2Cevent_type%2Cprevious_status%2Cnew_status%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_presence_events",
+      "query": "?select=id%2Cevent_type%2Cactor%2Ccreated_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_order_schedule_changes",
+      "query": "?select=id%2Cchange_type%2Cold_value%2Cnew_value%2Cchanged_by%2Cchanged_at%2Cwork_order%3Awork_orders%21inner%28id%2Cvehicle_id%2Creason%29&work_order.vehicle_id=eq.vehicle-1&order=changed_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_record_audit",
+      "query": "?select=id%2Cevent_type%2Cfield_name%2Cold_value%2Cnew_value%2Cactor%2Csource%2Ccreated_at%2Cinspection_job%3Ainspection_jobs%21inner%28id%2Cvehicle_id%2Cwork_order_id%2Crecord_type%29&inspection_job.vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/inspection_distance_omission_history",
+      "query": "?select=id%2Citem_code%2Cinspection_date%2Codometer_km%2Comitted_for_distance%2Cconsecutive_omission_count%2Ccreated_at&vehicle_id=eq.vehicle-1&order=created_at.desc%2Cid.desc&offset=0&limit=25"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Cregistration_number%2Cregistration_number_last4%2Cregistration_last4%2Cmaker%2Cmodel%2Cchassis_number&id=eq.vehicle-1"
+    },
+    {
+      "method": "PATCH",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?id=eq.older&vehicle_id=eq.vehicle-1&select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "PATCH",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?id=eq.older&vehicle_id=eq.vehicle-1&select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/lease_maintenance_contracts",
+      "query": "?select=id%2Cvehicle_id%2Csource_document_id%2Ccontract_number%2Ccontract_start_date%2Ccontract_end_date%2Csubstitute_car_state%2Csubstitute_car_eligible_work_types%2Csubstitute_car_start_day%2Csubstitute_car_max_days%2Csubstitute_car_notes%2Cinspection_timing_state%2Cinspection_intervals_months%2Cbattery_contract_state%2Csummer_tire_contract_state%2Cwinter_tire_contract_state%2Ctire_storage_contract_state%2Coil_interval_state%2Coil_interval_km%2Ctire_maker_restriction_state%2Ctire_maker_names%2Cnotes%2Cneeds_review%2Creviewed_by%2Creviewed_at%2Ccreated_at%2Cupdated_at&vehicle_id=eq.vehicle-1&order=contract_start_date.desc.nullslast%2Ccontract_end_date.desc.nullslast%2Ccreated_at.desc%2Cid.desc&offset=0&limit=20"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Cstatus%2Cwork_completed%2Cneeds_loaner%2Cplanned_delivery_at%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&needs_loaner=eq.true&checked_out_at=is.null&order=id.asc&limit=301"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cwork_order_id%2Cvehicle_id%2Centry_type%2Cstarts_at&work_order_id=in.%28work-1%29&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/loaner_reservations",
+      "query": "?select=id%2Cwork_order_id%2Cloaner_vehicle_id%2Cstatus%2Cstarts_at%2Cends_at&work_order_id=in.%28work-1%29&status=in.%28reserved%2Cchecked_out%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customer_booking_requests",
+      "query": "?select=id%2Cwork_order_id&work_order_id=in.%28work-1%29&status=neq.cancelled&status=neq.rejected"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_vehicle_availability",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/loaner_vehicle_availability",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Cstatus%2Cwork_completed%2Cneeds_loaner%2Cplanned_delivery_at%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&needs_loaner=eq.true&checked_out_at=is.null&order=id.asc&limit=301"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cwork_order_id%2Cvehicle_id%2Centry_type%2Cstarts_at&work_order_id=in.%28loaner-work-0%2Cloaner-work-1%2Cloaner-work-2%2Cloaner-work-3%2Cloaner-work-4%2Cloaner-work-5%2Cloaner-work-6%2Cloaner-work-7%2Cloaner-work-8%2Cloaner-work-9%2Cloaner-work-10%2Cloaner-work-11%2Cloaner-work-12%2Cloaner-work-13%2Cloaner-work-14%2Cloaner-work-15%2Cloaner-work-16%2Cloaner-work-17%2Cloaner-work-18%2Cloaner-work-19%2Cloaner-work-20%2Cloaner-work-21%2Cloaner-work-22%2Cloaner-work-23%2Cloaner-work-24%2Cloaner-work-25%2Cloaner-work-26%2Cloaner-work-27%2Cloaner-work-28%2Cloaner-work-29%2Cloaner-work-30%2Cloaner-work-31%2Cloaner-work-32%2Cloaner-work-33%2Cloaner-work-34%2Cloaner-work-35%2Cloaner-work-36%2Cloaner-work-37%2Cloaner-work-38%2Cloaner-work-39%2Cloaner-work-40%2Cloaner-work-41%2Cloaner-work-42%2Cloaner-work-43%2Cloaner-work-44%2Cloaner-work-45%2Cloaner-work-46%2Cloaner-work-47%2Cloaner-work-48%2Cloaner-work-49%2Cloaner-work-50%2Cloaner-work-51%2Cloaner-work-52%2Cloaner-work-53%2Cloaner-work-54%2Cloaner-work-55%2Cloaner-work-56%2Cloaner-work-57%2Cloaner-work-58%2Cloaner-work-59%2Cloaner-work-60%2Cloaner-work-61%2Cloaner-work-62%2Cloaner-work-63%2Cloaner-work-64%2Cloaner-work-65%2Cloaner-work-66%2Cloaner-work-67%2Cloaner-work-68%2Cloaner-work-69%2Cloaner-work-70%2Cloaner-work-71%2Cloaner-work-72%2Cloaner-work-73%2Cloaner-work-74%2Cloaner-work-75%2Cloaner-work-76%2Cloaner-work-77%2Cloaner-work-78%2Cloaner-work-79%2Cloaner-work-80%2Cloaner-work-81%2Cloaner-work-82%2Cloaner-work-83%2Cloaner-work-84%2Cloaner-work-85%2Cloaner-work-86%2Cloaner-work-87%2Cloaner-work-88%2Cloaner-work-89%2Cloaner-work-90%2Cloaner-work-91%2Cloaner-work-92%2Cloaner-work-93%2Cloaner-work-94%2Cloaner-work-95%2Cloaner-work-96%2Cloaner-work-97%2Cloaner-work-98%2Cloaner-work-99%2Cloaner-work-100%2Cloaner-work-101%2Cloaner-work-102%2Cloaner-work-103%2Cloaner-work-104%2Cloaner-work-105%2Cloaner-work-106%2Cloaner-work-107%2Cloaner-work-108%2Cloaner-work-109%2Cloaner-work-110%2Cloaner-work-111%2Cloaner-work-112%2Cloaner-work-113%2Cloaner-work-114%2Cloaner-work-115%2Cloaner-work-116%2Cloaner-work-117%2Cloaner-work-118%2Cloaner-work-119%2Cloaner-work-120%2Cloaner-work-121%2Cloaner-work-122%2Cloaner-work-123%2Cloaner-work-124%2Cloaner-work-125%2Cloaner-work-126%2Cloaner-work-127%2Cloaner-work-128%2Cloaner-work-129%2Cloaner-work-130%2Cloaner-work-131%2Cloaner-work-132%2Cloaner-work-133%2Cloaner-work-134%2Cloaner-work-135%2Cloaner-work-136%2Cloaner-work-137%2Cloaner-work-138%2Cloaner-work-139%2Cloaner-work-140%2Cloaner-work-141%2Cloaner-work-142%2Cloaner-work-143%2Cloaner-work-144%2Cloaner-work-145%2Cloaner-work-146%2Cloaner-work-147%2Cloaner-work-148%2Cloaner-work-149%2Cloaner-work-150%2Cloaner-work-151%2Cloaner-work-152%2Cloaner-work-153%2Cloaner-work-154%2Cloaner-work-155%2Cloaner-work-156%2Cloaner-work-157%2Cloaner-work-158%2Cloaner-work-159%2Cloaner-work-160%2Cloaner-work-161%2Cloaner-work-162%2Cloaner-work-163%2Cloaner-work-164%2Cloaner-work-165%2Cloaner-work-166%2Cloaner-work-167%2Cloaner-work-168%2Cloaner-work-169%2Cloaner-work-170%2Cloaner-work-171%2Cloaner-work-172%2Cloaner-work-173%2Cloaner-work-174%2Cloaner-work-175%2Cloaner-work-176%2Cloaner-work-177%2Cloaner-work-178%2Cloaner-work-179%2Cloaner-work-180%2Cloaner-work-181%2Cloaner-work-182%2Cloaner-work-183%2Cloaner-work-184%2Cloaner-work-185%2Cloaner-work-186%2Cloaner-work-187%2Cloaner-work-188%2Cloaner-work-189%2Cloaner-work-190%2Cloaner-work-191%2Cloaner-work-192%2Cloaner-work-193%2Cloaner-work-194%2Cloaner-work-195%2Cloaner-work-196%2Cloaner-work-197%2Cloaner-work-198%2Cloaner-work-199%2Cloaner-work-200%2Cloaner-work-201%2Cloaner-work-202%2Cloaner-work-203%2Cloaner-work-204%2Cloaner-work-205%2Cloaner-work-206%2Cloaner-work-207%2Cloaner-work-208%2Cloaner-work-209%2Cloaner-work-210%2Cloaner-work-211%2Cloaner-work-212%2Cloaner-work-213%2Cloaner-work-214%2Cloaner-work-215%2Cloaner-work-216%2Cloaner-work-217%2Cloaner-work-218%2Cloaner-work-219%2Cloaner-work-220%2Cloaner-work-221%2Cloaner-work-222%2Cloaner-work-223%2Cloaner-work-224%2Cloaner-work-225%2Cloaner-work-226%2Cloaner-work-227%2Cloaner-work-228%2Cloaner-work-229%2Cloaner-work-230%2Cloaner-work-231%2Cloaner-work-232%2Cloaner-work-233%2Cloaner-work-234%2Cloaner-work-235%2Cloaner-work-236%2Cloaner-work-237%2Cloaner-work-238%2Cloaner-work-239%2Cloaner-work-240%2Cloaner-work-241%2Cloaner-work-242%2Cloaner-work-243%2Cloaner-work-244%2Cloaner-work-245%2Cloaner-work-246%2Cloaner-work-247%2Cloaner-work-248%2Cloaner-work-249%2Cloaner-work-250%2Cloaner-work-251%2Cloaner-work-252%2Cloaner-work-253%2Cloaner-work-254%2Cloaner-work-255%2Cloaner-work-256%2Cloaner-work-257%2Cloaner-work-258%2Cloaner-work-259%2Cloaner-work-260%2Cloaner-work-261%2Cloaner-work-262%2Cloaner-work-263%2Cloaner-work-264%2Cloaner-work-265%2Cloaner-work-266%2Cloaner-work-267%2Cloaner-work-268%2Cloaner-work-269%2Cloaner-work-270%2Cloaner-work-271%2Cloaner-work-272%2Cloaner-work-273%2Cloaner-work-274%2Cloaner-work-275%2Cloaner-work-276%2Cloaner-work-277%2Cloaner-work-278%2Cloaner-work-279%2Cloaner-work-280%2Cloaner-work-281%2Cloaner-work-282%2Cloaner-work-283%2Cloaner-work-284%2Cloaner-work-285%2Cloaner-work-286%2Cloaner-work-287%2Cloaner-work-288%2Cloaner-work-289%2Cloaner-work-290%2Cloaner-work-291%2Cloaner-work-292%2Cloaner-work-293%2Cloaner-work-294%2Cloaner-work-295%2Cloaner-work-296%2Cloaner-work-297%2Cloaner-work-298%2Cloaner-work-299%29&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/loaner_reservations",
+      "query": "?select=id%2Cwork_order_id%2Cloaner_vehicle_id%2Cstatus%2Cstarts_at%2Cends_at&work_order_id=in.%28loaner-work-0%2Cloaner-work-1%2Cloaner-work-2%2Cloaner-work-3%2Cloaner-work-4%2Cloaner-work-5%2Cloaner-work-6%2Cloaner-work-7%2Cloaner-work-8%2Cloaner-work-9%2Cloaner-work-10%2Cloaner-work-11%2Cloaner-work-12%2Cloaner-work-13%2Cloaner-work-14%2Cloaner-work-15%2Cloaner-work-16%2Cloaner-work-17%2Cloaner-work-18%2Cloaner-work-19%2Cloaner-work-20%2Cloaner-work-21%2Cloaner-work-22%2Cloaner-work-23%2Cloaner-work-24%2Cloaner-work-25%2Cloaner-work-26%2Cloaner-work-27%2Cloaner-work-28%2Cloaner-work-29%2Cloaner-work-30%2Cloaner-work-31%2Cloaner-work-32%2Cloaner-work-33%2Cloaner-work-34%2Cloaner-work-35%2Cloaner-work-36%2Cloaner-work-37%2Cloaner-work-38%2Cloaner-work-39%2Cloaner-work-40%2Cloaner-work-41%2Cloaner-work-42%2Cloaner-work-43%2Cloaner-work-44%2Cloaner-work-45%2Cloaner-work-46%2Cloaner-work-47%2Cloaner-work-48%2Cloaner-work-49%2Cloaner-work-50%2Cloaner-work-51%2Cloaner-work-52%2Cloaner-work-53%2Cloaner-work-54%2Cloaner-work-55%2Cloaner-work-56%2Cloaner-work-57%2Cloaner-work-58%2Cloaner-work-59%2Cloaner-work-60%2Cloaner-work-61%2Cloaner-work-62%2Cloaner-work-63%2Cloaner-work-64%2Cloaner-work-65%2Cloaner-work-66%2Cloaner-work-67%2Cloaner-work-68%2Cloaner-work-69%2Cloaner-work-70%2Cloaner-work-71%2Cloaner-work-72%2Cloaner-work-73%2Cloaner-work-74%2Cloaner-work-75%2Cloaner-work-76%2Cloaner-work-77%2Cloaner-work-78%2Cloaner-work-79%2Cloaner-work-80%2Cloaner-work-81%2Cloaner-work-82%2Cloaner-work-83%2Cloaner-work-84%2Cloaner-work-85%2Cloaner-work-86%2Cloaner-work-87%2Cloaner-work-88%2Cloaner-work-89%2Cloaner-work-90%2Cloaner-work-91%2Cloaner-work-92%2Cloaner-work-93%2Cloaner-work-94%2Cloaner-work-95%2Cloaner-work-96%2Cloaner-work-97%2Cloaner-work-98%2Cloaner-work-99%2Cloaner-work-100%2Cloaner-work-101%2Cloaner-work-102%2Cloaner-work-103%2Cloaner-work-104%2Cloaner-work-105%2Cloaner-work-106%2Cloaner-work-107%2Cloaner-work-108%2Cloaner-work-109%2Cloaner-work-110%2Cloaner-work-111%2Cloaner-work-112%2Cloaner-work-113%2Cloaner-work-114%2Cloaner-work-115%2Cloaner-work-116%2Cloaner-work-117%2Cloaner-work-118%2Cloaner-work-119%2Cloaner-work-120%2Cloaner-work-121%2Cloaner-work-122%2Cloaner-work-123%2Cloaner-work-124%2Cloaner-work-125%2Cloaner-work-126%2Cloaner-work-127%2Cloaner-work-128%2Cloaner-work-129%2Cloaner-work-130%2Cloaner-work-131%2Cloaner-work-132%2Cloaner-work-133%2Cloaner-work-134%2Cloaner-work-135%2Cloaner-work-136%2Cloaner-work-137%2Cloaner-work-138%2Cloaner-work-139%2Cloaner-work-140%2Cloaner-work-141%2Cloaner-work-142%2Cloaner-work-143%2Cloaner-work-144%2Cloaner-work-145%2Cloaner-work-146%2Cloaner-work-147%2Cloaner-work-148%2Cloaner-work-149%2Cloaner-work-150%2Cloaner-work-151%2Cloaner-work-152%2Cloaner-work-153%2Cloaner-work-154%2Cloaner-work-155%2Cloaner-work-156%2Cloaner-work-157%2Cloaner-work-158%2Cloaner-work-159%2Cloaner-work-160%2Cloaner-work-161%2Cloaner-work-162%2Cloaner-work-163%2Cloaner-work-164%2Cloaner-work-165%2Cloaner-work-166%2Cloaner-work-167%2Cloaner-work-168%2Cloaner-work-169%2Cloaner-work-170%2Cloaner-work-171%2Cloaner-work-172%2Cloaner-work-173%2Cloaner-work-174%2Cloaner-work-175%2Cloaner-work-176%2Cloaner-work-177%2Cloaner-work-178%2Cloaner-work-179%2Cloaner-work-180%2Cloaner-work-181%2Cloaner-work-182%2Cloaner-work-183%2Cloaner-work-184%2Cloaner-work-185%2Cloaner-work-186%2Cloaner-work-187%2Cloaner-work-188%2Cloaner-work-189%2Cloaner-work-190%2Cloaner-work-191%2Cloaner-work-192%2Cloaner-work-193%2Cloaner-work-194%2Cloaner-work-195%2Cloaner-work-196%2Cloaner-work-197%2Cloaner-work-198%2Cloaner-work-199%2Cloaner-work-200%2Cloaner-work-201%2Cloaner-work-202%2Cloaner-work-203%2Cloaner-work-204%2Cloaner-work-205%2Cloaner-work-206%2Cloaner-work-207%2Cloaner-work-208%2Cloaner-work-209%2Cloaner-work-210%2Cloaner-work-211%2Cloaner-work-212%2Cloaner-work-213%2Cloaner-work-214%2Cloaner-work-215%2Cloaner-work-216%2Cloaner-work-217%2Cloaner-work-218%2Cloaner-work-219%2Cloaner-work-220%2Cloaner-work-221%2Cloaner-work-222%2Cloaner-work-223%2Cloaner-work-224%2Cloaner-work-225%2Cloaner-work-226%2Cloaner-work-227%2Cloaner-work-228%2Cloaner-work-229%2Cloaner-work-230%2Cloaner-work-231%2Cloaner-work-232%2Cloaner-work-233%2Cloaner-work-234%2Cloaner-work-235%2Cloaner-work-236%2Cloaner-work-237%2Cloaner-work-238%2Cloaner-work-239%2Cloaner-work-240%2Cloaner-work-241%2Cloaner-work-242%2Cloaner-work-243%2Cloaner-work-244%2Cloaner-work-245%2Cloaner-work-246%2Cloaner-work-247%2Cloaner-work-248%2Cloaner-work-249%2Cloaner-work-250%2Cloaner-work-251%2Cloaner-work-252%2Cloaner-work-253%2Cloaner-work-254%2Cloaner-work-255%2Cloaner-work-256%2Cloaner-work-257%2Cloaner-work-258%2Cloaner-work-259%2Cloaner-work-260%2Cloaner-work-261%2Cloaner-work-262%2Cloaner-work-263%2Cloaner-work-264%2Cloaner-work-265%2Cloaner-work-266%2Cloaner-work-267%2Cloaner-work-268%2Cloaner-work-269%2Cloaner-work-270%2Cloaner-work-271%2Cloaner-work-272%2Cloaner-work-273%2Cloaner-work-274%2Cloaner-work-275%2Cloaner-work-276%2Cloaner-work-277%2Cloaner-work-278%2Cloaner-work-279%2Cloaner-work-280%2Cloaner-work-281%2Cloaner-work-282%2Cloaner-work-283%2Cloaner-work-284%2Cloaner-work-285%2Cloaner-work-286%2Cloaner-work-287%2Cloaner-work-288%2Cloaner-work-289%2Cloaner-work-290%2Cloaner-work-291%2Cloaner-work-292%2Cloaner-work-293%2Cloaner-work-294%2Cloaner-work-295%2Cloaner-work-296%2Cloaner-work-297%2Cloaner-work-298%2Cloaner-work-299%29&status=in.%28reserved%2Cchecked_out%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customer_booking_requests",
+      "query": "?select=id%2Cwork_order_id&work_order_id=in.%28loaner-work-0%2Cloaner-work-1%2Cloaner-work-2%2Cloaner-work-3%2Cloaner-work-4%2Cloaner-work-5%2Cloaner-work-6%2Cloaner-work-7%2Cloaner-work-8%2Cloaner-work-9%2Cloaner-work-10%2Cloaner-work-11%2Cloaner-work-12%2Cloaner-work-13%2Cloaner-work-14%2Cloaner-work-15%2Cloaner-work-16%2Cloaner-work-17%2Cloaner-work-18%2Cloaner-work-19%2Cloaner-work-20%2Cloaner-work-21%2Cloaner-work-22%2Cloaner-work-23%2Cloaner-work-24%2Cloaner-work-25%2Cloaner-work-26%2Cloaner-work-27%2Cloaner-work-28%2Cloaner-work-29%2Cloaner-work-30%2Cloaner-work-31%2Cloaner-work-32%2Cloaner-work-33%2Cloaner-work-34%2Cloaner-work-35%2Cloaner-work-36%2Cloaner-work-37%2Cloaner-work-38%2Cloaner-work-39%2Cloaner-work-40%2Cloaner-work-41%2Cloaner-work-42%2Cloaner-work-43%2Cloaner-work-44%2Cloaner-work-45%2Cloaner-work-46%2Cloaner-work-47%2Cloaner-work-48%2Cloaner-work-49%2Cloaner-work-50%2Cloaner-work-51%2Cloaner-work-52%2Cloaner-work-53%2Cloaner-work-54%2Cloaner-work-55%2Cloaner-work-56%2Cloaner-work-57%2Cloaner-work-58%2Cloaner-work-59%2Cloaner-work-60%2Cloaner-work-61%2Cloaner-work-62%2Cloaner-work-63%2Cloaner-work-64%2Cloaner-work-65%2Cloaner-work-66%2Cloaner-work-67%2Cloaner-work-68%2Cloaner-work-69%2Cloaner-work-70%2Cloaner-work-71%2Cloaner-work-72%2Cloaner-work-73%2Cloaner-work-74%2Cloaner-work-75%2Cloaner-work-76%2Cloaner-work-77%2Cloaner-work-78%2Cloaner-work-79%2Cloaner-work-80%2Cloaner-work-81%2Cloaner-work-82%2Cloaner-work-83%2Cloaner-work-84%2Cloaner-work-85%2Cloaner-work-86%2Cloaner-work-87%2Cloaner-work-88%2Cloaner-work-89%2Cloaner-work-90%2Cloaner-work-91%2Cloaner-work-92%2Cloaner-work-93%2Cloaner-work-94%2Cloaner-work-95%2Cloaner-work-96%2Cloaner-work-97%2Cloaner-work-98%2Cloaner-work-99%2Cloaner-work-100%2Cloaner-work-101%2Cloaner-work-102%2Cloaner-work-103%2Cloaner-work-104%2Cloaner-work-105%2Cloaner-work-106%2Cloaner-work-107%2Cloaner-work-108%2Cloaner-work-109%2Cloaner-work-110%2Cloaner-work-111%2Cloaner-work-112%2Cloaner-work-113%2Cloaner-work-114%2Cloaner-work-115%2Cloaner-work-116%2Cloaner-work-117%2Cloaner-work-118%2Cloaner-work-119%2Cloaner-work-120%2Cloaner-work-121%2Cloaner-work-122%2Cloaner-work-123%2Cloaner-work-124%2Cloaner-work-125%2Cloaner-work-126%2Cloaner-work-127%2Cloaner-work-128%2Cloaner-work-129%2Cloaner-work-130%2Cloaner-work-131%2Cloaner-work-132%2Cloaner-work-133%2Cloaner-work-134%2Cloaner-work-135%2Cloaner-work-136%2Cloaner-work-137%2Cloaner-work-138%2Cloaner-work-139%2Cloaner-work-140%2Cloaner-work-141%2Cloaner-work-142%2Cloaner-work-143%2Cloaner-work-144%2Cloaner-work-145%2Cloaner-work-146%2Cloaner-work-147%2Cloaner-work-148%2Cloaner-work-149%2Cloaner-work-150%2Cloaner-work-151%2Cloaner-work-152%2Cloaner-work-153%2Cloaner-work-154%2Cloaner-work-155%2Cloaner-work-156%2Cloaner-work-157%2Cloaner-work-158%2Cloaner-work-159%2Cloaner-work-160%2Cloaner-work-161%2Cloaner-work-162%2Cloaner-work-163%2Cloaner-work-164%2Cloaner-work-165%2Cloaner-work-166%2Cloaner-work-167%2Cloaner-work-168%2Cloaner-work-169%2Cloaner-work-170%2Cloaner-work-171%2Cloaner-work-172%2Cloaner-work-173%2Cloaner-work-174%2Cloaner-work-175%2Cloaner-work-176%2Cloaner-work-177%2Cloaner-work-178%2Cloaner-work-179%2Cloaner-work-180%2Cloaner-work-181%2Cloaner-work-182%2Cloaner-work-183%2Cloaner-work-184%2Cloaner-work-185%2Cloaner-work-186%2Cloaner-work-187%2Cloaner-work-188%2Cloaner-work-189%2Cloaner-work-190%2Cloaner-work-191%2Cloaner-work-192%2Cloaner-work-193%2Cloaner-work-194%2Cloaner-work-195%2Cloaner-work-196%2Cloaner-work-197%2Cloaner-work-198%2Cloaner-work-199%2Cloaner-work-200%2Cloaner-work-201%2Cloaner-work-202%2Cloaner-work-203%2Cloaner-work-204%2Cloaner-work-205%2Cloaner-work-206%2Cloaner-work-207%2Cloaner-work-208%2Cloaner-work-209%2Cloaner-work-210%2Cloaner-work-211%2Cloaner-work-212%2Cloaner-work-213%2Cloaner-work-214%2Cloaner-work-215%2Cloaner-work-216%2Cloaner-work-217%2Cloaner-work-218%2Cloaner-work-219%2Cloaner-work-220%2Cloaner-work-221%2Cloaner-work-222%2Cloaner-work-223%2Cloaner-work-224%2Cloaner-work-225%2Cloaner-work-226%2Cloaner-work-227%2Cloaner-work-228%2Cloaner-work-229%2Cloaner-work-230%2Cloaner-work-231%2Cloaner-work-232%2Cloaner-work-233%2Cloaner-work-234%2Cloaner-work-235%2Cloaner-work-236%2Cloaner-work-237%2Cloaner-work-238%2Cloaner-work-239%2Cloaner-work-240%2Cloaner-work-241%2Cloaner-work-242%2Cloaner-work-243%2Cloaner-work-244%2Cloaner-work-245%2Cloaner-work-246%2Cloaner-work-247%2Cloaner-work-248%2Cloaner-work-249%2Cloaner-work-250%2Cloaner-work-251%2Cloaner-work-252%2Cloaner-work-253%2Cloaner-work-254%2Cloaner-work-255%2Cloaner-work-256%2Cloaner-work-257%2Cloaner-work-258%2Cloaner-work-259%2Cloaner-work-260%2Cloaner-work-261%2Cloaner-work-262%2Cloaner-work-263%2Cloaner-work-264%2Cloaner-work-265%2Cloaner-work-266%2Cloaner-work-267%2Cloaner-work-268%2Cloaner-work-269%2Cloaner-work-270%2Cloaner-work-271%2Cloaner-work-272%2Cloaner-work-273%2Cloaner-work-274%2Cloaner-work-275%2Cloaner-work-276%2Cloaner-work-277%2Cloaner-work-278%2Cloaner-work-279%2Cloaner-work-280%2Cloaner-work-281%2Cloaner-work-282%2Cloaner-work-283%2Cloaner-work-284%2Cloaner-work-285%2Cloaner-work-286%2Cloaner-work-287%2Cloaner-work-288%2Cloaner-work-289%2Cloaner-work-290%2Cloaner-work-291%2Cloaner-work-292%2Cloaner-work-293%2Cloaner-work-294%2Cloaner-work-295%2Cloaner-work-296%2Cloaner-work-297%2Cloaner-work-298%2Cloaner-work-299%29&status=neq.cancelled&status=neq.rejected"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-09-28&business_date=lte.2026-10-04"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-30T15%3A00%3A00.000Z&starts_at=lt.2026-10-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-10-01&business_date=lt.2026-11-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Cstatus%2Cwork_completed%2Cneeds_loaner%2Cplanned_delivery_at%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&needs_loaner=eq.true&checked_out_at=is.null&order=id.asc&limit=301"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cwork_order_id%2Cvehicle_id%2Centry_type%2Cstarts_at&work_order_id=in.%28work-1%29&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/loaner_reservations",
+      "query": "?select=id%2Cwork_order_id%2Cloaner_vehicle_id%2Cstatus%2Cstarts_at%2Cends_at&work_order_id=in.%28work-1%29&status=in.%28reserved%2Cchecked_out%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customer_booking_requests",
+      "query": "?select=id%2Cwork_order_id&work_order_id=in.%28work-1%29&status=neq.cancelled&status=neq.rejected"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-09-28&business_date=lte.2026-10-04"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-30T15%3A00%3A00.000Z&starts_at=lt.2026-10-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-10-01&business_date=lt.2026-11-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Cstatus%2Cwork_completed%2Cneeds_loaner%2Cplanned_delivery_at%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&needs_loaner=eq.true&checked_out_at=is.null&order=id.asc&limit=301"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cwork_order_id%2Cvehicle_id%2Centry_type%2Cstarts_at&work_order_id=in.%28work-1%29&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/loaner_reservations",
+      "query": "?select=id%2Cwork_order_id%2Cloaner_vehicle_id%2Cstatus%2Cstarts_at%2Cends_at&work_order_id=in.%28work-1%29&status=in.%28reserved%2Cchecked_out%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customer_booking_requests",
+      "query": "?select=id%2Cwork_order_id&work_order_id=in.%28work-1%29&status=neq.cancelled&status=neq.rejected"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "POST",
+      "path": "/rest/v1/rpc/schedule_capacity",
+      "query": ""
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-27T15%3A00%3A00.000Z&starts_at=lt.2026-10-04T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-09-28&business_date=lte.2026-10-04"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cstatus%2Cwork_completed%2Cis_urgent%2Cneeds_loaner%2Cworker_name%2Coutsource_vendor_name%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cvehicle_id%2Cwork_order_id%2Centry_type%2Cstarts_at%2Cends_at%2Cprint_time_mode%2Cprint_time_label_override&starts_at=gte.2026-09-30T15%3A00%3A00.000Z&starts_at=lt.2026-10-31T15%3A00%3A00.000Z&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel&business_date=gte.2026-10-01&business_date=lt.2026-11-01"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Coutsource_vendor_name%2Cis_urgent%2Cis_waiting_service&id=in.%28work-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/work_orders",
+      "query": "?select=id%2Cvehicle_id%2Creason%2Cworker_name%2Cstatus%2Cwork_completed%2Cneeds_loaner%2Cplanned_delivery_at%2Cplanned_delivery_date%2Cchecked_in_at%2Cchecked_out_at&needs_loaner=eq.true&checked_out_at=is.null&order=id.asc&limit=301"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/schedule_entries",
+      "query": "?select=id%2Cwork_order_id%2Cvehicle_id%2Centry_type%2Cstarts_at&work_order_id=in.%28work-1%29&order=starts_at.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/vehicles",
+      "query": "?select=id%2Ccustomer_id%2Cregistration_number_last4%2Cregistration_number&id=in.%28vehicle-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/loaner_reservations",
+      "query": "?select=id%2Cwork_order_id%2Cloaner_vehicle_id%2Cstatus%2Cstarts_at%2Cends_at&work_order_id=in.%28work-1%29&status=in.%28reserved%2Cchecked_out%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customer_booking_requests",
+      "query": "?select=id%2Cwork_order_id&work_order_id=in.%28work-1%29&status=neq.cancelled&status=neq.rejected"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/customers",
+      "query": "?select=id%2Cname%2Ccompany_name%2Cschedule_display_name&id=in.%28customer-1%29"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/app_user_profiles",
+      "query": "?select=is_active&user_id=eq.00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/business_calendar",
+      "query": "?select=business_date%2Cis_business_day%2Clabel%2Csource%2Csource_document_path%2Cupdated_at&business_date=gte.2026-04-01&business_date=lte.2027-03-31&order=business_date.asc"
+    }
+  ]
+}
