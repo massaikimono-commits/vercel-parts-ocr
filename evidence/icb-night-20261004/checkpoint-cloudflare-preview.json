@@ -1,0 +1,12 @@
+{
+  "conclusion": "success",
+  "details_url": "https://dash.cloudflare.com/c491c1c631c99a143b0c6dba4b658e0f/workers/services/view/vercel-parts-ocr/production/builds/870f765f-cfb0-4527-bc87-3e5132b40a7f",
+  "name": "Workers Builds: vercel-parts-ocr",
+  "output": {
+    "annotations_count": 0,
+    "annotations_url": "https://api.github.com/repos/massaikimono-commits/vercel-parts-ocr/check-runs/111329765449/annotations",
+    "summary": "\nBuild ID: [870f765f-cfb0-4527-bc87-3e5132b40a7f](https://dash.cloudflare.com/c491c1c631c99a143b0c6dba4b658e0f/workers/services/view/vercel-parts-ocr/production/builds/870f765f-cfb0-4527-bc87-3e5132b40a7f)\nScript: [vercel-parts-ocr](https://dash.cloudflare.com/c491c1c631c99a143b0c6dba4b658e0f/workers/services/view/vercel-parts-ocr/production)\nVersion ID: 612e484e-390b-42dc-971b-a9cec2f909b8\nPreview URL: https://612e484e-vercel-parts-ocr.massa-ikimono.workers.dev\nPreview Alias URL: https://candidate-icb-continuation-20261003-vercel-parts-ocr.massa-ikimono.workers.dev\n",
+    "text": null,
+    "title": "Workers Builds: vercel-parts-ocr"
+  }
+}
