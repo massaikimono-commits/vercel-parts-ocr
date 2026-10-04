@@ -1,0 +1,109 @@
+{
+  "schema": "icb.parts-overnight-freeze.v1",
+  "createdAt": "2026-10-04T01:08:56.086509+00:00",
+  "sourceHead": "a6e84cda32677c1d5a1f120b1ab48c21531e42eb",
+  "files": [
+    {
+      "path": "app/ocr/architecture-vnext/token-spatial-graph.mjs",
+      "sha256": "0f15d97873cee072fb568dcaf615b222a008bb43234f5919e28e046a59a6c5fa"
+    },
+    {
+      "path": "app/ocr/architecture-vnext/row-first-geometry.mjs",
+      "sha256": "29bb5ec36b61c373bf09021de8c720a5b2e08430c4be01e0994fd6e64e16cf35"
+    },
+    {
+      "path": "app/ocr/architecture-vnext/orientation-contract.mjs",
+      "sha256": "66fca0f1fedfe88c9205637752f8930109c368e323b43a2204675b8107884a31"
+    },
+    {
+      "path": "app/ocr/architecture-vnext/coordinate-contract.mjs",
+      "sha256": "139371e055f6063fcbcc87bdd501ffffa77d4f25489bc5b545ade28c78a3267a"
+    },
+    {
+      "path": "app/ocr/bakeoff/p5-token-evidence.mjs",
+      "sha256": "93a54caa020374ad7f0178bb3483c01a54108d03ed1372118b4423b5b595bb99"
+    },
+    {
+      "path": "app/ocr/bakeoff/document-regions.mjs",
+      "sha256": "3f88d63aff5c706ace97d57c710b00c50da37c81d545628dc1fd620f34013d6c"
+    },
+    {
+      "path": "scripts/lib/parts-ocr-overnight-runtime.mjs",
+      "sha256": "c593fa2317efed09cdfff658821cecd50612ea81ae8516c655d5cc5dda0547ca"
+    },
+    {
+      "path": "scripts/parts-ocr-vision-boundary.swift",
+      "sha256": "ccb523d6638e71c4e7911dca712e4644cd549b21ce8b121e6c8a545843efae3e"
+    },
+    {
+      "path": "scripts/parts-ocr-overnight-run.mjs",
+      "sha256": "6d052daba9a5dcfb8235535e3ba4fd26fc2f2c12dfff7d9699d27adbfda01d10"
+    }
+  ],
+  "nativeBinarySha256": "aef1c1e2c0be75490bd5f285c3d587f5fa4c96f9097d542ac816b51a0d181149",
+  "modelFiles": [
+    {
+      "language": "jpn",
+      "sha256": "2b63ebfbf1484de4a08ce53b29ef98a1c17658a93cbd38acb665d7d316d0be88"
+    },
+    {
+      "language": "eng",
+      "sha256": "45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91"
+    }
+  ],
+  "runtimeGtUsed": false,
+  "noFurtherRuntimeEditsAfterRealScoring": true,
+  "experiments": [
+    "T_PAGE_G",
+    "T_CARDINAL_G",
+    "V_PAGE_G",
+    "V_CARDINAL_G",
+    "V_RECTIFIED_G",
+    "R_V_PAGE",
+    "R_V_CARDINAL"
+  ],
+  "formalGate": "HOLD_UNMAPPED_54_9",
+  "baselineEvidenceHead": "a6e84cda32677c1d5a1f120b1ab48c21531e42eb",
+  "nativeCapability": {
+    "os": "Version 27.0.1 (Build 26A434)",
+    "revision": 3,
+    "runtimeGtUsed": false,
+    "supportedLanguages": [
+      "en-US",
+      "fr-FR",
+      "it-IT",
+      "de-DE",
+      "es-ES",
+      "pt-BR",
+      "zh-Hans",
+      "zh-Hant",
+      "yue-Hans",
+      "yue-Hant",
+      "ko-KR",
+      "ja-JP",
+      "ru-RU",
+      "uk-UA",
+      "th-TH",
+      "vi-VT",
+      "ar-SA",
+      "ars-SA",
+      "tr-TR",
+      "id-ID",
+      "cs-CZ",
+      "da-DK",
+      "nl-NL",
+      "no-NO",
+      "nn-NO",
+      "nb-NO",
+      "ms-MY",
+      "pl-PL",
+      "ro-RO",
+      "sv-SE",
+      "fi-FI",
+      "hi-IN",
+      "mr-IN"
+    ]
+  },
+  "orientationFormula": "confidenceMass/sqrt(knownTokenCount) * sameLineNeighborFraction; top-2 ambiguity when second >=0.9*first; ambiguous export abstains",
+  "runReadiness": "synthetic unit invariants passed; development draft run excluded, final frozen synthetic raster pass follows"
+}

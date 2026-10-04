@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {inverseCardinalBox,selectCardinalHypotheses} from '../app/ocr/architecture-vnext/orientation-contract.mjs';
+const original={x1:10,y1:20,x2:40,y2:30},w=100,h=80;
+for(const [angle,b] of [[0,original],[90,{x1:h-original.y2,y1:original.x1,x2:h-original.y1,y2:original.x2}],[180,{x1:w-original.x2,y1:h-original.y2,x2:w-original.x1,y2:h-original.y1}],[270,{x1:original.y1,y1:w-original.x2,x2:original.y2,y2:w-original.x1}]])assert.deepEqual(inverseCardinalBox(b,angle,w,h),original);
+const tokens=[{...original,confidence:.8},{x1:50,y1:20,x2:75,y2:30,confidence:.8}];
+assert.equal(selectCardinalHypotheses([{angle:90,width:w,height:h,tokens:[]},{angle:0,width:w,height:h,tokens}]).selected[0].angle,0);
+assert.equal(selectCardinalHypotheses([{angle:90,width:w,height:h,tokens},{angle:0,width:w,height:h,tokens}]).selected.length,2);
+assert.equal(selectCardinalHypotheses([{angle:0,width:w,height:h,tokens:tokens.map(t=>({...t,confidence:null}))}]).selected.length,0);
+assert.equal(selectCardinalHypotheses([{angle:0,width:w,height:h,tokens:[{...original,x1:-10,confidence:1}]}]).selected.length,0);
+console.log('Orientation contract: 8 cardinal inverse / evidence / ties / unknown confidence assertions PASS');

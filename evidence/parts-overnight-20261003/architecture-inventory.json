@@ -1,0 +1,114 @@
+{
+  "schema": "icb.parts-overnight-architecture-inventory.v1",
+  "created": "2026-10-03",
+  "modelRoutingRole": "Luna Fast Path",
+  "checkout": {
+    "branch": "candidate/parts-ocr-generalization-overnight-20261003",
+    "head": "a6e84cda32677c1d5a1f120b1ab48c21531e42eb",
+    "upstreamRecoveryRef": "origin/eval/parts-real-photo-recovery-20261003",
+    "otherAvailableRef": "origin/candidate/parts-ocr-architecture-audit-20261003",
+    "protectedRefsModified": false
+  },
+  "architectureGateSpec": {
+    "requested": "ICB-SPEC v1.4 OCR Architecture Gate",
+    "status": "NOT_FOUND_IN_CHECKED_OUT_TREE_OR_AVAILABLE_GIT_REFS",
+    "search": "repository paths and tracked content on current recovery HEAD plus available origin/candidate/parts-ocr-architecture-audit-20261003 ref",
+    "availableArchitectureSources": [
+      "docs/recognition-architecture.md",
+      "docs/PARTS_OCR_P5_TOKEN_GRID_ARCHITECTURE.md",
+      "docs/PARTS_OCR_BAKEOFF_ROOT_CAUSE_AUDIT.md",
+      "docs/PARTS_OCR_REAL_IMAGE_OVERNIGHT_20261003.md"
+    ]
+  },
+  "existingArchitectures": [
+    {
+      "id": "FROZEN_ACTUAL_DEDICATED_AND_GENERAL",
+      "paths": [
+        "scripts/parts-ocr-frozen-local-regression.mjs",
+        "app/ocr/page.tsx",
+        "app/ocr/general/page.tsx",
+        "app/ocr/transfer.ts"
+      ],
+      "sourceRef": "6a31ec4b9028410e90a8dbd9c8b40d53de7742d2",
+      "role": "historical reproduction baseline",
+      "disposition": "REGRESSION_ONLY",
+      "notes": "Exact runOCR source extraction; includes inherited fixed geometry and SUPPLIER_PARTS answer dictionary; Node/Skia is not browser parity. Never use the inherited answer dictionary as a new generalization architecture."
+    },
+    {
+      "id": "P0_P1_CELL_FIRST_AND_RULE_BOUNDED",
+      "paths": [
+        "app/ocr/bakeoff/p0-adapter.ts",
+        "app/ocr/bakeoff/browser-candidates.ts",
+        "app/ocr/bakeoff/hybrid.ts"
+      ],
+      "sourceRef": "a6e84cda32677c1d5a1f120b1ab48c21531e42eb",
+      "role": "bakeoff controls",
+      "disposition": "REGRESSION_ONLY",
+      "notes": "Controls emitted zero matched rows on diagnostic yellow60 and white15."
+    },
+    {
+      "id": "P5_TOKEN_GRID",
+      "paths": [
+        "app/ocr/bakeoff/p5-token-evidence.mjs",
+        "app/ocr/bakeoff/p5-token-grid-core.mjs",
+        "app/ocr/bakeoff/p5-token-grid-browser.ts",
+        "app/ocr/bakeoff/p5-psm-primary-browser.ts",
+        "app/ocr/bakeoff/contract.ts"
+      ],
+      "sourceRef": "a6e84cda32677c1d5a1f120b1ab48c21531e42eb",
+      "role": "page OCR tokens followed by header anchoring, vertical row clustering, semantic columns, reconstruction and unconditional review",
+      "disposition": "REGRESSION_ONLY",
+      "notes": "No matched or complete row across PSM3/PSM6 on diagnostic yellow60/white15; candidate mapping variants also yielded zero complete rows. Generic-header and partial-header behavior remains uncertain."
+    },
+    {
+      "id": "P6_DOCUMENT_REGION_EXPERIMENT",
+      "paths": [
+        "app/ocr/bakeoff/document-regions.mjs",
+        "app/ocr/bakeoff/root-cause-diagnostics.ts"
+      ],
+      "sourceRef": "a6e84cda32677c1d5a1f120b1ab48c21531e42eb",
+      "role": "experimental document localization and region OCR path",
+      "disposition": "NO_OP_VERIFIED",
+      "notes": "Prior doc marks the pure document-region/quad/warp prototype REJECTED due to multi-paper and pale-paper limitations. It has no application adoption. Recovery report states P6 regresses versus P5; do not reconnect or adopt."
+    },
+    {
+      "id": "STAGE_A22_TARGETED_CROP_CORRECTION",
+      "paths": [
+        "app/ocr/diagnostic/stage-a22/crop-correction.ts",
+        "app/ocr/diagnostic/stage-a22/RealImageAudit.tsx",
+        "scripts/stage-a22-invariant-audit.mjs"
+      ],
+      "sourceRef": "a6e84cda32677c1d5a1f120b1ab48c21531e42eb",
+      "role": "browser diagnostic; does not alter recognizer or A17/A19 thresholds",
+      "disposition": "NO_OP_VERIFIED",
+      "notes": "Explicit invariant audit keeps GT out of control/crop implementation and protects runtime thresholds. Stage A23 is not present in checkout or available refs."
+    }
+  ],
+  "evidence": {
+    "source": "evidence/real-photo-recovery-20261003/",
+    "inputIntegrity": "15/15 source hash matches and originals marked read-only/unchanged; source paths omitted",
+    "coverage": "P5 PSM3, P5 PSM6 and P6 PSM3 each have 15/15 result records; no timeouts or errors; runtimeGtUsed false on all",
+    "observedResults": {
+      "frozenBaseline": "0 complete rows across diagnostic yellow60 and white15; dedicated/general measured separately",
+      "P5_PSM3": "0 matched rows for strict/current and all tested header variants; D partial has 2 associated yellow rows and 0 complete rows",
+      "P5_PSM6": "0 matched rows for strict/current and all tested header variants; D partial has 2 associated yellow rows and 0 complete rows",
+      "P6_PSM3": "0 matched/complete rows; architecture review records regression relative to P5"
+    },
+    "limits": [
+      "This is a diagnostic 60/15 set; user-specified formal scope remains 54/9 and is unresolved.",
+      "The recovery docs warn that aligned scoring errors cannot prove physical segmentation causes without independent geometry annotations.",
+      "Node Skia execution does not establish browser parity or arbitrary orientation robustness.",
+      "White historical capture identity is unverified."
+    ]
+  },
+  "disposition": {
+    "current_candidate": "NONE_ADOPTED",
+    "action": "IMPLEMENT",
+    "actionMeaning": "Implement the new architecture generalization work via the parent task. Apply the exact ICB-SPEC v1.4 OCR Architecture Gate if its source is supplied/located; this inventory makes no runtime changes.",
+    "blockers": [
+      "ICB-SPEC v1.4 source is absent from inspected tree/refs; gate criteria cannot be asserted from memory.",
+      "Formal identity/annotation/row-count conflicts remain HOLD.",
+      "No architecture has demonstrated a complete-row improvement on current diagnostic evidence."
+    ]
+  }
+}
