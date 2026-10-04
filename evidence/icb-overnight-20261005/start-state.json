@@ -1,0 +1,31 @@
+{
+  "repo": "massaikimono-commits/vercel-parts-ocr",
+  "started_on": "2026-10-05",
+  "source_workspace": "/Users/massa_ikimono/Developer/vercel-parts-ocr",
+  "source_workspace_branch": "main",
+  "source_workspace_head": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+  "source_workspace_status": "clean at start; never edited",
+  "origin_main_at_start": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+  "origin_candidate_icb_continuation_at_start": "3cfbcd9b10e0c4e80ebfe513891a69131536762a",
+  "isolated_worktree": "/private/tmp/icb-overnight-20261005",
+  "isolated_worktree_start_head": "3cfbcd9b10e0c4e80ebfe513891a69131536762a",
+  "pr_93": {
+    "url": "https://github.com/massaikimono-commits/vercel-parts-ocr/pull/93",
+    "state": "open draft",
+    "base": "candidate/icb-app-overnight-20261003",
+    "head": "candidate/icb-continuation-20261003",
+    "head_sha_at_start": "3cfbcd9b10e0c4e80ebfe513891a69131536762a"
+  },
+  "pr_92": {
+    "url": "https://github.com/massaikimono-commits/vercel-parts-ocr/pull/92",
+    "state": "open draft",
+    "head_sha_at_start": "8b38adb"
+  },
+  "candidate_relation": "Candidate contains main merge f00bd12 (PR #90 dependency recovery) in its ancestry; no rollback or cherry-pick required.",
+  "security_recovery_commit_on_main": "faa5ab33cf34bba874e9f1fb41da39c7a7dd6ace",
+  "worktrees": [
+    "original main workspace, clean and untouched",
+    "pre-existing certificate and delivery worktrees were not modified"
+  ],
+  "reset_ticket_used": false
+}

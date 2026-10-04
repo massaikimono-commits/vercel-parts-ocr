@@ -1,0 +1,52 @@
+{
+  "RUN": "ICB overnight autonomous continuation 2026-10-05",
+  "START_BRANCH": "candidate/icb-continuation-20261003",
+  "START_HEAD": "3cfbcd9b10e0c4e80ebfe513891a69131536762a",
+  "FINAL_BRANCH": "candidate/icb-continuation-20261003",
+  "FINAL_HEAD": "to be recorded after evidence checkpoint commit",
+  "OVERNIGHT_LEVEL": 6,
+  "SECURITY_GATE": "HOLD",
+  "SECURITY_CLASSIFICATION": [
+    "D_NO_PATCH_AVAILABLE",
+    "E_TRANSITIVE_ONLY",
+    "F_BUILD_OR_DEPLOY_TOOLCHAIN_PATH; runtime reachability unproven",
+    "H_GATE_POLICY_REVIEW_REQUIRED"
+  ],
+  "DEPENDENCY_CHANGES": false,
+  "NO_OP_VERIFIED": 6,
+  "REMEDIATED": 0,
+  "IMPLEMENTED": 0,
+  "TEST": "PASS: full npm run build script regression chain plus optimized Next build",
+  "REGRESSION": "PASS: 64 fixture-browser checks, 29 routes, 3 widths, 0 page errors",
+  "BUILD": "PASS",
+  "CI": "Full Regression FAIL at production npm audit for 7 high braces-chain findings before CI app tests; deployment-safety SUCCESS; Cloudflare Workers build SUCCESS; Vercel one-shot preview SKIPPED by security-gated chain.",
+  "PREVIEW": "Existing candidate Workers Preview ready at the audited current candidate SHA; new Preview not requested/bypassed.",
+  "PREVIEW_URL": "https://candidate-icb-continuation-20261003-vercel-parts-ocr.massa-ikimono.workers.dev",
+  "DB_REQUIRED_HOLD": [
+    "Delivery presets/custom-time mutation UX",
+    "legal_3m apply",
+    "Atomic multi-RPC schedule edit/active registration"
+  ],
+  "USER_DEVICE_REQUIRED": [
+    "Authenticated live backend",
+    "iPhone/iPad/Safari",
+    "Physical print acceptance"
+  ],
+  "SPEC_DECISION_REQUIRED": [],
+  "BLOCKED": [
+    "SECURITY_GATE_HOLD: braces <=3.0.3 remains latest; automatic fix proposes breaking vinext downgrade.",
+    "BROWSER_VALIDATION_HOLD not applicable: elevated retry succeeded.",
+    "Formal standalone v1.3/v1.4 spec is absent from repo; no new ambiguous behavior was changed."
+  ],
+  "PREVIEW_BLOCK_REASON": "Vercel one-shot Preview remains skipped by the Full Regression security gate. Existing Cloudflare candidate Preview is explicitly a Preview alias and Workers build passed.",
+  "MAIN_CHANGED": false,
+  "PRODUCTION_CHANGED": false,
+  "DB_CHANGED": false,
+  "CREDENTIAL_CHANGED": false,
+  "FROZEN_OCR_CHANGED": false,
+  "FORCE_PUSH_USED": false,
+  "SECURITY_POLICY_WEAKENED": false,
+  "EXISTING_WORKTREE_DAMAGED": false,
+  "NEXT_RECOMMENDED_PHASE": "Re-triage when braces has a published patched version or the Vinext dependency chain offers a behavior-compatible upgrade; then require full security audit, regression, CI, and guarded Vercel Preview. Continue DB/device acceptance only under their existing Holds.",
+  "HUMAN_ACTION_REQUIRED": "No routine development action. Existing DB and real-device Holds remain for their respective acceptance steps."
+}
