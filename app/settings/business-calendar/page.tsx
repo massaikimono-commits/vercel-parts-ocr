@@ -2,7 +2,7 @@
 "use client";
 import { appLocation as location } from "../../lib/internal-navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { safeActionError } from "../../lib/client-security";
 import { validateDocumentFile } from "../../lib/file-security";
 import { supabase } from "../../supabase";
@@ -70,6 +70,8 @@ export default function BusinessCalendarPage() {
   const [fiscalYear, setFiscalYear] = useState(currentFiscalYear);
   const [rows, setRows] = useState<CalendarRow[]>([]);
   const [busy, setBusy] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const loadSequence = useRef(0);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("営業日カレンダーを読み込んでいます。");
   const [importFiscalYear, setImportFiscalYear] = useState(currentFiscalYear);
@@ -79,10 +81,13 @@ export default function BusinessCalendarPage() {
 
   useEffect(() => {
     void loadYear(fiscalYear);
+    return () => { loadSequence.current += 1; };
   }, [fiscalYear]);
 
   async function loadYear(year: number) {
+    const requestId = ++loadSequence.current;
     setBusy(true);
+    setLoaded(false);
     const { start, end } = fiscalBounds(year);
     try {
       const { data, error } = await supabase
@@ -92,8 +97,10 @@ export default function BusinessCalendarPage() {
         .lte("business_date", end)
         .order("business_date", { ascending: true });
       if (error) throw error;
+      if (requestId !== loadSequence.current) return;
       const nextRows = (data || []) as CalendarRow[];
       setRows(nextRows);
+      setLoaded(true);
       const missing = expectedFiscalDays(year) - nextRows.length;
       setMessage(
         missing > 0
@@ -101,10 +108,11 @@ export default function BusinessCalendarPage() {
           : `${year}年度 ${nextRows.length}日を表示しています。`
       );
     } catch (error: any) {
+      if (requestId !== loadSequence.current) return;
       setRows([]);
       setMessage(safeActionError("営業日カレンダーの読み込み", error));
     } finally {
-      setBusy(false);
+      if (requestId === loadSequence.current) setBusy(false);
     }
   }
 
@@ -221,15 +229,16 @@ export default function BusinessCalendarPage() {
             <button className="editEntry" type="button" onClick={() => location.assign("/settings/business-calendar/edit")}>営業日設定・変更</button>
           </div>
         </div>
-        <div className="summary">
+        {loaded && !busy && <div className="summary">
           <b className="openCount">営業 {counts.open}日</b>
           <b className="closedCount">休業 {counts.closed}日</b>
           {counts.missing > 0 && <b className="missingCount">未登録 {counts.missing}日</b>}
-        </div>
-        <div className="notice">{busy ? "営業日を読み込み中…" : message}</div>
+        </div>}
+        <div role="status" aria-live="polite" className="notice">{busy ? "営業日を読み込み中…" : message}</div>
+        {!loaded && !busy && <button type="button" onClick={() => void loadYear(fiscalYear)}>再読み込み</button>}
       </section>
 
-      <section className="monthsGrid" aria-label={`${fiscalYear}年度の営業日カレンダー`}>
+      {loaded && !busy && <section className="monthsGrid" aria-label={`${fiscalYear}年度の営業日カレンダー`}>
         {fiscalMonths(fiscalYear).map(({ year, month }) => {
           const firstDate = monthDate(year, month, 1);
           const leading = weekdayOf(firstDate);
@@ -271,7 +280,7 @@ export default function BusinessCalendarPage() {
             </article>
           );
         })}
-      </section>
+      </section>}
 
       <section className="helpCard">
         <b>カレンダーの使い方</b>

@@ -159,6 +159,11 @@ function ScheduleContent() {
   const params = useSearchParams();
   const query = params.toString();
   const loadSequence = useRef(0);
+  const loadPending=useRef(false);
+  const workActionLocks=useRef(new Set<string>());
+  const [pendingWorkIds,setPendingWorkIds]=useState<string[]>([]);
+  const currentLoad=useRef<(()=>Promise<void>)|null>(null);
+  currentLoad.current=load;
 
   function validDay(value: string | null): value is string {
     if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -175,6 +180,7 @@ function ScheduleContent() {
 
   useEffect(() => {
     void loadLayout();
+    return ()=>{currentLoad.current=null;};
   }, []);
 
   async function loadLayout() {
@@ -227,6 +233,7 @@ function ScheduleContent() {
 
   async function load() {
     const sequence = ++loadSequence.current;
+    loadPending.current=true;
     setBusy(true);
     setEntries([]); setStateEntries([]); setWorkOrders([]); setVehicles([]); setCustomers([]);
     const { start, end } = jstBounds(day);
@@ -322,7 +329,7 @@ function ScheduleContent() {
       if (sequence !== loadSequence.current) return;
       setMessage(safeActionError("予定の読み込み", error));
     } finally {
-      if (sequence === loadSequence.current) setBusy(false);
+      if (sequence === loadSequence.current){loadPending.current=false;setBusy(false);}
     }
   }
 
@@ -400,12 +407,22 @@ function ScheduleContent() {
       });
   }, [businessStates.stayingVehicles, vehicleMap, customerMap]);
 
+  function beginWorkAction(id:string){
+    if(loadPending.current || workActionLocks.current.has(id)) return false;
+    workActionLocks.current.add(id);setPendingWorkIds(old=>[...old,id]);return true;
+  }
+  function finishWorkAction(id:string){
+    workActionLocks.current.delete(id);setPendingWorkIds(old=>old.filter(value=>value!==id));
+  }
   async function toggleWorkCompleted(work: WorkOrder) {
+    if(!beginWorkAction(work.id)) return;
+    const sequence=loadSequence.current;
     const next = !work.work_completed;
     try {
       const rpc = next ? "complete_work_order_one_tap" : "reopen_work_order";
       const { data, error } = await supabase.rpc(rpc, { p_work_order_id: work.id, p_actor: "schedule" });
       if (error) throw error;
+      if(sequence!==loadSequence.current){await currentLoad.current?.();return;}
       setWorkOrders((old) => old.map((x) => x.id === work.id ? {
         ...x,
         work_completed: next,
@@ -413,12 +430,15 @@ function ScheduleContent() {
       } : x));
       setMessage(next ? "作業完了にしました。" : "作業完了を解除しました。");
     } catch (error: any) {
+      if(sequence!==loadSequence.current){await currentLoad.current?.();return;}
       setMessage(safeActionError("作業状態の保存", error));
-    }
+    }finally{finishWorkAction(work.id);}
   }
 
   async function toggleWorkProgress(work: WorkOrder) {
     if (work.work_completed || work.status === "completed") return;
+    if(!beginWorkAction(work.id)) return;
+    const sequence=loadSequence.current;
     const nextStatus = work.status === "in_progress" ? "scheduled" : "in_progress";
     try {
       const { data, error } = await supabase.rpc("set_work_order_progress_state", {
@@ -427,14 +447,16 @@ function ScheduleContent() {
         p_actor: "schedule",
       });
       if (error) throw error;
+      if(sequence!==loadSequence.current){await currentLoad.current?.();return;}
       setWorkOrders((old) => old.map((x) => x.id === work.id ? {
         ...x,
         status: data?.status || nextStatus,
       } : x));
       setMessage(nextStatus === "in_progress" ? "作業中にしました。" : "作業未実施へ戻しました。");
     } catch (error: any) {
+      if(sequence!==loadSequence.current){await currentLoad.current?.();return;}
       setMessage(safeActionError("作業状態の保存", error));
-    }
+    }finally{finishWorkAction(work.id);}
   }
 
   async function advanceWorkState(work: WorkOrder) {
@@ -451,6 +473,8 @@ function ScheduleContent() {
 
   async function saveStayInfo(event: React.FormEvent<HTMLFormElement>, work: WorkOrder) {
     event.preventDefault();
+    if(!beginWorkAction(work.id)) return;
+    const sequence=loadSequence.current;
     const form = new FormData(event.currentTarget);
     const stayReason = String(form.get("stay_reason") || "").trim();
     try {
@@ -459,15 +483,18 @@ function ScheduleContent() {
         .update({ stay_reason: stayReason || null, updated_at: new Date().toISOString() })
         .eq("id", work.id);
       if (error) throw error;
+      if(sequence!==loadSequence.current){await currentLoad.current?.();return;}
       setWorkOrders((old) => old.map((x) => x.id === work.id ? {
         ...x,
         stay_reason: stayReason || null,
       } : x));
       setMessage("滞留理由を保存しました。納車予定は予約変更画面から登録してください。");
     } catch (error: any) {
+      if(sequence!==loadSequence.current){await currentLoad.current?.();return;}
       setMessage(safeActionError("滞留理由の保存", error));
-    }
+    }finally{finishWorkAction(work.id);}
   }
+
 
 
   function changeColumnLayout(next: ColumnLayout) {
@@ -527,6 +554,8 @@ function ScheduleContent() {
       <>
         <button
           className={`workState ${state} noPrint`}
+          disabled={busy || pendingWorkIds.includes(work.id)}
+          aria-busy={pendingWorkIds.includes(work.id)}
           onClick={() => void advanceWorkState(work)}
           aria-label={nextLabel}
           title={`${label} → ${nextLabel}`}
@@ -594,11 +623,13 @@ function ScheduleContent() {
         <details className="stayEdit noPrint">
           <summary>滞留情報を編集</summary>
           <form onSubmit={(e) => void saveStayInfo(e, work)}>
+            <fieldset disabled={busy || pendingWorkIds.includes(work.id)} className="stayFields">
             <label>滞留理由
               <input name="stay_reason" defaultValue={work.stay_reason || ""} list="stay-reason-options" placeholder="例：部品待ち" />
             </label>
             <button type="submit">滞留理由を保存</button>
             <button type="button" onClick={() => location.assign("/schedule/edit?id=" + encodeURIComponent(inboundEntry.id))}>納車予定を登録・変更</button>
+            </fieldset>
           </form>
         </details>
       </article>
@@ -758,7 +789,7 @@ function ScheduleContent() {
         <div className="heroMain">
           <div className="desktopHeroTitle"><div className="eyebrow">1日の予定</div><h1>{dateLabel(day)}</h1></div>
           <div className="mobileDayLine"><b>{dateLabel(day)}</b><span>{morningCount + afternoonCount}件</span></div>
-          <div className="notice">{busy ? "予定を読み込み中…" : message}</div>
+          <div className="notice" role="status" aria-live="polite">{busy ? "予定を読み込み中…" : message}</div>
         </div>
         <div className="summary">
           <div><small>午前</small><b>{morningCount}</b></div>
@@ -850,6 +881,7 @@ function ScheduleContent() {
         }
       `}</style>
       <style jsx global>{`
+        .stayFields{border:0;padding:0;margin:0;min-width:0}
         *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{border:1px solid #ccd7e5;background:#fff;color:#2674e8;border-radius:12px;padding:10px 13px;font-weight:800}.page{max-width:1100px;margin:0 auto;padding:18px 14px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.card{position:relative;background:#fff;border:1px solid #d9e0ea;border-radius:22px;padding:22px;margin-bottom:16px}.hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.eyebrow{font-weight:800;color:#2674e8}h1{font-size:32px;margin:5px 0 8px}h2{margin:0}h3{margin:0 0 10px;color:#5d6878;font-size:16px}.notice{color:#5d6878}.summary{display:flex;gap:9px;flex-wrap:wrap}.summary>div{min-width:92px;background:#f7f9fc;border-radius:14px;padding:11px 13px;display:grid}.summary b{font-size:25px}.summary small{color:#718096}.dateNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;align-items:center}.secondaryNavRow,.quickNavRow{display:contents}.mobileDayLine,.stayMobileSummary{display:none}.dateNav input{border:1px solid #ccd7e5;border-radius:12px;padding:10px 12px;background:#fff}.dateNav .newEntry{background:#2f6fe4;color:#fff;border-color:#2f6fe4}.dateNav .print{margin-left:auto}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.dailyBoardTitle>div{display:grid;gap:3px}.dailyBoardTitle small{color:#697689;font-weight:700}.dailyBoardHeader{display:grid;grid-template-columns:1fr 1fr;border:1px solid #ccd7e5;border-bottom:0;border-radius:12px 12px 0 0;overflow:hidden;background:#f7f9fc}.dailyBoardHeader>b{padding:9px 10px;text-align:center}.dailyBoardHeader>b+ b{border-left:1px solid #ccd7e5}.dailyBoardRows{border:1px solid #ccd7e5;border-radius:0 0 12px 12px;overflow:hidden}.dailyBoardRow{display:grid;grid-template-columns:1fr 1fr;min-height:58px}.dailyBoardRow+.dailyBoardRow{border-top:1px solid #e2e8f0}.dailyBoardCell{min-width:0}.dailyBoardCell+.dailyBoardCell{border-left:1px solid #ccd7e5}.dailySlotEmpty{height:100%;min-height:58px}.dailySlotCard{height:100%;min-height:58px;display:grid;grid-template-columns:38% 22% 20% 20%;align-items:start;gap:0;padding:6px 7px;border:0;border-radius:0;cursor:pointer;overflow:hidden}.deliveryCell .dailySlotCard{grid-template-columns:46% 28% 26%}.dailyCellCustomer,.dailyCellVehicle,.dailyCellTime,.dailyCellDue{min-width:0;overflow:hidden;padding-right:4px}.dailyCellCustomer>b,.dailyCellVehicle>b,.dailyCellTime>b,.dailyCellDue>b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dailyCellCustomer>b{font-size:14px}.dailyCellVehicle{display:flex;flex-direction:column}.dailyCellVehicle>b{font-size:13px}.dailyCellVehicle>small{font-size:9px;color:#5d6878;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dailyCellTime{display:flex;flex-direction:column;align-items:flex-start}.dailyCellTime>small{font-size:9px;font-weight:900;color:#5d6878}.dailyCellTime>b{font-size:12px}.dailyCellDue{display:flex;flex-direction:column;align-items:flex-start;line-height:1}.dailyCellDue>b{font-size:11px}.dailyCellDue>small{font-size:9px;margin-top:2px}.dailyWorkState .workState{padding:2px 5px;font-size:8px}.dailyWorkState .printWorkState{display:none}.overflowNotice{margin-top:10px;padding:10px 12px;border-radius:10px;background:#fff0ee;border:1px solid #efb4ad;color:#8f2f2f;font-weight:800}.columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scheduleItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;margin-bottom:9px;break-inside:avoid;cursor:pointer}.scheduleItem.done{opacity:.62}.scheduleItem.reason-shaken,.stayItem.reason-shaken,.dailySlotCard.reason-shaken{background:#fff0f0;border-color:#e99a9a}.scheduleItem.reason-check,.stayItem.reason-check,.dailySlotCard.reason-check{background:#eef5ff;border-color:#9dbce8}.scheduleItem.reason-repair,.stayItem.reason-repair,.dailySlotCard.reason-repair{background:#fff8d8;border-color:#e4cd67}.scheduleItem.reason-body,.stayItem.reason-body,.dailySlotCard.reason-body{background:#fff;border-color:#cfd8e3}.urgentItem{border-color:#e6aa5a;box-shadow:inset 4px 0 0 #e6aa5a}.itemTop{display:flex;justify-content:space-between;gap:10px}.itemMain{min-width:0;width:100%}.customerRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.customer{font-size:19px;font-weight:800;margin-top:4px}.scheduleIdentityRow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:5px}.scheduleVehicle{display:flex;flex-direction:column;min-width:0}.scheduleVehicle>b{font-size:15px;line-height:1.05}.scheduleVehicle>small{font-size:10px;color:#5d6878;line-height:1.05;margin-top:2px}.scheduleTime{display:flex;align-items:center;gap:5px;white-space:nowrap}.scheduleTime>span{font-size:11px;font-weight:900;color:#5d6878}.scheduleTime>b{font-size:14px}.complete{min-width:88px}.complete.active{background:#e9f7ef;border-color:#aad6b9;color:#237443}.workStateSlot{display:inline-flex;align-items:center;gap:6px}.workState{border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;white-space:nowrap}.workState.pending{background:#f0f2f5;border-color:#cdd4dd;color:#657180}.workState.running{background:#fff0d8;border-color:#e7b465;color:#9a5d00}.workState.completed{background:#e9f7ef;border-color:#78bc8e;color:#176b37}.printWorkState{display:none;font-weight:900;font-size:11px}.printWorkState.running{color:#7c4d00}.printWorkState.pending{color:#667180}.printWorkState.completed{color:#176b37}.flags{display:flex;gap:5px;flex-wrap:wrap}.flag{border-radius:999px;padding:4px 8px;font-size:12px;font-weight:900}.flag.urgent{background:#fff0db;color:#995b00}.flag.loaner{background:#eaf3ff;color:#245ca8}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.meta span{background:#f2f6fb;border-radius:999px;padding:5px 9px;font-size:13px}.meta .stayAge{background:#eef5ff;color:#315f98;font-weight:800}.meta .stayAge.alert{background:#fff0db;color:#995b00}.workloadGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.workloadCard{border:1px solid #dbe3ee;border-radius:13px;padding:12px;display:grid;gap:4px;background:#fff}.workloadCard>b{font-size:16px}.workloadCard span{font-size:12px;color:#5d6878}.workloadCard strong{font-size:18px;color:#172033}.workloadCard em{font-size:11px;font-style:normal;font-weight:900;color:#995b00;background:#fff0db;border-radius:999px;padding:3px 7px;justify-self:start}.workloadCard.unassigned{border-color:#e6aa5a}.sub,.note{margin-top:9px;color:#5d6878}.note{background:#fff9e8;padding:8px 10px;border-radius:9px}.rowActions{display:flex;gap:7px;flex-wrap:wrap}.open{margin-top:10px}.empty{padding:17px;background:#f8fafc;color:#8793a5;border-radius:12px;text-align:center}.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.stayGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stayItem{border:1px solid #dbe3ee;border-radius:15px;padding:14px;break-inside:avoid;cursor:pointer}.stayInfo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.stayReason,.stayDelivery{display:grid;gap:3px;border-radius:11px;padding:9px 10px;background:#f7f9fc}.stayReason b,.stayDelivery b{font-size:11px;color:#6c7889}.stayReason span,.stayDelivery span{font-weight:900}.stayReason span{color:#8b5a0a}.stayEdit{margin-top:10px;border-top:1px solid #edf0f4;padding-top:8px}.stayEdit summary{cursor:pointer;color:#2674e8;font-weight:800;font-size:13px}.stayEdit form{display:grid;grid-template-columns:1fr 180px auto;gap:8px;align-items:end;margin-top:8px}.stayEdit label{display:grid;gap:4px;font-size:12px;font-weight:800;color:#5d6878}.stayEdit input{border:1px solid #ccd7e5;border-radius:9px;padding:8px;background:#fff}.printPeriod{display:none}@media screen and (min-width:721px){.page{max-width:1440px;padding:10px 12px 36px}.top{margin-bottom:7px}.card{padding:12px 14px;margin-bottom:8px;border-radius:14px}.hero{gap:10px}.eyebrow{font-size:12px}h1{font-size:24px;margin:2px 0 3px}.notice{font-size:12px}.summary{gap:5px}.summary>div{min-width:70px;padding:6px 8px;border-radius:9px}.summary b{font-size:19px}.dateNav{gap:5px;margin-bottom:8px}.dateNav button,.dateNav input{padding:6px 8px;border-radius:8px;font-size:12px}.sectionTitle{margin-bottom:6px}.sectionTitle h2{font-size:18px}h3{margin-bottom:4px;font-size:12px}.columns{gap:8px}.scheduleItem{padding:6px 8px;margin-bottom:4px;border-radius:8px}.itemTop{gap:5px;align-items:center}.itemMain{display:block;min-width:0;flex:1}.customerRow{gap:4px;flex-wrap:nowrap;min-width:0}.customer{font-size:14px;line-height:1.1;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}.scheduleIdentityRow{margin-top:3px;gap:5px}.scheduleVehicle>b{font-size:11px}.scheduleVehicle>small{font-size:8px}.scheduleTime{gap:3px}.scheduleTime>span{font-size:8px}.scheduleTime>b{font-size:10px}.complete{min-width:58px;padding:4px 6px;border-radius:7px;font-size:10px;line-height:1.1}.workState{padding:2px 5px;font-size:9px}.flags{gap:3px;flex-wrap:nowrap}.flag{padding:2px 5px;font-size:9px}.meta{gap:3px;margin-top:3px}.meta span{padding:2px 5px;font-size:10px;line-height:1.15}.sub{margin-top:2px;font-size:10px;line-height:1.15}.note{margin-top:3px;padding:3px 5px;border-radius:5px;font-size:10px;line-height:1.2}.open{margin-top:3px;padding:2px 6px;border-radius:6px;font-size:10px;line-height:1.15}.empty{padding:7px;font-size:11px}}@media(max-width:720px){.page{padding:6px 6px 36px}.top{margin-bottom:4px;min-height:28px}.top button{padding:4px 7px;border-radius:7px;font-size:10px}.top strong{font-size:12px}.card{margin-bottom:6px;border-radius:12px}.hero{display:grid!important;grid-template-columns:1fr auto;align-items:center;gap:5px;padding:6px 8px}.desktopHeroTitle{display:none}.mobileDayLine{display:flex;align-items:center;gap:7px;line-height:1}.mobileDayLine>b{font-size:13px}.mobileDayLine>span{font-size:10px;font-weight:900;color:#2674e8}.notice{font-size:9px;line-height:1.1;max-height:22px;overflow:hidden;margin-top:2px}.summary{display:flex;margin-top:0!important;gap:3px;flex-wrap:nowrap}.summary>div{min-width:0;padding:3px 5px;border-radius:7px;display:flex;align-items:baseline;gap:2px}.summary small{font-size:7px;white-space:nowrap}.summary b{font-size:11px}.dateNav{display:grid;grid-template-columns:1fr;gap:4px;margin:0 0 5px}.dayNavRow{gap:4px!important}.dayNavRow button{padding:5px 4px!important;font-size:10px!important;border-radius:7px!important}.secondaryNavRow{display:block}.secondaryNavRow .datePicker{width:100%;height:28px;padding:2px 6px;border-radius:7px;font-size:10px}.quickNavRow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}.quickNavRow button{padding:5px 2px;border-radius:7px;font-size:9px;min-width:0}.dateNav .print{margin-left:0}.dailyBoardSection{padding:7px 5px;margin-bottom:6px}.dailyBoardTitle{margin-bottom:4px}.dailyBoardTitle h2{font-size:13px}.dailyBoardTitle small{display:none}.dailyBoardTitle>span{font-size:9px}.dailyBoardHeader>b{padding:5px 4px;font-size:9px}.dailyBoardRow{min-height:50px}.dailySlotEmpty{min-height:50px}.dailySlotCard{min-height:50px;padding:5px 5px;grid-template-columns:39% 22% 19% 20%}.deliveryCell .dailySlotCard{grid-template-columns:47% 28% 25%}.dailyCellCustomer>b{font-size:12px}.dailyCellVehicle>b{font-size:11px}.dailyCellVehicle>small{font-size:8px}.dailyCellTime>b{font-size:10px}.dailyCellTime>small{font-size:8px}.dailyCellDue>b{font-size:10px}.dailyCellDue>small{font-size:8px}.dailyWorkState .workState{font-size:7px;padding:2px 4px}.hero{display:block}h1{font-size:24px;margin:3px 0 6px}.summary{margin-top:10px}.periodSection{padding:12px 9px}.periodSection .columns{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}.periodSection .deliveryColumn{grid-column:1;grid-row:1}.periodSection .inboundColumn{grid-column:2;grid-row:1}.periodSection h3{font-size:11px;line-height:1.2;margin-bottom:5px}.periodSection .scheduleItem{padding:6px 5px;margin-bottom:5px;border-radius:9px}.periodSection .itemTop{gap:4px}.periodSection .itemMain>b{font-size:10px}.periodSection .customerRow{gap:3px}.periodSection .customer{font-size:13px;line-height:1.15;margin-top:2px}.periodSection .complete{min-width:0;padding:4px 5px;font-size:9px;border-radius:7px}.periodSection .workState{padding:2px 4px;font-size:8px}.periodSection .flag{padding:2px 4px;font-size:8px}.periodSection .meta{gap:3px;margin-top:4px}.periodSection .meta span{padding:2px 4px;font-size:9px}.periodSection .sub{margin-top:4px;font-size:9px}.periodSection .note{margin-top:4px;padding:4px;font-size:9px}.periodSection .open{margin-top:4px;padding:3px 5px;font-size:9px}.periodSection .empty{padding:9px 3px;font-size:10px}.staySection{padding:7px 5px}.staySection .sectionTitle{margin-bottom:4px}.staySection .sectionTitle h2{font-size:13px}.staySection .sectionTitle span{font-size:9px}.stayGrid{grid-template-columns:1fr;gap:3px}.stayItem{padding:5px 6px;border-radius:8px}.stayDesktopBody{display:none}.stayMobileSummary{display:grid;gap:2px}.stayMobileMain{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:5px;align-items:center;min-width:0}.stayMobileMain>b{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stayMobileMain>span{font-size:9px;white-space:nowrap}.stayMobileMain .mobileState{display:inline-flex}.stayMobileMain .mobileState .workState{font-size:7px;padding:2px 4px}.stayMobileMain .mobileState .printWorkState{display:none}.stayMobileSub,.stayMobileExtra{display:flex;gap:6px;flex-wrap:wrap;line-height:1.15}.stayMobileSub span{font-size:8px;color:#5d6878}.stayMobileExtra span{font-size:7px;color:#7b8797}.stayAgeText.alert{color:#995b00;font-weight:900}.stayEdit{margin-top:3px;padding-top:3px}.stayEdit summary{font-size:8px}.stayEdit form{grid-template-columns:1fr;gap:3px;margin-top:4px}.stayEdit label{font-size:8px}.stayEdit input{padding:5px 6px;font-size:9px}.stayEdit button{padding:5px 6px;border-radius:7px;font-size:9px}.workloadSection{padding:7px 5px}.workloadSection .sectionTitle{margin-bottom:4px}.workloadSection .sectionTitle h2{font-size:13px}.workloadGrid{grid-template-columns:1fr;gap:3px}.workloadCard{grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:5px;padding:6px 7px;border-radius:8px;text-align:left}.workloadCard>b{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workloadCard span{font-size:8px;white-space:nowrap}.workloadCard strong{font-size:10px}.workloadCard em{font-size:7px;padding:2px 4px;white-space:nowrap}.quick{grid-template-columns:1fr 1fr;gap:4px;margin-top:6px}.quick button{padding:6px 4px;border-radius:7px;font-size:9px;min-height:30px}.card.noPrint>h2{font-size:13px}.dateNav .print{margin-left:0}}@media print{body{background:#fff}.page{max-width:none;padding:0}.noPrint{display:none!important}.card{border:0;border-radius:0;padding:10mm 8mm;margin:0;box-shadow:none}.hero{display:block;padding-bottom:4mm;border-bottom:1px solid #aaa}.hero .summary{display:none}.columns{grid-template-columns:1fr 1fr;gap:8mm}.scheduleItem{border:1px solid #777;padding:3mm;margin-bottom:2.5mm}.printWorkState{display:inline}.printPeriod{display:block;position:absolute;right:8mm;top:10mm;font-weight:800;color:#666}.afternoonSection .columns>div{display:flex;flex-direction:column;justify-content:flex-end}.afternoonSection .scheduleItem{flex:0 0 auto}h1{font-size:20pt}}
       `}</style>
     </main>

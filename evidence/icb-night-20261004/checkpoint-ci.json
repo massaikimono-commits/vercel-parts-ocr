@@ -1,0 +1,117 @@
+{
+  "conclusion": "failure",
+  "headSha": "20cb095544bbb829367ee872c798af99dafadf6d",
+  "jobs": [
+    {
+      "completedAt": "2026-10-04T00:52:09Z",
+      "conclusion": "failure",
+      "databaseId": 111329590633,
+      "name": "full-regression",
+      "startedAt": "2026-10-04T00:51:43Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-04T00:51:44Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-04T00:51:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:51:46Z",
+          "conclusion": "success",
+          "name": "Checkout",
+          "number": 2,
+          "startedAt": "2026-10-04T00:51:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:51:49Z",
+          "conclusion": "success",
+          "name": "Use Node.js 22",
+          "number": 3,
+          "startedAt": "2026-10-04T00:51:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:52:07Z",
+          "conclusion": "success",
+          "name": "Install dependencies",
+          "number": 4,
+          "startedAt": "2026-10-04T00:51:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:52:08Z",
+          "conclusion": "failure",
+          "name": "Audit production dependencies",
+          "number": 5,
+          "startedAt": "2026-10-04T00:52:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:52:08Z",
+          "conclusion": "skipped",
+          "name": "Validate CI routing contract",
+          "number": 6,
+          "startedAt": "2026-10-04T00:52:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:52:08Z",
+          "conclusion": "skipped",
+          "name": "Run full application regression and build",
+          "number": 7,
+          "startedAt": "2026-10-04T00:52:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:52:08Z",
+          "conclusion": "skipped",
+          "name": "Run extended vehicle-certificate OCR regressions",
+          "number": 8,
+          "startedAt": "2026-10-04T00:52:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:52:08Z",
+          "conclusion": "skipped",
+          "name": "Run extended parts OCR fixture regression",
+          "number": 9,
+          "startedAt": "2026-10-04T00:52:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:52:08Z",
+          "conclusion": "skipped",
+          "name": "Post Use Node.js 22",
+          "number": 17,
+          "startedAt": "2026-10-04T00:52:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:52:08Z",
+          "conclusion": "success",
+          "name": "Post Checkout",
+          "number": 18,
+          "startedAt": "2026-10-04T00:52:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-04T00:52:08Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 19,
+          "startedAt": "2026-10-04T00:52:08Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/37166237648/job/111329590633"
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/37166237648",
+  "classification": "SECURITY_GATE",
+  "appStepsSkipped": true
+}

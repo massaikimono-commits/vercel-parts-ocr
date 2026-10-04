@@ -1,0 +1,42 @@
+{
+  "START_BRANCH": "candidate/icb-continuation-20261003",
+  "START_HEAD": "e99d5235544d0dc6bb2d763af093294e1aa3170a",
+  "SECURITY_GATE": "HOLD",
+  "DEPENDENCY_CHANGES": false,
+  "TEST": "11 Phase3 actual-function checks PASS",
+  "REGRESSION": "53 build-script stages PASS",
+  "BUILD": "PASS",
+  "E2E": {
+    "status": "PASS",
+    "checks": 44,
+    "fixtureOnly": true,
+    "viewportWidths": [
+      390,
+      768,
+      1440
+    ]
+  },
+  "CI": "exact committed head to be checked after push; known unchanged dependency gate blocks",
+  "PREVIEW": "not forced; SECURITY_GATE_HOLD",
+  "FINAL_HEAD": "see PR #93 commit / external final evidence (self-referential SHA excluded)",
+  "DB_REQUIRED_HOLD": [
+    "delivery-input DB-required UX",
+    "legal_3m apply"
+  ],
+  "USER_DEVICE_REQUIRED": [
+    "authenticated device acceptance",
+    "Safari/iPhone/iPad",
+    "physical print acceptance"
+  ],
+  "SPEC_DECISION_REQUIRED": [
+    "inherited search-scope ambiguity"
+  ],
+  "NEXT_RECOMMENDED_PHASE": "published safe dependency remediation, full CI, guarded Preview and authenticated device acceptance",
+  "MAIN_CHANGED": false,
+  "PRODUCTION_CHANGED": false,
+  "DB_CHANGED": false,
+  "CREDENTIAL_CHANGED": false,
+  "FORCE_PUSH_USED": false,
+  "SECURITY_POLICY_WEAKENED": false,
+  "EXISTING_WORKTREE_DAMAGED": false
+}

@@ -1,0 +1,77 @@
+{
+  "CURRENT_BRANCH": "candidate/icb-continuation-20261003",
+  "START_HEAD": "4578802eeead79e2d107707515238ead991a3b87",
+  "END_HEAD": "recorded after commit/push in PR #93 and external final evidence",
+  "FEATURES_IMPLEMENTED": [
+    "last4-only schedule search (explicit latest spec)"
+  ],
+  "UX_IMPROVEMENTS": [
+    "query-owned edit and cancellation recovery",
+    "per-work status serialization and current-date refresh",
+    "active-vehicle duplicate/partial-write protection",
+    "daily/weekly loaner recovery and URL synchronization",
+    "workload read/assignment/filter recovery"
+  ],
+  "MOBILE_STATUS": "fixture Chromium 390/768 PASS; real iPhone/Safari acceptance remains HOLD",
+  "DESKTOP_STATUS": "1440 PASS; density retained",
+  "OCR_INTEGRATION_STATUS": "existing frozen/parts/PDF entry regression PASS; algorithms unchanged; no separate candidate mixed",
+  "PRINT_STATUS": "existing A4/A3/blank slip/no-total regression PASS; physical acceptance HOLD",
+  "DB_REQUIRED_ITEMS": [
+    "delivery presets/custom time DB-required contract",
+    "legal_3m apply",
+    "atomic multi-step schedule edit/active registration"
+  ],
+  "TEST_RESULTS": "19 actual-source focused checks PASS",
+  "REGRESSION_RESULTS": "54 stages PASS",
+  "BUILD_RESULT": "optimized Next build PASS with dummy fixture public environment",
+  "E2E": {
+    "status": "PASS",
+    "checks": 64,
+    "errors": [],
+    "sharedDatabaseTouched": false
+  },
+  "SECURITY_GATE": "HOLD",
+  "SECURITY_CLASSIFICATION": [
+    "D_NO_PATCH_AVAILABLE",
+    "E_TRANSITIVE_ONLY",
+    "F_BUILD_ONLY_OBSERVED_CHAIN",
+    "H_GATE_POLICY_REVIEW_REQUIRED"
+  ],
+  "RUNTIME_EXPOSURE": "not demonstrated, not asserted absent",
+  "DEPENDENCY_CHANGES": false,
+  "CI_RESULT": {
+    "checkpointHead": "20cb095544bbb829367ee872c798af99dafadf6d",
+    "classification": "SECURITY_GATE",
+    "fullRegressionRun": 37166237648,
+    "appTests": "SKIPPED after audit",
+    "deploymentSafety": "SUCCESS",
+    "ocrRouting": "SUCCESS",
+    "ocrTests": "audit blocked"
+  },
+  "PREVIEW_RESULT": {
+    "Vercel": "guarded SKIPPED; run37166263343",
+    "Cloudflare": "existing Git integration automatically created candidate Preview; not forced; checkpoint head20cb095",
+    "Acceptance": "SECURITY_GATE_HOLD / USER_DEVICE_REQUIRED"
+  },
+  "PREVIEW_URL": "https://612e484e-vercel-parts-ocr.massa-ikimono.workers.dev",
+  "PUSH_RESULT": "normal push checkpoint20cb095 successful; final evidence-only commit follows",
+  "MAIN_UNCHANGED": true,
+  "PRODUCTION_UNCHANGED": true,
+  "DB_UNCHANGED": true,
+  "FROZEN_OCR_UNCHANGED": true,
+  "CREDENTIAL_UNCHANGED": true,
+  "FORCE_PUSH_USED": false,
+  "SECURITY_POLICY_WEAKENED": false,
+  "RESET_TICKET_USED": false,
+  "EXISTING_WORKTREE_DAMAGED": false,
+  "REMAINING_BLOCKERS": [
+    "security gate without safe published patch",
+    "DB-required contracts/atomicity",
+    "authenticated device and physical print acceptance"
+  ],
+  "HUMAN_ACTION_REQUIRED": [
+    "later review existing HOLDs and authenticated acceptance; no routine development permission needed"
+  ],
+  "NEXT_RECOMMENDED_STAGE": "safe dependency remediation when published, full CI, guarded Preview, real-device acceptance",
+  "FINAL_VERDICT": "candidate UX readiness improved; production acceptance remains HOLD"
+}

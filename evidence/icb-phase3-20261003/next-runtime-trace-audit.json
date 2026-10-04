@@ -1,0 +1,5 @@
+{
+  "traceFiles": 41,
+  "vulnerableToolchainHits": [],
+  "scope": "local Next build trace only; not Cloudflare deployed runtime proof"
+}

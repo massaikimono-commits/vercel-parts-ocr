@@ -1,0 +1,25 @@
+{
+  "candidateBranch": "candidate/icb-continuation-20261003",
+  "candidateHead": "4578802eeead79e2d107707515238ead991a3b87",
+  "remoteCandidateHead": "4578802eeead79e2d107707515238ead991a3b87",
+  "originalWorkspace": "/Users/massa_ikimono/Developer/vercel-parts-ocr",
+  "originalBranch": "main",
+  "originalHead": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+  "originalStatus": "clean",
+  "independentWorkspace": "/private/tmp/icb-night-20261003",
+  "pr": 93,
+  "baseBranch": "candidate/icb-app-overnight-20261003",
+  "previousEvidence": "evidence/icb-phase3-20261003",
+  "changedImplementationTestConfigFiles": [
+    "app/loaners/page.tsx",
+    "app/loaners/week/page.tsx",
+    "app/schedule/active/page.tsx",
+    "app/schedule/edit/page.tsx",
+    "app/schedule/page.tsx",
+    "app/schedule/search/page.tsx",
+    "app/schedule/workload/page.tsx",
+    "package.json",
+    "scripts/icb-app-ux-browser-regression.mjs",
+    "scripts/icb-night-runtime-regression.mjs"
+  ]
+}
