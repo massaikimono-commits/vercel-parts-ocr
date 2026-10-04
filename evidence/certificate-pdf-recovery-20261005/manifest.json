@@ -1,0 +1,210 @@
+{
+  "source_head": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+  "evidence_files": [
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/REPORT.md",
+      "bytes": 6314,
+      "sha256": "9890c2e6536c7c3857ca21dc49112b8596b1f45a77884d693409633611cbf953"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/baseline-results.json",
+      "bytes": 4721,
+      "sha256": "75741163c888dcf7436186cb105d75299afe1f02bf325a10e8c2174de682261c"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/build-baseline.json",
+      "bytes": 373,
+      "sha256": "56dffb4f36d9df4ae2b501d28e22149a7ac596d72519ed7ebf07a55c1a50b600"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/build-baseline.txt",
+      "bytes": 23555,
+      "sha256": "18a99d3a51533b7f4ab7d4bc423f738fd82a3f90b7b33de1a5dca8505d13fceb"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/bulk-pdf-native-parity-regression.txt",
+      "bytes": 40,
+      "sha256": "c05301b0841cbb8fdd33252fcfffd7e3a6249d42ee4009b21ef934dfd4058268"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/certificate-pdf-document-integrity-regression.txt",
+      "bytes": 772,
+      "sha256": "6183d2033f64ee6aceb2ad6abea9e86b8e84cf3c3e632a95227ce9c8de9de731"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/certificate-pdf-generalization-regression.txt",
+      "bytes": 80,
+      "sha256": "eba0ea628bce15ae12f80dd285ea0dc6935c7d7ad96736b81d2f606e20c466f3"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/certificate-pdf-generalization-runtime-regression.txt",
+      "bytes": 82,
+      "sha256": "a970add5f1cca72724d844565323f3c59f41d417942ee46d3b13e9e05e5b1ab2"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/certificate-pdf-run-isolation-regression.txt",
+      "bytes": 147,
+      "sha256": "777d52888a11de655270b2c9baf96218fb8c93f530a5b33f057951c2df12c6f0"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/certificate-result-copy-regression.txt",
+      "bytes": 96,
+      "sha256": "e679bee39dd65fdec65ef8a3b1aaf052a916ffb03c9bb9165a23c3c9fa1b1b22"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/certificate-v2-no-legacy-overrides-regression.txt",
+      "bytes": 266,
+      "sha256": "401b1655ecec96d1e0a675f9f393a0905357dfe0bb61fda0b588fb9b68beedaa"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/ci-routing-regression.txt",
+      "bytes": 29,
+      "sha256": "22632cba36de45e4725609bb8c6cb7581b712b36037e78f819cdd776d9477fe8"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/committed-tree-paths.txt",
+      "bytes": 12596,
+      "sha256": "69a53571e65815534ac44bf2e22cf9c459e80a426b13c83cffb2dbcdcc740402"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/dependency-audit-network.json",
+      "bytes": 6272,
+      "sha256": "97edb9097c2b15020ac5fa80396d3a5208e6af3d9b40b76dc7a9b0f6099eae3e"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/dependency-audit-network.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/dependency-audit.json",
+      "bytes": 202,
+      "sha256": "abcf9a393d63fc0f7562b87bb163684d54549d4b96c7775e2ebc24f8633e15d6"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/dependency-audit.stderr",
+      "bytes": 323,
+      "sha256": "e60274959682e3bb65d589112dc97894e3083be3bb26d51afa3b5f30092f78bb"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/dependency-block.json",
+      "bytes": 1376,
+      "sha256": "6544c6b5074a4608e1198b2ade78836aa05cb4c380dfaaa608324f1a9844e744"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/dependency-install-network.txt",
+      "bytes": 26,
+      "sha256": "863a518ee7956c126a9c8de2bf53d1a3e4c0e244d979f2d9a218d1c539886720"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/dependency-install.txt",
+      "bytes": 655,
+      "sha256": "71dec8c086089c4428826b44ed4d7648a0120b877aef9a6f18dc9529936debfc"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/eight-case-matrix.json",
+      "bytes": 4725,
+      "sha256": "ef3c4b2ed9980a2cf4ec5f24601c4130593714d67e62fd377cb9fd7f35cc4989"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/evidence-path-history-search.txt",
+      "bytes": 2226,
+      "sha256": "854112595abdad8a2e13b10e294cf110dbb567d5fc9c2e64d255b5f4d02634dd"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/existing-preview.json",
+      "bytes": 1189,
+      "sha256": "110cb5858a576f88b164666d197af151cb4615b067e1956d1b52eb345d027347"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/final-ci.json",
+      "bytes": 3083,
+      "sha256": "d6238b1c24e3f5647b06f5dc31e45febc181c5297027cc7729a87d9d98252c74"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/final-pr.json",
+      "bytes": 3794,
+      "sha256": "e2798a42cb5be284667b8f3dbda4c5e9ca2264d18307642cd45dde5bdaf5f9a7"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/final-remote.json",
+      "bytes": 436,
+      "sha256": "b52001e0a6286d98158e78e8c04e00789fab73a3d95627935e9d127c356da61b"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/five-cluster-analysis.json",
+      "bytes": 6515,
+      "sha256": "38b8a4547ab36579ed4af00d8480dfb660295480903f4cc679358b1d8d875e7c"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/initial-environment-observation.json",
+      "bytes": 669,
+      "sha256": "89e3bb0b72a7853eb9254337cb85526d72c9bba4ef916b90295ec5d39823804c"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/next-env-d-ts-build-generated.diff",
+      "bytes": 424,
+      "sha256": "0d63d8301236ba4e59810d68d8a755576847e5063fb7569bec4e7de039a72dfe"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/pr87-comments.json",
+      "bytes": 5915,
+      "sha256": "1cd3381a2bac3975dbef7f9eb1d9670fadf0c022bae9daba5a237aeef70c5d53"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/pr87.json",
+      "bytes": 4125,
+      "sha256": "d045d51ca7f2f0c3f917265a1bca245604e0431875cf4da734f42dbc30e02f5f"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/pr90.json",
+      "bytes": 1510,
+      "sha256": "502bf53cf1504aa0f8e77872d0ae40f8f48d7a4edb8b24c07fa8a1bdb92504f2"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/prior-ci-failed.json",
+      "bytes": 24426,
+      "sha256": "11e47774ac7c3824f13aa67cb305133588e2d458b7f8644dac0002f0f597210a"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/remote-branches.json",
+      "bytes": 133111,
+      "sha256": "dd045f442ec9f3c9d380c7fbc33d6c26ffb7b010fb06a56a70c3642394b55d8b"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/remote-evidence-content-search.json",
+      "bytes": 411,
+      "sha256": "1ea4f74e11fac3d0b1272ae66363bd799a76108ba6b199721e3dd1fdcebac422"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/remote-evidence-path-search.json",
+      "bytes": 1033,
+      "sha256": "a29e610fa3103af4fb17c582690bbbeb69e3e972380d60e3c94e3e87ed617811"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/remote-refs.json",
+      "bytes": 436,
+      "sha256": "ef977dbd7ff072bd8d3bfb0ce22eb9cb524d3055f81bb600bc10e7375c5a2556"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/run-result.json",
+      "bytes": 2851,
+      "sha256": "18f2670d80afe51ff5a91225c53a09bc45346a295d1c16273d26c3ad705eecac"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/start-state.json",
+      "bytes": 3604,
+      "sha256": "8017993150b1879f1601313090cf6b8784be0e59ebee46f3a86cb4166f323e9f"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/tsconfig-json-build-generated.diff",
+      "bytes": 1226,
+      "sha256": "b2bed986165bb88343df3844c3f882266391adf10f65dc1da5cc2ecf00a1a151"
+    },
+    {
+      "path": "evidence/certificate-pdf-recovery-20261005/vehicle-certificate-regression.txt",
+      "bytes": 2692,
+      "sha256": "402c329389fb945c07ae2937cd4e900100c8fd0abcf540be69a6375c2c6748df"
+    }
+  ]
+}

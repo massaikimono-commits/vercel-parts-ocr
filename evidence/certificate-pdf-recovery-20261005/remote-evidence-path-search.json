@@ -1,0 +1,36 @@
+{
+  "refs_searched": 242,
+  "unique_trees": 184,
+  "hits": [
+    {
+      "ref": "refs/remotes/origin/candidate/certificate-pdf-canonical-generalization-20260919",
+      "paths": [
+        "docs/certificate-pdf-canonical-integration-patch.txt"
+      ]
+    },
+    {
+      "ref": "refs/remotes/origin/candidate/certificate-pdf-canonical-integration-20260920",
+      "paths": [
+        "docs/certificate-pdf-canonical-integration-protected-diff-failure.md"
+      ]
+    },
+    {
+      "ref": "refs/remotes/origin/eval/certificate-qr-stage-a21-4-format-counterfactual",
+      "paths": [
+        "docs/certificate-qr-stage-a21-5-compact-acceptance.md"
+      ]
+    },
+    {
+      "ref": "refs/remotes/origin/eval/certificate-qr-stage-a21-8-static-standalone",
+      "paths": [
+        "docs/certificate-qr-stage-a21-5-compact-acceptance.md"
+      ]
+    },
+    {
+      "ref": "refs/remotes/origin/safety/vercel-fail-closed-canary-20260910",
+      "paths": [
+        "docs/certificate-qr-stage-a21-5-compact-acceptance.md"
+      ]
+    }
+  ]
+}

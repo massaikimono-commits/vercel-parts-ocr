@@ -1,0 +1,106 @@
+{
+  "source_head": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+  "confirmed_root_causes": 0,
+  "total_clusters": 5,
+  "status": "SOURCE_PATHS_MAPPED; CAUSAL_HYPOTHESES_ONLY",
+  "clusters": [
+    {
+      "priority": "P0",
+      "cluster": "三重380せ88 physical mapping",
+      "source_paths": [
+        "app/lib/certificate-pdf-row-semantics.mjs:18",
+        "app/lib/certificate-pdf-row-semantics.mjs:124",
+        "app/lib/certificate-pdf-row-semantics.mjs:142",
+        "app/certificate-pdf-generalization-recovery.jsx:84",
+        "app/certificate-pdf-structured-reader-v3.jsx:215"
+      ],
+      "source_facts": "Generic recovery fills only empty current fields. Physical helper uses next row / label columns; V3 also uses kg/cm sequence parsing. A populated incorrect upstream value cannot be corrected by missing-only generic merge.",
+      "hypothesis": "Investigate cell ownership, anchor splitting, value alignment and priority when tokens can be attributed to the original PDF.",
+      "proposed_generic_fix": "Pending token reproduction; use semantic cell boundaries and evidence-based field ownership rather than registration/case identity.",
+      "risk": "Overwriting correct populated values or shifting payload/weight/dimensions/axles on existing layouts.",
+      "EXPECTED": null,
+      "ACTUAL": null,
+      "ROOT_CAUSE": "UNCONFIRMED: actual PDF and copied-state provenance missing",
+      "GENERIC_FIX": "NOT_IMPLEMENTED",
+      "REGRESSION_RISK": "Overwriting correct populated values or shifting payload/weight/dimensions/axles on existing layouts.",
+      "confirmation_count": 0
+    },
+    {
+      "priority": "P1",
+      "cluster": "L / kW final mapping",
+      "source_paths": [
+        "app/lib/certificate-pdf-row-semantics.mjs:154",
+        "app/certificate-pdf-semantic-recovery.jsx:23",
+        "app/vehicle-workflow-fast/page.tsx:162",
+        "app/lib/certificate-result-copy.mjs:5"
+      ],
+      "source_facts": "Physical parser pairs number/unit tokens; SemanticRecovery carries combined/value/unit fields. Fast form merges nonempty strings and copy formatter lists combined and optional separate fields. Existing nearest-baseline L/kW unit tests PASS.",
+      "hypothesis": "Trace unit selection and propagation through authoritative current form using the recorded actual values. Passing extraction helpers do not prove final mapping.",
+      "proposed_generic_fix": "Pending end-to-end reproduction; preserve explicit selected unit through final field mapping.",
+      "risk": "Copying a printed alternative unit or leaving stale separate output/displacement fields.",
+      "EXPECTED": null,
+      "ACTUAL": null,
+      "ROOT_CAUSE": "UNCONFIRMED: actual PDF and copied-state provenance missing",
+      "GENERIC_FIX": "NOT_IMPLEMENTED",
+      "REGRESSION_RISK": "Copying a printed alternative unit or leaving stale separate output/displacement fields.",
+      "confirmation_count": 0
+    },
+    {
+      "priority": "P1",
+      "cluster": "owner / user same-as semantics",
+      "source_paths": [
+        "app/certificate-owner-semantics.jsx:17",
+        "app/certificate-owner-semantics.jsx:24",
+        "app/certificate-owner-semantics.jsx:34",
+        "app/vehicle-workflow-fast/page.tsx:162"
+      ],
+      "source_facts": "sameAs resolves explicit phrases against user values; unresolved/masked values are deleted from normalized patch. Form merge copies only nonempty strings. Existing distinct identity and explicit same-as tests PASS.",
+      "hypothesis": "Check whether raw phrases, user fields and final form clear/merge order match the real acceptance evidence; normalization tests do not cover every final event order.",
+      "proposed_generic_fix": "Pending reproducer; explicit semantics and current-document raw/status/value reconciliation.",
+      "risk": "Inferring a masked/missing user from owner or retaining an old unresolved value.",
+      "EXPECTED": null,
+      "ACTUAL": null,
+      "ROOT_CAUSE": "UNCONFIRMED: actual PDF and copied-state provenance missing",
+      "GENERIC_FIX": "NOT_IMPLEMENTED",
+      "REGRESSION_RISK": "Inferring a masked/missing user from owner or retaining an old unresolved value.",
+      "confirmation_count": 0
+    },
+    {
+      "priority": "P1",
+      "cluster": "owner / address boundary contamination",
+      "source_paths": [
+        "app/certificate-pdf-semantic-recovery.jsx:21",
+        "app/certificate-pdf-semantic-recovery.jsx:22"
+      ],
+      "source_facts": "recoverIdentity derives boundaries from other semantic labels and truncates recognized next labels; owner-at-issuance uses its own semantic region. Existing boundary contract passes.",
+      "hypothesis": "Check original label token fragmentation and main-table/issuance row boundaries.",
+      "proposed_generic_fix": "Pending reproduction; split identity fields by label/value ownership and prevent adjacent-cell spill.",
+      "risk": "Truncating multiline addresses, confusing issuance/current owner, or dropping valid owner names.",
+      "EXPECTED": null,
+      "ACTUAL": null,
+      "ROOT_CAUSE": "UNCONFIRMED: actual PDF and copied-state provenance missing",
+      "GENERIC_FIX": "NOT_IMPLEMENTED",
+      "REGRESSION_RISK": "Truncating multiline addresses, confusing issuance/current owner, or dropping valid owner names.",
+      "confirmation_count": 0
+    },
+    {
+      "priority": "P1",
+      "cluster": "label-as-value",
+      "source_paths": [
+        "app/vehicle-workflow-fast/page.tsx:65",
+        "app/certificate-pdf-semantic-recovery.jsx:21",
+        "app/certificate-pdf-structured-reader-v3.jsx:101"
+      ],
+      "source_facts": "freeJp accepts general Japanese/alphanumeric text and is not itself a label classifier; identity recovery removes known other labels. Token-level label/value evidence for failed real fields is missing.",
+      "hypothesis": "Locate whether the label entered V3 parsing, OCR fallback, recovery or final merge.",
+      "proposed_generic_fix": "Pending reproduction; token-aware label/value classification within field boundaries.",
+      "risk": "Rejecting valid values containing words also used by labels or deleting a legitimate multiline value.",
+      "EXPECTED": null,
+      "ACTUAL": null,
+      "ROOT_CAUSE": "UNCONFIRMED: actual PDF and copied-state provenance missing",
+      "GENERIC_FIX": "NOT_IMPLEMENTED",
+      "REGRESSION_RISK": "Rejecting valid values containing words also used by labels or deleting a legitimate multiline value.",
+      "confirmation_count": 0
+    }
+  ]
+}

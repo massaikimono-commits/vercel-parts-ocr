@@ -1,0 +1,45 @@
+54b032997fa81373856b8bbcb471a6c3259b9c5b a21.8: add one-shot fixed8 real evidence UI
+
+app/eval/certificate-qr-stage-a21-8-real-evidence/page.jsx
+8ce59061cc42674733ad113871c0fb2103131372 a21.7: add privacy-safe character-class instrumentation and false-accept guards
+
+app/eval/certificate-qr-stage-a21-4-evidence/contract.mjs
+26813ae6828a8a4c64134ff6f53cd48443527f9f [deploy] Stage A21.5 same-origin compact acceptance preview
+
+docs/certificate-qr-stage-a21-5-compact-acceptance.md
+2b8b7ff8f4a150456e6c1ce97401c4bb09e126e6 test: add A21.5 compact acceptance invariants
+
+scripts/photo-qr-stage-a21-5-compact-acceptance-test.mjs
+53111bda79282cffdf849028dfd1d5d550876318 eval: add A21.5 same-origin evidence analysis page
+
+app/eval/certificate-qr-stage-a21-5-compact-acceptance/page.jsx
+b98b4ac3b9be0fc90b45d4c501b87a22a2ea1003 eval: add A21.5 compact acceptance counterfactual contract
+
+app/eval/certificate-qr-stage-a21-5-compact-acceptance/contract.mjs
+d1b90984c0a394565be3e0119cb341e8a527aaac [deploy] Stage A21.4 evidence recapture preview
+
+docs/certificate-qr-stage-a21-4-evidence.md
+16b2ecc5f59588eeef14128255c19c3413fbcf2a fix: preserve prior A21.4 evidence until successful replacement
+
+app/eval/certificate-qr-stage-a21-4-evidence/page.jsx
+449b81c5df192b3021e7864bc29be9c3a91d6559 feat: add A21.4 one-run persisted evidence page
+
+app/eval/certificate-qr-stage-a21-4-evidence/page.jsx
+b0680432da674bd7443c470fe21006e082e53acf feat: add A21.4 persisted evidence contract
+
+app/eval/certificate-qr-stage-a21-4-evidence/contract.mjs
+4189d5ad69af92fe969da7981c9af59d2444e7f0 [deploy] Stage A21.3 evidence-capture preview
+
+docs/certificate-qr-stage-a21-3-evidence.md
+c81886b2815d9817e692579c79c101dd32f2fba2 eval: add A21.3 one-run evidence UI
+
+app/eval/certificate-qr-stage-a21-3-evidence/page.jsx
+d9f2c374903a9bc4908bc41db37e41d252e89eb3 eval: add A21.3 evidence summary contract
+
+app/eval/certificate-qr-stage-a21-3-evidence/contract.mjs
+3b6ad49cf4523474af18eb2d1143c74ca9598096 fix: reconcile chassis and user name from existing OCR evidence
+
+app/certificate-existing-evidence-v9.jsx
+f88a7b2185fb8145065daeae13ab809da28b6f8e feat: add final evidence safety layer for certificate OCR
+
+app/certificate-evidence-safety-v8.jsx

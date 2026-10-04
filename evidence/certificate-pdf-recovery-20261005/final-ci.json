@@ -1,0 +1,19 @@
+{
+  "recorded_at": "2026-10-04T16:42:33.570885+00:00",
+  "command": [
+    "gh",
+    "run",
+    "list",
+    "--repo",
+    "massaikimono-commits/vercel-parts-ocr",
+    "--branch",
+    "candidate/certificate-pdf-current-main-integration-20260929",
+    "--limit",
+    "10",
+    "--json",
+    "databaseId,headSha,name,status,conclusion,url"
+  ],
+  "exit": 0,
+  "stdout": "[{\"conclusion\":\"success\",\"databaseId\":36970514308,\"headSha\":\"5ca65e71312b1b352d1b042e8bc95715acb9c8e1\",\"name\":\"Full regression\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36970514308\"},{\"conclusion\":\"success\",\"databaseId\":36970483816,\"headSha\":\"5ca65e71312b1b352d1b042e8bc95715acb9c8e1\",\"name\":\"Deployment safety guard\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36970483816\"},{\"conclusion\":\"success\",\"databaseId\":36970483815,\"headSha\":\"5ca65e71312b1b352d1b042e8bc95715acb9c8e1\",\"name\":\"Certificate PDF Generalization\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36970483815\"},{\"conclusion\":\"success\",\"databaseId\":36970481630,\"headSha\":\"5ca65e71312b1b352d1b042e8bc95715acb9c8e1\",\"name\":\"Certificate PDF Generalization\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36970481630\"},{\"conclusion\":\"failure\",\"databaseId\":36970481721,\"headSha\":\"5ca65e71312b1b352d1b042e8bc95715acb9c8e1\",\"name\":\"OCR regression\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36970481721\"},{\"conclusion\":\"success\",\"databaseId\":36800165640,\"headSha\":\"d3b925685786c8ae68a93f0f90e28d25266b93b5\",\"name\":\"Full regression\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36800165640\"},{\"conclusion\":\"success\",\"databaseId\":36800097765,\"headSha\":\"d3b925685786c8ae68a93f0f90e28d25266b93b5\",\"name\":\"Certificate PDF Generalization\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36800097765\"},{\"conclusion\":\"success\",\"databaseId\":36800097821,\"headSha\":\"d3b925685786c8ae68a93f0f90e28d25266b93b5\",\"name\":\"Deployment safety guard\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36800097821\"},{\"conclusion\":\"success\",\"databaseId\":36800094329,\"headSha\":\"d3b925685786c8ae68a93f0f90e28d25266b93b5\",\"name\":\"Certificate PDF Generalization\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36800094329\"},{\"conclusion\":\"success\",\"databaseId\":36799903430,\"headSha\":\"7007a4c9c2e57917dfa7a1a944c95ce12a91f655\",\"name\":\"Deployment safety guard\",\"status\":\"completed\",\"url\":\"https://github.com/massaikimono-commits/vercel-parts-ocr/actions/runs/36799903430\"}]\n",
+  "stderr": ""
+}

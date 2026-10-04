@@ -1,0 +1,14 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "build"
+  ],
+  "head": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+  "kind": "UNCHANGED_SOURCE_BASELINE",
+  "exit": 0,
+  "started_at": "2026-10-04T16:40:05.537014+00:00",
+  "ended_at": "2026-10-04T16:40:19.380468+00:00",
+  "environment": "CI public dummy Supabase values; no secrets; no DB calls",
+  "log": "build-baseline.txt"
+}
