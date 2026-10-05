@@ -1,0 +1,10 @@
+{
+  "sourceSha": "934ed05255c4d3c45ec1e042052957c431f691a6",
+  "sourceShaDeployments": 0,
+  "verifiedVia": "Vercel list_deployments filtered by exact SHA and fixed project/team",
+  "preview": "NOT_CREATED",
+  "reason": "Existing one-shot Preview requires successful Full regression for exact SHA; Full 37311476580 failed at unchanged audit gate",
+  "securityGatePreserved": true,
+  "deploymentOrPromotionRequested": false,
+  "humanAfterAcceptance": "NOT_EXECUTED"
+}

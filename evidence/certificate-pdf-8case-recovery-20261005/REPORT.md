@@ -72,3 +72,13 @@ Portable local capture harness: `scripts/certificate-pdf-original-form-capture.m
 After dependency-gated Full regression succeeds and an exact-source Preview is READY, Human minimum action: on `/vehicle-workflow-v2?mode=new`, upload each of the same eight originals in a fresh/new document, press “読取結果をコピー” after completion, and provide eight text copies for source-field comparison. Do not save vehicle records. Record the exact Preview URL/SHA. This Human gate has not been executed or predicted PASS.
 
 Main, Production, DB, Photo QR, Guided Live QR and Parts OCR remain unchanged. No merge, force push or deployment promotion occurred.
+
+## Remote outcomes — source commit 934ed05255c4d3c45ec1e042052957c431f691a6
+
+Normal non-force push advanced PR #87 candidate from 5ca65e7 to 934ed05. PR remains OPEN/DRAFT, NOT MERGED/ADOPTED. Certificate PDF source-validation CI **PASS**: push 37311477054 and PR 37311485242. Deployment safety guard **PASS**: 37311485117. Full regression **FAIL**: 37311476580, at Audit production dependencies; downstream source/build stages skipped. OCR regression **FAIL**: 37311477327, also audit-gated. These CI failures are dependency blocks, distinct from local source/build PASS and successful PDF CI.
+
+Vercel exact-source deployment query returned zero deployments. New Preview: **NOT CREATED / BLOCKED by unchanged Full-regression security gate**. No security bypass or direct deploy was attempted. Human After Acceptance remains deferred until a valid exact-head Preview is READY. No immediate Human-only authentication/acceptance action is required.
+
+Remaining: integrate the separate stream's approved non-breaking dependency recovery into this candidate, rerun audit/Full regression, create the gated non-Production Preview, then acquire Human eight copied-form-state results. Next exact action: apply the dependency recovery stream's approved non-breaking lineage to PR #87 candidate. This Certificate executor made no dependency change.
+
+Final verdict: **PARTIAL** — original provenance recovered, all five cluster causes confirmed and generically fixed, all 297 source-scorable fields pass, existing checks/build/PDF CI pass; audit/Full CI/Preview/Human gates remain. Raw build logs are retained locally; tracked display logs normalize CR/tab/trailing whitespace only, with raw/display SHA recorded. A following Evidence-only commit records CI results without changing the validated runtime source.

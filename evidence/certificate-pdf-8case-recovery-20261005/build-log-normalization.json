@@ -1,0 +1,16 @@
+[
+  {
+    "log": "build-final.txt",
+    "rawSha256": "4853d06ad4b3ea3d405c6d1f9cd363a4ca6a8e86303eba6c2d2ced452a5f3abc",
+    "displaySha256": "6aa5b1ebff9d83bc01f868165199999a74efe59c77ee93d2ef131631765585bc",
+    "normalization": "CR removal, trailing/EOF whitespace trimming, tab expansion only; words unchanged",
+    "rawLocalPath": ".eval-private/certificate-pdf-8case/raw-build-final.txt"
+  },
+  {
+    "log": "build-initial.txt",
+    "rawSha256": "9c62e86f5e4ea917acf956c3230109335078a008511ecd91c25f6db85ca0a4be",
+    "displaySha256": "708014e71859a908e692cc174b3dfcc15d99b623ee18d6fda702ecbcdd0f070c",
+    "normalization": "CR removal, trailing/EOF whitespace trimming, tab expansion only; words unchanged",
+    "rawLocalPath": ".eval-private/certificate-pdf-8case/raw-build-initial.txt"
+  }
+]

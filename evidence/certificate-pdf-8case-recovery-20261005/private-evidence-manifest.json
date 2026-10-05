@@ -1,5 +1,5 @@
 {
-  "storage": "Private raw originals-derived evidence and independently frozen expected; no raw identities in public Git",
+  "storage": "Private local original-derived Evidence; field hashes and sanitized fixtures only in public Git",
   "files": [
     {
       "path": ".eval-private/certificate-pdf-8case/after-case1.txt",
@@ -200,6 +200,16 @@
       "path": ".eval-private/certificate-pdf-8case/expected.py",
       "sha256": "00691e97c7165efaa6f84c0f4de1d3f836205077196b77d58c73b7297aac472b",
       "bytes": 6122
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/raw-build-final.txt",
+      "sha256": "4853d06ad4b3ea3d405c6d1f9cd363a4ca6a8e86303eba6c2d2ced452a5f3abc",
+      "bytes": 23110
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/raw-build-initial.txt",
+      "sha256": "9c62e86f5e4ea917acf956c3230109335078a008511ecd91c25f6db85ca0a4be",
+      "bytes": 23558
     },
     {
       "path": ".eval-private/certificate-pdf-8case/score.py",
