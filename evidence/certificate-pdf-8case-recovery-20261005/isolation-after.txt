@@ -1,0 +1,2 @@
+certificate-pdf-run-isolation-regression: 13 cases PASS, six actual writer completion paths PASS, weak fallback recovery PASS, mount topology PASS
+PASS capture reconciliation protects outer and nested form packets; PDF-to-photo transition clears recovery state

@@ -4,6 +4,7 @@ import ts from "typescript";
 import { createRequire } from "node:module";
 import { beginPdfRun, hasPdfRunMark, isCurrentPdfRun, isPdfRunContinuation, markPdfRunContinuation, pdfRunForEvent } from "../app/certificate-pdf-run-identity.js";
 import * as rowSemantics from "../app/lib/certificate-pdf-row-semantics.mjs";
+import * as fieldSemantics from "../app/lib/certificate-pdf-field-semantics.mjs";
 
 const require = createRequire(import.meta.url);
 const read = (path) => fs.readFileSync(new URL(`../app/${path}`, import.meta.url), "utf8");
@@ -38,6 +39,7 @@ function loadComponent(path, replacements = {}) {
   const mockRequire = (name) => name === "react" ? { useLayoutEffect: (callback) => { cleanups.push(callback()); } }
     : name === "./certificate-pdf-run-identity" ? { beginPdfRun, hasPdfRunMark, isCurrentPdfRun, isPdfRunContinuation, markPdfRunContinuation, pdfRunForEvent }
       : name === "./lib/certificate-pdf-row-semantics.mjs" ? rowSemantics
+      : name === "./lib/certificate-pdf-field-semantics.mjs" ? fieldSemantics
       : require(name);
   new Function("require", "module", "exports", output)(mockRequire, module, module.exports);
   module.exports.default();
@@ -47,6 +49,7 @@ let cleanups = [];
 let changeCapture = [];
 let changeBubble = [];
 let authListeners = [];
+let authCapture = [];
 let weakFallbackListeners = [];
 let events = [];
 let deferred = new Map();
@@ -87,7 +90,7 @@ function select(id) {
 }
 function setup() {
   cleanups.forEach((cleanup) => cleanup?.()); cleanups = [];
-  changeCapture = []; changeBubble = []; authListeners = []; weakFallbackListeners = []; events = []; deferred = new Map();
+  changeCapture = []; changeBubble = []; authListeners = []; authCapture = []; weakFallbackListeners = []; events = []; deferred = new Map();
   globalThis.HTMLInputElement = FakeInput;
   globalThis.Event = FakeEvent;
   globalThis.CustomEvent = FakeCustomEvent;
@@ -99,9 +102,9 @@ function setup() {
   };
   globalThis.window = {
     __vehicleCertificatePdfPriority: null, __vehicleCertificateQrPriority: null, __vehicleCertificatePdfRowPriority: null,
-    addEventListener(name, callback, capture) { if (name === "change" && capture) changeCapture.push(callback); else if (name === "vehicle-certificate-authoritative") authListeners.push(callback); else if (name === "certificate-pdf-weak-structured-fallback") weakFallbackListeners.push(callback); },
-    removeEventListener(name, callback) { if (name === "change") changeCapture = changeCapture.filter((fn) => fn !== callback); else if (name === "vehicle-certificate-authoritative") authListeners = authListeners.filter((fn) => fn !== callback); else if (name === "certificate-pdf-weak-structured-fallback") weakFallbackListeners = weakFallbackListeners.filter((fn) => fn !== callback); },
-    dispatchEvent(event) { if (event.type === "vehicle-certificate-authoritative") { events.push(event.detail); for (const callback of [...authListeners]) callback(event); } else if (event.type === "certificate-pdf-weak-structured-fallback") { for (const callback of [...weakFallbackListeners]) callback(event); } return true; },
+    addEventListener(name, callback, capture) { if (name === "change" && capture) changeCapture.push(callback); else if (name === "vehicle-certificate-authoritative") (capture ? authCapture : authListeners).push(callback); else if (name === "certificate-pdf-weak-structured-fallback") weakFallbackListeners.push(callback); },
+    removeEventListener(name, callback) { if (name === "change") changeCapture = changeCapture.filter((fn) => fn !== callback); else if (name === "vehicle-certificate-authoritative") { authListeners = authListeners.filter((fn) => fn !== callback); authCapture = authCapture.filter((fn) => fn !== callback); } else if (name === "certificate-pdf-weak-structured-fallback") weakFallbackListeners = weakFallbackListeners.filter((fn) => fn !== callback); },
+    dispatchEvent(event) { if (event.type === "vehicle-certificate-authoritative") { events.push(event.detail); for (const callback of [...authCapture, ...authListeners]) callback(event); } else if (event.type === "certificate-pdf-weak-structured-fallback") { for (const callback of [...weakFallbackListeners]) callback(event); } return true; },
     setInterval() { return 1; }, clearInterval() {},
   };
   currentInput = new FakeInput();
@@ -290,3 +293,28 @@ assert.equal(events.length, 2);
 // CASES 11–12: B remained current; all six A completions left its fields and AUTH unchanged.
 assert.equal(window.__certificatePdfRunDiagnostic.staleRunRejected, false);
 console.log("certificate-pdf-run-isolation-regression: 13 cases PASS, six actual writer completion paths PASS, weak fallback recovery PASS, mount topology PASS");
+
+setup();
+globalThis.__testExtract = async () => ({layout:"four-axis",semantic:true,patch:{vehicleWeightKg:"888",userAddress:"",__pdfGeneralizationEvidence:{validatedFields:["vehicleWeightKg","userAddress"],clearedFields:["userAddress"]}}});
+loadComponent("certificate-pdf-generalization-recovery.jsx", {extractGenericPatch:'async function extractGenericPatch(file) { return globalThis.__testExtract(file); }'});
+select("current");await flush();
+let nested=false;const consumed=[];
+window.addEventListener("vehicle-certificate-authoritative",()=>{if(nested)return;nested=true;emitAuth({vehicleWeightKg:"777",userAddress:"住所ラベル"});nested=false;});
+window.addEventListener("vehicle-certificate-authoritative",e=>consumed.push({...e.detail}));
+emitAuth({vehicleWeightKg:"999",userAddress:"住所ラベル"});
+assert.equal(consumed.length,2);assert.ok(consumed.every(p=>p.vehicleWeightKg==="888"&&p.userAddress===""));
+currentInput.files=[{type:"image/png",name:"photo.png"}];emitChange(currentInput);
+emitAuth({vehicleWeightKg:"123"});assert.equal(consumed.at(-1).vehicleWeightKg,"123");
+console.log("PASS capture reconciliation protects outer and nested form packets; PDF-to-photo transition clears recovery state");
+setup();
+globalThis.__testExtract = (file) => pause(file.id);
+loadComponent('certificate-pdf-generalization-recovery.jsx',{extractGenericPatch:'async function extractGenericPatch(file) { return globalThis.__testExtract(file); }'});
+select('pending-photo');emitAuth({vehicleWeightKg:'111'});
+currentInput.files=[{type:'image/png',name:'photo.png'}];emitChange(currentInput);
+const beforePhoto=events.length;
+deferred.get('pending-photo').resolve({layout:'four-axis',semantic:true,patch:{vehicleWeightKg:'222'}});await flush();
+assert.equal(events.length,beforePhoto);
+const readyRun=select('ready-weak');deferred.get('ready-weak').resolve({layout:'four-axis',patch:{heightCm:'177'}});await flush();
+window.dispatchEvent(new FakeCustomEvent('certificate-pdf-weak-structured-fallback',{detail:{runId:readyRun}}));
+assert.equal(events.at(-1).heightCm,'177');
+console.log('PASS pending PDF-to-photo completion rejected; already-ready weak fallback reaches form');

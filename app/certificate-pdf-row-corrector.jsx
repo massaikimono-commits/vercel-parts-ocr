@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { preservePdfSemanticFields } from "./lib/certificate-pdf-field-semantics.mjs";
 import { isCurrentPdfRun, isPdfRunContinuation, pdfRunForEvent } from "./certificate-pdf-run-identity";
 
 const AUTH_EVENT = "vehicle-certificate-authoritative";
@@ -237,7 +238,7 @@ export default function CertificatePdfRowCorrector() {
       const base = window[PDF_PRIORITY_KEY];
       const row = window[ROW_PRIORITY_KEY];
       if (!base || !row || typeof base !== "object" || typeof row !== "object") return;
-      const merged = { ...base, ...row };
+      const merged = preservePdfSemanticFields(base, { ...base, ...row });
       if (JSON.stringify(base) === JSON.stringify(merged)) return;
       window[PDF_PRIORITY_KEY] = merged;
       correcting = true;

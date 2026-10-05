@@ -1,0 +1,9 @@
+{"case":"case1","eventCount":3,"fields":59,"priorityCount":63,"message":"新しい車両の車検証を読み取るか、下の項目を入力してください。"}
+{"case":"case2","eventCount":3,"fields":62,"priorityCount":60,"message":"新しい車両の車検証を読み取るか、下の項目を入力してください。"}
+{"case":"case3","eventCount":27,"fields":58,"priorityCount":60,"message":"新しい車両の車検証を読み取るか、下の項目を入力してください。"}
+{"case":"case4","eventCount":3,"fields":59,"priorityCount":59,"message":"新しい車両の車検証を読み取るか、下の項目を入力してください。"}
+{"case":"case5","eventCount":19,"fields":63,"priorityCount":64,"message":"新しい車両の車検証を読み取るか、下の項目を入力してください。"}
+{"case":"case6","eventCount":3,"fields":58,"priorityCount":61,"message":"新しい車両の車検証を読み取るか、下の項目を入力してください。"}
+{"case":"case7","eventCount":15,"fields":60,"priorityCount":65,"message":"新しい車両の車検証を読み取るか、下の項目を入力してください。"}
+{"case":"case8","eventCount":24,"fields":65,"priorityCount":67,"message":"新しい車両の車検証を読み取るか、下の項目を入力してください。"}
+{"cases":8,"errors":[],"dbWrites":0}

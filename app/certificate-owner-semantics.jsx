@@ -39,6 +39,7 @@ function normalizePatch(detail) {
   const ownerAddress = sameAs(patch.ownerAddressRaw ?? patch.ownerAddress ?? "", userAddress.value, "使用者住所に同じ");
 
   const apply = (key, rawKey, stateKey, item) => {
+    if (detail.__pdfGeneralizationEvidence?.identityFields?.includes(key)) return;
     if (item.rawValue) patch[rawKey] = item.rawValue; else delete patch[rawKey];
     if (item.value) patch[key] = item.value; else delete patch[key];
     patch[stateKey] = item.status;
@@ -56,10 +57,10 @@ function normalizePatch(detail) {
   delete patch.resolutionReason;
 
   patch.ownerUserSemantics = JSON.stringify({
-    ownerNameStatus: ownerName.status,
-    ownerAddressStatus: ownerAddress.status,
-    userNameStatus: userName.status,
-    userAddressStatus: userAddress.status,
+    ownerNameStatus: patch.ownerNameStatus,
+    ownerAddressStatus: patch.ownerAddressStatus,
+    userNameStatus: patch.userNameStatus,
+    userAddressStatus: patch.userAddressStatus,
     automaticOwnerToUserResolution: false,
   });
   return patch;

@@ -50,6 +50,7 @@ jobs:
           node scripts/certificate-pdf-document-integrity-regression.mjs
           node scripts/certificate-pdf-generalization-regression.mjs
           node scripts/certificate-pdf-generalization-runtime-regression.mjs
+          node scripts/certificate-pdf-field-semantics-regression.mjs
 
       - name: Run full application regression and build
         env:

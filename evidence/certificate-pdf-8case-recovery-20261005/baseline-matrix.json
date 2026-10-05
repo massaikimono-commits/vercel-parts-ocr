@@ -1,0 +1,2756 @@
+{
+  "source": "Actual CURRENT form copy; source-derived expected scoring only",
+  "normalization": "NFKC and whitespace; numeric primary separately from Raw bracket alternatives",
+  "cases": [
+    {
+      "caseId": "case1",
+      "sha256": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f",
+      "scored": 39,
+      "passed": 17,
+      "failed": 22,
+      "cells": [
+        {
+          "field": "registrationNumber",
+          "pass": false,
+          "expectedSha256": "32a9f412e5df336ecd4710c62dbe7f2054cd60ad8c33b30a68b66d2fd75c6e15",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "chassisNumber",
+          "pass": true,
+          "expectedSha256": "ee7eca652a0270ac55edbb7d888a2e5d904fc59e23498cd5a0b07829fe44a293",
+          "actualSha256": "ee7eca652a0270ac55edbb7d888a2e5d904fc59e23498cd5a0b07829fe44a293",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "registrationDate",
+          "pass": false,
+          "expectedSha256": "c6bef643cc2ac5b4239d15367c577431c84dc675a6913412dd02cb53033cd159",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "firstRegistration",
+          "pass": false,
+          "expectedSha256": "a0546ed4a07af4bafe0714bf9ef874070cd5dbd5dded98f1f6e81c030b9cde28",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "inspectionExpiry",
+          "pass": false,
+          "expectedSha256": "f5a1c83525b25ba5a368358bc2d14689e160f4a6030ec0d0099453af5394cacd",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "vehicleName",
+          "pass": false,
+          "expectedSha256": "e389c2401ab7c5b8571a79dad0c783ab2d3d55aa6de24a8aa0b6c4c274a531fc",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "model",
+          "pass": true,
+          "expectedSha256": "59c5e0821b6d053356d99736f0caae1828f205e68e0cc22c6e3c86b4d52f7b1c",
+          "actualSha256": "59c5e0821b6d053356d99736f0caae1828f205e68e0cc22c6e3c86b4d52f7b1c",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "engineModel",
+          "pass": false,
+          "expectedSha256": "cace6e642768f0f8a1a5c7dbc733e17d87ff38781102aa05a9ab0feee90939fe",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "vehicleClass",
+          "pass": true,
+          "expectedSha256": "de907d10df98b498985b3f8f88402858e8817869a114aacc6919a0cec71fb3d6",
+          "actualSha256": "de907d10df98b498985b3f8f88402858e8817869a114aacc6919a0cec71fb3d6",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "purpose",
+          "pass": true,
+          "expectedSha256": "845587b43b719c6c8de6f0eef050b39f00f9e5a595a7a9104e3291759da80be7",
+          "actualSha256": "845587b43b719c6c8de6f0eef050b39f00f9e5a595a7a9104e3291759da80be7",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "privateBusiness",
+          "pass": true,
+          "expectedSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "actualSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "bodyShape",
+          "pass": true,
+          "expectedSha256": "1cc5fdeb7403e665fd7106fba8612a47a2a0d3602cee9c3ff2452a733f339ea8",
+          "actualSha256": "1cc5fdeb7403e665fd7106fba8612a47a2a0d3602cee9c3ff2452a733f339ea8",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacity",
+          "pass": true,
+          "expectedSha256": "7902699be42c8a8e46fbbb4501726517e86b22c56a189f7625a6da49081b2451",
+          "actualSha256": "7902699be42c8a8e46fbbb4501726517e86b22c56a189f7625a6da49081b2451",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "maxPayloadKg",
+          "pass": false,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "73a2af8864fc500fa49048bf3003776c19938f360e56bd03663866fb3087884a",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "73a2af8864fc500fa49048bf3003776c19938f360e56bd03663866fb3087884a",
+          "actualSha256": "73a2af8864fc500fa49048bf3003776c19938f360e56bd03663866fb3087884a",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightKg",
+          "pass": false,
+          "expectedSha256": "cd444afadcc6aede3f2de3f8bb8d4006283b66f22b5d4546ea1f22a9d4e2897c",
+          "actualSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "lengthCm",
+          "pass": false,
+          "expectedSha256": "227445a988500528d7826c6921d2e3b4a79ccf3a94cc3bcf7b667e3ae4990b36",
+          "actualSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "widthCm",
+          "pass": false,
+          "expectedSha256": "61a229bae1e90331edd986b6bbbe617f7035de88a5bf7c018c3add6c762a6e8d",
+          "actualSha256": "39e18a493b913441c12fac89a09f24958e5da0ff6f3300c80c5359f36e3223aa",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "heightCm",
+          "pass": false,
+          "expectedSha256": "580811fa95269f3ecd4f22d176e079d36093573680b6ef66fa341e687a15b5da",
+          "actualSha256": "39e18a493b913441c12fac89a09f24958e5da0ff6f3300c80c5359f36e3223aa",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "actualSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontRearAxleWeightKg",
+          "pass": false,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearFrontAxleWeightKg",
+          "pass": false,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearRearAxleWeightKg",
+          "pass": false,
+          "expectedSha256": "39e18a493b913441c12fac89a09f24958e5da0ff6f3300c80c5359f36e3223aa",
+          "actualSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "displacementOrRatedOutput",
+          "pass": false,
+          "expectedSha256": "41d1d5a0dfc90611e2011be7fe3efb16d2e16710d7fd30998bc14caf7193542c",
+          "actualSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "fuel",
+          "pass": true,
+          "expectedSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "actualSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "modelDesignationNumber",
+          "pass": false,
+          "expectedSha256": "b0f14e5fdb90799db84c5e5de32031fd7e65bb02b46709abf790ad20c3051611",
+          "actualSha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "classificationNumber",
+          "pass": false,
+          "expectedSha256": "0591b59c1bdd9acd2847a202ddd02c3f14f9b5a049a5707c3279c1e967745ed4",
+          "actualSha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerNameRaw",
+          "pass": true,
+          "expectedSha256": "9a553908c0c2b794540a1635fcff54cacba9604150a73a026ebbeab666205435",
+          "actualSha256": "9a553908c0c2b794540a1635fcff54cacba9604150a73a026ebbeab666205435",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerName",
+          "pass": true,
+          "expectedSha256": "9a553908c0c2b794540a1635fcff54cacba9604150a73a026ebbeab666205435",
+          "actualSha256": "9a553908c0c2b794540a1635fcff54cacba9604150a73a026ebbeab666205435",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddressRaw",
+          "pass": true,
+          "expectedSha256": "eff4f22c6c5d20feaa05025661e08e7ca7be043bb9b7dc01dc9ca0222c27b85f",
+          "actualSha256": "eff4f22c6c5d20feaa05025661e08e7ca7be043bb9b7dc01dc9ca0222c27b85f",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddress",
+          "pass": true,
+          "expectedSha256": "eff4f22c6c5d20feaa05025661e08e7ca7be043bb9b7dc01dc9ca0222c27b85f",
+          "actualSha256": "eff4f22c6c5d20feaa05025661e08e7ca7be043bb9b7dc01dc9ca0222c27b85f",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userNameRaw",
+          "pass": true,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userName",
+          "pass": true,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": false,
+          "actualPresent": false
+        },
+        {
+          "field": "userAddressRaw",
+          "pass": true,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddress",
+          "pass": false,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "7baff37f82ecbb826b334a83d6dc8adb55d717630cfa86c2704592bf5a372000",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": false,
+          "actualPresent": true
+        },
+        {
+          "field": "baseLocationRaw",
+          "pass": false,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "baseLocation",
+          "pass": false,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "866eb856430b7b8a53580f97d2c33c8fc4fed62184dd3149ccb42834fa56cf67",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": false,
+          "actualPresent": true
+        },
+        {
+          "field": "recordDate",
+          "pass": false,
+          "expectedSha256": "e941f304dbbfdf23130569af9246750b4f4214eedb601f9842d61247db94e52a",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "documentNumber",
+          "pass": false,
+          "expectedSha256": "476cdbb54a496681e491d42d9e9db9ec21335eddaa76c3eb7549c98ae6840f1b",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "case2",
+      "sha256": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7",
+      "scored": 36,
+      "passed": 29,
+      "failed": 7,
+      "cells": [
+        {
+          "field": "registrationNumber",
+          "pass": true,
+          "expectedSha256": "765f5be7cd031e859e668c42f2cde3b0ca7ccd99acb9b35c288115f9885b4ee2",
+          "actualSha256": "765f5be7cd031e859e668c42f2cde3b0ca7ccd99acb9b35c288115f9885b4ee2",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "chassisNumber",
+          "pass": true,
+          "expectedSha256": "b5727d9617ef0bbe220baf924a0dfc3c3e58214cbdbc3b0264db330ece50524b",
+          "actualSha256": "b5727d9617ef0bbe220baf924a0dfc3c3e58214cbdbc3b0264db330ece50524b",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "registrationDate",
+          "pass": true,
+          "expectedSha256": "aaa77ed0e2a544ca43b700cc2af49e61bcfb20cbb5985dc4c751d3f6463eeb8d",
+          "actualSha256": "aaa77ed0e2a544ca43b700cc2af49e61bcfb20cbb5985dc4c751d3f6463eeb8d",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "firstRegistration",
+          "pass": true,
+          "expectedSha256": "e655d51a7ff5e5b96a24679fe9491f5b23fb1d5515fdc8b64ae2e74fca48ba52",
+          "actualSha256": "e655d51a7ff5e5b96a24679fe9491f5b23fb1d5515fdc8b64ae2e74fca48ba52",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "inspectionExpiry",
+          "pass": true,
+          "expectedSha256": "84fa244626026ffac28dda2f34f9fbe203d8da587b62e28a70e8e2331117a4ff",
+          "actualSha256": "84fa244626026ffac28dda2f34f9fbe203d8da587b62e28a70e8e2331117a4ff",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleName",
+          "pass": true,
+          "expectedSha256": "a293034981e1a8c89ec53d57a66df46f7f2b974650032c6a2a58d7f5b577aff3",
+          "actualSha256": "a293034981e1a8c89ec53d57a66df46f7f2b974650032c6a2a58d7f5b577aff3",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "model",
+          "pass": true,
+          "expectedSha256": "8eb107de4d7e9565f9f346b168d513954f6a66f419d96901d746e177b7556ef1",
+          "actualSha256": "8eb107de4d7e9565f9f346b168d513954f6a66f419d96901d746e177b7556ef1",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "engineModel",
+          "pass": true,
+          "expectedSha256": "642f762e011c9d8ea7f38e3710597c8b8990d78c1c9d0bffc2bf56ec18bd43cd",
+          "actualSha256": "642f762e011c9d8ea7f38e3710597c8b8990d78c1c9d0bffc2bf56ec18bd43cd",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleClass",
+          "pass": true,
+          "expectedSha256": "3ff8f7df8c4c779bb14e352a5b813eb807e83fe4ac76fc80e830b0ef753dbc74",
+          "actualSha256": "3ff8f7df8c4c779bb14e352a5b813eb807e83fe4ac76fc80e830b0ef753dbc74",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "purpose",
+          "pass": true,
+          "expectedSha256": "1e700b7e66f948848bd12e279c040f337795d2cb6923bc51e7d8dd945f4f1115",
+          "actualSha256": "1e700b7e66f948848bd12e279c040f337795d2cb6923bc51e7d8dd945f4f1115",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "privateBusiness",
+          "pass": true,
+          "expectedSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "actualSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "bodyShape",
+          "pass": true,
+          "expectedSha256": "f48d168b2c20ea180f23e7e5a0593414d18dfb2a64b1d5f3d06e535e228f1937",
+          "actualSha256": "f48d168b2c20ea180f23e7e5a0593414d18dfb2a64b1d5f3d06e535e228f1937",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacity",
+          "pass": true,
+          "expectedSha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+          "actualSha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "maxPayloadKg",
+          "pass": true,
+          "expectedSha256": "deeeb5df3f2cee6bf4e597a8a3a878a6ce49b932b9e90b416922d4499f54fae6",
+          "actualSha256": "deeeb5df3f2cee6bf4e597a8a3a878a6ce49b932b9e90b416922d4499f54fae6",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "5904c93073387f898f4f339094d4bad7043b6440519debb01b2867939661ded2",
+          "actualSha256": "5904c93073387f898f4f339094d4bad7043b6440519debb01b2867939661ded2",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "55fdec963805de594b61b2c1692cadc2c1dfb844d6ac10c5bfed33c842087b2e",
+          "actualSha256": "55fdec963805de594b61b2c1692cadc2c1dfb844d6ac10c5bfed33c842087b2e",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "lengthCm",
+          "pass": true,
+          "expectedSha256": "fc95ce176603e9e1d1ffee39023b31dd856e00ad030526902604ed2a68a12c4b",
+          "actualSha256": "fc95ce176603e9e1d1ffee39023b31dd856e00ad030526902604ed2a68a12c4b",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "widthCm",
+          "pass": true,
+          "expectedSha256": "1d28c120568c10e19b9d8abe8b66d0983fa3d2e11ee7751aca50f83c6f4a43aa",
+          "actualSha256": "1d28c120568c10e19b9d8abe8b66d0983fa3d2e11ee7751aca50f83c6f4a43aa",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "heightCm",
+          "pass": true,
+          "expectedSha256": "7559ca4a957c8c82ba04781cd66a68d6022229fca0e8e88d8e487c96ee4446d0",
+          "actualSha256": "7559ca4a957c8c82ba04781cd66a68d6022229fca0e8e88d8e487c96ee4446d0",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "6bcaea9882504292b2f6ea37a84b215463e71ab73b824ee90ecdc10c8dde71ed",
+          "actualSha256": "6bcaea9882504292b2f6ea37a84b215463e71ab73b824ee90ecdc10c8dde71ed",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "2af4dd48399a5cf64c23fc7933e11aaf6171d80001b4b1377498ae6056b1acbf",
+          "actualSha256": "2af4dd48399a5cf64c23fc7933e11aaf6171d80001b4b1377498ae6056b1acbf",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "displacementOrRatedOutput",
+          "pass": true,
+          "expectedSha256": "c3fa7df69ce376950a79a0c7038241717d7c174e69d264c644017ba2158c497c",
+          "actualSha256": "c3fa7df69ce376950a79a0c7038241717d7c174e69d264c644017ba2158c497c",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "fuel",
+          "pass": true,
+          "expectedSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "actualSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "modelDesignationNumber",
+          "pass": true,
+          "expectedSha256": "9fb02420006c6f3b9e8eb2211adf8ea5c5b8e6edb8605d65f56d0d7f2dc1184d",
+          "actualSha256": "9fb02420006c6f3b9e8eb2211adf8ea5c5b8e6edb8605d65f56d0d7f2dc1184d",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "classificationNumber",
+          "pass": true,
+          "expectedSha256": "888b19a43b151683c87895f6211d9f8640f97bdc8ef32f03dbe057c8f5e56d32",
+          "actualSha256": "888b19a43b151683c87895f6211d9f8640f97bdc8ef32f03dbe057c8f5e56d32",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerNameRaw",
+          "pass": false,
+          "expectedSha256": "30bb84d937f05a4ca895ae998092b493731478966e05769aa098f3872db4631b",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "ownerName",
+          "pass": false,
+          "expectedSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "ownerAddressRaw",
+          "pass": false,
+          "expectedSha256": "0f5791d34a2515b7b7cdf65a4baa1a261a3a9ada8349e464a52344afcbc3acd8",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "ownerAddress",
+          "pass": false,
+          "expectedSha256": "6d8c060444cbeb5c1a5729b199b976ffd555f6ba1c02776cacb9d1c58057b6eb",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "userNameRaw",
+          "pass": true,
+          "expectedSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "actualSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userName",
+          "pass": true,
+          "expectedSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "actualSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddressRaw",
+          "pass": true,
+          "expectedSha256": "6d8c060444cbeb5c1a5729b199b976ffd555f6ba1c02776cacb9d1c58057b6eb",
+          "actualSha256": "6d8c060444cbeb5c1a5729b199b976ffd555f6ba1c02776cacb9d1c58057b6eb",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddress",
+          "pass": true,
+          "expectedSha256": "6d8c060444cbeb5c1a5729b199b976ffd555f6ba1c02776cacb9d1c58057b6eb",
+          "actualSha256": "6d8c060444cbeb5c1a5729b199b976ffd555f6ba1c02776cacb9d1c58057b6eb",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacityRaw",
+          "pass": false,
+          "expectedSha256": "2e2cafe9c4404aae90bd3eab6e1d444686f6f3352d492f8ae4f7a48cb7a1e251",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "maxPayloadRaw",
+          "pass": false,
+          "expectedSha256": "a988cdc68ae34c4645ec08931cfebb0ae8ef4935128848225c887bf9484514ff",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "grossVehicleWeightRaw",
+          "pass": false,
+          "expectedSha256": "7e30b30839f418b5b801cdc474f98a3986468c0017d011093fa213b4522f8763",
+          "actualSha256": "27badc983df1780b60c2b3fa9d3a19a00e46aac798451f0febdca52920faaddf",
+          "sourcePath": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        }
+      ]
+    },
+    {
+      "caseId": "case3",
+      "sha256": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1",
+      "scored": 36,
+      "passed": 34,
+      "failed": 2,
+      "cells": [
+        {
+          "field": "registrationNumber",
+          "pass": true,
+          "expectedSha256": "9299612c4d5d2e5859ecabb457bb3ec8b12593455e5fc9aa700189497ed9ba0e",
+          "actualSha256": "9299612c4d5d2e5859ecabb457bb3ec8b12593455e5fc9aa700189497ed9ba0e",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "chassisNumber",
+          "pass": true,
+          "expectedSha256": "c1b90314ffcc4bd78a7f3bd95bdc1a49c561b9cf91788535a5b46c3f884b3e67",
+          "actualSha256": "c1b90314ffcc4bd78a7f3bd95bdc1a49c561b9cf91788535a5b46c3f884b3e67",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "registrationDate",
+          "pass": true,
+          "expectedSha256": "d1d451f6d0e09bab620cc700c2990e3d82a73646b6111118bae9c17c5fa376f0",
+          "actualSha256": "d1d451f6d0e09bab620cc700c2990e3d82a73646b6111118bae9c17c5fa376f0",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "firstRegistration",
+          "pass": true,
+          "expectedSha256": "eea960412be5110cdf78c83916d8ab613862143bc703826b24dc2504bf239c43",
+          "actualSha256": "eea960412be5110cdf78c83916d8ab613862143bc703826b24dc2504bf239c43",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "inspectionExpiry",
+          "pass": true,
+          "expectedSha256": "5b74d2b19ad438d65253fff7789defa8f56eb105e5407af003874c55d8f22b8c",
+          "actualSha256": "5b74d2b19ad438d65253fff7789defa8f56eb105e5407af003874c55d8f22b8c",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleName",
+          "pass": true,
+          "expectedSha256": "6cb404f67121c3dbca963cc836db2d3a98d98073ae7a7bb62e3e5b514836af64",
+          "actualSha256": "6cb404f67121c3dbca963cc836db2d3a98d98073ae7a7bb62e3e5b514836af64",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "model",
+          "pass": true,
+          "expectedSha256": "b385967fb00c056e359f2e69b54545695ece8649a7f64bbdd429dda78709d621",
+          "actualSha256": "b385967fb00c056e359f2e69b54545695ece8649a7f64bbdd429dda78709d621",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "engineModel",
+          "pass": true,
+          "expectedSha256": "f572dc0cc7f382336600c581bbee87276d414a4dc0cdf13e1c0101958acd3980",
+          "actualSha256": "f572dc0cc7f382336600c581bbee87276d414a4dc0cdf13e1c0101958acd3980",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleClass",
+          "pass": true,
+          "expectedSha256": "3ff8f7df8c4c779bb14e352a5b813eb807e83fe4ac76fc80e830b0ef753dbc74",
+          "actualSha256": "3ff8f7df8c4c779bb14e352a5b813eb807e83fe4ac76fc80e830b0ef753dbc74",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "purpose",
+          "pass": true,
+          "expectedSha256": "845587b43b719c6c8de6f0eef050b39f00f9e5a595a7a9104e3291759da80be7",
+          "actualSha256": "845587b43b719c6c8de6f0eef050b39f00f9e5a595a7a9104e3291759da80be7",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "privateBusiness",
+          "pass": true,
+          "expectedSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "actualSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "bodyShape",
+          "pass": true,
+          "expectedSha256": "ac5b141d30cac1d963f780345e2aae03addfb85c03e466ac2a6a2a59669b23bf",
+          "actualSha256": "ac5b141d30cac1d963f780345e2aae03addfb85c03e466ac2a6a2a59669b23bf",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacity",
+          "pass": true,
+          "expectedSha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+          "actualSha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "maxPayloadKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "2099a9b5f777e242d1f9e19d27e232cc71e2fa7964fc988a319fce5671ca7f73",
+          "actualSha256": "2099a9b5f777e242d1f9e19d27e232cc71e2fa7964fc988a319fce5671ca7f73",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "8a9a02d73aeefd97306a08c30969a9e8d5ef03960978a1c5db4447558d40f689",
+          "actualSha256": "8a9a02d73aeefd97306a08c30969a9e8d5ef03960978a1c5db4447558d40f689",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "lengthCm",
+          "pass": true,
+          "expectedSha256": "fc95ce176603e9e1d1ffee39023b31dd856e00ad030526902604ed2a68a12c4b",
+          "actualSha256": "fc95ce176603e9e1d1ffee39023b31dd856e00ad030526902604ed2a68a12c4b",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "widthCm",
+          "pass": true,
+          "expectedSha256": "1d28c120568c10e19b9d8abe8b66d0983fa3d2e11ee7751aca50f83c6f4a43aa",
+          "actualSha256": "1d28c120568c10e19b9d8abe8b66d0983fa3d2e11ee7751aca50f83c6f4a43aa",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "heightCm",
+          "pass": true,
+          "expectedSha256": "043066daf2109523a7490d4bfad4766da5719950a2b5f96d192fc0537e84f32a",
+          "actualSha256": "043066daf2109523a7490d4bfad4766da5719950a2b5f96d192fc0537e84f32a",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "26d228663f13a88592a12d16cf9587caab0388b262d6d9f126ed62f9333aca94",
+          "actualSha256": "26d228663f13a88592a12d16cf9587caab0388b262d6d9f126ed62f9333aca94",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "1e472b39b105d349bcd069c4a711b44a2fffb8e274714bb07ecfff69a9a7f67b",
+          "actualSha256": "1e472b39b105d349bcd069c4a711b44a2fffb8e274714bb07ecfff69a9a7f67b",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "displacementOrRatedOutput",
+          "pass": true,
+          "expectedSha256": "c3fa7df69ce376950a79a0c7038241717d7c174e69d264c644017ba2158c497c",
+          "actualSha256": "c3fa7df69ce376950a79a0c7038241717d7c174e69d264c644017ba2158c497c",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "fuel",
+          "pass": true,
+          "expectedSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "actualSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "modelDesignationNumber",
+          "pass": true,
+          "expectedSha256": "82b059588a91062920a2b7e68647b25ae83f4f49870febc109dd681056b27765",
+          "actualSha256": "82b059588a91062920a2b7e68647b25ae83f4f49870febc109dd681056b27765",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "classificationNumber",
+          "pass": true,
+          "expectedSha256": "888b19a43b151683c87895f6211d9f8640f97bdc8ef32f03dbe057c8f5e56d32",
+          "actualSha256": "888b19a43b151683c87895f6211d9f8640f97bdc8ef32f03dbe057c8f5e56d32",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerNameRaw",
+          "pass": true,
+          "expectedSha256": "30bb84d937f05a4ca895ae998092b493731478966e05769aa098f3872db4631b",
+          "actualSha256": "30bb84d937f05a4ca895ae998092b493731478966e05769aa098f3872db4631b",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerName",
+          "pass": true,
+          "expectedSha256": "5632bd5b4a95e2d0b2337a22206d86a952ef7294b2ecf8aff6702916ea1f2b26",
+          "actualSha256": "5632bd5b4a95e2d0b2337a22206d86a952ef7294b2ecf8aff6702916ea1f2b26",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddressRaw",
+          "pass": true,
+          "expectedSha256": "7ab58e51c1d04de3159409e12d3839f2f3ec8cae0f83d7fb008e1dfbcc3af798",
+          "actualSha256": "7ab58e51c1d04de3159409e12d3839f2f3ec8cae0f83d7fb008e1dfbcc3af798",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddress",
+          "pass": true,
+          "expectedSha256": "9a3318b7a9dfd656d49ce6aa286c6e5e5760f94f3bb7ee848c405c2648950f48",
+          "actualSha256": "9a3318b7a9dfd656d49ce6aa286c6e5e5760f94f3bb7ee848c405c2648950f48",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userNameRaw",
+          "pass": true,
+          "expectedSha256": "5632bd5b4a95e2d0b2337a22206d86a952ef7294b2ecf8aff6702916ea1f2b26",
+          "actualSha256": "5632bd5b4a95e2d0b2337a22206d86a952ef7294b2ecf8aff6702916ea1f2b26",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userName",
+          "pass": true,
+          "expectedSha256": "5632bd5b4a95e2d0b2337a22206d86a952ef7294b2ecf8aff6702916ea1f2b26",
+          "actualSha256": "5632bd5b4a95e2d0b2337a22206d86a952ef7294b2ecf8aff6702916ea1f2b26",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddressRaw",
+          "pass": true,
+          "expectedSha256": "9a3318b7a9dfd656d49ce6aa286c6e5e5760f94f3bb7ee848c405c2648950f48",
+          "actualSha256": "9a3318b7a9dfd656d49ce6aa286c6e5e5760f94f3bb7ee848c405c2648950f48",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddress",
+          "pass": true,
+          "expectedSha256": "9a3318b7a9dfd656d49ce6aa286c6e5e5760f94f3bb7ee848c405c2648950f48",
+          "actualSha256": "9a3318b7a9dfd656d49ce6aa286c6e5e5760f94f3bb7ee848c405c2648950f48",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "baseLocation",
+          "pass": true,
+          "expectedSha256": "7ab58e51c1d04de3159409e12d3839f2f3ec8cae0f83d7fb008e1dfbcc3af798",
+          "actualSha256": "7ab58e51c1d04de3159409e12d3839f2f3ec8cae0f83d7fb008e1dfbcc3af798",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "recordDate",
+          "pass": false,
+          "expectedSha256": "99d6bb0fdef658993da91c83249ad37b03504ae8a1795b3619828bb2b109a8e0",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "documentNumber",
+          "pass": false,
+          "expectedSha256": "1619c6f56cfab99887776618c4153a3427ed4b5874571c1a80f812e93047c40b",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        }
+      ]
+    },
+    {
+      "caseId": "case4",
+      "sha256": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1",
+      "scored": 33,
+      "passed": 27,
+      "failed": 6,
+      "cells": [
+        {
+          "field": "registrationNumber",
+          "pass": true,
+          "expectedSha256": "9086f84c9668e45ba84eef50537174cf8624429ee4827576d6aa34bd73303481",
+          "actualSha256": "9086f84c9668e45ba84eef50537174cf8624429ee4827576d6aa34bd73303481",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "chassisNumber",
+          "pass": true,
+          "expectedSha256": "4ec3c14b1ea3611ef278540a9df3458c6094e0d75ec2169b1e93d748002537d2",
+          "actualSha256": "4ec3c14b1ea3611ef278540a9df3458c6094e0d75ec2169b1e93d748002537d2",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "registrationDate",
+          "pass": true,
+          "expectedSha256": "df7a7871aa47e04b1a7132a93489fb9e1f11b08ebb1c84316569a2b6737e9b0d",
+          "actualSha256": "df7a7871aa47e04b1a7132a93489fb9e1f11b08ebb1c84316569a2b6737e9b0d",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "firstRegistration",
+          "pass": true,
+          "expectedSha256": "f8b4f7d46f253c3af56d10d73b56e1faae2dc33565ff77be721c1200cb59b5e1",
+          "actualSha256": "f8b4f7d46f253c3af56d10d73b56e1faae2dc33565ff77be721c1200cb59b5e1",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "inspectionExpiry",
+          "pass": true,
+          "expectedSha256": "08b98a081f3263852661be62a0449d84fe222f541b5ab521300d3f02836b0924",
+          "actualSha256": "08b98a081f3263852661be62a0449d84fe222f541b5ab521300d3f02836b0924",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleName",
+          "pass": true,
+          "expectedSha256": "4b9a5b70a338d74e7a4bc0dae03aff2f45cb15848b4fcbc55bb1f41f1a2f13fc",
+          "actualSha256": "4b9a5b70a338d74e7a4bc0dae03aff2f45cb15848b4fcbc55bb1f41f1a2f13fc",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "model",
+          "pass": true,
+          "expectedSha256": "dc5dd8aa29e7f3aa7c767fd4788ca51e4a4bf4f2c1716f7897b115c6c9dd09bb",
+          "actualSha256": "dc5dd8aa29e7f3aa7c767fd4788ca51e4a4bf4f2c1716f7897b115c6c9dd09bb",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "engineModel",
+          "pass": true,
+          "expectedSha256": "3ecb41a926cd0ebffd3082999dcaf8db6eafe40a1e1849d0424e8c7d13e70195",
+          "actualSha256": "3ecb41a926cd0ebffd3082999dcaf8db6eafe40a1e1849d0424e8c7d13e70195",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleClass",
+          "pass": true,
+          "expectedSha256": "de907d10df98b498985b3f8f88402858e8817869a114aacc6919a0cec71fb3d6",
+          "actualSha256": "de907d10df98b498985b3f8f88402858e8817869a114aacc6919a0cec71fb3d6",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "purpose",
+          "pass": true,
+          "expectedSha256": "1e700b7e66f948848bd12e279c040f337795d2cb6923bc51e7d8dd945f4f1115",
+          "actualSha256": "1e700b7e66f948848bd12e279c040f337795d2cb6923bc51e7d8dd945f4f1115",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "privateBusiness",
+          "pass": true,
+          "expectedSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "actualSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "bodyShape",
+          "pass": true,
+          "expectedSha256": "f70bd6a647c37d4f472ad9aed554b7afe083e3140600903721c393a0da871a84",
+          "actualSha256": "f70bd6a647c37d4f472ad9aed554b7afe083e3140600903721c393a0da871a84",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacity",
+          "pass": true,
+          "expectedSha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+          "actualSha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "maxPayloadKg",
+          "pass": true,
+          "expectedSha256": "81a83544cf93c245178cbc1620030f1123f435af867c79d87135983c52ab39d9",
+          "actualSha256": "81a83544cf93c245178cbc1620030f1123f435af867c79d87135983c52ab39d9",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "7421ff69b2a0f7c0a619d8d42166bd8e073362f99c8ff088ec019eac858f2312",
+          "actualSha256": "7421ff69b2a0f7c0a619d8d42166bd8e073362f99c8ff088ec019eac858f2312",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "27c6c4c5f2c6371982db88e4f2d750c046237a6f41554afae0732a3340890a65",
+          "actualSha256": "27c6c4c5f2c6371982db88e4f2d750c046237a6f41554afae0732a3340890a65",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "lengthCm",
+          "pass": true,
+          "expectedSha256": "683d098205b11550f2d71016c82c4377a96c9f808e132f83f15ba9bd058c7b20",
+          "actualSha256": "683d098205b11550f2d71016c82c4377a96c9f808e132f83f15ba9bd058c7b20",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "widthCm",
+          "pass": true,
+          "expectedSha256": "802b906a18591ead8a6dd809b262ace4c65c16e89764c40ae326cfcff811e10c",
+          "actualSha256": "802b906a18591ead8a6dd809b262ace4c65c16e89764c40ae326cfcff811e10c",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "heightCm",
+          "pass": true,
+          "expectedSha256": "d86580a57f7bf542e85202283cb845953c9d28f80a8e651db08b2fc0b2d6a731",
+          "actualSha256": "d86580a57f7bf542e85202283cb845953c9d28f80a8e651db08b2fc0b2d6a731",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "202fd26f14d638ccb40975163ab0f05e1acf24c04a30708b3e0abfac44301a08",
+          "actualSha256": "202fd26f14d638ccb40975163ab0f05e1acf24c04a30708b3e0abfac44301a08",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "ad1f3889d0032e7c2791053060e4c044837353325fbd42cdeeef65638ed31c2a",
+          "actualSha256": "ad1f3889d0032e7c2791053060e4c044837353325fbd42cdeeef65638ed31c2a",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "displacementOrRatedOutput",
+          "pass": true,
+          "expectedSha256": "f5dbdeffd3fdb52c60548c07afce6e8f716e4aecad29896e34e3461ac89141bc",
+          "actualSha256": "f5dbdeffd3fdb52c60548c07afce6e8f716e4aecad29896e34e3461ac89141bc",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "fuel",
+          "pass": true,
+          "expectedSha256": "61aa099fe3a8488af0c0784bf0e8eca54ba547d31342b1a615fedc0d48bc30d2",
+          "actualSha256": "61aa099fe3a8488af0c0784bf0e8eca54ba547d31342b1a615fedc0d48bc30d2",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerNameRaw",
+          "pass": false,
+          "expectedSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "actualSha256": "297e9a1dcb42c094595c921bbf4f18ffc1da824310f3e0c5e3dd1b6bb5d357a0",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerName",
+          "pass": false,
+          "expectedSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "actualSha256": "297e9a1dcb42c094595c921bbf4f18ffc1da824310f3e0c5e3dd1b6bb5d357a0",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddressRaw",
+          "pass": false,
+          "expectedSha256": "6d8c060444cbeb5c1a5729b199b976ffd555f6ba1c02776cacb9d1c58057b6eb",
+          "actualSha256": "344099e64a295f533c97fbeb48ea4982d9dba30fbc863a1725e67680c6705693",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddress",
+          "pass": false,
+          "expectedSha256": "6d8c060444cbeb5c1a5729b199b976ffd555f6ba1c02776cacb9d1c58057b6eb",
+          "actualSha256": "344099e64a295f533c97fbeb48ea4982d9dba30fbc863a1725e67680c6705693",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userNameRaw",
+          "pass": true,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userName",
+          "pass": false,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": false,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddressRaw",
+          "pass": true,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddress",
+          "pass": false,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1:page1",
+          "expectedPresent": false,
+          "actualPresent": true
+        }
+      ]
+    },
+    {
+      "caseId": "case5",
+      "sha256": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe",
+      "scored": 42,
+      "passed": 35,
+      "failed": 7,
+      "cells": [
+        {
+          "field": "registrationNumber",
+          "pass": true,
+          "expectedSha256": "b08a683ffb4e3c78270437885303e36c8188a05dbbfdc23892476cc1738a7fe8",
+          "actualSha256": "b08a683ffb4e3c78270437885303e36c8188a05dbbfdc23892476cc1738a7fe8",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "chassisNumber",
+          "pass": true,
+          "expectedSha256": "dccd3d60c00c7b6a1eb011c68d849e6fd28a37277623cb372be338ae0cc90ff6",
+          "actualSha256": "dccd3d60c00c7b6a1eb011c68d849e6fd28a37277623cb372be338ae0cc90ff6",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "registrationDate",
+          "pass": true,
+          "expectedSha256": "9e9734f21c5f08c6c564a3464e7b82818eea7ef0d7c1c856a03fe90386fcc104",
+          "actualSha256": "9e9734f21c5f08c6c564a3464e7b82818eea7ef0d7c1c856a03fe90386fcc104",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "firstRegistration",
+          "pass": true,
+          "expectedSha256": "026cadec890c2eb97bac4f3ed868aebb833f7444f29c5d47c6c786f22be3359b",
+          "actualSha256": "026cadec890c2eb97bac4f3ed868aebb833f7444f29c5d47c6c786f22be3359b",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "inspectionExpiry",
+          "pass": true,
+          "expectedSha256": "46e874813beb1d919c7b3f2129184a29fef6e2a3305243b6ddb9711a4e85d597",
+          "actualSha256": "46e874813beb1d919c7b3f2129184a29fef6e2a3305243b6ddb9711a4e85d597",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleName",
+          "pass": true,
+          "expectedSha256": "e389c2401ab7c5b8571a79dad0c783ab2d3d55aa6de24a8aa0b6c4c274a531fc",
+          "actualSha256": "e389c2401ab7c5b8571a79dad0c783ab2d3d55aa6de24a8aa0b6c4c274a531fc",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "model",
+          "pass": true,
+          "expectedSha256": "a8f8c0ae6946388acfce0aa971f688f3115f6a5e16bb53c0adb21028c8d79f57",
+          "actualSha256": "a8f8c0ae6946388acfce0aa971f688f3115f6a5e16bb53c0adb21028c8d79f57",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "engineModel",
+          "pass": true,
+          "expectedSha256": "41f592eee123aec85319dfe0fc4be31ce70b2ce14fa4ea6a1039cea13e84a977",
+          "actualSha256": "41f592eee123aec85319dfe0fc4be31ce70b2ce14fa4ea6a1039cea13e84a977",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleClass",
+          "pass": true,
+          "expectedSha256": "c8242d4e2db77c716b4db8ee7edf46d1772307e7566d8db641aa6f24021af54a",
+          "actualSha256": "c8242d4e2db77c716b4db8ee7edf46d1772307e7566d8db641aa6f24021af54a",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "purpose",
+          "pass": true,
+          "expectedSha256": "1e700b7e66f948848bd12e279c040f337795d2cb6923bc51e7d8dd945f4f1115",
+          "actualSha256": "1e700b7e66f948848bd12e279c040f337795d2cb6923bc51e7d8dd945f4f1115",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "privateBusiness",
+          "pass": true,
+          "expectedSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "actualSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "bodyShape",
+          "pass": true,
+          "expectedSha256": "f48d168b2c20ea180f23e7e5a0593414d18dfb2a64b1d5f3d06e535e228f1937",
+          "actualSha256": "f48d168b2c20ea180f23e7e5a0593414d18dfb2a64b1d5f3d06e535e228f1937",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacity",
+          "pass": true,
+          "expectedSha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+          "actualSha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "maxPayloadKg",
+          "pass": true,
+          "expectedSha256": "83151157c10d85af7c84657c71c3e3603d955160f0526fce672481da83a2e090",
+          "actualSha256": "83151157c10d85af7c84657c71c3e3603d955160f0526fce672481da83a2e090",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "bc10b57514d76124b4120a34db2224067fed660b09408ade0b14b582946ff2fc",
+          "actualSha256": "bc10b57514d76124b4120a34db2224067fed660b09408ade0b14b582946ff2fc",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "b97d4904938f12a04277ff18c386c7460877bf4002ad82a0ee3a5ab88f2b9249",
+          "actualSha256": "b97d4904938f12a04277ff18c386c7460877bf4002ad82a0ee3a5ab88f2b9249",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "lengthCm",
+          "pass": true,
+          "expectedSha256": "050a010ce24d0896056e9a36a1940738d38f469d644b3682cfcc47569739c525",
+          "actualSha256": "050a010ce24d0896056e9a36a1940738d38f469d644b3682cfcc47569739c525",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "widthCm",
+          "pass": true,
+          "expectedSha256": "f57e5cb1f4532c008183057ecc94283801fcb5afe2d1c190e3dfd38c4da08042",
+          "actualSha256": "f57e5cb1f4532c008183057ecc94283801fcb5afe2d1c190e3dfd38c4da08042",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "heightCm",
+          "pass": true,
+          "expectedSha256": "9ae2bdd7beedc2e766c6b76585530e16925115707dc7a06ab5ee4aa2776b2c7b",
+          "actualSha256": "9ae2bdd7beedc2e766c6b76585530e16925115707dc7a06ab5ee4aa2776b2c7b",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "172e1676eda470ede17e9d491554bcbe97ba4691f92880064c8cb29ec35a467e",
+          "actualSha256": "172e1676eda470ede17e9d491554bcbe97ba4691f92880064c8cb29ec35a467e",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontRearAxleWeightKg",
+          "pass": false,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "rearFrontAxleWeightKg",
+          "pass": false,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "rearRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "30eec89ddd9c342ef28a87f731d6e50ba977baf12d7caa7045a9d56b0e923f03",
+          "actualSha256": "30eec89ddd9c342ef28a87f731d6e50ba977baf12d7caa7045a9d56b0e923f03",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "displacementOrRatedOutput",
+          "pass": true,
+          "expectedSha256": "d6b91b6c699a693303ca43e08cdde868c8826a0442afa0c8595223e897f83ead",
+          "actualSha256": "d6b91b6c699a693303ca43e08cdde868c8826a0442afa0c8595223e897f83ead",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "fuel",
+          "pass": true,
+          "expectedSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "actualSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "modelDesignationNumber",
+          "pass": true,
+          "expectedSha256": "7db0eec455ec7cd76e567d65e3171ed8cd24ee7d5c0666d77d876d4dca292c5e",
+          "actualSha256": "7db0eec455ec7cd76e567d65e3171ed8cd24ee7d5c0666d77d876d4dca292c5e",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "classificationNumber",
+          "pass": true,
+          "expectedSha256": "7550e2da7b7a165c69fb72da92347f15b535eeebe8ea58913b09542376e83917",
+          "actualSha256": "7550e2da7b7a165c69fb72da92347f15b535eeebe8ea58913b09542376e83917",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerNameRaw",
+          "pass": true,
+          "expectedSha256": "8efec164f4efd496fbae30a25af6e436f8077be592211065b1eb83057365afa7",
+          "actualSha256": "8efec164f4efd496fbae30a25af6e436f8077be592211065b1eb83057365afa7",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerName",
+          "pass": true,
+          "expectedSha256": "8efec164f4efd496fbae30a25af6e436f8077be592211065b1eb83057365afa7",
+          "actualSha256": "8efec164f4efd496fbae30a25af6e436f8077be592211065b1eb83057365afa7",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddressRaw",
+          "pass": true,
+          "expectedSha256": "0dee225a108aed77ba1207ff9b6e6c518c3f941e43e7118e3e7aff416c99ce28",
+          "actualSha256": "0dee225a108aed77ba1207ff9b6e6c518c3f941e43e7118e3e7aff416c99ce28",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddress",
+          "pass": true,
+          "expectedSha256": "0dee225a108aed77ba1207ff9b6e6c518c3f941e43e7118e3e7aff416c99ce28",
+          "actualSha256": "0dee225a108aed77ba1207ff9b6e6c518c3f941e43e7118e3e7aff416c99ce28",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userNameRaw",
+          "pass": true,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userName",
+          "pass": true,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": false,
+          "actualPresent": false
+        },
+        {
+          "field": "userAddressRaw",
+          "pass": true,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddress",
+          "pass": false,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "7baff37f82ecbb826b334a83d6dc8adb55d717630cfa86c2704592bf5a372000",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": false,
+          "actualPresent": true
+        },
+        {
+          "field": "baseLocationRaw",
+          "pass": false,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "baseLocation",
+          "pass": true,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": false,
+          "actualPresent": false
+        },
+        {
+          "field": "recordDate",
+          "pass": false,
+          "expectedSha256": "2f7309989deb10abe5a4be5eff8cbce946c5724925da29ef83edc799a82bc0ef",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "documentNumber",
+          "pass": false,
+          "expectedSha256": "102d45ad1eb7ceddae437742bf96778a402113e6fd32094c341d1ec6ac1c0eec",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "seatingCapacityRaw",
+          "pass": false,
+          "expectedSha256": "1a7171a5c06d938514200df0cc4b764f7901a063b4a582b5ecb74a52d6f200a7",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "maxPayloadRaw",
+          "pass": true,
+          "expectedSha256": "c20ace649650758675da265a551f464c615db73b5a22b78a44b7fb93934d1efe",
+          "actualSha256": "c20ace649650758675da265a551f464c615db73b5a22b78a44b7fb93934d1efe",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightRaw",
+          "pass": true,
+          "expectedSha256": "a20aef1b197783c2867c2a58b8c42b51ec82e09b7dd2f1deebc8c74bbb15c7f5",
+          "actualSha256": "a20aef1b197783c2867c2a58b8c42b51ec82e09b7dd2f1deebc8c74bbb15c7f5",
+          "sourcePath": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        }
+      ]
+    },
+    {
+      "caseId": "case6",
+      "sha256": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88",
+      "scored": 35,
+      "passed": 29,
+      "failed": 6,
+      "cells": [
+        {
+          "field": "registrationNumber",
+          "pass": true,
+          "expectedSha256": "f15ae56ba6a637e63e4c1a7118a74fde36be020d0b6188482c92ff8fc70f3fde",
+          "actualSha256": "f15ae56ba6a637e63e4c1a7118a74fde36be020d0b6188482c92ff8fc70f3fde",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "chassisNumber",
+          "pass": true,
+          "expectedSha256": "ee7eca652a0270ac55edbb7d888a2e5d904fc59e23498cd5a0b07829fe44a293",
+          "actualSha256": "ee7eca652a0270ac55edbb7d888a2e5d904fc59e23498cd5a0b07829fe44a293",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "registrationDate",
+          "pass": true,
+          "expectedSha256": "1abed56bb0082bef54b3c1c44239a182c23d23c5e5d8c9b4b5135deeb32740ca",
+          "actualSha256": "1abed56bb0082bef54b3c1c44239a182c23d23c5e5d8c9b4b5135deeb32740ca",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "firstRegistration",
+          "pass": true,
+          "expectedSha256": "a0546ed4a07af4bafe0714bf9ef874070cd5dbd5dded98f1f6e81c030b9cde28",
+          "actualSha256": "a0546ed4a07af4bafe0714bf9ef874070cd5dbd5dded98f1f6e81c030b9cde28",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "inspectionExpiry",
+          "pass": true,
+          "expectedSha256": "276b107e6b72bbf568ba17f073332043fe2a0b33c46b409d8bc461582f731022",
+          "actualSha256": "276b107e6b72bbf568ba17f073332043fe2a0b33c46b409d8bc461582f731022",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleName",
+          "pass": true,
+          "expectedSha256": "e389c2401ab7c5b8571a79dad0c783ab2d3d55aa6de24a8aa0b6c4c274a531fc",
+          "actualSha256": "e389c2401ab7c5b8571a79dad0c783ab2d3d55aa6de24a8aa0b6c4c274a531fc",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "model",
+          "pass": true,
+          "expectedSha256": "59c5e0821b6d053356d99736f0caae1828f205e68e0cc22c6e3c86b4d52f7b1c",
+          "actualSha256": "59c5e0821b6d053356d99736f0caae1828f205e68e0cc22c6e3c86b4d52f7b1c",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "engineModel",
+          "pass": true,
+          "expectedSha256": "cace6e642768f0f8a1a5c7dbc733e17d87ff38781102aa05a9ab0feee90939fe",
+          "actualSha256": "cace6e642768f0f8a1a5c7dbc733e17d87ff38781102aa05a9ab0feee90939fe",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleClass",
+          "pass": true,
+          "expectedSha256": "de907d10df98b498985b3f8f88402858e8817869a114aacc6919a0cec71fb3d6",
+          "actualSha256": "de907d10df98b498985b3f8f88402858e8817869a114aacc6919a0cec71fb3d6",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "purpose",
+          "pass": true,
+          "expectedSha256": "845587b43b719c6c8de6f0eef050b39f00f9e5a595a7a9104e3291759da80be7",
+          "actualSha256": "845587b43b719c6c8de6f0eef050b39f00f9e5a595a7a9104e3291759da80be7",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "privateBusiness",
+          "pass": true,
+          "expectedSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "actualSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "bodyShape",
+          "pass": true,
+          "expectedSha256": "1cc5fdeb7403e665fd7106fba8612a47a2a0d3602cee9c3ff2452a733f339ea8",
+          "actualSha256": "1cc5fdeb7403e665fd7106fba8612a47a2a0d3602cee9c3ff2452a733f339ea8",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacity",
+          "pass": true,
+          "expectedSha256": "7902699be42c8a8e46fbbb4501726517e86b22c56a189f7625a6da49081b2451",
+          "actualSha256": "7902699be42c8a8e46fbbb4501726517e86b22c56a189f7625a6da49081b2451",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "maxPayloadKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "73a2af8864fc500fa49048bf3003776c19938f360e56bd03663866fb3087884a",
+          "actualSha256": "73a2af8864fc500fa49048bf3003776c19938f360e56bd03663866fb3087884a",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "cd444afadcc6aede3f2de3f8bb8d4006283b66f22b5d4546ea1f22a9d4e2897c",
+          "actualSha256": "cd444afadcc6aede3f2de3f8bb8d4006283b66f22b5d4546ea1f22a9d4e2897c",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "lengthCm",
+          "pass": true,
+          "expectedSha256": "227445a988500528d7826c6921d2e3b4a79ccf3a94cc3bcf7b667e3ae4990b36",
+          "actualSha256": "227445a988500528d7826c6921d2e3b4a79ccf3a94cc3bcf7b667e3ae4990b36",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "widthCm",
+          "pass": true,
+          "expectedSha256": "61a229bae1e90331edd986b6bbbe617f7035de88a5bf7c018c3add6c762a6e8d",
+          "actualSha256": "61a229bae1e90331edd986b6bbbe617f7035de88a5bf7c018c3add6c762a6e8d",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "heightCm",
+          "pass": true,
+          "expectedSha256": "580811fa95269f3ecd4f22d176e079d36093573680b6ef66fa341e687a15b5da",
+          "actualSha256": "580811fa95269f3ecd4f22d176e079d36093573680b6ef66fa341e687a15b5da",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "actualSha256": "055f78940c07630352676197ab7c3ed8d5bb204d406e5c6ff101f870bc9b7dd7",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "39e18a493b913441c12fac89a09f24958e5da0ff6f3300c80c5359f36e3223aa",
+          "actualSha256": "39e18a493b913441c12fac89a09f24958e5da0ff6f3300c80c5359f36e3223aa",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "displacementOrRatedOutput",
+          "pass": true,
+          "expectedSha256": "41d1d5a0dfc90611e2011be7fe3efb16d2e16710d7fd30998bc14caf7193542c",
+          "actualSha256": "41d1d5a0dfc90611e2011be7fe3efb16d2e16710d7fd30998bc14caf7193542c",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "fuel",
+          "pass": true,
+          "expectedSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "actualSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "modelDesignationNumber",
+          "pass": true,
+          "expectedSha256": "b0f14e5fdb90799db84c5e5de32031fd7e65bb02b46709abf790ad20c3051611",
+          "actualSha256": "b0f14e5fdb90799db84c5e5de32031fd7e65bb02b46709abf790ad20c3051611",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "classificationNumber",
+          "pass": true,
+          "expectedSha256": "0591b59c1bdd9acd2847a202ddd02c3f14f9b5a049a5707c3279c1e967745ed4",
+          "actualSha256": "0591b59c1bdd9acd2847a202ddd02c3f14f9b5a049a5707c3279c1e967745ed4",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerNameRaw",
+          "pass": false,
+          "expectedSha256": "ebbdb606e821d2fe1fdc7d8fbb550a0f3a555a90946e8e821e775940f3dcd2a9",
+          "actualSha256": "eb3ec3942ead0734108adbec6a992e5339710aaddd0ac0954e59432bf6dc83b7",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerName",
+          "pass": false,
+          "expectedSha256": "ebbdb606e821d2fe1fdc7d8fbb550a0f3a555a90946e8e821e775940f3dcd2a9",
+          "actualSha256": "eb3ec3942ead0734108adbec6a992e5339710aaddd0ac0954e59432bf6dc83b7",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddressRaw",
+          "pass": false,
+          "expectedSha256": "448197dbac8882f72390a269e0a2d1a1c2a33220a1baa0b20da8a455ebd81dde",
+          "actualSha256": "1d035615be845be6900cc1ddbc08c8fb4b20346bdd8e2119d29af0cdc060161f",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAddress",
+          "pass": false,
+          "expectedSha256": "448197dbac8882f72390a269e0a2d1a1c2a33220a1baa0b20da8a455ebd81dde",
+          "actualSha256": "1d035615be845be6900cc1ddbc08c8fb4b20346bdd8e2119d29af0cdc060161f",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userNameRaw",
+          "pass": true,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userName",
+          "pass": false,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": false,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddressRaw",
+          "pass": true,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddress",
+          "pass": false,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "sourcePath": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88:page1",
+          "expectedPresent": false,
+          "actualPresent": true
+        }
+      ]
+    },
+    {
+      "caseId": "case7",
+      "sha256": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8",
+      "scored": 36,
+      "passed": 33,
+      "failed": 3,
+      "cells": [
+        {
+          "field": "registrationNumber",
+          "pass": true,
+          "expectedSha256": "e03967a5636faad767ae6d0326a2ae7ed89ae851e89adb780e4e83eaaf19b23e",
+          "actualSha256": "e03967a5636faad767ae6d0326a2ae7ed89ae851e89adb780e4e83eaaf19b23e",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "chassisNumber",
+          "pass": true,
+          "expectedSha256": "6ed92ed84584f351574eb07893925838fd6d1e0150a4795211e9dde6a536d367",
+          "actualSha256": "6ed92ed84584f351574eb07893925838fd6d1e0150a4795211e9dde6a536d367",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "registrationDate",
+          "pass": true,
+          "expectedSha256": "91efb3eb8a5e2a777c35600d84c27be3be4347bee161f8a2967aa6303a3cd91d",
+          "actualSha256": "91efb3eb8a5e2a777c35600d84c27be3be4347bee161f8a2967aa6303a3cd91d",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "firstRegistration",
+          "pass": true,
+          "expectedSha256": "14c6bcfeab434961ed8493ed38873be603196c27a4a15f4ede64a89d9babf843",
+          "actualSha256": "14c6bcfeab434961ed8493ed38873be603196c27a4a15f4ede64a89d9babf843",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "inspectionExpiry",
+          "pass": true,
+          "expectedSha256": "5b746adeba84e8bd78a44e4e087ea34111aa734e00b5ce1c456da2ea21c1681e",
+          "actualSha256": "5b746adeba84e8bd78a44e4e087ea34111aa734e00b5ce1c456da2ea21c1681e",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleName",
+          "pass": true,
+          "expectedSha256": "898b77915fad40e3c257311767f15a7678c5c7ae90701e8903a0e78905910a3a",
+          "actualSha256": "898b77915fad40e3c257311767f15a7678c5c7ae90701e8903a0e78905910a3a",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "model",
+          "pass": true,
+          "expectedSha256": "7428f758438609aae474b825d8ef024c816a51baa8389a9f97283499edb0b2c4",
+          "actualSha256": "7428f758438609aae474b825d8ef024c816a51baa8389a9f97283499edb0b2c4",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "engineModel",
+          "pass": true,
+          "expectedSha256": "9cef2454d14ebcc1aba4c33a13d0f3c2dd695d1ecc1fffc10e17ba94ba415fb5",
+          "actualSha256": "9cef2454d14ebcc1aba4c33a13d0f3c2dd695d1ecc1fffc10e17ba94ba415fb5",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleClass",
+          "pass": true,
+          "expectedSha256": "de907d10df98b498985b3f8f88402858e8817869a114aacc6919a0cec71fb3d6",
+          "actualSha256": "de907d10df98b498985b3f8f88402858e8817869a114aacc6919a0cec71fb3d6",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "purpose",
+          "pass": true,
+          "expectedSha256": "845587b43b719c6c8de6f0eef050b39f00f9e5a595a7a9104e3291759da80be7",
+          "actualSha256": "845587b43b719c6c8de6f0eef050b39f00f9e5a595a7a9104e3291759da80be7",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "privateBusiness",
+          "pass": true,
+          "expectedSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "actualSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "bodyShape",
+          "pass": true,
+          "expectedSha256": "ac5b141d30cac1d963f780345e2aae03addfb85c03e466ac2a6a2a59669b23bf",
+          "actualSha256": "ac5b141d30cac1d963f780345e2aae03addfb85c03e466ac2a6a2a59669b23bf",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacity",
+          "pass": true,
+          "expectedSha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
+          "actualSha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "maxPayloadKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "5f0fbfc126a9876e177921aeb69a9705447e5b4f29fc96631ab4ac6d31c62717",
+          "actualSha256": "5f0fbfc126a9876e177921aeb69a9705447e5b4f29fc96631ab4ac6d31c62717",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "c6bb15225eca43aca18f2ceb395c34012a6f95fe76c097576c04be49f5875fa3",
+          "actualSha256": "c6bb15225eca43aca18f2ceb395c34012a6f95fe76c097576c04be49f5875fa3",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "lengthCm",
+          "pass": true,
+          "expectedSha256": "48f89b630677c2cbb70e2ba05bf7a3633294e368a45bdc2c7df9d832f9e0c941",
+          "actualSha256": "48f89b630677c2cbb70e2ba05bf7a3633294e368a45bdc2c7df9d832f9e0c941",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "widthCm",
+          "pass": true,
+          "expectedSha256": "cba28b89eb859497f544956d64cf2ecf29b76fe2ef7175b33ea59e64293a4461",
+          "actualSha256": "cba28b89eb859497f544956d64cf2ecf29b76fe2ef7175b33ea59e64293a4461",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "heightCm",
+          "pass": true,
+          "expectedSha256": "1d28c120568c10e19b9d8abe8b66d0983fa3d2e11ee7751aca50f83c6f4a43aa",
+          "actualSha256": "1d28c120568c10e19b9d8abe8b66d0983fa3d2e11ee7751aca50f83c6f4a43aa",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "edbad80a93adb5830afc3fccfe0e7c27a81359b59bb2a8c277f95d4adec7c389",
+          "actualSha256": "edbad80a93adb5830afc3fccfe0e7c27a81359b59bb2a8c277f95d4adec7c389",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "0604cd3138feed202ef293e062da2f4720f77a05d25ee036a7a01c9cfcdd1f0a",
+          "actualSha256": "0604cd3138feed202ef293e062da2f4720f77a05d25ee036a7a01c9cfcdd1f0a",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "displacementOrRatedOutput",
+          "pass": true,
+          "expectedSha256": "5cf580d55c021844282d1f6610d7c68b83abfd6c261e6d6ba191b81ad57db22b",
+          "actualSha256": "5cf580d55c021844282d1f6610d7c68b83abfd6c261e6d6ba191b81ad57db22b",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "fuel",
+          "pass": true,
+          "expectedSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "actualSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "modelDesignationNumber",
+          "pass": true,
+          "expectedSha256": "305f7429498ccd9e275f944f7a10094ad84af83c2d287dcd9fbcc2fbb1f3ba77",
+          "actualSha256": "305f7429498ccd9e275f944f7a10094ad84af83c2d287dcd9fbcc2fbb1f3ba77",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "classificationNumber",
+          "pass": true,
+          "expectedSha256": "4fac6dbe26e823ed6edf999c63fab3507119cf3cbfb56036511aa62e258c35b4",
+          "actualSha256": "4fac6dbe26e823ed6edf999c63fab3507119cf3cbfb56036511aa62e258c35b4",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userNameRaw",
+          "pass": true,
+          "expectedSha256": "7499ddb0d19ede7702fdfa346a1f9d33efe1ee416792fc02ccf92b614e913ad8",
+          "actualSha256": "7499ddb0d19ede7702fdfa346a1f9d33efe1ee416792fc02ccf92b614e913ad8",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userName",
+          "pass": true,
+          "expectedSha256": "7499ddb0d19ede7702fdfa346a1f9d33efe1ee416792fc02ccf92b614e913ad8",
+          "actualSha256": "7499ddb0d19ede7702fdfa346a1f9d33efe1ee416792fc02ccf92b614e913ad8",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddressRaw",
+          "pass": true,
+          "expectedSha256": "ffdd3109f628dbf6b8ea760fd41f1dc7c1b8506089a9b7083532a350a3f54686",
+          "actualSha256": "ffdd3109f628dbf6b8ea760fd41f1dc7c1b8506089a9b7083532a350a3f54686",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddress",
+          "pass": true,
+          "expectedSha256": "ffdd3109f628dbf6b8ea760fd41f1dc7c1b8506089a9b7083532a350a3f54686",
+          "actualSha256": "ffdd3109f628dbf6b8ea760fd41f1dc7c1b8506089a9b7083532a350a3f54686",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "baseLocation",
+          "pass": true,
+          "expectedSha256": "9520d2a6d08b29f4574eaaef1f5f7bb2eb7d739b2a288374aaa444cbf30f3540",
+          "actualSha256": "9520d2a6d08b29f4574eaaef1f5f7bb2eb7d739b2a288374aaa444cbf30f3540",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "recordDate",
+          "pass": false,
+          "expectedSha256": "dc633b90ccef36a69089ea2a39188487965aa6debb47ecbe5f4374ca3cf34c3a",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "documentNumber",
+          "pass": false,
+          "expectedSha256": "de3a4380367320b060e4b28ea22a42c7b28b109fecc053bbf83392a6512b1194",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "ownerAtIssuanceNameRaw",
+          "pass": true,
+          "expectedSha256": "3ad835e4576be69bb76cd875d34c61fd0475adaae95596a8b9dd707946aea63f",
+          "actualSha256": "3ad835e4576be69bb76cd875d34c61fd0475adaae95596a8b9dd707946aea63f",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAtIssuanceAddressRaw",
+          "pass": false,
+          "expectedSha256": "5b04a523b29d50b6aa506754bd64ef04c89ccba19b2b44775bdf8833e02a9d60",
+          "actualSha256": "9ba726f049f5f4602f48dd7e6f0b91904c8d720e72b2d085ea7cb81dfe8b3979",
+          "sourcePath": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        }
+      ]
+    },
+    {
+      "caseId": "case8",
+      "sha256": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2",
+      "scored": 40,
+      "passed": 34,
+      "failed": 6,
+      "cells": [
+        {
+          "field": "registrationNumber",
+          "pass": true,
+          "expectedSha256": "27220ecf88f3977417d0225a3a317857d179e8f3a11de06b3723b45633cb6167",
+          "actualSha256": "27220ecf88f3977417d0225a3a317857d179e8f3a11de06b3723b45633cb6167",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "chassisNumber",
+          "pass": true,
+          "expectedSha256": "d7d6b42fd320483eaaf0b38df1f3aef7cc2511cb6c531ff5d8b07871a31b4e21",
+          "actualSha256": "d7d6b42fd320483eaaf0b38df1f3aef7cc2511cb6c531ff5d8b07871a31b4e21",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "registrationDate",
+          "pass": true,
+          "expectedSha256": "70711e119be2685ac6a6d321cedcec078a74a9bfd5062d27a782fffd7b4d7694",
+          "actualSha256": "70711e119be2685ac6a6d321cedcec078a74a9bfd5062d27a782fffd7b4d7694",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "firstRegistration",
+          "pass": true,
+          "expectedSha256": "9bd3f313e61900f1780dbd753ddc4271e50e68e4cb8d6b281e04cdbead5580cd",
+          "actualSha256": "9bd3f313e61900f1780dbd753ddc4271e50e68e4cb8d6b281e04cdbead5580cd",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "inspectionExpiry",
+          "pass": true,
+          "expectedSha256": "9d9d15ff25aaad153ab9f37357371757d22f91517cb0ea8733e538302687f1f0",
+          "actualSha256": "9d9d15ff25aaad153ab9f37357371757d22f91517cb0ea8733e538302687f1f0",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleName",
+          "pass": true,
+          "expectedSha256": "898b77915fad40e3c257311767f15a7678c5c7ae90701e8903a0e78905910a3a",
+          "actualSha256": "898b77915fad40e3c257311767f15a7678c5c7ae90701e8903a0e78905910a3a",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "model",
+          "pass": true,
+          "expectedSha256": "c9dc83cb0350804fc25c0d28bfee7f48895f40b92fd9bafc250dd63ca454e06b",
+          "actualSha256": "c9dc83cb0350804fc25c0d28bfee7f48895f40b92fd9bafc250dd63ca454e06b",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "engineModel",
+          "pass": true,
+          "expectedSha256": "85ede0f11eafc3df283be5a864270b2ac560e56c5ea856bec28ffa897a756538",
+          "actualSha256": "85ede0f11eafc3df283be5a864270b2ac560e56c5ea856bec28ffa897a756538",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleClass",
+          "pass": true,
+          "expectedSha256": "c8242d4e2db77c716b4db8ee7edf46d1772307e7566d8db641aa6f24021af54a",
+          "actualSha256": "c8242d4e2db77c716b4db8ee7edf46d1772307e7566d8db641aa6f24021af54a",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "purpose",
+          "pass": true,
+          "expectedSha256": "1e700b7e66f948848bd12e279c040f337795d2cb6923bc51e7d8dd945f4f1115",
+          "actualSha256": "1e700b7e66f948848bd12e279c040f337795d2cb6923bc51e7d8dd945f4f1115",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "privateBusiness",
+          "pass": true,
+          "expectedSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "actualSha256": "9ac4899db19e1bb40678bcd38354facc13f4030946987d98220f1bb65a364536",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "bodyShape",
+          "pass": true,
+          "expectedSha256": "f48d168b2c20ea180f23e7e5a0593414d18dfb2a64b1d5f3d06e535e228f1937",
+          "actualSha256": "f48d168b2c20ea180f23e7e5a0593414d18dfb2a64b1d5f3d06e535e228f1937",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacity",
+          "pass": true,
+          "expectedSha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+          "actualSha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "maxPayloadKg",
+          "pass": true,
+          "expectedSha256": "dfcafae694259c719203dd502252ab975bf6849dc6c8f5fcbe1eda19a821db4d",
+          "actualSha256": "dfcafae694259c719203dd502252ab975bf6849dc6c8f5fcbe1eda19a821db4d",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "vehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "6ed255bcd55046343338a717f96b055b531cf7afd739e03c7f26f57ba3d51218",
+          "actualSha256": "6ed255bcd55046343338a717f96b055b531cf7afd739e03c7f26f57ba3d51218",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightKg",
+          "pass": true,
+          "expectedSha256": "2fa382a80d7c2d794f0f430bd3b286a65602d3867e2b52910871d58419cd2f16",
+          "actualSha256": "2fa382a80d7c2d794f0f430bd3b286a65602d3867e2b52910871d58419cd2f16",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "lengthCm",
+          "pass": true,
+          "expectedSha256": "c6bd343ae0007cdb979de7540f2668fe849d68ff47fa1a650a28f89104f41f1e",
+          "actualSha256": "c6bd343ae0007cdb979de7540f2668fe849d68ff47fa1a650a28f89104f41f1e",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "widthCm",
+          "pass": true,
+          "expectedSha256": "f57e5cb1f4532c008183057ecc94283801fcb5afe2d1c190e3dfd38c4da08042",
+          "actualSha256": "f57e5cb1f4532c008183057ecc94283801fcb5afe2d1c190e3dfd38c4da08042",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "heightCm",
+          "pass": true,
+          "expectedSha256": "a4e00d7e6aa82111575438c5e5d3e63269d4c475c718b2389f6d02932c47f8a6",
+          "actualSha256": "a4e00d7e6aa82111575438c5e5d3e63269d4c475c718b2389f6d02932c47f8a6",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "f296867839c8befafed32b55a7c11ab4ad14387d2434b970a55237d537bc9353",
+          "actualSha256": "f296867839c8befafed32b55a7c11ab4ad14387d2434b970a55237d537bc9353",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "frontRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearFrontAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "actualSha256": "3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "rearRearAxleWeightKg",
+          "pass": true,
+          "expectedSha256": "172e1676eda470ede17e9d491554bcbe97ba4691f92880064c8cb29ec35a467e",
+          "actualSha256": "172e1676eda470ede17e9d491554bcbe97ba4691f92880064c8cb29ec35a467e",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "displacementOrRatedOutput",
+          "pass": false,
+          "expectedSha256": "728d93ac80460f5ec4e232c57208c5387ba241a594647279413b65b66a7450cf",
+          "actualSha256": "677f27740b5f8d73f26804080c0a0a1d78ad3a49f87af9ef40bc6095a56b0639",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "fuel",
+          "pass": true,
+          "expectedSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "actualSha256": "26763b352e28fe76d4a30aa09f30b3cde7db5612d188ab5852816a165e9c9f89",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "modelDesignationNumber",
+          "pass": true,
+          "expectedSha256": "47587ad4ee7391f0f7e2f45021e00817d5bfb471126f2300a0b47f010be555f9",
+          "actualSha256": "47587ad4ee7391f0f7e2f45021e00817d5bfb471126f2300a0b47f010be555f9",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "classificationNumber",
+          "pass": true,
+          "expectedSha256": "ddfcd6f752faf5e5ba65da9c6e1dbc5be379156eccc152a098ebe52f74d1fd52",
+          "actualSha256": "ddfcd6f752faf5e5ba65da9c6e1dbc5be379156eccc152a098ebe52f74d1fd52",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userNameRaw",
+          "pass": true,
+          "expectedSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "actualSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userName",
+          "pass": true,
+          "expectedSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "actualSha256": "5bcfc03fcf46c3030864425dfce04ba8d23db06f42fa0dba19e83602908702d0",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddressRaw",
+          "pass": true,
+          "expectedSha256": "6d9f07fdfee1d28c7308144aea6f7af26967cba5750f06fa22a40e25722fdfbb",
+          "actualSha256": "6d9f07fdfee1d28c7308144aea6f7af26967cba5750f06fa22a40e25722fdfbb",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "userAddress",
+          "pass": true,
+          "expectedSha256": "6d9f07fdfee1d28c7308144aea6f7af26967cba5750f06fa22a40e25722fdfbb",
+          "actualSha256": "6d9f07fdfee1d28c7308144aea6f7af26967cba5750f06fa22a40e25722fdfbb",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "baseLocationRaw",
+          "pass": false,
+          "expectedSha256": "596f4162a52f315b2ad0fa53fd30a2769d02a41ed7439123790966eee4ceb5cd",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "baseLocation",
+          "pass": true,
+          "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": false,
+          "actualPresent": false
+        },
+        {
+          "field": "recordDate",
+          "pass": false,
+          "expectedSha256": "5f27e758da045ae79b77f49026b5da4167249e134003593e5c178bb9fa9b42c0",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "documentNumber",
+          "pass": false,
+          "expectedSha256": "dd662ecdd24502481bae1a6942c555f1c54d0501b8d56b6661ba666a0eb1ab69",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "ownerAtIssuanceNameRaw",
+          "pass": true,
+          "expectedSha256": "1026ba2015a7b8ec3befead4695fe5e3aeaa206fb63a8d02186c7911685acba0",
+          "actualSha256": "1026ba2015a7b8ec3befead4695fe5e3aeaa206fb63a8d02186c7911685acba0",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "ownerAtIssuanceAddressRaw",
+          "pass": false,
+          "expectedSha256": "64c7801a51e5a61167a25ca1db8e8fe70c4be877219f59dae246719d4217d9ec",
+          "actualSha256": "f4a8479e48964db93e487a18d123efb853d4dade3f6154ebc02ec215e9089706",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "seatingCapacityRaw",
+          "pass": false,
+          "expectedSha256": "7dfee0c07bf2b369074ae44d18bf4b9e802944d6139c8772f7f4b5dbb7651fae",
+          "actualSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": false
+        },
+        {
+          "field": "maxPayloadRaw",
+          "pass": true,
+          "expectedSha256": "5b4e2399587fec091afa7f2fc6656b6960057fb2a5c3f810d7bd09a6ee89a831",
+          "actualSha256": "5b4e2399587fec091afa7f2fc6656b6960057fb2a5c3f810d7bd09a6ee89a831",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        },
+        {
+          "field": "grossVehicleWeightRaw",
+          "pass": true,
+          "expectedSha256": "b9b1fa93f5c1f86405ec0b2837bee03d0e360ce8aa42fbf685a56eae2fddbac3",
+          "actualSha256": "b9b1fa93f5c1f86405ec0b2837bee03d0e360ce8aa42fbf685a56eae2fddbac3",
+          "sourcePath": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2:page1",
+          "expectedPresent": true,
+          "actualPresent": true
+        }
+      ]
+    }
+  ],
+  "scored": 297,
+  "passed": 238,
+  "failed": 59,
+  "casePass": 0,
+  "humanAcceptance": false
+}

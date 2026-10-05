@@ -1,0 +1,2887 @@
+[
+  {
+    "caseId": "case1",
+    "beforeEvents": 53,
+    "afterEvents": 3,
+    "before": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "1110",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "1110"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 11,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 12,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 17,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 18,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 20,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 21,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 24,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 25,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 27,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 29,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 34,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 35,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 37,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 39,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 41,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "1110",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "1110"
+        }
+      },
+      {
+        "eventIndex": 42,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 43,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 46,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 47,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 49,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 51,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ],
+    "after": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "1110",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "1110"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "2020",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "1110",
+          "widthCm": "910",
+          "heightCm": "910",
+          "frontRearAxleWeightKg": "1110",
+          "rearFrontAxleWeightKg": "1110",
+          "rearRearAxleWeightKg": "1110",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ]
+  },
+  {
+    "caseId": "case2",
+    "beforeEvents": 26,
+    "afterEvents": 3,
+    "before": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "1400",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "200",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 10,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "1400",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L"
+        }
+      },
+      {
+        "eventIndex": 11,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "200",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 16,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "1400",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L"
+        }
+      },
+      {
+        "eventIndex": 17,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "200",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 19,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "1400",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L"
+        }
+      },
+      {
+        "eventIndex": 20,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "200",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 23,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "1400",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L"
+        }
+      },
+      {
+        "eventIndex": 24,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "200",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ],
+    "after": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "1400",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350",
+          "grossVehicleWeightKg": "200",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "940",
+          "maxPayloadKg": "350 [200]",
+          "grossVehicleWeightKg": "1400 [1360]",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "194",
+          "frontFrontAxleWeightKg": "560",
+          "rearRearAxleWeightKg": "380",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ]
+  },
+  {
+    "caseId": "case3",
+    "beforeEvents": 53,
+    "afterEvents": 27,
+    "before": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "650"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 11,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 12,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 17,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 18,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 20,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 21,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 24,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 25,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 27,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 29,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 34,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 35,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 37,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 39,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 41,
+        "values": {
+          "vehicleWeightKg": "650"
+        }
+      },
+      {
+        "eventIndex": 42,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 43,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 46,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 47,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 49,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 51,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ],
+    "after": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "650"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 19,
+        "values": {
+          "vehicleWeightKg": "650"
+        }
+      },
+      {
+        "eventIndex": 20,
+        "values": {
+          "vehicleWeightKg": "650",
+          "grossVehicleWeightKg": "870",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 26,
+        "values": {
+          "vehicleWeightKg": "650",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "870",
+          "lengthCm": "339",
+          "widthCm": "147",
+          "heightCm": "152",
+          "frontFrontAxleWeightKg": "400",
+          "rearRearAxleWeightKg": "250",
+          "displacementOrRatedOutput": "0.65 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ]
+  },
+  {
+    "caseId": "case4",
+    "beforeEvents": 26,
+    "afterEvents": 3,
+    "before": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "12",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "2000",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 3,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 5,
+        "values": {
+          "vehicleWeightKg": "12",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "2000",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 6,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 7,
+        "values": {
+          "vehicleWeightKg": "12",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "2000",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 9,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 10,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L"
+        }
+      },
+      {
+        "eventIndex": 11,
+        "values": {
+          "vehicleWeightKg": "12",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "2000",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 12,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 14,
+        "values": {
+          "vehicleWeightKg": "12",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "2000",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 15,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 16,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L"
+        }
+      },
+      {
+        "eventIndex": 17,
+        "values": {
+          "vehicleWeightKg": "12",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "2000",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 18,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 19,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L"
+        }
+      },
+      {
+        "eventIndex": 20,
+        "values": {
+          "vehicleWeightKg": "12",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "2000",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 22,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 23,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L"
+        }
+      },
+      {
+        "eventIndex": 24,
+        "values": {
+          "vehicleWeightKg": "12",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "2000",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 25,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ],
+    "after": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "12",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "2000",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "3820",
+          "maxPayloadKg": "2000",
+          "grossVehicleWeightKg": "5985",
+          "lengthCm": "616",
+          "widthCm": "214",
+          "heightCm": "215",
+          "frontFrontAxleWeightKg": "1850",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "1970",
+          "displacementOrRatedOutput": "4.77 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ]
+  },
+  {
+    "caseId": "case5",
+    "beforeEvents": 29,
+    "afterEvents": 19,
+    "before": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "maxPayloadKg": "450",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 KW"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "maxPayloadKg": "450",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "1140",
+          "maxPayloadKg": "450 [300]",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 7,
+        "values": {
+          "maxPayloadKg": "450",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 8,
+        "values": {
+          "vehicleWeightKg": "1140",
+          "maxPayloadKg": "450 [300]",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 19,
+        "values": {
+          "maxPayloadKg": "450",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 KW"
+        }
+      },
+      {
+        "eventIndex": 20,
+        "values": {
+          "maxPayloadKg": "450",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 21,
+        "values": {
+          "vehicleWeightKg": "1140",
+          "maxPayloadKg": "450 [300]",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 26,
+        "values": {
+          "vehicleWeightKg": "1140",
+          "maxPayloadKg": "450 [300]",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "widthCm": "169",
+          "heightCm": "150",
+          "frontFrontAxleWeightKg": "670",
+          "rearRearAxleWeightKg": "470",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ],
+    "after": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "maxPayloadKg": "450",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 KW"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "maxPayloadKg": "450",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "1140",
+          "maxPayloadKg": "450 [300]",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 4,
+        "values": {
+          "maxPayloadKg": "450",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 5,
+        "values": {
+          "vehicleWeightKg": "1140",
+          "maxPayloadKg": "450 [300]",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 11,
+        "values": {
+          "maxPayloadKg": "450",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 KW"
+        }
+      },
+      {
+        "eventIndex": 12,
+        "values": {
+          "maxPayloadKg": "450",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 13,
+        "values": {
+          "vehicleWeightKg": "1140",
+          "maxPayloadKg": "450 [300]",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 18,
+        "values": {
+          "vehicleWeightKg": "1140",
+          "maxPayloadKg": "450 [300]",
+          "grossVehicleWeightKg": "1700 [1715]",
+          "lengthCm": "439",
+          "widthCm": "169",
+          "heightCm": "150",
+          "frontFrontAxleWeightKg": "670",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "470",
+          "displacementOrRatedOutput": "1.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ]
+  },
+  {
+    "caseId": "case6",
+    "beforeEvents": 26,
+    "afterEvents": 3,
+    "before": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "213",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2020",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 3,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 5,
+        "values": {
+          "vehicleWeightKg": "213",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2020",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 6,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 7,
+        "values": {
+          "vehicleWeightKg": "213",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2020",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 9,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 10,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L"
+        }
+      },
+      {
+        "eventIndex": 11,
+        "values": {
+          "vehicleWeightKg": "213",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2020",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 12,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 14,
+        "values": {
+          "vehicleWeightKg": "213",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2020",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 15,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 16,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L"
+        }
+      },
+      {
+        "eventIndex": 17,
+        "values": {
+          "vehicleWeightKg": "213",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2020",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 18,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 19,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L"
+        }
+      },
+      {
+        "eventIndex": 20,
+        "values": {
+          "vehicleWeightKg": "213",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2020",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 22,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 23,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L"
+        }
+      },
+      {
+        "eventIndex": 24,
+        "values": {
+          "vehicleWeightKg": "213",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2020",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 25,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ],
+    "after": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "vehicleWeightKg": "213",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2020",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "2020",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "2405",
+          "lengthCm": "491",
+          "widthCm": "185",
+          "heightCm": "181",
+          "frontFrontAxleWeightKg": "1110",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "910",
+          "displacementOrRatedOutput": "3.49 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ]
+  },
+  {
+    "caseId": "case7",
+    "beforeEvents": 72,
+    "afterEvents": 15,
+    "before": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 KW"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 6,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 9,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 11,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 16,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 17,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 19,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 21,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 23,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 25,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 30,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 31,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 33,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 34,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 39,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 40,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 42,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 43,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 48,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 49,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 54,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 55,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 57,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 58,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ],
+    "after": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 KW"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 3,
+        "values": {
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 5,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 6,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 10,
+        "values": {
+          "vehicleWeightKg": "1320",
+          "maxPayloadKg": "-",
+          "grossVehicleWeightKg": "1595",
+          "lengthCm": "454",
+          "widthCm": "176",
+          "heightCm": "147",
+          "frontFrontAxleWeightKg": "820",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "500",
+          "displacementOrRatedOutput": "1.79 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ]
+  },
+  {
+    "caseId": "case8",
+    "beforeEvents": 41,
+    "afterEvents": 24,
+    "before": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 KW"
+        }
+      },
+      {
+        "eventIndex": 1,
+        "values": {
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 3,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250 [1050]",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 8,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 9,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250 [1050]",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 16,
+        "values": {
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 17,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 18,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250 [1050]",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 31,
+        "values": {
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 KW"
+        }
+      },
+      {
+        "eventIndex": 32,
+        "values": {
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 33,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 34,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250 [1050]",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ],
+    "after": [
+      {
+        "eventIndex": 0,
+        "values": {
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 KW"
+        }
+      },
+      {
+        "eventIndex": 2,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250 [1050]",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 5,
+        "values": {
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 6,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250 [1050]",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 8,
+        "values": {
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 9,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250 [1050]",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 10,
+        "values": {
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 11,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250 [1050]",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 13,
+        "values": {
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      },
+      {
+        "eventIndex": 14,
+        "values": {
+          "vehicleWeightKg": "1690",
+          "maxPayloadKg": "1250 [1050]",
+          "grossVehicleWeightKg": "3105 [3070]",
+          "lengthCm": "469",
+          "widthCm": "169",
+          "heightCm": "198",
+          "frontFrontAxleWeightKg": "1020",
+          "frontRearAxleWeightKg": "-",
+          "rearFrontAxleWeightKg": "-",
+          "rearRearAxleWeightKg": "670",
+          "displacementOrRatedOutput": "1.99 L",
+          "displacementOrRatedOutputUnit": "L"
+        }
+      }
+    ]
+  }
+]

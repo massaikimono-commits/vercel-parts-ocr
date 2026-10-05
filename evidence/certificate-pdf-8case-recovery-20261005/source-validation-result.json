@@ -1,0 +1,27 @@
+{
+  "originals": 8,
+  "provenance": "PASS",
+  "baselinePassed": 238,
+  "baselineScored": 297,
+  "baselineFailures": 59,
+  "finalPassed": 297,
+  "finalScored": 297,
+  "finalFailures": 0,
+  "allCases": 8,
+  "baselinePassPreserved": 238,
+  "rootCauses": 5,
+  "securityAudit": {
+    "info": 0,
+    "low": 1,
+    "moderate": 1,
+    "high": 7,
+    "critical": 1,
+    "total": 10
+  },
+  "humanAcceptance": false,
+  "build": "PASS including 49 configured application regression commands",
+  "runtimeSourceFiles": 7,
+  "DBWrites": 0,
+  "consoleErrors": [],
+  "ownerStatusJsonConsistency": "PASS"
+}

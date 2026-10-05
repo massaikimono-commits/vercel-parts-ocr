@@ -1,0 +1,17 @@
+PASS A previous document fields clear, customer context retained
+PASS B old async completion rejected after B begins
+PASS C same-document continuation does not reset
+PASS D distinct owner and user retained
+PASS E explicit same-as-user name
+PASS F explicit same-as-user address
+PASS G explicit L remains L
+PASS H explicit kW remains kW
+PASS I next-label boundary retained
+PASS J four-axis columns and codes
+PASS K four-axis missing fields never use previous document
+PASS L two-axis baseline remains unchanged
+PASS same-row two-axis fields retain their own columns
+PASS unit follows the nearest numeric baseline, not the first textual unit
+PASS M weak structured result retains independent generic recovery path
+PASS N PDF clear reaches the actual form merge; ordinary empty updates remain unchanged
+certificate-pdf-document-integrity-regression: 16 cases PASS

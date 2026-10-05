@@ -1,0 +1,1 @@
+PASS Certificate PDF semantic fields: 8 layouts, 358 field checks, geometry changes, same-as/masked, L/kW, reconciliation and stroked-rule classification

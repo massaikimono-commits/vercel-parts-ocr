@@ -7,6 +7,10 @@ on:
   pull_request:
     paths:
       - 'app/lib/certificate-pdf-row-semantics.mjs'
+      - 'app/lib/certificate-pdf-field-semantics.mjs'
+      - 'test/fixtures/certificate-pdf-ruled/**'
+      - 'scripts/certificate-pdf-field-semantics-regression.mjs'
+      - 'scripts/certificate-pdf-run-isolation-regression.mjs'
       - 'app/lib/certificate-result-copy.mjs'
       - 'app/vehicle-workflow-fast/page.tsx'
       - 'scripts/certificate-result-copy-regression.mjs'
@@ -40,3 +44,7 @@ jobs:
         run: node scripts/certificate-pdf-generalization-runtime-regression.mjs
       - name: Document integrity regression
         run: node scripts/certificate-pdf-document-integrity-regression.mjs
+      - name: Ruled PDF fields and final packet regression
+        run: |
+          node scripts/certificate-pdf-field-semantics-regression.mjs
+          node scripts/certificate-pdf-run-isolation-regression.mjs

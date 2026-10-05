@@ -1,0 +1,1 @@
+PASS copy contract CASE A-J + Clipboard API / Safari fallback / failure feedback source binding

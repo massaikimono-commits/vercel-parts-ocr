@@ -124,9 +124,22 @@ check("unit follows the nearest numeric baseline, not the first textual unit", (
   assert.equal(parseFourAxleVehicleRows(mixed).displacementOrRatedOutput, "1.79 L");
 });
 check("M weak structured result retains independent generic recovery path", () => {
-  assert.match(generalization, /window\.addEventListener\(AUTH_EVENT, onAuthoritative\)/);
+  assert.match(generalization, /window\.addEventListener\(AUTH_EVENT, onAuthoritative, true\)/);
   assert.match(generalization, /parseFourAxleVehicleRows/);
   assert.match(generalization, /certificate-pdf-weak-structured-fallback/);
   assert.match(fs.readFileSync(new URL("../app/certificate-pdf-native-reader-v2.jsx", import.meta.url), "utf8"), /!parsed\.confident[^\n]+certificate-pdf-weak-structured-fallback[^\n]+passToExisting\(input\)/);
 });
+
+
+check('N PDF clear reaches the actual form merge; ordinary empty updates remain unchanged', () => {
+  const mergeSource=page.split('\n').find(line=>line.trim().startsWith('function mergePatch(patch:Patch)'));
+  assert.ok(mergeSource);
+  const js=ts.transpileModule(mergeSource+'\nreturn mergePatch;', {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+  let state={...empty,certificate:{userAddress:'使用者の住所',vehicleWeightKg:'1110'}};
+  const merge=new Function('setVehicle','serialFromRegistration','fuelType',js)(fn=>{state=fn(state)},()=>'',()=> 'その他');
+  merge({userAddress:''});assert.equal(state.certificate.userAddress,'使用者の住所');
+  merge({userAddress:'',vehicleWeightKg:'2020',__pdfGeneralizationEvidence:{clearedFields:['userAddress']}});
+  assert.equal(state.certificate.userAddress,'');assert.equal(state.certificate.vehicleWeightKg,'2020');
+});
+
 console.log(`certificate-pdf-document-integrity-regression: ${cases} cases PASS`);
