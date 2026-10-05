@@ -1,0 +1,51 @@
+{
+  "verdict": "PARTIAL",
+  "sourceSha": "934ed05255c4d3c45ec1e042052957c431f691a6",
+  "branch": "candidate/certificate-pdf-current-main-integration-20260929",
+  "PR": 87,
+  "originals": 8,
+  "provenance": "PASS",
+  "rootCauses": 5,
+  "baseline": {
+    "passed": 238,
+    "scored": 297,
+    "failed": 59
+  },
+  "after": {
+    "passed": 297,
+    "scored": 297,
+    "failed": 0,
+    "cases": 8,
+    "baselinePassPreserved": 238
+  },
+  "tests": "PASS",
+  "build": "PASS",
+  "securityAudit": "FAIL: critical 1/high 7",
+  "CI": {
+    "certificatePush": 37311477054,
+    "certificatePR": 37311485242,
+    "fullAuditFailure": 37311476580,
+    "OCRAuditFailure": 37311477327,
+    "deploymentSafetyPass": 37311485117
+  },
+  "Preview": "NOT_CREATED: Full regression security gate",
+  "humanAcceptance": false,
+  "humanActionRequiredNow": false,
+  "remaining": [
+    "approved dependency recovery integration",
+    "audit/Full CI",
+    "gated Preview",
+    "Human copied-form-state After Acceptance"
+  ],
+  "unchanged": [
+    "main",
+    "Production",
+    "DB",
+    "Photo QR",
+    "Guided Live QR",
+    "Parts OCR",
+    "dependencies",
+    "credentials",
+    "trust"
+  ]
+}

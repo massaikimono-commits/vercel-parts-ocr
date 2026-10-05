@@ -1,0 +1,14 @@
+{
+  "continuation": "User accepted previous BLOCKED run and explicitly provided eight originals",
+  "startHead": "d09688359a37600986da7b22eb94412f0b8afbc2",
+  "sourceHead": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+  "remoteCandidateHead": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+  "mainHead": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+  "PR": 87,
+  "PRState": "OPEN/DRAFT",
+  "initialWorkingTree": "CLEAN in isolated clone; existing real candidate worktree untouched; unrelated original cwd dirty work untouched",
+  "activeOtherWorktree": "/private/tmp/icb-dependency-braces-recovery-20261005 (separate dependency stream; not touched)",
+  "previousReport": "evidence/certificate-pdf-recovery-20261005/REPORT.md",
+  "legacyCopiedEvidence": "Previous exhaustive 242 refs/184 trees search did not recover originals/GT/current copies; new actual current-form baseline explicitly acquired from provided original sources",
+  "repoVisibility": "PUBLIC; original bytes, owner/address values and raw form states remain local private; tracked matrices use field hashes"
+}

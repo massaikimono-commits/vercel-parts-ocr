@@ -1,0 +1,267 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@vinext/cloudflare": {
+      "name": "@vinext/cloudflare",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "vinext"
+      ],
+      "effects": [],
+      "range": "0.0.1 || >=1.0.0-beta.0",
+      "nodes": [
+        "node_modules/@vinext/cloudflare"
+      ],
+      "fixAvailable": {
+        "name": "@vinext/cloudflare",
+        "version": "0.2.1",
+        "isSemVerMajor": true
+      }
+    },
+    "braces": {
+      "name": "braces",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1240992,
+          "name": "braces",
+          "dependency": "braces",
+          "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+          "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+          "severity": "high",
+          "cwe": [
+            "CWE-674"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<=3.0.3"
+        }
+      ],
+      "effects": [
+        "micromatch"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/braces"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    },
+    "dompurify": {
+      "name": "dompurify",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1240621,
+          "name": "dompurify",
+          "dependency": "dompurify",
+          "title": "DOMPurify: IN_PLACE: node-removing afterSanitize hook leaves detached subtree event handlers armed, causing DOM XSS",
+          "url": "https://github.com/advisories/GHSA-p98j-92pf-mc4p",
+          "severity": "low",
+          "cwe": [
+            "CWE-79"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=3.4.13 <=3.4.15"
+        }
+      ],
+      "effects": [],
+      "range": "3.4.13 - 3.4.15",
+      "nodes": [
+        "node_modules/dompurify"
+      ],
+      "fixAvailable": true
+    },
+    "fast-glob": {
+      "name": "fast-glob",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "micromatch"
+      ],
+      "effects": [
+        "vite-plugin-dynamic-import"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/fast-glob"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    },
+    "fast-uri": {
+      "name": "fast-uri",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1240091,
+          "name": "fast-uri",
+          "dependency": "fast-uri",
+          "title": "fast-uri vulnerable to inconsistent host case normalization via percent-encoded octets",
+          "url": "https://github.com/advisories/GHSA-hrr3-gc8f-f4qj",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-178"
+          ],
+          "cvss": {
+            "score": 4.8,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+          },
+          "range": ">=3.0.0 <3.1.8"
+        }
+      ],
+      "effects": [],
+      "range": "3.0.0 - 3.1.7",
+      "nodes": [
+        "node_modules/fast-uri"
+      ],
+      "fixAvailable": true
+    },
+    "micromatch": {
+      "name": "micromatch",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "braces"
+      ],
+      "effects": [
+        "fast-glob"
+      ],
+      "range": ">=0.2.0",
+      "nodes": [
+        "node_modules/micromatch"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    },
+    "next": {
+      "name": "next",
+      "severity": "critical",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1240609,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js: Remote Code Execution in next/og ImageResponse",
+          "url": "https://github.com/advisories/GHSA-vcvr-r3jv-pc5j",
+          "severity": "critical",
+          "cwe": [
+            "CWE-1395"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=16.2.0 <16.3.6"
+        }
+      ],
+      "effects": [],
+      "range": "16.2.0 - 16.3.5",
+      "nodes": [
+        "node_modules/next"
+      ],
+      "fixAvailable": {
+        "name": "next",
+        "version": "16.3.8",
+        "isSemVerMajor": false
+      }
+    },
+    "vinext": {
+      "name": "vinext",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "vite-plugin-commonjs"
+      ],
+      "effects": [
+        "@vinext/cloudflare"
+      ],
+      "range": ">=0.0.16",
+      "nodes": [
+        "node_modules/vinext"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    },
+    "vite-plugin-commonjs": {
+      "name": "vite-plugin-commonjs",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "vite-plugin-dynamic-import"
+      ],
+      "effects": [
+        "vinext"
+      ],
+      "range": "0.5.0 - 0.5.2 || >=0.7.0",
+      "nodes": [
+        "node_modules/vite-plugin-commonjs"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    },
+    "vite-plugin-dynamic-import": {
+      "name": "vite-plugin-dynamic-import",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "fast-glob"
+      ],
+      "effects": [
+        "vite-plugin-commonjs"
+      ],
+      "range": ">=0.2.0",
+      "nodes": [
+        "node_modules/vite-plugin-dynamic-import"
+      ],
+      "fixAvailable": {
+        "name": "vinext",
+        "version": "0.0.15",
+        "isSemVerMajor": true
+      }
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 1,
+      "moderate": 1,
+      "high": 7,
+      "critical": 1,
+      "total": 10
+    },
+    "dependencies": {
+      "prod": 139,
+      "dev": 87,
+      "optional": 121,
+      "peer": 54,
+      "peerOptional": 0,
+      "total": 342
+    }
+  }
+}

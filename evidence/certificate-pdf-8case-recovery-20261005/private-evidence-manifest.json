@@ -1,0 +1,225 @@
+{
+  "storage": "Private local original-derived Evidence; field hashes and sanitized fixtures only in public Git",
+  "files": [
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-case1.txt",
+      "sha256": "8b80d7f4cb631789e8f98f26ebaf6659d3da733347e532dbfe934d313fcb35b9",
+      "bytes": 1844
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-case2.txt",
+      "sha256": "89d3741ca76bdfea25145a9d0961f29652f280af75f5bde167f9bcdd155ffba6",
+      "bytes": 2093
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-case3.txt",
+      "sha256": "2ec3ae4ecfa1da99131dbe18f9cae1f3bfaab1094d42ade473eea0588b16eb75",
+      "bytes": 1886
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-case4.txt",
+      "sha256": "07ce51111d17f150e77a76e5fe498b7c7588b74588a2e266866ee9244ba55173",
+      "bytes": 1839
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-case5.txt",
+      "sha256": "d76d05bcc2d828fb471c4be24f56779f82aa95019a55346e7a2a5dbf6ce0bce3",
+      "bytes": 2059
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-case6.txt",
+      "sha256": "22c5713a64837ddab3b2a183231171a4830b52601ccfd44e4ec376a05d760628",
+      "bytes": 1760
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-case7.txt",
+      "sha256": "c19951f5a8e94bf21dd08526f50b5c6c7071fe0fc67e81d1c2ca0ed6d09381a5",
+      "bytes": 2200
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-case8.txt",
+      "sha256": "65a844c563898097da9a3395a1816468dd7a15b4a41ea329e8dea216ad354dd9",
+      "bytes": 2370
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-initial.json",
+      "sha256": "093cf15d4a4580bf33ac465405f83525c5a993a27eff4c83dc4521f73cbff6a3",
+      "bytes": 31508854
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after-mismatches.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/after.json",
+      "sha256": "8451dc9185e218a08f4265870f2905e645f2558256104565a27e041e26a61ddd",
+      "bytes": 1086575
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline-case1.txt",
+      "sha256": "26eb32b861f55f32efd27e442c5e5900edb01f2e223de0e2733f80b2b64a4b06",
+      "bytes": 1708
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline-case2.txt",
+      "sha256": "741a462383ff5b82eca885beb7ef580bc4278c2d6272d62c6b4ec48bd6c2d1d9",
+      "bytes": 1694
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline-case3.txt",
+      "sha256": "925382df0c27f1cfa86a56201063033f076174b4469e13650489f3ca23c6b0bc",
+      "bytes": 1767
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline-case4.txt",
+      "sha256": "b3ec27b8812842686495715cb3ec73817b5253694d7d535562a83d2013c1ec5d",
+      "bytes": 2042
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline-case5.txt",
+      "sha256": "63e5bda5f3f3ccfb83ee50093f7174f7d6b545a29d1a03b0d27aa8984583db38",
+      "bytes": 1886
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline-case6.txt",
+      "sha256": "837b3c0949e99edf9fec4cd52b5bdbb68690db8241ce05cafd14793205ebebfb",
+      "bytes": 1930
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline-case7.txt",
+      "sha256": "506cfa662bc6d3063a521d344b421731ca217399b28647c2088baeb400f1eaa0",
+      "bytes": 2636
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline-case8.txt",
+      "sha256": "24b8058698ecfff63b965687f3e6227a9d28725519b87004b66bbccc8de41f51",
+      "bytes": 2808
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline-mismatches.json",
+      "sha256": "a6b802d3df35328c4ad45e61ed5cadbd3cc47dad32c2fb8239b59bacffde3c19",
+      "bytes": 8047
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/baseline.json",
+      "sha256": "bc2ffd7bcdeb4ed72fe4db060f2e52cb2d53f287dc3de3bac1af2cfefbf646d8",
+      "bytes": 3459514
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/capture-browser.mjs",
+      "sha256": "9546ec428416a05f89b57a5dfeefd7ed376c14a01a704a30847eeedec08c24aa",
+      "bytes": 4233
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case1-page1.png",
+      "sha256": "b46faccb03800bb43c771475b3ff854e2702afd077b079cc3975453cd2160b50",
+      "bytes": 319992
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case1-tokens.json",
+      "sha256": "71304567742d15e74bd65f58b2045fbc95c81cdfef17abc01b9a874a6512c37c",
+      "bytes": 43849
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case2-page1.png",
+      "sha256": "7b484d2a4dc61c23dbf0093c4e972870eb30144741c3402bb762d5aad2a6a5d7",
+      "bytes": 244215
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case2-tokens.json",
+      "sha256": "99911b734ea86bc170e52d2f16d0c4d2d7725eeea8caa4ec2c342a8b9358df9c",
+      "bytes": 29502
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case3-page1.png",
+      "sha256": "56a53090b769310690b4fffa0ef04db281b69f4d19c3942ceeaea753d1e5b291",
+      "bytes": 358175
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case3-tokens.json",
+      "sha256": "c2f1aecdaf2129f8d01a413f356dff65d2f6ca8bd03e385de76f4ea2b548ff78",
+      "bytes": 40590
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case4-page1.png",
+      "sha256": "3542b9c8e15364f635533102ebc9b5e3fd00676ac5b380abaf0eae50f6113bb4",
+      "bytes": 252745
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case4-tokens.json",
+      "sha256": "2d9533b5b0c9e3d0e15639fd031f134a576d710cbba43aff2a734ef6464b5bd7",
+      "bytes": 31635
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case5-page1.png",
+      "sha256": "5d4aa520fd1bf692ffb6bb59c386c2ae7b1979b156df9d1730eba4e4af3f54dd",
+      "bytes": 355401
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case5-tokens.json",
+      "sha256": "048d9a805d02c05c168c53c5f85e4c6754c5403a8c4975c5c10eeb75872b4582",
+      "bytes": 45824
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case6-page1.png",
+      "sha256": "80054847fcb972cae6a3857ce643214e3ef3510e727292a1a36f13d95bcc2197",
+      "bytes": 235820
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case6-tokens.json",
+      "sha256": "baa45d109a048f9d1555d8cb6f9c15e963e6f0b056b88edb1c69296f96cf7212",
+      "bytes": 32482
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case7-page1.png",
+      "sha256": "8a7acb4621af95e943ee921ad348d2abc6b28b8740fbd4ce529944d850864c49",
+      "bytes": 373672
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case7-tokens.json",
+      "sha256": "c18b4e5f8524160ea4894fc82c4f816cea0bc2bdedf121581e9cb4089d3b9580",
+      "bytes": 45949
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case8-page1.png",
+      "sha256": "0a8879aa89b30892c8fe8ce7e00b11fe928772a39fb6e5884d9e347fc13427e1",
+      "bytes": 368311
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/case8-tokens.json",
+      "sha256": "9907ade44c9bf0cf2a5618d676132e5cbcf1728943c82a4c73581ce3598a13c4",
+      "bytes": 46069
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/expected.json",
+      "sha256": "40b6cc8a364ba2e9db303c22d4c3a8aa5a03383f45bafc291c8c99f423809acc",
+      "bytes": 11998
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/expected.py",
+      "sha256": "00691e97c7165efaa6f84c0f4de1d3f836205077196b77d58c73b7297aac472b",
+      "bytes": 6122
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/raw-build-final.txt",
+      "sha256": "4853d06ad4b3ea3d405c6d1f9cd363a4ca6a8e86303eba6c2d2ced452a5f3abc",
+      "bytes": 23110
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/raw-build-initial.txt",
+      "sha256": "9c62e86f5e4ea917acf956c3230109335078a008511ecd91c25f6db85ca0a4be",
+      "bytes": 23558
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/score.py",
+      "sha256": "5ed23f465917872f7a43d81b1418e5e7816abf3c24d8e59334539cd216a77c14",
+      "bytes": 2550
+    },
+    {
+      "path": ".eval-private/certificate-pdf-8case/semantic-initial.json",
+      "sha256": "4ab633c4f41f1ab840f015211331cfb0d5613139eaeb19160cc270963c13bb78",
+      "bytes": 26583
+    }
+  ]
+}

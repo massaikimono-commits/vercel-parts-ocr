@@ -1,0 +1,57 @@
+vehicle-certificate-regression  Audit production dependencies   ﻿2026-10-05T12:43:42.1540368Z ##[group]Run npm audit --omit=dev --audit-level=high
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:42.1540857Z ^[[36;1mnpm audit --omit=dev --audit-level=high^[[0m
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:42.1606940Z shell: /usr/bin/bash -e {0}
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:42.1607234Z ##[endgroup]
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0778980Z # npm audit report
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0780345Z
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0780596Z braces  *
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0781066Z Severity: high
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0782664Z braces vulnerable to stack-exhaustion denial of service through deeply nested patterns - https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0783797Z fix available via `npm audit fix --force`
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0784256Z Will install vinext@0.0.15, which is a breaking change
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0784642Z node_modules/braces
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0785130Z   micromatch  >=0.2.0
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0785459Z   Depends on vulnerable versions of braces
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0785785Z   node_modules/micromatch
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0786042Z     fast-glob  *
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0786339Z     Depends on vulnerable versions of micromatch
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0787122Z     node_modules/fast-glob
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0787437Z       vite-plugin-dynamic-import  >=0.2.0
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0787822Z       Depends on vulnerable versions of fast-glob
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0788205Z       node_modules/vite-plugin-dynamic-import
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0788599Z         vite-plugin-commonjs  0.5.0 - 0.5.2 || >=0.7.0
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0789084Z         Depends on vulnerable versions of vite-plugin-dynamic-import
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0789531Z         node_modules/vite-plugin-commonjs
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0789831Z           vinext  >=0.0.16
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0790184Z           Depends on vulnerable versions of vite-plugin-commonjs
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0790561Z           node_modules/vinext
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0790955Z             @vinext/cloudflare  0.0.1 || >=1.0.0-beta.0
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0791342Z             Depends on vulnerable versions of vinext
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0791695Z             node_modules/@vinext/cloudflare
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0791898Z
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0792050Z dompurify  3.4.13 - 3.4.15
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0793002Z DOMPurify: IN_PLACE: node-removing afterSanitize hook leaves detached subtree event handlers armed, causing DOM XSS - https://github.com/advisories/GHSA-p98j-92pf-mc4p
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0793808Z fix available via `npm audit fix`
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0794100Z node_modules/dompurify
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0794248Z
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0794427Z fast-uri  3.0.0 - 3.1.7
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0794679Z Severity: moderate
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0796792Z fast-uri vulnerable to inconsistent host case normalization via percent-encoded octets - https://github.com/advisories/GHSA-hrr3-gc8f-f4qj
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0798097Z fix available via `npm audit fix`
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0798487Z node_modules/fast-uri
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0798690Z
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0798817Z next  16.2.0 - 16.3.5
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0799104Z Severity: critical
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0799735Z Next.js: Remote Code Execution in next/og ImageResponse - https://github.com/advisories/GHSA-vcvr-r3jv-pc5j
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0800364Z fix available via `npm audit fix --force`
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0800855Z Will install next@16.3.8, which is outside the stated dependency range
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0801256Z node_modules/next
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0801390Z
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0801639Z 10 vulnerabilities (1 low, 1 moderate, 7 high, 1 critical)
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0801899Z
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0802115Z To address issues that do not require attention, run:
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0802443Z   npm audit fix
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0802576Z
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0802803Z To address all issues (including breaking changes), run:
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0803153Z   npm audit fix --force
+vehicle-certificate-regression  Audit production dependencies   2026-10-05T12:43:44.0943396Z ##[error]Process completed with exit code 1.

@@ -1,0 +1,111 @@
+{
+  "recorded_at": "2026-10-04T16:37:42.013267+00:00",
+  "results": {
+    "local-head": {
+      "command": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit": 0,
+      "stdout": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1\n",
+      "stderr": ""
+    },
+    "local-branch": {
+      "command": [
+        "git",
+        "branch",
+        "--show-current"
+      ],
+      "exit": 0,
+      "stdout": "candidate/certificate-pdf-current-main-integration-20260929\n",
+      "stderr": ""
+    },
+    "local-status": {
+      "command": [
+        "git",
+        "status",
+        "--porcelain"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "remote-refs": {
+      "command": [
+        "git",
+        "ls-remote",
+        "origin",
+        "refs/heads/main",
+        "refs/heads/candidate/certificate-pdf-current-main-integration-20260929"
+      ],
+      "exit": 128,
+      "stdout": "",
+      "stderr": "fatal: unable to access 'https://github.com/massaikimono-commits/vercel-parts-ocr.git/': Could not resolve host: github.com\n"
+    },
+    "pr87": {
+      "command": [
+        "gh",
+        "pr",
+        "view",
+        "87",
+        "--repo",
+        "massaikimono-commits/vercel-parts-ocr",
+        "--json",
+        "number,title,state,isDraft,headRefName,headRefOid,baseRefName,mergeStateStatus,url,statusCheckRollup"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n"
+    },
+    "source-worktrees": {
+      "command": [
+        "git",
+        "-C",
+        "/Users/massa_ikimono/Developer/vercel-parts-ocr",
+        "worktree",
+        "list",
+        "--porcelain"
+      ],
+      "exit": 0,
+      "stdout": "worktree /Users/massa_ikimono/Developer/vercel-parts-ocr\nHEAD f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4\nbranch refs/heads/main\n\nworktree /private/tmp/icb-delivery-time-boundary-20261005\nHEAD 5870d86846a961ae2f9dccae993740b728df59d9\nbranch refs/heads/candidate/delivery-time-ux-acceptance-revision-20260929\n\nworktree /private/tmp/icb-overnight-20261005\nHEAD 820bfe8038d5a24594711a6536dc517b86a70673\nbranch refs/heads/candidate/icb-continuation-20261003\n\nworktree /Users/massa_ikimono/Developer/vercel-parts-ocr-delivery-gate\nHEAD 5870d86846a961ae2f9dccae993740b728df59d9\ndetached\n\nworktree /Users/massa_ikimono/Developer/vercel-parts-ocr-preview-final\nHEAD 13c32f5862a464a389926b5539ac5bf4aee96b09\ndetached\n\nworktree /Users/massa_ikimono/Developer/worktrees/vercel-parts-ocr-certificate-current\nHEAD 5ca65e71312b1b352d1b042e8bc95715acb9c8e1\nbranch refs/heads/candidate/certificate-pdf-current-main-integration-20260929\n\n",
+      "stderr": ""
+    },
+    "source-certificate-status": {
+      "command": [
+        "git",
+        "-C",
+        "/Users/massa_ikimono/Developer/worktrees/vercel-parts-ocr-certificate-current",
+        "status",
+        "--porcelain"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "source-certificate-head": {
+      "command": [
+        "git",
+        "-C",
+        "/Users/massa_ikimono/Developer/worktrees/vercel-parts-ocr-certificate-current",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit": 0,
+      "stdout": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1\n",
+      "stderr": ""
+    },
+    "original-cwd-status": {
+      "command": [
+        "git",
+        "-C",
+        "/Users/massa_ikimono/Developer/first-class-mechanic-trainer",
+        "status",
+        "--porcelain"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  }
+}

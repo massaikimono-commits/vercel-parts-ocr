@@ -1,0 +1,31 @@
+{
+  "candidate_head": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+  "lockfile_sha256": "175d6d743327e606e783574b808e458f2b137090d00eddf975b923fc1dc9d36b",
+  "installed_from_candidate_lock": {
+    "next": "16.3.4",
+    "vinext": "1.0.0-beta.9",
+    "@vinext/cloudflare": "1.0.0-beta.7",
+    "braces": "3.0.3",
+    "dompurify": "3.4.14",
+    "fast-uri": "3.1.7",
+    "typescript": "5.9.3",
+    "pdfjs-dist": "4.10.38"
+  },
+  "audit_command": "npm audit --omit=dev --audit-level=high --json",
+  "audit_exit": 1,
+  "audit_vulnerabilities": {
+    "info": 0,
+    "low": 1,
+    "moderate": 1,
+    "high": 7,
+    "critical": 1,
+    "total": 10
+  },
+  "prior_ocr_ci_run": 36970481721,
+  "prior_failure_step": "Audit production dependencies, before vehicle-certificate source regressions",
+  "main_dependency_recovery_pr": 90,
+  "main_dependency_recovery_head": "f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4",
+  "source_logic_result": "All nine selected baseline suites PASS; all 49 package build regression commands and next build PASS. No runtime fix evaluated.",
+  "dependency_migration_performed": false,
+  "reason": "Missing acceptance provenance blocks runtime implementation. Current high audit also includes vinext/braces chain with breaking downgrades offered; PR90 alone is not evidence of resolving current high audit. No audit threshold change or breaking downgrade adopted."
+}

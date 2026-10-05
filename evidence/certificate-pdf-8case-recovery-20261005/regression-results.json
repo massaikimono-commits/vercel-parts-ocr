@@ -1,0 +1,86 @@
+[
+  {
+    "script": "certificate-pdf-run-isolation-regression",
+    "exit": 0,
+    "log": "certificate-pdf-run-isolation-regression-after.txt",
+    "tail": [
+      "PASS capture reconciliation protects outer and nested form packets; PDF-to-photo transition clears recovery state",
+      "PASS pending PDF-to-photo completion rejected; already-ready weak fallback reaches form"
+    ]
+  },
+  {
+    "script": "certificate-pdf-document-integrity-regression",
+    "exit": 0,
+    "log": "certificate-pdf-document-integrity-regression-after.txt",
+    "tail": [
+      "PASS N PDF clear reaches the actual form merge; ordinary empty updates remain unchanged",
+      "certificate-pdf-document-integrity-regression: 16 cases PASS"
+    ]
+  },
+  {
+    "script": "certificate-pdf-generalization-regression",
+    "exit": 0,
+    "log": "certificate-pdf-generalization-regression-after.txt",
+    "tail": [
+      "PASS post-5905 PDF generalization row semantics: two-axis + four-axis isolation"
+    ]
+  },
+  {
+    "script": "certificate-pdf-generalization-runtime-regression",
+    "exit": 0,
+    "log": "certificate-pdf-generalization-runtime-regression-after.txt",
+    "tail": [
+      "PASS PDF generalization runtime integration: run-scoped, generic, V2+fast mounted"
+    ]
+  },
+  {
+    "script": "certificate-result-copy-regression",
+    "exit": 0,
+    "log": "certificate-result-copy-regression-after.txt",
+    "tail": [
+      "PASS copy contract CASE A-J + Clipboard API / Safari fallback / failure feedback source binding"
+    ]
+  },
+  {
+    "script": "vehicle-certificate-regression",
+    "exit": 0,
+    "log": "vehicle-certificate-regression-after.txt",
+    "tail": [
+      "",
+      "All 44 vehicle-certificate case(s) passed across 11 fixture(s)."
+    ]
+  },
+  {
+    "script": "certificate-v2-no-legacy-overrides-regression",
+    "exit": 0,
+    "log": "certificate-v2-no-legacy-overrides-regression-after.txt",
+    "tail": [
+      "- QR priority remains available without 14 post-OCR redispatches",
+      "- fast workflow keeps the single final QR-preferred merge"
+    ]
+  },
+  {
+    "script": "bulk-pdf-native-parity-regression",
+    "exit": 0,
+    "log": "bulk-pdf-native-parity-regression-after.txt",
+    "tail": [
+      "bulk PDF native parity regression: PASS"
+    ]
+  },
+  {
+    "script": "ci-routing-regression",
+    "exit": 0,
+    "log": "ci-routing-regression-after.txt",
+    "tail": [
+      "ci routing regression passed"
+    ]
+  },
+  {
+    "script": "certificate-pdf-field-semantics-regression",
+    "exit": 0,
+    "log": "certificate-pdf-field-semantics-regression-after.txt",
+    "tail": [
+      "PASS Certificate PDF semantic fields: 8 layouts, 358 field checks, geometry changes, same-as/masked, L/kW, reconciliation and stroked-rule classification"
+    ]
+  }
+]

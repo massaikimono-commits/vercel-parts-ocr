@@ -1,0 +1,5 @@
+PASS certificate v2 legacy-override regression
+- legacy fuel DOM heuristic disabled on v2/fast
+- legacy consistency repush disabled on v2/fast
+- QR priority remains available without 14 post-OCR redispatches
+- fast workflow keeps the single final QR-preferred merge

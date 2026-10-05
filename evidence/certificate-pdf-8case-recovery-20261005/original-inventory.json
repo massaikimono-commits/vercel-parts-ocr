@@ -1,0 +1,110 @@
+{
+  "source": "User explicitly designated 8-case ORIGINAL SOURCE SET on 2026-10-05 JST",
+  "count": 8,
+  "files": [
+    {
+      "caseId": "case1",
+      "filename": "20240714152240_三重３８０せ８８.pdf",
+      "path": "/Users/massa_ikimono/Downloads/20240714152240_三重３８０せ８８.pdf",
+      "sha256": "6d79b09f8697c02bb10aad99513303a8d88aab90f49e28cf2bd7056fe56f191f",
+      "bytes": 113013,
+      "pageCount": 1,
+      "tokenCounts": [
+        143
+      ],
+      "identityStatus": "PASS: text layer and rendered original page reviewed",
+      "registrationNumber": "三重380せ88"
+    },
+    {
+      "caseId": "case2",
+      "filename": "NVAN.pdf",
+      "path": "/Users/massa_ikimono/Downloads/NVAN.pdf",
+      "sha256": "e0aa794d8d565b51b3f9213fb19656f60eee11baa0fd25750fe84ecedce665e7",
+      "bytes": 62055,
+      "pageCount": 1,
+      "tokenCounts": [
+        124
+      ],
+      "identityStatus": "PASS: text layer and rendered original page reviewed",
+      "registrationNumber": "なにわ480に8462"
+    },
+    {
+      "caseId": "case3",
+      "filename": "20260919165302_神戸５８４ふ７０１０_K.pdf",
+      "path": "/Users/massa_ikimono/Downloads/20260919165302_神戸５８４ふ７０１０_K.pdf",
+      "sha256": "507af3ce5984b8c85732b414ce94227b1636429fc6dbaba34781d40212d06ea1",
+      "bytes": 312246,
+      "pageCount": 1,
+      "tokenCounts": [
+        127
+      ],
+      "identityStatus": "PASS: text layer and rendered original page reviewed",
+      "registrationNumber": "神戸584ふ7010"
+    },
+    {
+      "caseId": "case4",
+      "filename": "エルフ.pdf",
+      "path": "/Users/massa_ikimono/Downloads/エルフ.pdf",
+      "sha256": "ba2b496048837b04e595087bb3bc098cbb3412f9546841e1cdf9af22d6f915e1",
+      "bytes": 63900,
+      "pageCount": 1,
+      "tokenCounts": [
+        128
+      ],
+      "identityStatus": "PASS: text layer and rendered original page reviewed",
+      "registrationNumber": "なにわ100さ7179"
+    },
+    {
+      "caseId": "case5",
+      "filename": "20260919165228_なにわ４００め１１９０.pdf",
+      "path": "/Users/massa_ikimono/Downloads/20260919165228_なにわ４００め１１９０.pdf",
+      "sha256": "2a671af3fea3f241a3176d06e9e3fb04393a8b106ac711f297842b20dd5a6afe",
+      "bytes": 117369,
+      "pageCount": 1,
+      "tokenCounts": [
+        152
+      ],
+      "identityStatus": "PASS: text layer and rendered original page reviewed",
+      "registrationNumber": "なにわ400め1190"
+    },
+    {
+      "caseId": "case6",
+      "filename": "エルグランド.pdf",
+      "path": "/Users/massa_ikimono/Downloads/エルグランド.pdf",
+      "sha256": "e8da5a78252d4d89f70b712e7a4006726ea85e03c99ca22a2b8e1b62f34f2a88",
+      "bytes": 62885,
+      "pageCount": 1,
+      "tokenCounts": [
+        133
+      ],
+      "identityStatus": "PASS: text layer and rendered original page reviewed",
+      "registrationNumber": "和泉301も6921"
+    },
+    {
+      "caseId": "case7",
+      "filename": "20230624094104_なにわ３０１ひ５５６１.pdf",
+      "path": "/Users/massa_ikimono/Downloads/20230624094104_なにわ３０１ひ５５６１.pdf",
+      "sha256": "bcefd2edd4da987b56e797fcbef0085d1c89af7798786e1f65cebf792ab3f1c8",
+      "bytes": 118350,
+      "pageCount": 1,
+      "tokenCounts": [
+        155
+      ],
+      "identityStatus": "PASS: text layer and rendered original page reviewed",
+      "registrationNumber": "なにわ301ひ5561"
+    },
+    {
+      "caseId": "case8",
+      "filename": "20260917145621_なにわ４００む５９０５.pdf",
+      "path": "/Users/massa_ikimono/Downloads/20260917145621_なにわ４００む５９０５.pdf",
+      "sha256": "f8f9f3058badae91da2cdaa82dfda4f5ae3356d389ebedc31c752f07eb2b34f2",
+      "bytes": 118226,
+      "pageCount": 1,
+      "tokenCounts": [
+        155
+      ],
+      "identityStatus": "PASS: text layer and rendered original page reviewed",
+      "registrationNumber": "なにわ400む5905"
+    }
+  ]
+}

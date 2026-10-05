@@ -1,0 +1,13 @@
+{
+  "command": [
+    "git",
+    "ls-remote",
+    "origin",
+    "refs/heads/main",
+    "refs/heads/candidate/certificate-pdf-current-main-integration-20260929"
+  ],
+  "recorded_at": "2026-10-04T16:38:27.804091+00:00",
+  "exit": 0,
+  "stdout": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1\trefs/heads/candidate/certificate-pdf-current-main-integration-20260929\nf00bd122e89dc7f375ff0bf4c024ae1c765f5ae4\trefs/heads/main\n",
+  "stderr": ""
+}

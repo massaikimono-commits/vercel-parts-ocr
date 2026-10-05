@@ -1,0 +1,62 @@
+{
+  "recorded_at": "2026-10-04T16:45:40.567984+00:00",
+  "stream": "CERTIFICATE_PDF",
+  "verdict": "BLOCKED",
+  "source_start_head": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+  "source_final_head": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+  "branch": "evidence/certificate-pdf-recovery-20261005",
+  "candidate_branch": "candidate/certificate-pdf-current-main-integration-20260929",
+  "pr": 87,
+  "pr_state": "OPEN/DRAFT/NOT_MERGED/NOT_ADOPTED",
+  "runtime_files_changed": 0,
+  "dependency_files_changed": 0,
+  "root_causes_confirmed": 0,
+  "fixes_implemented": [],
+  "eight_case_regression": {
+    "pass": 0,
+    "fail": 0,
+    "blocked": 8
+  },
+  "selected_baseline_suites": {
+    "pass": 9,
+    "fail": 0
+  },
+  "vehicle_certificate_baseline": {
+    "pass": 44,
+    "fixtures": 11
+  },
+  "document_integrity_baseline": {
+    "pass": 15
+  },
+  "run_isolation_baseline": {
+    "pass": 13,
+    "actual_writer_paths": "PASS"
+  },
+  "generalization_baseline": "PASS; two-axis/four-axis isolation and runtime contract",
+  "build": "PASS; 49 package regression commands + Next production build, local CI dummy public settings",
+  "security_audit": "FAIL; 1 critical, 7 high, 1 moderate, 1 low",
+  "ci": "Existing head: OCR 36970481721 FAILURE at audit; PDF 36970483815 SUCCESS; Full 36970514308 SUCCESS. No new CI dispatched.",
+  "preview": "No new Preview created. Existing exact source head Preview independently verified READY, target=null, dpl_ArBJLGx4hE5GbKzFFki7ZsA9LeFE",
+  "existing_preview_url": "https://vercel-parts-f06h4aaho-massa-ikimono-8427s-projects.vercel.app/vehicle-workflow-v2",
+  "human_action_required": true,
+  "human_action": "Identify the existing eight-case original PDF/GT and copied-form-state Evidence by repository path and commit, or existing accessible location. No fresh After Acceptance requested yet.",
+  "remaining": [
+    "Acceptance evidence provenance and expected/actual fields unknown for all eight real PDFs",
+    "Five real-PDF failure clusters unconfirmed and unfixed",
+    "Current dependency audit blocks normal gated CI; no safe complete dependency resolution proven",
+    "After Acceptance remains pending after actual source fixes and a newly ready Preview"
+  ],
+  "next_exact_action": "Resolve the existing eight-case Evidence location/provenance, then freeze baseline and reproduce the P0 physical mapping from those source tokens.",
+  "boundaries": {
+    "MAIN": "UNCHANGED",
+    "PRODUCTION": "UNCHANGED",
+    "DB": "UNCHANGED",
+    "PHOTO_QR": "UNCHANGED",
+    "GUIDED_LIVE_QR": "UNCHANGED",
+    "PARTS_OCR": "UNCHANGED",
+    "CREDENTIALS": "UNCHANGED",
+    "GLOBAL_TRUST": "UNCHANGED"
+  },
+  "remote_mutations": "NONE; Evidence checkpoint committed locally only; no push or deploy",
+  "evidence_path": "/private/tmp/icb-certificate-recovery-20261005/evidence/certificate-pdf-recovery-20261005"
+}

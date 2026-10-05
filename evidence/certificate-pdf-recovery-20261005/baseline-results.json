@@ -1,0 +1,138 @@
+{
+  "head": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+  "kind": "UNCHANGED_SOURCE_BASELINE",
+  "results": [
+    {
+      "script": "certificate-pdf-run-isolation-regression",
+      "command": [
+        "node",
+        "scripts/certificate-pdf-run-isolation-regression.mjs"
+      ],
+      "exit": 0,
+      "started_at": "2026-10-04T16:39:43.197303+00:00",
+      "ended_at": "2026-10-04T16:39:43.632326+00:00",
+      "log": "certificate-pdf-run-isolation-regression.txt",
+      "tail": [
+        "certificate-pdf-run-isolation-regression: 13 cases PASS, six actual writer completion paths PASS, weak fallback recovery PASS, mount topology PASS"
+      ]
+    },
+    {
+      "script": "certificate-pdf-document-integrity-regression",
+      "command": [
+        "node",
+        "scripts/certificate-pdf-document-integrity-regression.mjs"
+      ],
+      "exit": 0,
+      "started_at": "2026-10-04T16:39:43.198360+00:00",
+      "ended_at": "2026-10-04T16:39:43.405427+00:00",
+      "log": "certificate-pdf-document-integrity-regression.txt",
+      "tail": [
+        "PASS unit follows the nearest numeric baseline, not the first textual unit",
+        "PASS M weak structured result retains independent generic recovery path",
+        "certificate-pdf-document-integrity-regression: 15 cases PASS"
+      ]
+    },
+    {
+      "script": "certificate-pdf-generalization-regression",
+      "command": [
+        "node",
+        "scripts/certificate-pdf-generalization-regression.mjs"
+      ],
+      "exit": 0,
+      "started_at": "2026-10-04T16:39:43.198593+00:00",
+      "ended_at": "2026-10-04T16:39:43.236419+00:00",
+      "log": "certificate-pdf-generalization-regression.txt",
+      "tail": [
+        "PASS post-5905 PDF generalization row semantics: two-axis + four-axis isolation"
+      ]
+    },
+    {
+      "script": "certificate-pdf-generalization-runtime-regression",
+      "command": [
+        "node",
+        "scripts/certificate-pdf-generalization-runtime-regression.mjs"
+      ],
+      "exit": 0,
+      "started_at": "2026-10-04T16:39:43.236469+00:00",
+      "ended_at": "2026-10-04T16:39:43.271868+00:00",
+      "log": "certificate-pdf-generalization-runtime-regression.txt",
+      "tail": [
+        "PASS PDF generalization runtime integration: run-scoped, generic, V2+fast mounted"
+      ]
+    },
+    {
+      "script": "certificate-result-copy-regression",
+      "command": [
+        "node",
+        "scripts/certificate-result-copy-regression.mjs"
+      ],
+      "exit": 0,
+      "started_at": "2026-10-04T16:39:43.271910+00:00",
+      "ended_at": "2026-10-04T16:39:43.311186+00:00",
+      "log": "certificate-result-copy-regression.txt",
+      "tail": [
+        "PASS copy contract CASE A-J + Clipboard API / Safari fallback / failure feedback source binding"
+      ]
+    },
+    {
+      "script": "vehicle-certificate-regression",
+      "command": [
+        "node",
+        "scripts/vehicle-certificate-regression.mjs"
+      ],
+      "exit": 0,
+      "started_at": "2026-10-04T16:39:43.311217+00:00",
+      "ended_at": "2026-10-04T16:39:43.384065+00:00",
+      "log": "vehicle-certificate-regression.txt",
+      "tail": [
+        "PASS truck-qrless-textlayer-001/registration-digit-spacing: 28 fields",
+        "",
+        "All 44 vehicle-certificate case(s) passed across 11 fixture(s)."
+      ]
+    },
+    {
+      "script": "certificate-v2-no-legacy-overrides-regression",
+      "command": [
+        "node",
+        "scripts/certificate-v2-no-legacy-overrides-regression.mjs"
+      ],
+      "exit": 0,
+      "started_at": "2026-10-04T16:39:43.384105+00:00",
+      "ended_at": "2026-10-04T16:39:43.417492+00:00",
+      "log": "certificate-v2-no-legacy-overrides-regression.txt",
+      "tail": [
+        "- legacy consistency repush disabled on v2/fast",
+        "- QR priority remains available without 14 post-OCR redispatches",
+        "- fast workflow keeps the single final QR-preferred merge"
+      ]
+    },
+    {
+      "script": "bulk-pdf-native-parity-regression",
+      "command": [
+        "node",
+        "scripts/bulk-pdf-native-parity-regression.mjs"
+      ],
+      "exit": 0,
+      "started_at": "2026-10-04T16:39:43.405464+00:00",
+      "ended_at": "2026-10-04T16:39:43.440623+00:00",
+      "log": "bulk-pdf-native-parity-regression.txt",
+      "tail": [
+        "bulk PDF native parity regression: PASS"
+      ]
+    },
+    {
+      "script": "ci-routing-regression",
+      "command": [
+        "node",
+        "scripts/ci-routing-regression.mjs"
+      ],
+      "exit": 0,
+      "started_at": "2026-10-04T16:39:43.417524+00:00",
+      "ended_at": "2026-10-04T16:39:43.451231+00:00",
+      "log": "ci-routing-regression.txt",
+      "tail": [
+        "ci routing regression passed"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+name: Certificate PDF Generalization
+
+on:
+  push:
+    branches:
+      - candidate/certificate-pdf-current-main-integration-20260929
+  pull_request:
+    paths:
+      - 'app/lib/certificate-pdf-row-semantics.mjs'
+      - 'app/lib/certificate-pdf-field-semantics.mjs'
+      - 'test/fixtures/certificate-pdf-ruled/**'
+      - 'scripts/certificate-pdf-field-semantics-regression.mjs'
+      - 'scripts/certificate-pdf-run-isolation-regression.mjs'
+      - 'app/lib/certificate-result-copy.mjs'
+      - 'app/vehicle-workflow-fast/page.tsx'
+      - 'scripts/certificate-result-copy-regression.mjs'
+      - 'app/certificate-pdf-generalization-recovery.jsx'
+      - 'app/vehicle-workflow-v2/layout.tsx'
+      - 'app/vehicle-workflow-fast/layout.tsx'
+      - 'scripts/certificate-pdf-generalization-regression.mjs'
+      - 'scripts/certificate-pdf-generalization-runtime-regression.mjs'
+      - 'scripts/certificate-pdf-document-integrity-regression.mjs'
+      - '.github/workflows/certificate-pdf-generalization.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Post-5905 row semantic regression
+        run: node scripts/certificate-pdf-generalization-regression.mjs
+      - name: Authoritative read result copy regression
+        run: node scripts/certificate-result-copy-regression.mjs
+      - name: Runtime integration regression
+        run: node scripts/certificate-pdf-generalization-runtime-regression.mjs
+      - name: Document integrity regression
+        run: node scripts/certificate-pdf-document-integrity-regression.mjs
+      - name: Ruled PDF fields and final packet regression
+        run: |
+          node scripts/certificate-pdf-field-semantics-regression.mjs
+          node scripts/certificate-pdf-run-isolation-regression.mjs

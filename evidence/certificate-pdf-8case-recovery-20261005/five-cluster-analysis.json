@@ -1,0 +1,94 @@
+{
+  "confirmed": 5,
+  "total": 5,
+  "clusters": [
+    {
+      "priority": "P0",
+      "cluster": "physical mapping",
+      "cases": [
+        "case1"
+      ],
+      "expected": "payload -; weight 2020; gross 2405; dimensions 491/185/181; axes 1110/-/-/910; output 3.49 L",
+      "actual": "payload2020; gross1110; dimensions1110/910/910; axes1110 repeated; output1110",
+      "sourcePath": [
+        "app/vehicle-workflow-fast/page.tsx",
+        "app/certificate-pdf-semantic-recovery.jsx",
+        "app/certificate-pdf-generalization-recovery.jsx"
+      ],
+      "rootCause": "Legacy row extraction crosses portrait physical cells; semantic recovery has correct gross/unit, but nested dispatch correction is overwritten when the outer packet resumes at the React bubble consumer. Missing-only generalization cannot replace wrong nonempty values.",
+      "genericFix": "Resolve physical fields from actual stroked table cells, then reconcile each incoming authoritative packet in capture phase; fallback writers preserve only document-proven fields.",
+      "regressionRisk": "Partial/unruled layouts retain existing missing-only fallback; stale runs and original V3/V2 handoff tested."
+    },
+    {
+      "priority": "P1",
+      "cluster": "L / kW final mapping",
+      "cases": [
+        "case8"
+      ],
+      "expected": "1.99 L",
+      "actual": "1.99 KW",
+      "sourcePath": [
+        "app/certificate-pdf-row-corrector.jsx",
+        "app/certificate-pdf-weight-displacement-recovery.jsx",
+        "app/certificate-pdf-generalization-recovery.jsx"
+      ],
+      "rootCause": "Both alternative printed unit legends are in text reading order; later row/global writers can reintroduce kW after a correct nearest-baseline recovery.",
+      "genericFix": "Pair number and unit inside the label cell by baseline then x distance; preserve validated value/raw/unit through final dispatch.",
+      "regressionRisk": "Synthetic changed numbers with both L and true kW verify explicit unit mapping; existing L/kW suite retained."
+    },
+    {
+      "priority": "P1",
+      "cluster": "owner / user same-as semantics",
+      "cases": [
+        "case2",
+        "case3"
+      ],
+      "expected": "Explicit 使用者に同じ and 使用者の住所に同じ resolve owner from available user, with raw phrases retained",
+      "actual": "case2 owner fields absent; case3 primary identity already correct",
+      "sourcePath": [
+        "app/certificate-pdf-semantic-recovery.jsx",
+        "app/certificate-owner-semantics.jsx"
+      ],
+      "rootCause": "Landscape vertical role markers with generic name/address labels are not recognized; optional の in address equivalence is excluded by exact phrase matching.",
+      "genericFix": "Use vertical label-role relationships; handle both address phrases; preserve same-as/masked/unresolved statuses without owner-to-user inference.",
+      "regressionRisk": "Masked users remain blank and unresolved same-as remains unresolved; distinct owner/user test preserved."
+    },
+    {
+      "priority": "P1",
+      "cluster": "owner / address boundary contamination",
+      "cases": [
+        "case4",
+        "case6",
+        "case7",
+        "case8"
+      ],
+      "expected": "Exactly the labeled owner/name/address, or separately identified issuance owner fields, without duplication, postal classifier or later notes",
+      "actual": "Landscape owner name repeats and includes address label; address duplicates; issuance address includes rule/inspection notes",
+      "sourcePath": [
+        "app/certificate-pdf-semantic-recovery.jsx",
+        "app/lib/certificate-pdf-field-semantics.mjs"
+      ],
+      "rootCause": "Midpoint/header x bounds cross landscape cells; issuance notes use a broad region extending into later tax/inspection items. A large outer notes cell alone is also insufficient.",
+      "genericFix": "Ruled cell boundaries for tables, inline label and next-header/rule/notes boundaries for issuance notes; remove bracket classifier only at end.",
+      "regressionRisk": "Issuance owner is kept separately; existing candidate fallback display is retained and is NOT scored as proof of current owner."
+    },
+    {
+      "priority": "P1",
+      "cluster": "label-as-value",
+      "cases": [
+        "case1",
+        "case5"
+      ],
+      "expected": "Masked user address and base location remain blank visible values with raw masking retained",
+      "actual": "使用者の住所 label remains as user address; section heading used as base location",
+      "sourcePath": [
+        "app/certificate-pdf-row-corrector.jsx",
+        "app/certificate-owner-semantics.jsx",
+        "app/vehicle-workflow-fast/page.tsx"
+      ],
+      "rootCause": "Old unbounded line readers pick header tokens; owner normalization drops masked fields and form merge accepts only nonempty strings, retaining earlier wrong label values.",
+      "genericFix": "Exclude recognized label and section tokens from cell values; emit explicit masked clears and allow only PDF-evidenced clears at form merge.",
+      "regressionRisk": "Clear permission is PDF metadata scoped; default nonempty merge and Photo path preserved."
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "result": {
+    "deployment": {
+      "id": "dpl_ArBJLGx4hE5GbKzFFki7ZsA9LeFE",
+      "name": "vercel-parts-ocr",
+      "url": "vercel-parts-f06h4aaho-massa-ikimono-8427s-projects.vercel.app",
+      "type": "LAMBDAS",
+      "state": "READY",
+      "createdAt": 1790920110253,
+      "creator": {
+        "uid": "vEqGhzdWAuFMWKyWzXkwDLrf",
+        "username": "massa-ikimono-8427"
+      },
+      "project": {
+        "id": "prj_GUedEKT5z3vrL7NMLGhx04jgPeMK",
+        "name": "vercel-parts-ocr",
+        "framework": "nextjs"
+      },
+      "meta": {
+        "githubCommitRef": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+        "githubCommitSha": "5ca65e71312b1b352d1b042e8bc95715acb9c8e1",
+        "githubCommitMessage": "feat: copy current certificate form results for acceptance",
+        "githubRepo": "vercel-parts-ocr",
+        "githubOrg": "massaikimono-commits"
+      },
+      "alias": [
+        "vercel-parts-ocr-git-5ca65e-9c5691-massa-ikimono-8427s-projects.vercel.app"
+      ],
+      "target": null,
+      "regions": [
+        "iad1"
+      ],
+      "buildingAt": 1790920112027,
+      "ready": 1790920203348,
+      "readyState": "READY",
+      "aliasError": null
+    }
+  }
+}

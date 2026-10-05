@@ -1,0 +1,556 @@
+
+> vercel-parts-ocr-app@1.0.0 build
+> npm run test:certificate && npm run test:certificate-v2-overrides && npm run test:bulk-pdf-parity && npm run test:parts && npm run test:parts-pass-budget && npm run test:inspection && npm run test:record-types && npm run test:workshop-record-types && npm run test:schedule-print && npm run test:schedule-print-layout && npm run test:schedule-work-state && npm run test:schedule-existing-vehicle && npm run test:schedule-desktop-density && npm run test:schedule-report-layout && npm run test:schedule-pickup-rules && npm run test:schedule-workflow-ux && npm run test:schedule-registration-duplicate && npm run test:schedule-registration-action-feedback && npm run test:schedule-batch-cross-customer && npm run test:schedule-inbound-time-selector && npm run test:schedule-edit-inbound-time-selector && npm run test:schedule-search-work-order && npm run test:schedule-cancellation-work-order && npm run test:schedule-search-actions && npm run test:schedule-one-day-practical && npm run test:schedule-detail && npm run test:daily-report-template && npm run test:daily-report-allocation && npm run test:daily-report-print-model && npm run test:daily-report-secondary && npm run test:daily-report-work-code && npm run test:daily-report-field-anchor && npm run test:vehicle-business-state && npm run test:waiting-service-v13 && npm run test:qr-speed && npm run test:parts-layout && npm run test:paper-sizes && npm run test:security && npm run test:schedule-rpc-auth && npm run test:app-core-safety && npm run test:schedule-source-dom-cleanup && npm run test:app-completion && npm run test:cloudflare-architecture && npm run test:vercel-selective-deploy && npm run test:parts-data-continue && npm run test:mobile-quick-nav && npm run test:operational-readiness && npm run test:lease-contract-foundation && npm run test:customer-migration-workflow && next build
+
+
+> vercel-parts-ocr-app@1.0.0 test:certificate
+> node scripts/vehicle-certificate-regression.mjs
+
+PASS QR density targeting: 4 layout(s)
+PASS kei-qrless-textlayer-001/base: 28 fields
+PASS kei-qrless-textlayer-001/wide-spaces: 28 fields
+PASS kei-qrless-textlayer-001/dash-glyphs: 28 fields
+PASS kei-qrless-textlayer-001/registration-digit-spacing: 28 fields
+PASS nissan-passenger-qrless-textlayer-001/base: 30 fields
+PASS nissan-passenger-qrless-textlayer-001/wide-spaces: 30 fields
+PASS nissan-passenger-qrless-textlayer-001/dash-glyphs: 30 fields
+PASS nissan-passenger-qrless-textlayer-001/registration-digit-spacing: 30 fields
+PASS photo-ocr-kei-spacing-002/base: 28 fields
+PASS photo-ocr-kei-spacing-002/wide-spaces: 28 fields
+PASS photo-ocr-kei-spacing-002/dash-glyphs: 28 fields
+PASS photo-ocr-kei-spacing-002/registration-digit-spacing: 28 fields
+PASS photo-ocr-nissan-glare-002/base: 30 fields
+PASS photo-ocr-nissan-glare-002/wide-spaces: 30 fields
+PASS photo-ocr-nissan-glare-002/dash-glyphs: 30 fields
+PASS photo-ocr-nissan-glare-002/registration-digit-spacing: 30 fields
+PASS photo-ocr-toyota-angle-002/base: 30 fields
+PASS photo-ocr-toyota-angle-002/wide-spaces: 30 fields
+PASS photo-ocr-toyota-angle-002/dash-glyphs: 30 fields
+PASS photo-ocr-toyota-angle-002/registration-digit-spacing: 30 fields
+PASS photo-ocr-toyota-combined-noise-003/base: 30 fields
+PASS photo-ocr-toyota-combined-noise-003/wide-spaces: 30 fields
+PASS photo-ocr-toyota-combined-noise-003/dash-glyphs: 30 fields
+PASS photo-ocr-toyota-combined-noise-003/registration-digit-spacing: 30 fields
+PASS photo-ocr-toyota-fullwidth-004/base: 30 fields
+PASS photo-ocr-toyota-fullwidth-004/wide-spaces: 30 fields
+PASS photo-ocr-toyota-fullwidth-004/dash-glyphs: 30 fields
+PASS photo-ocr-toyota-fullwidth-004/registration-digit-spacing: 30 fields
+PASS photo-ocr-truck-angle-002/base: 28 fields
+PASS photo-ocr-truck-angle-002/wide-spaces: 28 fields
+PASS photo-ocr-truck-angle-002/dash-glyphs: 28 fields
+PASS photo-ocr-truck-angle-002/registration-digit-spacing: 28 fields
+PASS photo-ocr-truck-noise-001/base: 30 fields
+PASS photo-ocr-truck-noise-001/wide-spaces: 30 fields
+PASS photo-ocr-truck-noise-001/dash-glyphs: 30 fields
+PASS photo-ocr-truck-noise-001/registration-digit-spacing: 30 fields
+PASS toyota-qrless-textlayer-001/base: 30 fields
+PASS toyota-qrless-textlayer-001/wide-spaces: 30 fields
+PASS toyota-qrless-textlayer-001/dash-glyphs: 30 fields
+PASS toyota-qrless-textlayer-001/registration-digit-spacing: 30 fields
+PASS truck-qrless-textlayer-001/base: 28 fields
+PASS truck-qrless-textlayer-001/wide-spaces: 28 fields
+PASS truck-qrless-textlayer-001/dash-glyphs: 28 fields
+PASS truck-qrless-textlayer-001/registration-digit-spacing: 28 fields
+
+All 44 vehicle-certificate case(s) passed across 11 fixture(s).
+
+> vercel-parts-ocr-app@1.0.0 test:certificate-v2-overrides
+> node scripts/certificate-v2-no-legacy-overrides-regression.mjs
+
+PASS certificate v2 legacy-override regression
+- legacy fuel DOM heuristic disabled on v2/fast
+- legacy consistency repush disabled on v2/fast
+- QR priority remains available without 14 post-OCR redispatches
+- fast workflow keeps the single final QR-preferred merge
+
+> vercel-parts-ocr-app@1.0.0 test:bulk-pdf-parity
+> node scripts/bulk-pdf-native-parity-regression.mjs
+
+bulk PDF native parity regression: PASS
+
+> vercel-parts-ocr-app@1.0.0 test:parts
+> node scripts/parts-slip-regression.mjs
+
+PASS parts-dedupe-noise-001/base: 1 part(s)
+PASS parts-dedupe-noise-001/wide-spaces: 1 part(s)
+PASS parts-dedupe-noise-001/dash-glyphs: 1 part(s)
+PASS parts-dedupe-noise-001/fullwidth-digits: 1 part(s)
+PASS parts-dedupe-noise-001/japanese-comma: 1 part(s)
+PASS parts-legacy-tab-001/base: 1 part(s)
+PASS parts-legacy-tab-001/wide-spaces: 1 part(s)
+PASS parts-legacy-tab-001/dash-glyphs: 1 part(s)
+PASS parts-legacy-tab-001/fullwidth-digits: 1 part(s)
+PASS parts-legacy-tab-001/japanese-comma: 1 part(s)
+PASS parts-line-break-001/base: 1 part(s)
+PASS parts-line-break-001/wide-spaces: 1 part(s)
+PASS parts-line-break-001/dash-glyphs: 1 part(s)
+PASS parts-line-break-001/fullwidth-digits: 1 part(s)
+PASS parts-line-break-001/japanese-comma: 1 part(s)
+PASS parts-standard-001/base: 2 part(s)
+PASS parts-standard-001/wide-spaces: 2 part(s)
+PASS parts-standard-001/dash-glyphs: 2 part(s)
+PASS parts-standard-001/fullwidth-digits: 2 part(s)
+PASS parts-standard-001/japanese-comma: 2 part(s)
+PASS parts-yellow-five-row-photo-proxy-001/base: 5 part(s)
+PASS parts-yellow-five-row-photo-proxy-001/wide-spaces: 5 part(s)
+PASS parts-yellow-five-row-photo-proxy-001/dash-glyphs: 5 part(s)
+PASS parts-yellow-five-row-photo-proxy-001/fullwidth-digits: 5 part(s)
+PASS parts-yellow-five-row-photo-proxy-001/japanese-comma: 5 part(s)
+
+All 25 parts-slip case(s) passed across 5 fixture(s).
+
+> vercel-parts-ocr-app@1.0.0 test:parts-pass-budget
+> node scripts/parts-ocr-pass-budget-regression.mjs
+
+PASS parts OCR pass-budget regression
+- confident general slips skip dedicated-marker rescue OCR
+- dedicated amount column is read only when cost fallback can be used
+
+> vercel-parts-ocr-app@1.0.0 test:inspection
+> node scripts/inspection-autofill-regression.mjs
+
+PASS first EV print uses vehicle rules
+PASS first HV print uses belt absent rule
+PASS printed exception wins over HV rule
+PASS previous replacement and top-up are not reused
+PASS current parts override previous baseline
+PASS handwritten top-up result is current job only
+
+All 6 inspection autofill case(s) passed.
+
+> vercel-parts-ocr-app@1.0.0 test:record-types
+> node scripts/record-type-regression.mjs
+
+PASS trailer
+PASS rental motorcycle
+PASS motorcycle
+PASS business vehicle
+PASS private truck
+PASS private passenger
+PASS light cargo business exception
+PASS ambiguous remains manual
+All 8 record-type cases passed.
+
+> vercel-parts-ocr-app@1.0.0 test:workshop-record-types
+> node scripts/workshop-record-type-regression.mjs
+
+PASS schedule check wins over vehicle type
+PASS business uses appendix 3
+PASS private cargo uses appendix 5
+PASS private passenger uses appendix 6
+PASS light cargo exception remains appendix 6 and reviewable
+PASS trailer is not silently mapped
+PASS motorcycle is not silently mapped
+PASS unknown vehicle requires review
+
+All 8 workshop record-type case(s) passed.
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-print
+> node scripts/schedule-print-rules-regression.mjs
+
+schedule print rule regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-print-layout
+> node scripts/schedule-print-layout-regression.mjs
+
+schedule print layout regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-work-state
+> node scripts/schedule-work-state-regression.mjs
+
+schedule work-state regression passed
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-existing-vehicle
+> node scripts/schedule-existing-vehicle-selection-regression.mjs
+
+PASS schedule existing-vehicle selection regression
+- registered customer/vehicle records are searchable
+- vehicles from different customers can be selected together
+- selected vehicle/customer fields are preserved for single registration
+- multiple selected vehicles use the JSONB atomic batch registration RPC
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-desktop-density
+> node scripts/schedule-desktop-density-regression.mjs
+
+PASS schedule desktop density regression
+- compact layout applies to desktop screen only
+- mobile breakpoint remains separate
+- schedule print action routes to the dedicated print page
+- dedicated print preview stays proportional and print output remains fixed to exact A3 portrait
+- daily report field anchors are explicitly calibrated within the A3 coordinate system
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-report-layout
+> node scripts/schedule-daily-report-screen-layout-regression.mjs
+
+PASS daily-report screen layout regression
+- one-day schedule keeps the accepted daily-report board: delivery left, inbound right
+- weekly days use morning/afternoon daily-report sections
+- day schedule routes printing to the dedicated print page
+- print preview stays proportional and physical print remains fixed to exact A3 portrait
+- print fields use explicit handwritten-reference anchors inside the A3 coordinate system
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-pickup-rules
+> node scripts/schedule-pickup-capacity-regression.mjs
+
+PASS pickup capacity/deadline regression
+- morning pickup cap is 10 independent pickup entries
+- exact pickup/delivery can render as deadline labels
+- afternoon pickup period option exists
+- legacy option labels remain available for older deployed UI
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-workflow-ux
+> node scripts/schedule-workflow-ux-regression.mjs
+
+PASS schedule workflow UX regression
+- home is weekly-schedule first
+- registration starts with customer/vehicle, then work, then date/time
+- inspection schedule type is persisted only for reason=点検
+- cancellation reason is optional
+- daily/weekly schedule labels are distinct and consistent
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-registration-duplicate
+> node scripts/schedule-registration-duplicate-regression.mjs
+
+schedule registration duplicate regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-registration-action-feedback
+> node scripts/schedule-registration-action-feedback-regression.mjs
+
+schedule registration action feedback regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-batch-cross-customer
+> node scripts/schedule-batch-cross-customer-regression.mjs
+
+schedule cross-customer batch regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-inbound-time-selector
+> node scripts/schedule-inbound-time-selector-regression.mjs
+
+schedule inbound time selector regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-edit-inbound-time-selector
+> node scripts/schedule-edit-inbound-time-selector-regression.mjs
+
+schedule edit inbound time selector regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-search-work-order
+> node scripts/schedule-search-work-order-regression.mjs
+
+schedule search/work-order regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-cancellation-work-order
+> node scripts/schedule-cancellation-work-order-regression.mjs
+
+schedule cancellation work-order regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-search-actions
+> node scripts/schedule-search-actions-regression.mjs
+
+schedule search actions regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-one-day-practical
+> node scripts/schedule-one-day-practical-regression.mjs
+
+schedule one-day practical regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-detail
+> node scripts/schedule-detail-regression.mjs
+
+schedule detail regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:daily-report-template
+> node scripts/daily-report-template-regression.mjs
+
+daily report template regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:daily-report-allocation
+> node scripts/daily-report-allocation-regression.mjs
+
+daily report allocation regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:daily-report-print-model
+> node scripts/daily-report-print-model-regression.mjs
+
+daily report print model regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:daily-report-secondary
+> node scripts/daily-report-secondary-sections-regression.mjs
+
+daily report secondary sections regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:daily-report-work-code
+> node scripts/daily-report-work-code-regression.mjs
+
+daily report work-code regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:daily-report-field-anchor
+> node scripts/daily-report-field-anchor-regression.mjs
+
+Daily report A3 field-anchor regression: PASS
+
+> vercel-parts-ocr-app@1.0.0 test:vehicle-business-state
+> node scripts/vehicle-state-business-regression.mjs
+
+vehicle state business regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:waiting-service-v13
+> node scripts/waiting-service-customer-visit-v13-regression.mjs
+
+waiting service customer-visit v1.3 corrected regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:qr-speed
+> node scripts/qr-speed-regression.mjs
+
+PASS QR density speed/layout coverage: kei-six=1.3ms/6 | registered-five-left=1.3ms/5 | registered-five-right=0.9ms/5 | legacy-two=1.0ms/2 | photo-small-qr=1.3ms/5 | photo-large-qr=1.3ms/5 | photo-small-qr-upper-edge=0.6ms/5 | photo-large-qr-lower-edge=0.6ms/5 | photo-small-qr-upper-left-corner=2.1ms/1 | photo-large-qr-lower-right-corner=1.3ms/2 | photo-shift-up=1.4ms/5 | photo-shift-up-edge=1.3ms/5 | photo-shift-down=0.6ms/5 | photo-shift-down-edge=0.5ms/5 | photo-shift-left-edge=0.5ms/1 | photo-shift-right-edge=0.5ms/1 | photo-shift-upper-left-corner=0.6ms/1 | photo-shift-upper-right-corner=0.5ms/1 | photo-shift-lower-left-corner=0.5ms/1 | photo-shift-lower-right-corner=0.5ms/1 | upper-page-decoy=0.5ms/0 | upper-boundary-decoy=0.5ms/0 | lower-left-decoy=0.5ms/0 | lower-left-boundary-decoy=0.6ms/0
+
+> vercel-parts-ocr-app@1.0.0 test:parts-layout
+> node scripts/parts-layout-semantics-regression.mjs
+
+PASS parts layout semantics: white generic routing and single-price=>定価 extraction proxies survive repeated-photo spacing/full-width/background noise; yellow dedicated markers keep priority under anonymized rotation/background/noise/multi-slip/repeated-capture stress
+
+> vercel-parts-ocr-app@1.0.0 test:paper-sizes
+> node scripts/print-paper-size-regression.mjs
+
+PASS print paper size regression
+
+> vercel-parts-ocr-app@1.0.0 test:security
+> node scripts/security-regression.mjs
+
+PASS route guard imported
+PASS route guard wraps app
+PASS route guard checks session
+PASS route guard redirects unauthenticated users
+PASS publishable Supabase key only
+PASS package is private
+PASS git ignores env and private keys
+PASS CI blocks high dependency vulnerabilities
+PASS CI uses npm ci
+PASS security-patched jsPDF locked
+PASS security-patched Next.js locked
+PASS Tesseract vendored versions match lockfile
+PASS npm lockfile v3 present
+PASS file signature validator exists
+PASS dedicated OCR validates files
+PASS generic OCR validates files
+PASS auto OCR validates files
+PASS vehicle OCR validates files
+PASS URL auth session detection disabled
+PASS active app-user verifier exists
+PASS protected routes require active app user
+PASS home session requires active app user
+PASS sensitive routes disable caching
+PASS spreadsheet export neutralizer
+PASS PDF resource limits
+PASS logout clears temporary session context
+PASS login history linked from dashboard
+PASS automatic login anomaly alerts wired
+PASS auto logout reason is shown
+PASS inactive logout is audited
+PASS inactive sessions use local signout
+PASS 12 hour absolute session cap remains
+PASS 30 minute inactivity timeout
+PASS login button blocks repeated submits
+PASS progressive login throttle wired
+PASS login history screen exists
+PASS login attempts are recorded
+PASS root dashboard disables caching
+PASS session revalidated on history restore
+PASS absolute session timeout enforced
+PASS idle session timeout enforced
+PASS temporary vehicle context is session-only
+PASS PDF worker is bundled locally
+PASS oversized image guard
+PASS strict referrer privacy
+PASS robots disabled
+PASS browser source maps disabled
+PASS framework header disabled
+PASS security header: X-Frame-Options
+PASS security header: X-Content-Type-Options
+PASS security header: HSTS
+PASS security header: Referrer-Policy
+PASS security header: Permissions-Policy
+PASS security header: CSP
+PASS security header: Cross-Origin-Opener-Policy
+PASS no privileged secret patterns in app
+PASS one-time Tesseract vendor workflow removed
+PASS Tesseract runtime is same-origin only
+PASS no dynamic code execution sinks
+PASS dangerouslySetInnerHTML not used in app runtime
+PASS no tracked .env files
+All 61 security regression checks passed.
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-rpc-auth
+> node scripts/schedule-rpc-active-user-security-regression.mjs
+
+schedule RPC active-user security regression: ok
+
+> vercel-parts-ocr-app@1.0.0 test:app-core-safety
+> node scripts/app-core-safety-regression.mjs
+
+app-core safety regression passed
+
+> vercel-parts-ocr-app@1.0.0 test:schedule-source-dom-cleanup
+> node scripts/schedule-source-dom-cleanup-regression.mjs
+
+Schedule source/DOM cleanup regression: PASS
+
+> vercel-parts-ocr-app@1.0.0 test:app-completion
+> node scripts/app-completion-regression.mjs
+
+App completion regression: PASS
+
+> vercel-parts-ocr-app@1.0.0 test:cloudflare-architecture
+> node scripts/cloudflare-architecture-regression.mjs
+
+Cloudflare architecture regression: PASS
+- Next.js baseline: 16.3.4
+- App Router route handlers: 0
+- Server entrypoints with Node/heavy-processing primitives: 0
+- Heavy OCR/image/PDF/print entrypoints remain browser-side
+- Supabase remains browser-direct with public credentials only
+- Netlify-specific runtime dependency/configuration not detected
+
+> vercel-parts-ocr-app@1.0.0 test:vercel-selective-deploy
+> node scripts/vercel-selective-deploy-regression.mjs
+
+Vercel selective Git deployment regression: PASS
+
+> vercel-parts-ocr-app@1.0.0 test:parts-data-continue
+> node scripts/parts-data-continue-actions-regression.mjs
+
+Parts data continue actions regression: PASS
+
+> vercel-parts-ocr-app@1.0.0 test:mobile-quick-nav
+> node scripts/mobile-quick-nav-regression.mjs
+
+Integrated device UX feedback regression: PASS
+Schedule week loading regression: PASS
+A3 report geometry regression: PASS
+Daily report handwritten visual-alignment regression: PASS
+Tablet/desktop compact density regression: PASS
+
+> vercel-parts-ocr-app@1.0.0 test:operational-readiness
+> node scripts/operational-readiness-regression.mjs
+
+Operational readiness regression: PASS
+- slow/offline recovery: PASS
+- mobile quick-nav current state: PASS
+- home weekly source navigation / accessible label: PASS
+- loading termination contracts: PASS
+- bounded history/search contracts: PASS
+- operational hub / business wording preservation: PASS
+
+> vercel-parts-ocr-app@1.0.0 test:lease-contract-foundation
+> node scripts/lease-contract-foundation-regression.mjs
+
+PASS contract table exists
+PASS vehicle history link exists
+PASS source document link exists
+PASS contract period stored
+PASS substitute-car detail fields stored
+PASS inspection intervals stored
+PASS battery and tire terms stored
+PASS oil special interval stored
+PASS tire maker restriction stored
+PASS evidence preserved
+PASS four-state semantics enforced
+PASS RLS enabled
+PASS active app-user policy
+PASS anon table access revoked
+PASS rental eligibility helper exists
+PASS missing contract is fail-closed
+PASS expired contract is fail-closed
+PASS no substitute-car rider blocks rental
+PASS work-type eligibility checked
+PASS start-day condition checked
+PASS duration limit checked
+PASS anon eligibility RPC revoked
+PASS no current loaner assignment mutation
+PASS vehicle action route exists
+PASS contract UI uses existing table only
+PASS contract history is vehicle scoped and paged
+PASS normal screens do not preload lease contracts
+PASS requested contract condition fields are editable
+PASS saving edited contract requires re-review
+PASS reviewer comes from authenticated app profile
+PASS existing source document is read on demand only
+PASS lease UI does not enforce rental or mutate loaner reservations
+All 32 lease contract foundation checks passed.
+
+> vercel-parts-ocr-app@1.0.0 test:customer-migration-workflow
+> node scripts/customer-migration-workflow-regression.mjs
+
+PASS customer migration workflow regression
+- customer records can be removed without deleting vehicle/work history
+- different customers' existing vehicles can be scheduled together through the JSONB batch RPC
+- multiple native-text vehicle-certificate PDFs can be reviewed and bulk imported
+- bulk workflows remain authenticated and bounded
+▲ Next.js 16.3.4 (Turbopack)
+✓ Running next.config.mjs took 6ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 689ms
+  Running TypeScript ...
+
+  We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+  The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+    - allowJs was set to true
+    - include was updated to add '.next/dev/types/**/*.ts'
+
+  The following mandatory changes were made to your tsconfig.json:
+
+    - jsx was set to react-jsx (next.js uses the React automatic runtime)
+
+  Finished TypeScript in 1154ms ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/39) ...
+  Generating static pages using 9 workers (9/39)
+  Generating static pages using 9 workers (19/39)
+  Generating static pages using 9 workers (29/39)
+✓ Generating static pages using 9 workers (39/39) in 190ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /customer-vehicles
+├ ○ /customer-vehicles/bulk-import
+├ ○ /customer-vehicles/history
+├ ○ /customer-vehicles/lease-maintenance
+├ ○ /customer-vehicles/photos
+├ ○ /inspection
+├ ○ /inspection/print
+├ ○ /inspection/select
+├ ○ /loaners
+├ ○ /loaners/week
+├ ○ /ocr
+├ ○ /ocr/auto
+├ ○ /ocr/general
+├ ○ /parts-data
+├ ○ /parts-print
+├ ○ /parts-review
+├ ○ /schedule
+├ ○ /schedule/active
+├ ○ /schedule/detail
+├ ○ /schedule/edit
+├ ○ /schedule/loaners
+├ ○ /schedule/month
+├ ○ /schedule/new
+├ ○ /schedule/print
+├ ○ /schedule/search
+├ ○ /schedule/week
+├ ○ /schedule/workload
+├ ○ /settings/business-calendar
+├ ○ /settings/business-calendar/edit
+├ ○ /settings/login-history
+├ ○ /settings/staff
+├ ○ /settings/vendors
+├ ƒ /vehicle-workflow
+├ ○ /vehicle-workflow-fast
+├ ○ /vehicle-workflow-v2
+└ ○ /vehicle-workflow-v3
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

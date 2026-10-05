@@ -1,0 +1,16 @@
+{
+  "command": [
+    "gh",
+    "pr",
+    "view",
+    "90",
+    "--repo",
+    "massaikimono-commits/vercel-parts-ocr",
+    "--json",
+    "number,title,state,mergeCommit,body,files"
+  ],
+  "recorded_at": "2026-10-04T16:38:30.664497+00:00",
+  "exit": 0,
+  "stdout": "{\"body\":\"## Changes\\n- Pin Next.js to patched 16.3.6 and regenerate the npm lockfile with npm resolver.\\n- Resolve transitive dompurify to 3.4.16 and fast-uri to 3.1.8.\\n- Update the existing Security Regression lock assertion from vulnerable 16.3.4 to a patched 16.3.x floor.\\n\\n## Validation\\n- `npm ci`, `npm audit --omit=dev` (0 vulnerabilities), and `npm ls` passed.\\n- Full `npm run build` with CI public test settings passed, including application, Vehicle Certificate, and Parts OCR regressions.\\n- Extended QR and Parts fixture regressions, Deployment Safety, and `git diff --check` passed.\\n- Application source, main, Production, DB, and shared Supabase were not changed.\\n\\nMain merge remains on hold pending management approval.\",\"files\":[{\"path\":\"package-lock.json\",\"additions\":46,\"deletions\":99,\"changeType\":\"MODIFIED\"},{\"path\":\"package.json\",\"additions\":1,\"deletions\":1,\"changeType\":\"MODIFIED\"},{\"path\":\"scripts/security-regression.mjs\",\"additions\":3,\"deletions\":1,\"changeType\":\"MODIFIED\"}],\"mergeCommit\":{\"oid\":\"f00bd122e89dc7f375ff0bf4c024ae1c765f5ae4\"},\"number\":90,\"state\":\"MERGED\",\"title\":\"fix: patch production dependency advisories\"}\n",
+  "stderr": ""
+}

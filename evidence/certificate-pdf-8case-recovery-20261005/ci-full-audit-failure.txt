@@ -1,0 +1,57 @@
+full-regression Audit production dependencies   ﻿2026-10-05T12:43:27.7886236Z ##[group]Run npm audit --omit=dev --audit-level=high
+full-regression Audit production dependencies   2026-10-05T12:43:27.7886473Z ^[[36;1mnpm audit --omit=dev --audit-level=high^[[0m
+full-regression Audit production dependencies   2026-10-05T12:43:27.7942816Z shell: /usr/bin/bash -e {0}
+full-regression Audit production dependencies   2026-10-05T12:43:27.7942958Z ##[endgroup]
+full-regression Audit production dependencies   2026-10-05T12:43:29.3311326Z # npm audit report
+full-regression Audit production dependencies   2026-10-05T12:43:29.3311760Z
+full-regression Audit production dependencies   2026-10-05T12:43:29.3311857Z braces  *
+full-regression Audit production dependencies   2026-10-05T12:43:29.3312049Z Severity: high
+full-regression Audit production dependencies   2026-10-05T12:43:29.3312743Z braces vulnerable to stack-exhaustion denial of service through deeply nested patterns - https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
+full-regression Audit production dependencies   2026-10-05T12:43:29.3313368Z fix available via `npm audit fix --force`
+full-regression Audit production dependencies   2026-10-05T12:43:29.3313728Z Will install vinext@0.0.15, which is a breaking change
+full-regression Audit production dependencies   2026-10-05T12:43:29.3314038Z node_modules/braces
+full-regression Audit production dependencies   2026-10-05T12:43:29.3314243Z   micromatch  >=0.2.0
+full-regression Audit production dependencies   2026-10-05T12:43:29.3314470Z   Depends on vulnerable versions of braces
+full-regression Audit production dependencies   2026-10-05T12:43:29.3314751Z   node_modules/micromatch
+full-regression Audit production dependencies   2026-10-05T12:43:29.3314951Z     fast-glob  *
+full-regression Audit production dependencies   2026-10-05T12:43:29.3315461Z     Depends on vulnerable versions of micromatch
+full-regression Audit production dependencies   2026-10-05T12:43:29.3315808Z     node_modules/fast-glob
+full-regression Audit production dependencies   2026-10-05T12:43:29.3316060Z       vite-plugin-dynamic-import  >=0.2.0
+full-regression Audit production dependencies   2026-10-05T12:43:29.3316369Z       Depends on vulnerable versions of fast-glob
+full-regression Audit production dependencies   2026-10-05T12:43:29.3316687Z       node_modules/vite-plugin-dynamic-import
+full-regression Audit production dependencies   2026-10-05T12:43:29.3317007Z         vite-plugin-commonjs  0.5.0 - 0.5.2 || >=0.7.0
+full-regression Audit production dependencies   2026-10-05T12:43:29.3317368Z         Depends on vulnerable versions of vite-plugin-dynamic-import
+full-regression Audit production dependencies   2026-10-05T12:43:29.3317694Z         node_modules/vite-plugin-commonjs
+full-regression Audit production dependencies   2026-10-05T12:43:29.3317921Z           vinext  >=0.0.16
+full-regression Audit production dependencies   2026-10-05T12:43:29.3318366Z           Depends on vulnerable versions of vite-plugin-commonjs
+full-regression Audit production dependencies   2026-10-05T12:43:29.3318645Z           node_modules/vinext
+full-regression Audit production dependencies   2026-10-05T12:43:29.3318943Z             @vinext/cloudflare  0.0.1 || >=1.0.0-beta.0
+full-regression Audit production dependencies   2026-10-05T12:43:29.3319439Z             Depends on vulnerable versions of vinext
+full-regression Audit production dependencies   2026-10-05T12:43:29.3319724Z             node_modules/@vinext/cloudflare
+full-regression Audit production dependencies   2026-10-05T12:43:29.3319884Z
+full-regression Audit production dependencies   2026-10-05T12:43:29.3319987Z dompurify  3.4.13 - 3.4.15
+full-regression Audit production dependencies   2026-10-05T12:43:29.3320716Z DOMPurify: IN_PLACE: node-removing afterSanitize hook leaves detached subtree event handlers armed, causing DOM XSS - https://github.com/advisories/GHSA-p98j-92pf-mc4p
+full-regression Audit production dependencies   2026-10-05T12:43:29.3321394Z fix available via `npm audit fix`
+full-regression Audit production dependencies   2026-10-05T12:43:29.3321621Z node_modules/dompurify
+full-regression Audit production dependencies   2026-10-05T12:43:29.3321738Z
+full-regression Audit production dependencies   2026-10-05T12:43:29.3321826Z fast-uri  3.0.0 - 3.1.7
+full-regression Audit production dependencies   2026-10-05T12:43:29.3322019Z Severity: moderate
+full-regression Audit production dependencies   2026-10-05T12:43:29.3322606Z fast-uri vulnerable to inconsistent host case normalization via percent-encoded octets - https://github.com/advisories/GHSA-hrr3-gc8f-f4qj
+full-regression Audit production dependencies   2026-10-05T12:43:29.3323168Z fix available via `npm audit fix`
+full-regression Audit production dependencies   2026-10-05T12:43:29.3323370Z node_modules/fast-uri
+full-regression Audit production dependencies   2026-10-05T12:43:29.3323507Z
+full-regression Audit production dependencies   2026-10-05T12:43:29.3323592Z next  16.2.0 - 16.3.5
+full-regression Audit production dependencies   2026-10-05T12:43:29.3323813Z Severity: critical
+full-regression Audit production dependencies   2026-10-05T12:43:29.3324297Z Next.js: Remote Code Execution in next/og ImageResponse - https://github.com/advisories/GHSA-vcvr-r3jv-pc5j
+full-regression Audit production dependencies   2026-10-05T12:43:29.3324705Z fix available via `npm audit fix --force`
+full-regression Audit production dependencies   2026-10-05T12:43:29.3324945Z Will install next@16.3.8, which is outside the stated dependency range
+full-regression Audit production dependencies   2026-10-05T12:43:29.3325183Z node_modules/next
+full-regression Audit production dependencies   2026-10-05T12:43:29.3325252Z
+full-regression Audit production dependencies   2026-10-05T12:43:29.3325376Z 10 vulnerabilities (1 low, 1 moderate, 7 high, 1 critical)
+full-regression Audit production dependencies   2026-10-05T12:43:29.3325508Z
+full-regression Audit production dependencies   2026-10-05T12:43:29.3325614Z To address issues that do not require attention, run:
+full-regression Audit production dependencies   2026-10-05T12:43:29.3325782Z   npm audit fix
+full-regression Audit production dependencies   2026-10-05T12:43:29.3325855Z
+full-regression Audit production dependencies   2026-10-05T12:43:29.3325963Z To address all issues (including breaking changes), run:
+full-regression Audit production dependencies   2026-10-05T12:43:29.3326142Z   npm audit fix --force
+full-regression Audit production dependencies   2026-10-05T12:43:29.3462646Z ##[error]Process completed with exit code 1.

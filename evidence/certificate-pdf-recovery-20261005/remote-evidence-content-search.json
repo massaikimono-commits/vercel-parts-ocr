@@ -1,0 +1,14 @@
+{
+  "pattern": "7010|5561|1190|三重.?380.?せ.?88|copied.form.state|8.case|failure.cluster",
+  "refs_searched": 242,
+  "unique_trees": 184,
+  "results": [
+    {
+      "ref": "refs/remotes/origin/candidate/icb-continuation-20261003",
+      "exit": 0,
+      "matches": [
+        "refs/remotes/origin/candidate/icb-continuation-20261003:evidence/icb-night-20261004/checkpoint-ci-failure.txt"
+      ]
+    }
+  ]
+}
